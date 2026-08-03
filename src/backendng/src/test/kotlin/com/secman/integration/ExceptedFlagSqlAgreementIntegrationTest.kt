@@ -1,6 +1,7 @@
 package com.secman.integration
 
 import com.secman.domain.Asset
+import com.secman.domain.ExceptionKind
 import com.secman.domain.Vulnerability
 import com.secman.domain.VulnerabilityException
 import com.secman.repository.AssetRepository
@@ -144,40 +145,49 @@ class ExceptedFlagSqlAgreementIntegrationTest : BaseIntegrationTest() {
 
         val disagreements = mutableListOf<String>()
 
-        for ((subject, subjectValue) in subjects) {
-            for ((scope, scopeValue, exAssetId) in scopes) {
-                // ALL_VULNS x GLOBAL is a forbidden combination in the product model.
-                if (subject == VulnerabilityException.Subject.ALL_VULNS &&
-                    scope == VulnerabilityException.Scope.GLOBAL
-                ) continue
+        for (kind in ExceptionKind.entries) {
+            for ((subject, subjectValue) in subjects) {
+                for ((scope, scopeValue, exAssetId) in scopes) {
+                    // ALL_VULNS x GLOBAL is a forbidden combination in the product model.
+                    if (subject == VulnerabilityException.Subject.ALL_VULNS &&
+                        scope == VulnerabilityException.Scope.GLOBAL
+                    ) continue
 
-                val ex = exceptionRepository.save(
-                    VulnerabilityException(
-                        subject = subject,
-                        scope = scope,
-                        subjectValue = subjectValue,
-                        scopeValue = scopeValue,
-                        assetId = exAssetId,
-                        reason = "agreement test",
-                        createdBy = "tester"
+                    val ex = exceptionRepository.save(
+                        VulnerabilityException(
+                            subject = subject,
+                            scope = scope,
+                            kind = kind,
+                            subjectValue = subjectValue,
+                            scopeValue = scopeValue,
+                            assetId = exAssetId,
+                            reason = "agreement test",
+                            createdBy = "tester"
+                        )
                     )
-                )
 
-                // SQL writes `excepted` from EXCEPTION_MATCH, and the entity predicate must
-                // reach the same verdict for every row.
-                recomputeAndReload().forEach { vuln ->
-                    val expected = ex.matches(vuln, vuln.asset)
-                    if (vuln.excepted != expected) {
-                        disagreements += "subject=$subject scope=$scope " +
-                            "vuln=${vuln.vulnerabilityId} asset=${vuln.asset.name} " +
-                            "sql=${vuln.excepted} entity=$expected"
+                    // SQL writes `excepted` from EXCEPTION_MATCH, and the entity predicate must
+                    // reach the same verdict for every row.
+                    recomputeAndReload().forEach { vuln ->
+                        val expected = ex.matches(vuln, vuln.asset)
+                        if (vuln.excepted != expected) {
+                            disagreements += "kind=$kind subject=$subject scope=$scope " +
+                                "vuln=${vuln.vulnerabilityId} asset=${vuln.asset.name} " +
+                                "sql=${vuln.excepted} entity=$expected"
+                        }
+                        // Independently of agreement: a NO_EDR exception must suppress nothing.
+                        // Agreement alone would be satisfied if BOTH implementations were wrong.
+                        if (kind == ExceptionKind.NO_EDR && vuln.excepted) {
+                            disagreements += "NO_EDR suppressed a finding: subject=$subject " +
+                                "scope=$scope vuln=${vuln.vulnerabilityId} asset=${vuln.asset.name}"
+                        }
                     }
-                }
 
-                // Same flush-then-recompute discipline: the DELETE must reach the database before
-                // the native recompute, or it leaks into the next iteration.
-                exceptionRepository.delete(ex)
-                recomputeAndReload()
+                    // Same flush-then-recompute discipline: the DELETE must reach the database before
+                    // the native recompute, or it leaks into the next iteration.
+                    exceptionRepository.delete(ex)
+                    recomputeAndReload()
+                }
             }
         }
 
@@ -206,6 +216,115 @@ class ExceptedFlagSqlAgreementIntegrationTest : BaseIntegrationTest() {
 
         // Both SQL (`expiration_date > NOW()`) and the entity predicate treat an expired exception
         // as inactive, so nothing may be suppressed.
+        assertThat(recomputeAndReload()).allSatisfy { assertThat(it.excepted).isFalse() }
+    }
+
+    /**
+     * Migration regression for the `kind` discriminator (V247).
+     *
+     * The failure this guards against is the worst one available: if `kind` ever holds NULL
+     * — Hibernate's hbm2ddl.auto creating the column on an environment where V247 did not
+     * apply, a restored pre-V247 dump, baseline-on-migrate skipping history — and
+     * EXCEPTION_MATCH compared it with plain equality, then EVERY pre-existing exception
+     * would stop matching and the nightly recomputeAllExceptedScheduled would clear
+     * `excepted` fleet-wide, unattended, surfacing thousands of "new" findings.
+     *
+     * EXCEPTION_MATCH is therefore written `(e.kind IS NULL OR e.kind = 'VULNERABILITY')`.
+     * This test forces the NULL that the migration is supposed to make impossible, and
+     * asserts suppression survives it.
+     *
+     * The test schema is Hibernate `create-drop` (Flyway is off in the `test` profile), so
+     * the column arrives NOT NULL from the entity annotation and the NULL has to be made
+     * reachable first. The DDL is reverted in a finally block; note that DDL implicitly
+     * commits in MariaDB, so the seeded fixture outlives the test transaction and is
+     * removed by the @AfterEach cleanup rather than by rollback.
+     */
+    @Test
+    @DisplayName("an exception with a NULL kind still suppresses (V247 fail-safe)")
+    fun nullKindStillSuppresses() {
+        seedFixture()
+        val ex = exceptionRepository.save(
+            VulnerabilityException(
+                subject = VulnerabilityException.Subject.CVE,
+                scope = VulnerabilityException.Scope.GLOBAL,
+                subjectValue = "CVE-2024-0001",
+                reason = "legacy row predating the kind column",
+                createdBy = "tester"
+            )
+        )
+        entityManager.flush()
+
+        entityManager.createNativeQuery(
+            "ALTER TABLE vulnerability_exception MODIFY kind VARCHAR(20) NULL"
+        ).executeUpdate()
+        try {
+            // Simulate the un-backfilled column. Bypasses the entity, which cannot express NULL.
+            entityManager.createNativeQuery("UPDATE vulnerability_exception SET kind = NULL WHERE id = :id")
+                .setParameter("id", ex.id)
+                .executeUpdate()
+
+            val recomputed = recomputeAndReload()
+            assertThat(recomputed.filter { it.vulnerabilityId == "CVE-2024-0001" })
+                .isNotEmpty
+                .allSatisfy { assertThat(it.excepted).isTrue() }
+            assertThat(recomputed.filter { it.vulnerabilityId == "CVE-2024-9999" })
+                .allSatisfy { assertThat(it.excepted).isFalse() }
+        } finally {
+            entityManager.createNativeQuery(
+                "UPDATE vulnerability_exception SET kind = 'VULNERABILITY' WHERE kind IS NULL"
+            ).executeUpdate()
+            entityManager.createNativeQuery(
+                "ALTER TABLE vulnerability_exception MODIFY kind VARCHAR(20) NOT NULL DEFAULT 'VULNERABILITY'"
+            ).executeUpdate()
+        }
+    }
+
+    /**
+     * The straightforward half of the same regression: an ordinary exception created after
+     * V247 must keep suppressing exactly as it did before the `kind` conjunct existed.
+     */
+    @Test
+    @DisplayName("adding the kind conjunct did not stop ordinary exceptions suppressing")
+    fun vulnerabilityKindStillSuppresses() {
+        seedFixture()
+        exceptionRepository.save(
+            VulnerabilityException(
+                subject = VulnerabilityException.Subject.CVE,
+                scope = VulnerabilityException.Scope.GLOBAL,
+                kind = ExceptionKind.VULNERABILITY,
+                subjectValue = "CVE-2024-0001",
+                reason = "ordinary suppression",
+                createdBy = "tester"
+            )
+        )
+
+        val recomputed = recomputeAndReload()
+        assertThat(recomputed.filter { it.vulnerabilityId == "CVE-2024-0001" })
+            .isNotEmpty
+            .allSatisfy { assertThat(it.excepted).isTrue() }
+    }
+
+    /**
+     * End-to-end statement of the feature's core invariant, at the SQL layer: an approved
+     * "No EDR possible" exception on an asset must leave that asset's findings visible.
+     * Stored exactly as the request pipeline stores it — ALL_VULNS × ASSET, which for
+     * kind=VULNERABILITY would suppress every finding on the box.
+     */
+    @Test
+    @DisplayName("a NO_EDR exception leaves the asset's vulnerabilities visible")
+    fun noEdrExceptionSuppressesNothing() {
+        val (matching, _) = seedFixture()
+        exceptionRepository.save(
+            VulnerabilityException(
+                subject = VulnerabilityException.Subject.ALL_VULNS,
+                scope = VulnerabilityException.Scope.ASSET,
+                kind = ExceptionKind.NO_EDR,
+                assetId = matching.id,
+                reason = "appliance image cannot run a Falcon sensor",
+                createdBy = "tester"
+            )
+        )
+
         assertThat(recomputeAndReload()).allSatisfy { assertThat(it.excepted).isFalse() }
     }
 }

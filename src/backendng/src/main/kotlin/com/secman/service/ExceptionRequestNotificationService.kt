@@ -2,6 +2,7 @@ package com.secman.service
 
 import com.secman.config.AppConfig
 import com.secman.domain.Asset
+import com.secman.domain.ExceptionKind
 import com.secman.domain.User
 import com.secman.domain.VulnerabilityException
 import com.secman.domain.VulnerabilityExceptionRequest
@@ -107,6 +108,11 @@ open class ExceptionRequestNotificationService(
      * where there is no single CVE to show.
      */
     private fun describeSubject(request: VulnerabilityExceptionRequest): String {
+        // NO_EDR is stored as the filler subject ALL_VULNS, so without this branch every
+        // "no EDR possible" mail would read "All Vulnerabilities on <host>" — and a reviewer
+        // acting on the mail alone would believe they are waiving every finding on that box.
+        if (request.kind == ExceptionKind.NO_EDR) return "No EDR possible"
+
         val singleCve = resolveCveId(request)
         if (singleCve != "Unknown CVE") return singleCve
 

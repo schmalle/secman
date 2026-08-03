@@ -403,6 +403,7 @@ const MyExceptionRequests: React.FC = () => {
                                                         <td data-testid={`my-exception-request-scope-${request.id}`}>
                                                             <ExceptionRequestScopeBadge
                                                                 scope={request.scope}
+                                                                kind={request.kind}
                                                                 scopeValue={request.scopeValue}
                                                                 assetId={request.assetId}
                                                                 assetName={request.assetName}

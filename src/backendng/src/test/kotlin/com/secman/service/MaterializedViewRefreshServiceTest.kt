@@ -32,6 +32,7 @@ class MaterializedViewRefreshServiceTest {
     private val assetHeatmapService = mockk<AssetHeatmapService>(relaxed = true)
     private val vulnerabilityService = mockk<VulnerabilityService>(relaxed = true)
     private val awsCleanServerKpiService = mockk<AwsCleanServerKpiService>(relaxed = true)
+    private val edrCoverageKpiService = mockk<EdrCoverageKpiService>(relaxed = true)
 
     private lateinit var service: MaterializedViewRefreshService
 
@@ -93,6 +94,7 @@ class MaterializedViewRefreshServiceTest {
             assetHeatmapService,
             vulnerabilityService,
             awsCleanServerKpiService,
+            edrCoverageKpiService,
             minRefreshIntervalSeconds,
             quietPeriodSeconds
         )
@@ -209,6 +211,10 @@ class MaterializedViewRefreshServiceTest {
         service.executeRefresh(job)
 
         verify(exactly = 1) { awsCleanServerKpiService.recalculate() }
+        // The EDR-coverage KPI hangs off the same hook. Asserted here because a refresh that
+        // silently stopped recalculating it would leave the dashboard reporting stale coverage
+        // with nothing to indicate the number had gone cold.
+        verify(exactly = 1) { edrCoverageKpiService.recalculate() }
     }
 
     @Test

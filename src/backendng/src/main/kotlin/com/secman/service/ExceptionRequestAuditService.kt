@@ -45,6 +45,9 @@ class ExceptionRequestAuditService(
                 val contextData = createContextData(
                     mapOf(
                         "scope" to request.scope.name,
+                        // Without this the audit trail cannot distinguish a NO_EDR record from
+                        // an ALL_VULNS x ASSET suppression — they share every other field.
+                        "kind" to request.kind.name,
                         "reasonSummary" to request.reason.take(200),
                         "expirationDate" to request.expirationDate.toString(),
                         "autoApproved" to request.autoApproved,

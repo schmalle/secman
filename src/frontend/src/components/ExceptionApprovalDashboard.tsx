@@ -390,6 +390,7 @@ const ExceptionApprovalDashboard: React.FC = () => {
                               <td data-testid={`exception-approval-scope-${request.id}`}>
                                 <ExceptionRequestScopeBadge
                                   scope={request.scope}
+                                  kind={request.kind}
                                   scopeValue={request.scopeValue}
                                   assetId={request.assetId}
                                   assetName={request.assetName}

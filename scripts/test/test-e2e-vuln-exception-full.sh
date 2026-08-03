@@ -1071,7 +1071,7 @@ cleanup() {
     local asset_ids_csv
     asset_ids_csv=$(db_exec "
         SELECT GROUP_CONCAT(id) FROM asset
-         WHERE name IN ('${ASSET1_NAME}','${ASSET2_NAME}',
+         WHERE name IN ('${ASSET1_NAME}','${ASSET2_NAME}','${ASSET1_NAME}-noedr',
                         '${AWS_ASSET_A_NAME}','${AWS_ASSET_B_NAME}','${AWS_ASSET_C_NAME}')
             OR name LIKE '${MATRIX_ASSET_PREFIX}-%';
     ")
@@ -1619,6 +1619,134 @@ else
     else
         record_skip "Phase 8d.5 (import_github_repos no-config negative)" "an active GitHub App config exists (HTTP $active_code)"
     fi
+fi
+
+# =============================================================================
+# Phase 8e (MCP): "No EDR possible" exception kind
+# =============================================================================
+#
+# The invariant under test is the whole point of the NO_EDR kind: it is stored as
+# ALL_VULNS x ASSET — the exact shape that, for kind=VULNERABILITY, suppresses every
+# finding on the asset — and approving it must hide NOTHING.
+#
+# Uses its own asset so the assertion cannot be confused by the approve/reject/cancel
+# lifecycle earlier phases run against testasset1/testasset2.
+
+if [[ "$UI_ONLY" == "true" ]]; then
+    record_skip "Phase 8e (No EDR possible exception kind)" "--ui-only"
+else
+    log "=== Phase 8e: NO_EDR exception kind ==="
+
+    noedr_asset_name="${ASSET1_NAME}-noedr"
+    noedr_cve="CVE-E2E-NOEDR-1"
+
+    res=$(mcp_call "create_asset" "$(jq -nc \
+        --arg n "$noedr_asset_name" --arg o "$USER1_USERNAME" \
+        '{name:$n,type:"SERVER",owner:$o,description:"E2E NO_EDR test asset"}')" "$ADMIN_USER_EMAIL")
+    NOEDR_ASSET_ID=$(echo "$res" | jq -r '.id')
+    [[ -z "$NOEDR_ASSET_ID" || "$NOEDR_ASSET_ID" == "null" ]] && fail "Failed to create $noedr_asset_name: $res"
+    ok "Created NO_EDR test asset $noedr_asset_name (id=$NOEDR_ASSET_ID)"
+
+    res=$(mcp_call "add_vulnerability" "$(jq -nc \
+        --arg h "$noedr_asset_name" --arg c "$noedr_cve" --arg o "$USER1_USERNAME" \
+        '{hostname:$h,cve:$c,criticality:"CRITICAL",daysOpen:40,owner:$o}')" "$ADMIN_USER_EMAIL")
+    NOEDR_VULN_ID=$(echo "$res" | jq -r '.id')
+    [[ -z "$NOEDR_VULN_ID" || "$NOEDR_VULN_ID" == "null" ]] && fail "Failed to add NO_EDR test vuln: $res"
+    ok "Added $noedr_cve (40d, overdue) on $noedr_asset_name — id=$NOEDR_VULN_ID"
+
+    # The "E2E TEST " prefix is load-bearing: cleanup() deletes exception rows by
+    # `reason LIKE 'E2E TEST %'`, and a NO_EDR exception's asset_id is a plain column
+    # rather than an FK, so it would otherwise outlive the asset as an orphan.
+    noedr_reason="E2E TEST No EDR possible: this appliance runs a vendor-locked image that cannot host a Falcon sensor."
+
+    # 8e.1 A plain user can file it — no vulnerabilityId, and no ADMIN/VULN role despite
+    # the request being stored with subject=ALL_VULNS.
+    res=$(mcp_call "create_exception_request" "$(jq -nc \
+        --arg aid "$NOEDR_ASSET_ID" --arg reason "$noedr_reason" --arg exp "$future_date" \
+        '{kind:"NO_EDR", subject:"ALL_VULNS", scope:"ASSET",
+          assetId:($aid|tonumber), reason:$reason, expirationDate:$exp}')" "$USER1_EMAIL")
+    NOEDR_REQ_ID=$(echo "$res" | jq -r '.request.id')
+    noedr_status=$(echo "$res" | jq -r '.request.status')
+    noedr_kind=$(echo "$res" | jq -r '.request.kind')
+    [[ -z "$NOEDR_REQ_ID" || "$NOEDR_REQ_ID" == "null" ]] && fail "Failed to create NO_EDR request: $res"
+    [[ "$noedr_status" == "PENDING" ]] || fail "Expected PENDING NO_EDR request, got $noedr_status"
+    [[ "$noedr_kind" == "NO_EDR" ]] || fail "Expected kind=NO_EDR, got '$noedr_kind'"
+    ok "user1 created NO_EDR request id=$NOEDR_REQ_ID status=PENDING (no vulnerabilityId, no ADMIN/VULN role)"
+
+    # 8e.2 A duplicate for the same asset is refused — NO_EDR has no cveId, so the
+    # CVE-keyed duplicate check cannot cover it.
+    err=$(mcp_call "create_exception_request" "$(jq -nc \
+        --arg aid "$NOEDR_ASSET_ID" --arg reason "$noedr_reason" --arg exp "$future_date" \
+        '{kind:"NO_EDR", subject:"ALL_VULNS", scope:"ASSET",
+          assetId:($aid|tonumber), reason:$reason, expirationDate:$exp}')" "$USER1_EMAIL" --allow-error)
+    echo "$err" | grep -qi "already has an active" \
+        || fail "Duplicate NO_EDR request for the same asset was NOT rejected: $err"
+    ok "duplicate NO_EDR request for the same asset is rejected"
+
+    # 8e.3 An over-broad NO_EDR request is refused up front.
+    err=$(mcp_call "create_exception_request" "$(jq -nc \
+        --arg reason "$noedr_reason" --arg exp "$future_date" \
+        '{kind:"NO_EDR", subject:"ALL_VULNS", scope:"GLOBAL",
+          reason:$reason, expirationDate:$exp}')" "$USER1_EMAIL" --allow-error)
+    echo "$err" | grep -qiE "scope=ASSET|assetId is required" \
+        || fail "NO_EDR with scope=GLOBAL was NOT rejected: $err"
+    ok "NO_EDR request with a non-ASSET scope is rejected"
+
+    # 8e.4 The approver can tell it apart from an all-vulnerabilities waiver.
+    res=$(mcp_call "get_pending_exception_requests" '{}' "$ADMIN_USER_EMAIL")
+    pending_kind=$(echo "$res" | jq -r --arg id "$NOEDR_REQ_ID" \
+        '(.requests // .) | map(select(.id == ($id|tonumber)))[0].kind // empty')
+    [[ "$pending_kind" == "NO_EDR" ]] || fail "Admin pending list does not mark request $NOEDR_REQ_ID as NO_EDR (got '$pending_kind')"
+    ok "admin pending list marks request $NOEDR_REQ_ID as kind=NO_EDR"
+
+    res=$(mcp_call "approve_exception_request" "$(jq -nc --arg id "$NOEDR_REQ_ID" \
+        '{requestId:($id|tonumber)}')" "$ADMIN_USER_EMAIL")
+    noedr_status=$(echo "$res" | jq -r '.request.status')
+    [[ "$noedr_status" == "APPROVED" ]] || fail "Expected APPROVED NO_EDR request, got $noedr_status"
+    ok "admin approved NO_EDR request $NOEDR_REQ_ID"
+
+    # 8e.5 THE CORE INVARIANT, checked against two of the three match predicates.
+    #
+    # (a) The entity predicate, via the tool's own filter: get_vulnerabilities with
+    #     includeExcepted=false drops any row an active exception matches. The NO_EDR
+    #     exception covers this asset, so if its kind guard were missing the row would
+    #     vanish here.
+    res=$(mcp_call "get_vulnerabilities" "$(jq -nc --arg cve "$noedr_cve" \
+        '{pageSize:200, includeExcepted:false, cveId:$cve}')" "$ADMIN_USER_EMAIL")
+    noedr_visible=$(echo "$res" | jq -r --arg id "$NOEDR_VULN_ID" \
+        '.vulnerabilities | map(select(.id == ($id|tonumber))) | length')
+    [[ "$noedr_visible" == "1" ]] \
+        || fail "NO_EDR exception suppressed a finding — it was filtered out of get_vulnerabilities (found=$noedr_visible). The entity kind guard is broken."
+    ok "the asset's vulnerability is still returned with includeExcepted=false (entity predicate honours kind)"
+
+    # (b) The SQL predicate + materialization, via the flag those UPDATEs write.
+    #     recomputeExcepted* interpolates ExceptionMatchSql.EXCEPTION_MATCH, so a missing
+    #     kind guard there would set excepted=1 on every row of this asset.
+    noedr_excepted_rows=$(db_exec "SELECT COUNT(*) FROM vulnerability WHERE asset_id=${NOEDR_ASSET_ID} AND excepted=1;")
+    [[ "$noedr_excepted_rows" == "0" ]] \
+        || fail "NO_EDR exception set excepted=1 on $noedr_excepted_rows row(s) — the SQL kind guard is broken"
+    ok "no vulnerability row on the asset has excepted=1 (SQL predicate honours kind)"
+
+    # 8e.6 It is listed as an exception, filterable by kind, and waives nothing.
+    res=$(mcp_call "list_vulnerability_exceptions" '{"kind":"NO_EDR","activeOnly":true}' "$ADMIN_USER_EMAIL")
+    noedr_listed=$(echo "$res" | jq -r --arg aid "$NOEDR_ASSET_ID" \
+        '(.exceptions // .) | map(select(.assetId == ($aid|tonumber) and .kind == "NO_EDR")) | length')
+    [[ "$noedr_listed" == "1" ]] || fail "list_vulnerability_exceptions kind=NO_EDR did not return the approved record (got $noedr_listed)"
+    noedr_affected=$(echo "$res" | jq -r --arg aid "$NOEDR_ASSET_ID" \
+        '(.exceptions // .) | map(select(.assetId == ($aid|tonumber)))[0].affectedVulnerabilityCount // 0')
+    [[ "$noedr_affected" == "0" ]] || fail "NO_EDR exception reports $noedr_affected affected vulnerabilities, expected 0"
+    ok "NO_EDR exception is listed, filterable by kind, and reports 0 affected vulnerabilities"
+
+    # 8e.7 The KPI endpoint is reachable and role-gated as documented.
+    admin_jwt=$(get_jwt "$ADMIN_USERNAME" "$ADMIN_PASSWORD")
+    kpi_code=$(curl -s -o /dev/null -w '%{http_code}' \
+        -H "Authorization: Bearer ${admin_jwt}" "${BASE_URL}/api/dashboard/edr-coverage-kpi")
+    [[ "$kpi_code" == "200" ]] || fail "GET /api/dashboard/edr-coverage-kpi returned $kpi_code for ADMIN"
+    user_jwt=$(get_jwt "$USER1_USERNAME" "$USER1_PASSWORD")
+    kpi_user_code=$(curl -s -o /dev/null -w '%{http_code}' \
+        -H "Authorization: Bearer ${user_jwt}" "${BASE_URL}/api/dashboard/edr-coverage-kpi")
+    [[ "$kpi_user_code" == "403" ]] || fail "EDR coverage KPI should be 403 for a plain user, got $kpi_user_code"
+    ok "EDR coverage KPI is 200 for ADMIN and 403 for a plain user"
 fi
 
 # =============================================================================

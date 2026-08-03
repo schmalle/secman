@@ -79,6 +79,10 @@ class GetPendingExceptionRequestsTool(
                     "assetName" to request.assetName,
                     "assetIp" to request.assetIp,
                     "requestedByUsername" to request.requestedByUsername,
+                    // NO_EDR requests are stored as ALL_VULNS x ASSET, so without `kind` an
+                    // approver reading this listing would see what looks like a request to
+                    // waive every finding on the asset.
+                    "kind" to request.kind.name,
                     "subject" to request.subject.name,
                     "scope" to request.scope.name,
                     "subjectValue" to request.subjectValue,

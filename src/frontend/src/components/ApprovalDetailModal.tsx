@@ -275,6 +275,7 @@ const ApprovalDetailModal: React.FC<ApprovalDetailModalProps> = ({
                           <strong>Scope:</strong><br />
                           <ExceptionRequestScopeBadge
                             scope={request.scope}
+                            kind={request.kind}
                             scopeValue={request.scopeValue}
                             assetId={request.assetId}
                             assetName={request.assetName}
@@ -543,6 +544,7 @@ const ApprovalDetailModal: React.FC<ApprovalDetailModalProps> = ({
                                   <td>
                                     <ExceptionRequestScopeBadge
                                       scope={sr.scope}
+                                      kind={sr.kind}
                                       scopeValue={sr.scopeValue}
                                       assetId={sr.assetId}
                                       assetName={sr.assetName}

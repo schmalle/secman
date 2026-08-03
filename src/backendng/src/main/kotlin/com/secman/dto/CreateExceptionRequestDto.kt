@@ -1,5 +1,6 @@
 package com.secman.dto
 
+import com.secman.domain.ExceptionKind
 import com.secman.domain.VulnerabilityException
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.validation.constraints.Future
@@ -57,6 +58,18 @@ data class CreateExceptionRequestDto(
      */
     @field:NotNull(message = "Exception scope is required")
     val scope: VulnerabilityException.Scope,
+
+    /**
+     * WHETHER this is a suppression rule at all. Defaults to VULNERABILITY, so every
+     * existing client — the web UI, the MCP tool, the extensions/ repos — keeps working
+     * and keeps meaning exactly what it meant before.
+     *
+     * NO_EDR records "this asset cannot run an EDR agent": scope must be ASSET, assetId is
+     * required, subject must be the filler ALL_VULNS with a null subjectValue, and
+     * scopeValue must be null. Unlike a real ALL_VULNS request it does NOT require
+     * ADMIN/VULN, because it suppresses nothing. See ExceptionKind.
+     */
+    val kind: ExceptionKind = ExceptionKind.VULNERABILITY,
 
     /**
      * Subject value: product name pattern or comma-separated CVE list.

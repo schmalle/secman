@@ -1,5 +1,6 @@
 package com.secman.mcp.tools
 
+import com.secman.domain.ExceptionKind
 import com.secman.domain.McpOperation
 import com.secman.domain.VulnerabilityException
 import com.secman.dto.CreateExceptionRequestDto
@@ -37,11 +38,21 @@ open class CreateExceptionRequestTool(
 
     override val inputSchema = mapOf(
         "type" to "object",
-        "required" to listOf("vulnerabilityId", "subject", "scope", "reason", "expirationDate"),
+        // vulnerabilityId is NOT listed here: a kind=NO_EDR request is about an asset's
+        // inability to run an EDR agent and has no vulnerability to anchor to. It stays
+        // mandatory for kind=VULNERABILITY, enforced in execute() below. Removing it from
+        // `required` only widens what the schema accepts, so existing callers are unaffected.
+        "required" to listOf("subject", "scope", "reason", "expirationDate"),
         "properties" to mapOf(
             "vulnerabilityId" to mapOf(
                 "type" to "number",
-                "description" to "ID of the vulnerability to request exception for"
+                "description" to "ID of the vulnerability to request exception for (required unless kind=NO_EDR)"
+            ),
+            "kind" to mapOf(
+                "type" to "string",
+                "enum" to listOf("VULNERABILITY", "NO_EDR"),
+                "default" to "VULNERABILITY",
+                "description" to "VULNERABILITY (default) suppresses matching findings. NO_EDR records that an asset cannot run an EDR agent: it requires scope=ASSET and assetId, takes no vulnerabilityId/subjectValue/scopeValue, suppresses nothing, and only removes the asset from the EDR-coverage KPI denominator."
             ),
             "subject" to mapOf(
                 "type" to "string",
@@ -89,20 +100,42 @@ open class CreateExceptionRequestTool(
         requireDelegation(context)?.let { return it }
 
         try {
-            // Parse and validate vulnerabilityId
-            val vulnerabilityId = (arguments["vulnerabilityId"] as? Number)?.toLong()
-                ?: return McpToolResult.error("VALIDATION_ERROR", "vulnerabilityId is required")
+            val kindStr = (arguments["kind"] as? String) ?: ExceptionKind.VULNERABILITY.name
+            val kind = try {
+                ExceptionKind.valueOf(kindStr)
+            } catch (e: IllegalArgumentException) {
+                return McpToolResult.error("VALIDATION_ERROR", "Invalid kind: $kindStr. Must be VULNERABILITY or NO_EDR")
+            }
 
-            // Security fix: Verify the delegated user can access the vulnerability's asset
-            // Without this check, a non-ADMIN user could create exception requests for
-            // vulnerabilities on assets they cannot normally access via MCP or REST API.
-            if (!context.isAdmin) {
-                val vulnerability = vulnerabilityRepository.findById(vulnerabilityId).orElse(null)
-                    ?: return McpToolResult.error("NOT_FOUND", "Vulnerability not found: $vulnerabilityId")
-                val assetId = vulnerability.asset.id
-                if (assetId == null || !context.canAccessAsset(assetId)) {
-                    return McpToolResult.error("NOT_FOUND", "Vulnerability not found: $vulnerabilityId")
+            // A NO_EDR request has no vulnerability anchor — it names the asset directly — so
+            // the vulnerability-derived access check below cannot apply. The asset is instead
+            // checked head-on, which is what stops a delegated user filing requests against
+            // arbitrary asset ids and, once approved, shrinking the EDR-coverage denominator
+            // for boxes they have no relationship to.
+            val vulnerabilityId: Long? = if (kind == ExceptionKind.NO_EDR) {
+                val assetId = (arguments["assetId"] as? Number)?.toLong()
+                    ?: return McpToolResult.error("VALIDATION_ERROR", "assetId is required for kind=NO_EDR")
+                if (!context.isAdmin && !context.canAccessAsset(assetId)) {
+                    return McpToolResult.error("NOT_FOUND", "Asset not found: $assetId")
                 }
+                null
+            } else {
+                // Parse and validate vulnerabilityId
+                val vid = (arguments["vulnerabilityId"] as? Number)?.toLong()
+                    ?: return McpToolResult.error("VALIDATION_ERROR", "vulnerabilityId is required")
+
+                // Security fix: Verify the delegated user can access the vulnerability's asset
+                // Without this check, a non-ADMIN user could create exception requests for
+                // vulnerabilities on assets they cannot normally access via MCP or REST API.
+                if (!context.isAdmin) {
+                    val vulnerability = vulnerabilityRepository.findById(vid).orElse(null)
+                        ?: return McpToolResult.error("NOT_FOUND", "Vulnerability not found: $vid")
+                    val assetId = vulnerability.asset.id
+                    if (assetId == null || !context.canAccessAsset(assetId)) {
+                        return McpToolResult.error("NOT_FOUND", "Vulnerability not found: $vid")
+                    }
+                }
+                vid
             }
 
             // Parse and validate reason
@@ -162,7 +195,8 @@ open class CreateExceptionRequestTool(
                         subjectValue = subjectValue,
                         scopeValue = scopeValue,
                         assetId = assetIdArg,
-                        callerRoles = context.delegatedUserRoles ?: emptySet()
+                        callerRoles = context.delegatedUserRoles ?: emptySet(),
+                        kind = kind
                     )
                 } catch (e: SecurityException) {
                     return McpToolResult.error("INSUFFICIENT_ROLE", e.message ?: "Insufficient role")
@@ -173,6 +207,7 @@ open class CreateExceptionRequestTool(
                         "valid" to true,
                         "request" to mapOf(
                             "vulnerabilityId" to vulnerabilityId,
+                            "kind" to kind.name,
                             "subject" to subject.name,
                             "scope" to scope.name,
                             "subjectValue" to subjectValue,
@@ -189,6 +224,7 @@ open class CreateExceptionRequestTool(
                 vulnerabilityId = vulnerabilityId,
                 subject = subject,
                 scope = scope,
+                kind = kind,
                 subjectValue = subjectValue,
                 scopeValue = scopeValue,
                 assetId = assetIdArg,
@@ -221,6 +257,7 @@ open class CreateExceptionRequestTool(
                         "assetName" to result.assetName,
                         "assetIp" to result.assetIp,
                         "requestedByUsername" to result.requestedByUsername,
+                        "kind" to result.kind.name,
                         "subject" to result.subject.name,
                         "scope" to result.scope.name,
                         "subjectValue" to result.subjectValue,

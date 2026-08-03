@@ -24,7 +24,8 @@ import java.time.LocalDateTime
         Index(name = "idx_asset_last_seen", columnList = "last_seen"),            // Outdated asset queries
         Index(name = "idx_asset_manual_creator", columnList = "manual_creator_id"), // Access control by creator
         Index(name = "idx_asset_scan_uploader", columnList = "scan_uploader_id"),   // Access control by uploader
-        Index(name = "idx_asset_network_zone", columnList = "network_zone")         // Network zone filtering (port-scan addon)
+        Index(name = "idx_asset_network_zone", columnList = "network_zone"),        // Network zone filtering (port-scan addon)
+        Index(name = "idx_asset_crowdstrike_agent_seen_at", columnList = "crowdstrike_agent_seen_at") // EDR-coverage KPI
     ]
 )
 @Serdeable
@@ -102,6 +103,20 @@ data class Asset(
      */
     @Column(name = "crowdstrike_last_imported_at")
     var crowdStrikeLastImportedAt: LocalDateTime? = null,
+
+    /**
+     * Timestamp when CrowdStrike last reported this asset as a managed device — i.e. when
+     * it appeared in an import's Stage-1 queried-host population.
+     *
+     * Distinct from [crowdStrikeLastImportedAt], which means "had a finding imported" and
+     * drives the CrowdStrike stale-asset deletion rules. That column is a poor EDR-presence
+     * signal because the daily import filters `--severity CRITICAL,HIGH` and drops empty
+     * batches, so a fully-patched host with a healthy sensor never sets it. This column is
+     * stamped for every queried device regardless of findings, and is the numerator source
+     * for `EdrCoverageKpiService`.
+     */
+    @Column(name = "crowdstrike_agent_seen_at")
+    var crowdStrikeAgentSeenAt: LocalDateTime? = null,
 
     /**
      * Comma-separated group names this asset belongs to

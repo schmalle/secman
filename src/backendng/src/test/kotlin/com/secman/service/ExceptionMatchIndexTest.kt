@@ -1,6 +1,7 @@
 package com.secman.service
 
 import com.secman.domain.Asset
+import com.secman.domain.ExceptionKind
 import com.secman.domain.ExceptionMatchable
 import com.secman.domain.Vulnerability
 import com.secman.domain.VulnerabilityException
@@ -48,10 +49,12 @@ class ExceptionMatchIndexTest {
         scope: VulnerabilityException.Scope,
         subjectValue: String? = null,
         scopeValue: String? = null,
-        assetId: Long? = null
+        assetId: Long? = null,
+        kind: ExceptionKind = ExceptionKind.VULNERABILITY
     ) = VulnerabilityException(
         subject = subject,
         scope = scope,
+        kind = kind,
         subjectValue = subjectValue,
         scopeValue = scopeValue,
         assetId = assetId,
@@ -150,8 +153,58 @@ class ExceptionMatchIndexTest {
     }
 
     /**
+     * A NO_EDR exception is an asset-capability record, not a suppression rule. It must
+     * never match anything, whatever its subject and scope say — including the
+     * ALL_VULNS × ASSET shape it is actually stored as, which for kind=VULNERABILITY
+     * would suppress every finding on the asset.
+     *
+     * This is the load-bearing guarantee of the whole feature: approving "this box cannot
+     * run an EDR agent" must not silently hide its vulnerabilities.
+     */
+    @Test
+    fun `NO_EDR exceptions never match, not even in their stored ALL_VULNS ASSET shape`() {
+        val noEdr = exception(
+            VulnerabilityException.Subject.ALL_VULNS,
+            VulnerabilityException.Scope.ASSET,
+            assetId = 1L,
+            kind = ExceptionKind.NO_EDR
+        )
+        val index = ExceptionMatchIndex(listOf(noEdr))
+
+        assertThat(index.isExcepted(row(assetId = 1L))).isFalse()
+        assertThat(index.firstMatch(row(assetId = 1L))).isNull()
+
+        // ...and the equivalent VULNERABILITY row DOES match, proving the fixture would
+        // otherwise have been suppressed and the assertion above is not vacuous.
+        val suppressing = exception(
+            VulnerabilityException.Subject.ALL_VULNS,
+            VulnerabilityException.Scope.ASSET,
+            assetId = 1L
+        )
+        assertThat(ExceptionMatchIndex(listOf(suppressing)).isExcepted(row(assetId = 1L))).isTrue()
+    }
+
+    @Test
+    fun `a NO_EDR exception does not mask a genuine suppression alongside it`() {
+        val index = ExceptionMatchIndex(listOf(
+            exception(
+                VulnerabilityException.Subject.ALL_VULNS, VulnerabilityException.Scope.ASSET,
+                assetId = 1L, kind = ExceptionKind.NO_EDR
+            ),
+            exception(
+                VulnerabilityException.Subject.CVE, VulnerabilityException.Scope.ASSET,
+                subjectValue = "CVE-2024-0001", assetId = 1L
+            )
+        ))
+        val match = index.firstMatch(row(vulnId = "CVE-2024-0001", assetId = 1L))
+        assertThat(match).isNotNull()
+        assertThat(match!!.kind).isEqualTo(ExceptionKind.VULNERABILITY)
+        assertThat(index.isExcepted(row(vulnId = "CVE-2024-9999", assetId = 1L))).isFalse()
+    }
+
+    /**
      * Anti-drift lock: the shared index and the canonical entity predicate
-     * [VulnerabilityException.matches] must agree for every subject×scope combination.
+     * [VulnerabilityException.matches] must agree for every kind×subject×scope combination.
      * (The index intentionally skips the isActive() check — all fixtures here are active.)
      */
     @Test
@@ -193,19 +246,29 @@ class ExceptionMatchIndexTest {
             Triple(VulnerabilityException.Scope.OS, "Windows Server 2019", null)
         )
 
-        for ((subject, subjectValue) in subjects) {
-            for ((scope, scopeValue, exAssetId) in scopes) {
-                val ex = exception(subject, scope, subjectValue, scopeValue, exAssetId)
-                val index = ExceptionMatchIndex(listOf(ex))
-                for ((v, a) in pairs) {
-                    val entityResult = ex.matches(v, a)
-                    val indexResult = index.firstMatch(v, a) != null
-                    assertThat(indexResult)
-                        .withFailMessage(
-                            "Index and entity disagree for subject=%s scope=%s vuln=%s asset=%s: index=%s entity=%s",
-                            subject, scope, v.vulnerabilityId, a.name, indexResult, entityResult
-                        )
-                        .isEqualTo(entityResult)
+        for (kind in ExceptionKind.entries) {
+            for ((subject, subjectValue) in subjects) {
+                for ((scope, scopeValue, exAssetId) in scopes) {
+                    val ex = exception(subject, scope, subjectValue, scopeValue, exAssetId, kind)
+                    val index = ExceptionMatchIndex(listOf(ex))
+                    for ((v, a) in pairs) {
+                        val entityResult = ex.matches(v, a)
+                        val indexResult = index.firstMatch(v, a) != null
+                        assertThat(indexResult)
+                            .withFailMessage(
+                                "Index and entity disagree for kind=%s subject=%s scope=%s vuln=%s asset=%s: index=%s entity=%s",
+                                kind, subject, scope, v.vulnerabilityId, a.name, indexResult, entityResult
+                            )
+                            .isEqualTo(entityResult)
+                        if (kind == ExceptionKind.NO_EDR) {
+                            assertThat(entityResult)
+                                .withFailMessage(
+                                    "NO_EDR must never suppress, but subject=%s scope=%s matched vuln=%s on asset=%s",
+                                    subject, scope, v.vulnerabilityId, a.name
+                                )
+                                .isFalse()
+                        }
+                    }
                 }
             }
         }

@@ -11,6 +11,7 @@ package com.secman.repository
  *   - `v` for vulnerability  (columns referenced: `vulnerability_id`, `vulnerable_product_versions`)
  *   - `a` for asset          (columns referenced: `id`, `ip`, `cloud_account_id`, `os_version`)
  *
+ * Kind axis     : VULNERABILITY | NO_EDR   — only VULNERABILITY ever suppresses
  * Subject axis  : ALL_VULNS | PRODUCT | CVE
  * Scope axis    : GLOBAL    | IP      | ASSET | AWS_ACCOUNT | OS
  *
@@ -35,11 +36,28 @@ package com.secman.repository
  *     only AFTER a recompute lands. `ExceptedFlagSqlAgreementIntegrationTest` asserts the two
  *     agree; keep it passing.
  *
+ * Three deliberate choices in the `kind` conjunct, all of which look like over-caution
+ * and are not:
+ *
+ *   1. `e.kind IS NULL OR e.kind = 'VULNERABILITY'`, NOT plain equality. V247 adds the
+ *      column NOT NULL with a backfill, so NULL should be impossible — but if it ever
+ *      occurred (Hibernate's hbm2ddl.auto=update creating the column on an environment
+ *      where V247 did not apply, a restored pre-V247 dump, baseline-on-migrate skipping
+ *      history), plain equality would make EVERY legacy exception stop matching, and the
+ *      03:00 recomputeAllExceptedScheduled would clear `excepted` fleet-wide, unattended.
+ *      This form degrades that scenario to "legacy rows behave exactly as before".
+ *   2. NOT `COALESCE(e.kind, 'VULNERABILITY') = 'VULNERABILITY'` — COALESCE is
+ *      non-sargable and would defeat idx_vuln_exception_covering. `IS NULL OR col = 'x'`
+ *      is a two-interval range scan MariaDB serves from the index.
+ *   3. First position, matching the leading column of idx_vuln_exception_covering as
+ *      rebuilt by V247.
+ *
  * Spec: docs/superpowers/specs/2026-04-28-vulnerability-exceptions-holistic-design.md (§3, §5)
  */
 object ExceptionMatchSql {
     const val EXCEPTION_MATCH: String = """
-        (e.expiration_date IS NULL OR e.expiration_date > NOW())
+        (e.kind IS NULL OR e.kind = 'VULNERABILITY')
+        AND (e.expiration_date IS NULL OR e.expiration_date > NOW())
         AND (
             (
                 (e.subject = 'ALL_VULNS')

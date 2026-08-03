@@ -254,6 +254,37 @@ empty payload, source-on-human-owned-asset, severity drift, XLSX isolation)
 plus `CrowdStrikeReconcileJobIntegrationTest` (async job lifecycle, 409 guard,
 unknown-job 404) and `CrowdStrikeReconcileJobServiceTest` (job state machine).
 
+## EDR-presence signal: `asset.crowdstrike_agent_seen_at` (V248)
+
+The same reconcile call also stamps `Asset.crowdStrikeAgentSeenAt` on every asset
+resolved from `queriedHosts`, and that timestamp — **not**
+`crowdstrike_last_imported_at` — is the numerator source for the EDR-coverage KPI
+(`EdrCoverageKpiService`, `GET /api/dashboard/edr-coverage-kpi`).
+
+The distinction matters and is easy to get wrong: `crowdstrike_last_imported_at` is
+only written for hosts that returned findings. `scripts/import.sh` runs
+`--severity CRITICAL,HIGH` and `CrowdStrikeApiClientImpl` forwards a batch only when
+it is non-empty, so a **fully-patched host with a healthy Falcon sensor never sets
+it**. A coverage metric built on that column would report low coverage precisely for
+well-maintained fleets. `queriedHosts` is the full Stage-1 device population,
+including hosts with zero matching vulnerabilities, which is what "CrowdStrike knows
+about this box" actually means.
+
+Two deliberate details:
+
+- The stamp happens **before** the zero-refresh safety brake. An aborted sweep is an
+  empty/failed *vulnerability* run, but its queried-host list is still valid evidence
+  of agent presence; stamping afterwards would collapse the KPI on exactly the days
+  the brake fires.
+- Empty or absent `queriedHosts` stamps nothing, mirroring the sweep's existing
+  "delete nothing" fail-safe — an old CLI against a new backend degrades to a stale
+  KPI rather than a wrong one.
+
+Resolution reuses `resolveQueriedAssetIds`, which matches by exact `cloudInstanceId`
+or by hostname (exact or `short.%` FQDN prefix), so one device can stamp several
+assets. Resolved-vs-queried counts are logged so that drift is observable; the sweep
+already trusts the same resolution for the strictly more destructive DELETE.
+
 ## Tests
 
 `src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportServiceTest.kt` covers: idempotent re-import, initial create, remediation removal, per-asset isolation, null-CVE filtering, expansion.

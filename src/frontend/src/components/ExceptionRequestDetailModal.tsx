@@ -220,6 +220,7 @@ const ExceptionRequestDetailModal: React.FC<ExceptionRequestDetailModalProps> = 
                                                 <br />
                                                 <ExceptionRequestScopeBadge
                                                     scope={request.scope}
+                                                    kind={request.kind}
                                                     scopeValue={request.scopeValue}
                                                     assetId={request.assetId}
                                                     assetName={request.assetName}

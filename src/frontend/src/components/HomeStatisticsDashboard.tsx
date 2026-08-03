@@ -16,6 +16,16 @@ type AwsCleanServerKpi = {
   cleanAwsServers: number | null;
 };
 
+type EdrCoverageKpi = {
+  available: boolean;
+  percentage: number | null;
+  totalEc2Instances: number | null;
+  eligibleEc2Instances: number | null;
+  coveredEc2Instances: number | null;
+  excludedByNoEdrException: number | null;
+  agentSeenWithinDays: number | null;
+};
+
 type DashboardState = {
   assets: number | null;
   users: number | null;
@@ -24,6 +34,7 @@ type DashboardState = {
   releases: number | null;
   lastCrowdStrikeCheckin: string | null;
   awsCleanServerKpi: AwsCleanServerKpi | null;
+  edrCoverageKpi: EdrCoverageKpi | null;
   accountFindingAge: Array<{
     awsAccountId: string;
     accountName: string;
@@ -39,12 +50,38 @@ const initialState: DashboardState = {
   releases: null,
   lastCrowdStrikeCheckin: null,
   awsCleanServerKpi: null,
+  edrCoverageKpi: null,
   accountFindingAge: null
 };
 
 const formatAwsCleanServerKpi = (kpi: AwsCleanServerKpi | null): string => {
   if (!kpi || !kpi.available || kpi.percentage == null) return 'Not available';
   return `${kpi.percentage}%`;
+};
+
+const formatEdrCoverageKpi = (kpi: EdrCoverageKpi | null): string => {
+  if (!kpi || !kpi.available || kpi.percentage == null) return 'Not available';
+  return `${kpi.percentage}%`;
+};
+
+/**
+ * The subtitle carries the counts the percentage hides: how many instances are actually
+ * covered, and how many were taken out of the denominator by an approved "No EDR possible"
+ * exception. Without the exemption count a rising percentage could equally mean better
+ * coverage or more exemptions.
+ */
+const describeEdrCoverage = (kpi: EdrCoverageKpi | null): string => {
+  if (!kpi || !kpi.available) {
+    return 'Awaiting the first CrowdStrike import since this metric was introduced';
+  }
+  const covered = formatCount(kpi.coveredEc2Instances);
+  const eligible = formatCount(kpi.eligibleEc2Instances);
+  const days = kpi.agentSeenWithinDays ?? 7;
+  const base = `${covered} of ${eligible} EC2 instances seen by CrowdStrike in the last ${days} days`;
+  const excluded = kpi.excludedByNoEdrException ?? 0;
+  return excluded > 0
+    ? `${base} · ${formatCount(excluded)} excluded as "No EDR possible"`
+    : base;
 };
 
 const formatDate = (isoOrNever: string): string => {
@@ -61,7 +98,7 @@ const HomeStatisticsDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardState>(initialState);
   const [userName, setUserName] = useState('there');
   const [isAdmin, setIsAdmin] = useState(false);
-  const [showAwsCleanServerKpi, setShowAwsCleanServerKpi] = useState(false);
+  const [showSecurityKpis, setShowAwsCleanServerKpi] = useState(false);
 
   useEffect(() => {
     setUserName(getUser()?.username ?? 'there');
@@ -122,6 +159,17 @@ const HomeStatisticsDashboard: React.FC = () => {
           }
         } catch (error) {
           console.warn('Failed to load AWS clean-server KPI:', error);
+        }
+
+        // Separate try/catch from the KPI above: either endpoint failing must degrade only
+        // its own card, not blank the dashboard or suppress the other KPI.
+        try {
+          const edrResp = await authenticatedGet('/api/dashboard/edr-coverage-kpi');
+          if (edrResp.ok) {
+            next.edrCoverageKpi = await edrResp.json();
+          }
+        } catch (error) {
+          console.warn('Failed to load EDR coverage KPI:', error);
         }
       }
 
@@ -185,12 +233,18 @@ const HomeStatisticsDashboard: React.FC = () => {
     });
   }
 
-  if (showAwsCleanServerKpi) {
+  if (showSecurityKpis) {
     cards.push({
       label: 'AWS Servers Without Old Vulnerabilities',
       value: formatAwsCleanServerKpi(stats.awsCleanServerKpi),
       subtitle: 'Share of AWS servers with no vulnerability older than 30 days',
       icon: 'bi-cloud-check'
+    });
+    cards.push({
+      label: 'EC2 Instances With CrowdStrike Installed',
+      value: formatEdrCoverageKpi(stats.edrCoverageKpi),
+      subtitle: describeEdrCoverage(stats.edrCoverageKpi),
+      icon: 'bi-shield-lock'
     });
   }
 

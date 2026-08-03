@@ -170,16 +170,14 @@ open class GetVulnerabilitiesTool(
                     io.micronaut.data.model.Page.of(content, pageable, total.toLong())
                 }
 
-                // No filters - get all with access control
+                // No filters - get all with access control.
+                // The access filter and the paging both run in SQL. Reading the table with
+                // findAll() and filtering in Kotlin loaded every vulnerability row into heap
+                // (1.1M entities against a 1 GB heap = OutOfMemoryError), and the cost grew
+                // with the table rather than with the page size actually requested.
                 else -> {
                     if (accessibleIds != null) {
-                        val allAccessible = vulnerabilityRepository.findAll()
-                            .filter { accessibleIds.contains(it.asset.id) }
-                        val total = allAccessible.size
-                        val start = page * pageSize
-                        val end = minOf(start + pageSize, total)
-                        val content = if (start < total) allAccessible.subList(start, end) else emptyList()
-                        io.micronaut.data.model.Page.of(content, pageable, total.toLong())
+                        vulnerabilityRepository.findByAssetIdIn(accessibleIds, pageable)
                     } else {
                         vulnerabilityRepository.findAll(pageable)
                     }

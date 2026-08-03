@@ -45,6 +45,7 @@ open class MaterializedViewRefreshService(
     private val assetHeatmapService: AssetHeatmapService,
     private val vulnerabilityService: VulnerabilityService,
     private val awsCleanServerKpiService: AwsCleanServerKpiService,
+    private val edrCoverageKpiService: EdrCoverageKpiService,
     @Value("\${secman.materialized-view-refresh.min-interval-seconds:60}")
     private val minRefreshIntervalSeconds: Long,
     @Value("\${secman.materialized-view-refresh.quiet-period-seconds:120}")
@@ -401,6 +402,13 @@ open class MaterializedViewRefreshService(
             awsCleanServerKpiService.recalculate()
         } catch (e: Exception) {
             log.error("AWS clean-server KPI recalculation failed (non-fatal): {}", e.message, e)
+        }
+
+        try {
+            log.info("Recalculating EDR coverage KPI after materialized view refresh")
+            edrCoverageKpiService.recalculate()
+        } catch (e: Exception) {
+            log.error("EDR coverage KPI recalculation failed (non-fatal): {}", e.message, e)
         }
     }
 

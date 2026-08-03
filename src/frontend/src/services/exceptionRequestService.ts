@@ -8,10 +8,10 @@
  */
 
 import { authenticatedGet, authenticatedPost, authenticatedDelete } from '../utils/auth';
-import type { ExceptionSubject, ExceptionScope } from './vulnerabilityManagementService';
+import type { ExceptionSubject, ExceptionScope, ExceptionKind } from './vulnerabilityManagementService';
 import { createReviewExceptionRequestDto } from './exceptionReviewDto';
 
-export type { ExceptionSubject, ExceptionScope };
+export type { ExceptionSubject, ExceptionScope, ExceptionKind };
 
 /**
  * Exception request status values
@@ -25,9 +25,15 @@ export type ExceptionRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPI
  * SINGLE_VULNERABILITY / CVE_PATTERN enum.
  */
 export interface CreateExceptionRequestDto {
-  vulnerabilityId: number;
+  /**
+   * Optional: a kind='NO_EDR' request is about an asset's inability to run an EDR agent
+   * and has no vulnerability to anchor to. Required for ordinary suppression requests.
+   */
+  vulnerabilityId?: number;
   subject: ExceptionSubject;
   scope: ExceptionScope;
+  /** Omit for an ordinary suppression; the backend defaults it to 'VULNERABILITY'. */
+  kind?: ExceptionKind;
   subjectValue?: string | null;
   scopeValue?: string | null;
   assetId?: number | null;
@@ -40,7 +46,7 @@ export interface CreateExceptionRequestDto {
  */
 export interface VulnerabilityExceptionRequestDto {
   id: number;
-  vulnerabilityId: number;
+  vulnerabilityId: number | null;
   vulnerabilityCve: string | null;
   assetId: number | null;
   assetName: string | null;
@@ -49,6 +55,8 @@ export interface VulnerabilityExceptionRequestDto {
   requestedByUsername: string;
   subject: ExceptionSubject;
   scope: ExceptionScope;
+  /** Optional so an older backend response still parses; treat a missing value as 'VULNERABILITY'. */
+  kind?: ExceptionKind;
   subjectValue: string | null;
   scopeValue: string | null;
   reason: string;

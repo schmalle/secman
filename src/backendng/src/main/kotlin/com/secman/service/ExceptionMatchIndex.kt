@@ -1,6 +1,7 @@
 package com.secman.service
 
 import com.secman.domain.Asset
+import com.secman.domain.ExceptionKind
 import com.secman.domain.ExceptionMatchable
 import com.secman.domain.Vulnerability
 import com.secman.domain.VulnerabilityException
@@ -31,7 +32,8 @@ import com.secman.domain.VulnerabilityException
  *   3. CVE exceptions (membership in pre-parsed CVE set)
  *
  * Contract: callers pass already-ACTIVE exceptions (not expired); this index does not
- * re-check `isActive()`.
+ * re-check `isActive()`. It DOES filter by kind itself, so callers need not pre-filter —
+ * a NO_EDR exception never enters a bucket and can never match.
  */
 class ExceptionMatchIndex(activeExceptions: List<VulnerabilityException>) {
     private data class CveBucket(val ex: VulnerabilityException, val cves: Set<String>)
@@ -45,6 +47,12 @@ class ExceptionMatchIndex(activeExceptions: List<VulnerabilityException>) {
         val p = mutableListOf<VulnerabilityException>()
         val c = mutableListOf<CveBucket>()
         for (ex in activeExceptions) {
+            // Only VULNERABILITY exceptions suppress findings. Dropping NO_EDR rows here
+            // rather than in firstMatch() means they can never reach a bucket at all, so
+            // no future match path can accidentally consider them. Mirrors the entity
+            // guard in VulnerabilityException.matches() and the SQL guard in
+            // ExceptionMatchSql.EXCEPTION_MATCH — all three must agree.
+            if (ex.kind != ExceptionKind.VULNERABILITY) continue
             when (ex.subject) {
                 VulnerabilityException.Subject.ALL_VULNS -> a += ex
                 VulnerabilityException.Subject.PRODUCT -> p += ex

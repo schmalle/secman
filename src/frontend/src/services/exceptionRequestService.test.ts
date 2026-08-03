@@ -20,6 +20,21 @@ test('request scope formatter returns distinct display labels for each scope', (
   assert.equal(os.title, 'OS: Windows Server 2019');
 });
 
+test('NO_EDR requests are labelled as such, not as a bare asset scope', () => {
+  // Stored shape is ALL_VULNS x ASSET, which the scope switch alone would render as "1 asset" —
+  // giving an approver no hint that this is an EDR-capability record rather than a waiver.
+  const noEdr = formatExceptionRequestScope({ scope: 'ASSET', assetName: 'web-01', kind: 'NO_EDR' });
+  assert.equal(noEdr.label, 'No EDR');
+  assert.equal(noEdr.title, 'No EDR possible on web-01');
+
+  // A missing kind means "written before the kind axis existed" and must keep the old rendering.
+  assert.equal(formatExceptionRequestScope({ scope: 'ASSET', assetName: 'web-01' }).label, '1 asset');
+  assert.equal(
+    formatExceptionRequestScope({ scope: 'ASSET', assetName: 'web-01', kind: 'VULNERABILITY' }).label,
+    '1 asset'
+  );
+});
+
 /**
  * Regression: production 500 on POST /api/vulnerability-exception-requests/{id}/approve.
  *

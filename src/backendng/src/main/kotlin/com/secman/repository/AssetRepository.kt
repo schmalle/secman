@@ -245,6 +245,21 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     fun findByCrowdStrikeLastImportedAtBefore(cutoff: LocalDateTime): List<Asset>
 
     /**
+     * Record that CrowdStrike reported these assets as managed devices.
+     *
+     * Written from the reconcile-stale call's Stage-1 queried-host population, which — unlike
+     * `crowdStrikeLastImportedAt` — includes hosts that returned zero findings. That makes this
+     * the only sound "has an EDR agent" signal; see EdrCoverageKpiService.
+     *
+     * A bulk UPDATE rather than a load-mutate-save loop: a daily run's population is thousands
+     * of assets, and this bypasses the persistence context entirely (callers already clear it).
+     */
+    @io.micronaut.data.annotation.Query(
+        "UPDATE Asset a SET a.crowdStrikeAgentSeenAt = :seenAt WHERE a.id IN (:ids)"
+    )
+    fun stampCrowdStrikeAgentSeenAt(ids: Collection<Long>, seenAt: LocalDateTime): Long
+
+    /**
      * Count assets that have ever been imported by CrowdStrike (timestamp not null).
      * Used as the denominator for the stale-asset cleanup safety brake.
      */
@@ -334,6 +349,71 @@ interface AssetRepository : JpaRepository<Asset, Long> {
           AND a.cloudInstanceId <> ''
     """)
     fun countAllAwsAssetsWithInstanceId(): Long
+
+    /**
+     * EDR-coverage KPI: EC2 instances excluded from the denominator by an approved,
+     * still-active "No EDR possible" exception.
+     *
+     * `e.kind = 'NO_EDR'` is plain equality with no IS-NULL fallback — deliberately the
+     * opposite of ExceptionMatchSql.EXCEPTION_MATCH. There, tolerating NULL fails safe
+     * (a legacy row keeps suppressing); here it would fail dangerously, silently reading
+     * every legacy exception as an EDR exemption and deflating the fleet's denominator.
+     */
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT COUNT(*) FROM asset a
+            WHERE a.cloud_instance_id IS NOT NULL
+              AND a.cloud_instance_id <> ''
+              AND EXISTS (
+                  SELECT 1 FROM vulnerability_exception e
+                  WHERE e.kind = 'NO_EDR'
+                    AND e.scope = 'ASSET'
+                    AND e.asset_id = a.id
+                    AND (e.expiration_date IS NULL OR e.expiration_date > NOW())
+              )
+        """,
+        nativeQuery = true
+    )
+    fun countEc2AssetsExcludedByNoEdrException(): Long
+
+    /**
+     * EDR-coverage KPI numerator: EC2 instances CrowdStrike reported as managed devices
+     * recently, excluding those exempted by an active NO_EDR exception.
+     *
+     * Recency (rather than "ever seen") is what makes this measure CURRENT coverage: a box
+     * whose sensor stops reporting drops out of the numerator once its stamp ages past the
+     * window, instead of counting as protected forever.
+     */
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT COUNT(*) FROM asset a
+            WHERE a.cloud_instance_id IS NOT NULL
+              AND a.cloud_instance_id <> ''
+              AND a.crowdstrike_agent_seen_at IS NOT NULL
+              AND a.crowdstrike_agent_seen_at >= :freshCutoff
+              AND NOT EXISTS (
+                  SELECT 1 FROM vulnerability_exception e
+                  WHERE e.kind = 'NO_EDR'
+                    AND e.scope = 'ASSET'
+                    AND e.asset_id = a.id
+                    AND (e.expiration_date IS NULL OR e.expiration_date > NOW())
+              )
+        """,
+        nativeQuery = true
+    )
+    fun countEc2AssetsWithFreshCrowdStrikeAgent(freshCutoff: LocalDateTime): Long
+
+    /**
+     * Whether the agent-seen signal has ever been written.
+     *
+     * Distinguishes "0% coverage" from "no import has run since this feature was deployed" —
+     * without it, a fresh deployment would confidently report 0% until the next CrowdStrike
+     * import, which is a false alarm rather than a measurement.
+     */
+    @io.micronaut.data.annotation.Query(
+        "SELECT COUNT(a) FROM Asset a WHERE a.crowdStrikeAgentSeenAt IS NOT NULL"
+    )
+    fun countAssetsWithAnyCrowdStrikeAgentSighting(): Long
 
     // MCP Tool Support - Feature 006: Asset inventory queries with pagination
 
