@@ -105,6 +105,37 @@ class ApplicationRegisterControllerIntegrationTest : BaseIntegrationTest() {
         assertThat(response.body()!!.createdBy).isEqualTo(adminUser.username)
     }
 
+    @Test
+    fun `check-github-url rejects non-github hosts to prevent SSRF`() {
+        val token = TestAuthHelper.getAuthToken(client, regularUser.username)
+
+        // Attempting to probe an internal/arbitrary host must be refused server-side,
+        // not merely relied upon in the frontend caller.
+        val response = client.toBlocking().exchange(
+            HttpRequest.GET<Any>("/api/applications/check-github-url?url=http://169.254.169.254/latest/meta-data/")
+                .bearerAuth(token),
+            Map::class.java
+        )
+
+        assertThat(response.status).isEqualTo(HttpStatus.OK)
+        assertThat(response.body()?.get("reachable")).isEqualTo(false)
+    }
+
+    @Test
+    fun `check-github-url rejects plain http even for github host`() {
+        val token = TestAuthHelper.getAuthToken(client, regularUser.username)
+
+        val response = client.toBlocking().exchange(
+            HttpRequest.GET<Any>("/api/applications/check-github-url?url=http://github.com/foo/bar")
+                .bearerAuth(token),
+            Map::class.java
+        )
+
+        assertThat(response.status).isEqualTo(HttpStatus.OK)
+        assertThat(response.body()?.get("reachable")).isEqualTo(false)
+        assertThat(response.body()?.get("reason")).isEqualTo("URL must use https")
+    }
+
     private fun validRequest(carId: String = "CAR-${System.nanoTime()}"): ApplicationRegisterRequest {
         return ApplicationRegisterRequest(
             carId = carId,

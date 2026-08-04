@@ -102,6 +102,15 @@ open class ApplicationRegisterController(
         }
     }
 
+    // SECURITY: despite the name, this endpoint used to open a server-side HTTP connection
+    // to ANY URL supplied by ANY authenticated user (down to plain USER role), with no host
+    // restriction — a textbook SSRF that could be used to probe internal network services or
+    // the cloud metadata endpoint (169.254.169.254) and read back reachability/status from the
+    // backend's network position. Despite the name "check-github-url", the host was never
+    // actually checked. Restrict to the github.com host family and refuse to leak redirect
+    // targets to other hosts.
+    private val allowedGithubHosts = setOf("github.com", "www.github.com", "api.github.com", "raw.githubusercontent.com")
+
     @Get("/check-github-url")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     @ExecuteOn(TaskExecutors.BLOCKING)
@@ -112,14 +121,20 @@ open class ApplicationRegisterController(
         }
         return try {
             val uri = URI.create(trimmed)
-            if (uri.scheme != "https" && uri.scheme != "http") {
-                return HttpResponse.ok(mapOf("reachable" to false, "reason" to "URL must use http or https"))
+            if (uri.scheme != "https") {
+                return HttpResponse.ok(mapOf("reachable" to false, "reason" to "URL must use https"))
+            }
+            val host = uri.host?.lowercase()
+            if (host == null || host !in allowedGithubHosts) {
+                return HttpResponse.ok(mapOf("reachable" to false, "reason" to "URL must point to github.com"))
             }
             val connection = uri.toURL().openConnection() as HttpURLConnection
             connection.requestMethod = "HEAD"
             connection.connectTimeout = 5000
             connection.readTimeout = 5000
-            connection.instanceFollowRedirects = true
+            // Do not auto-follow redirects: a github.com response could redirect to an
+            // arbitrary internal host, which would defeat the host allowlist above.
+            connection.instanceFollowRedirects = false
             connection.setRequestProperty("User-Agent", "SecMan/1.0")
             val status = connection.responseCode
             connection.disconnect()
