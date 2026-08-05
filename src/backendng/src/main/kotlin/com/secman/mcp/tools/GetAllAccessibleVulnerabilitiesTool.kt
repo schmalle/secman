@@ -6,6 +6,7 @@ import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
 import com.secman.service.VulnerabilityExceptionService
+import io.micronaut.data.model.Pageable
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 
@@ -36,7 +37,9 @@ class GetAllAccessibleVulnerabilitiesTool(
         - includeExcepted: include vulnerabilities covered by active exceptions (default: false)
 
         A safety cap (limit, default=5000, max=20000) bounds the response size. The response
-        reports total/returned/truncated so callers know whether the cap was hit.
+        reports total/returned/truncated so callers know whether the cap was hit. When
+        truncated is true, total counts the rows matching access control and severity, before
+        exception filtering.
     """.trimIndent()
 
     override val operation = McpOperation.READ
@@ -91,13 +94,22 @@ class GetAllAccessibleVulnerabilitiesTool(
                 ))
             }
 
-            var vulnerabilities = vulnerabilityRepository.findAll()
-            if (accessibleIds != null) {
-                vulnerabilities = vulnerabilities.filter { accessibleIds.contains(it.asset.id) }
+            // Access control, severity and the row cap all have to be applied in SQL. Reading the
+            // whole `vulnerability` table via findAll() and filtering in Kotlin loaded ~1.1M
+            // entities and exhausted the heap before any of these filters ran.
+            val severities = severityFilter?.takeIf { it.isNotEmpty() }
+            val pageable = Pageable.from(0, limit)
+            val page = when {
+                accessibleIds != null && severities != null ->
+                    vulnerabilityRepository.findByAssetIdInAndCvssSeverityIn(accessibleIds, severities, pageable)
+                accessibleIds != null ->
+                    vulnerabilityRepository.findByAssetIdIn(accessibleIds, pageable)
+                severities != null ->
+                    vulnerabilityRepository.findByCvssSeverityIn(severities, pageable)
+                else ->
+                    vulnerabilityRepository.findAll(pageable)
             }
-            if (severityFilter != null && severityFilter.isNotEmpty()) {
-                vulnerabilities = vulnerabilities.filter { it.cvssSeverity?.uppercase() in severityFilter }
-            }
+            var vulnerabilities = page.content
 
             // Eagerly hydrate the assets referenced by these vulnerabilities so we never touch
             // a Hibernate proxy outside of an active session (exception matching reads asset
@@ -117,8 +129,13 @@ class GetAllAccessibleVulnerabilitiesTool(
                 }
             }
 
-            val total = vulnerabilities.size
-            val limited = vulnerabilities.take(limit)
+            // The cap is enforced by the SQL page above, so `truncated` means "more rows matched
+            // than we fetched". When nothing was truncated we know the exact post-exception count;
+            // when it was, the best available total is the SQL match count (before exception
+            // filtering), since counting the rest would mean reading them.
+            val truncated = page.totalSize > page.content.size
+            val total = if (truncated) page.totalSize.toInt() else vulnerabilities.size
+            val limited = vulnerabilities
 
             val response = mapOf(
                 "vulnerabilities" to limited.map { vuln ->
@@ -141,7 +158,7 @@ class GetAllAccessibleVulnerabilitiesTool(
                 },
                 "total" to total,
                 "returned" to limited.size,
-                "truncated" to (limited.size < total),
+                "truncated" to truncated,
                 "exceptedFiltered" to !includeExcepted
             )
 

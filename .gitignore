@@ -113,3 +113,4 @@ crowdstrike-vulnerability-match-report-cs-owner-30d-post-sync.json
 .claude/scheduled_tasks.lock
 /extensions/secman_ai_github/
 /extensions/secman_visual_check/
+/src/backendng/exports
