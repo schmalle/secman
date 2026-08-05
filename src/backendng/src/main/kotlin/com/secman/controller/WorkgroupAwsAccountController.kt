@@ -1,6 +1,7 @@
 package com.secman.controller
 
 import com.secman.dto.WorkgroupAwsAccountDto
+import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import com.secman.repository.WorkgroupRepository
 import com.secman.service.DuplicateAccountException
@@ -21,16 +22,18 @@ import org.slf4j.LoggerFactory
  * Spec: docs/superpowers/specs/2026-04-28-workgroup-aws-account-assignment-design.md
  *
  * Endpoints:
- * - GET    /api/workgroups/{id}/aws-accounts                 — list (authenticated; access enforced by service+filter)
- * - POST   /api/workgroups/{id}/aws-accounts                 — add (ADMIN)
- * - DELETE /api/workgroups/{id}/aws-accounts/{awsAccountId}  — remove (ADMIN)
+ * - GET    /api/workgroups/{id}/aws-accounts                 — list (ADMIN or direct member)
+ * - POST   /api/workgroups/{id}/aws-accounts                 — add (ADMIN: any account; direct member: only
+ *                                                               accounts they can prove via their own UserMapping)
+ * - DELETE /api/workgroups/{id}/aws-accounts/{awsAccountId}  — remove (ADMIN or direct member)
  */
 @Controller("/api/workgroups/{workgroupId}/aws-accounts")
 @Secured(SecurityRule.IS_AUTHENTICATED)
 open class WorkgroupAwsAccountController(
     private val service: WorkgroupAwsAccountService,
     private val userRepository: UserRepository,
-    private val workgroupRepository: WorkgroupRepository
+    private val workgroupRepository: WorkgroupRepository,
+    private val userMappingRepository: UserMappingRepository
 ) {
     private val logger = LoggerFactory.getLogger(WorkgroupAwsAccountController::class.java)
 
@@ -74,6 +77,23 @@ open class WorkgroupAwsAccountController(
         }
         if (!isMemberOrAdmin(workgroupId, authentication)) {
             return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
+        }
+        // Non-admin members can only bind AWS accounts they can already prove ownership
+        // of via their own (admin-vetted) UserMapping rows. Without this, any authenticated
+        // user could self-create a workgroup (see WorkgroupController#createWorkgroup) and
+        // bind an arbitrary, unverified 12-digit account id to it, instantly granting every
+        // member of that workgroup visibility into all assets under that account (Unified
+        // Asset Access rule #9) with no ownership proof and no admin approval.
+        if (!authentication.roles.contains("ADMIN")) {
+            val ownedAccountIds = userMappingRepository.findDistinctAwsAccountIdByEmail(actor.email).toSet()
+            if (request.awsAccountId !in ownedAccountIds) {
+                logger.warn(
+                    "AUDIT: operation=ADD_WORKGROUP_AWS_ACCOUNT_DENIED, reason=UNVERIFIED_OWNERSHIP, actor={}, workgroup={}, awsAccountId={}",
+                    authentication.name, workgroupId, request.awsAccountId
+                )
+                return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
+                    .body(mapOf("error" to "You can only assign AWS accounts mapped to your own account"))
+            }
         }
         return try {
             val saved = service.add(workgroupId, request.awsAccountId, actor.id!!)

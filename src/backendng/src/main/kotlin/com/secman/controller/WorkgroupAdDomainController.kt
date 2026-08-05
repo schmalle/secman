@@ -1,6 +1,7 @@
 package com.secman.controller
 
 import com.secman.dto.WorkgroupAdDomainDto
+import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import com.secman.repository.WorkgroupRepository
 import com.secman.service.DuplicateAdDomainException
@@ -21,7 +22,8 @@ import org.slf4j.LoggerFactory
 open class WorkgroupAdDomainController(
     private val service: WorkgroupAdDomainService,
     private val userRepository: UserRepository,
-    private val workgroupRepository: WorkgroupRepository
+    private val workgroupRepository: WorkgroupRepository,
+    private val userMappingRepository: UserMappingRepository
 ) {
     private val logger = LoggerFactory.getLogger(WorkgroupAdDomainController::class.java)
 
@@ -57,6 +59,25 @@ open class WorkgroupAdDomainController(
         }
         if (!isMemberOrAdmin(workgroupId, authentication)) {
             return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
+        }
+        // Non-admin members can only bind AD domains they can already prove ownership
+        // of via their own (admin-vetted) UserMapping rows. Without this, any authenticated
+        // user could self-create a workgroup (see WorkgroupController#createWorkgroup) and
+        // bind an arbitrary, unverified AD domain to it, instantly granting every member of
+        // that workgroup visibility into all assets under that domain (Unified Asset Access
+        // rule #10) with no ownership proof and no admin approval.
+        if (!authentication.roles.contains("ADMIN")) {
+            val ownedDomains = userMappingRepository.findDistinctDomainByEmail(actor.email)
+                .map { it.lowercase() }
+                .toSet()
+            if (request.adDomain.lowercase() !in ownedDomains) {
+                logger.warn(
+                    "AUDIT: operation=ADD_WORKGROUP_AD_DOMAIN_DENIED, reason=UNVERIFIED_OWNERSHIP, actor={}, workgroup={}, adDomain={}",
+                    authentication.name, workgroupId, request.adDomain
+                )
+                return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
+                    .body(mapOf("error" to "You can only assign AD domains mapped to your own account"))
+            }
         }
         return try {
             val saved = service.add(workgroupId, request.adDomain, actor.id!!)

@@ -13,8 +13,12 @@ import org.slf4j.LoggerFactory
  * Service for managing AWS account assignments on workgroups.
  * Spec: docs/superpowers/specs/2026-04-28-workgroup-aws-account-assignment-design.md
  *
- * All mutations require ADMIN role — enforced by the controller layer.
- * This service trusts callers to have already authorized the operation.
+ * Mutations require ADMIN role OR direct workgroup membership — enforced by the
+ * controller layer. For non-ADMIN callers, the controller additionally requires
+ * the account id being added to already be one of the caller's own (admin-vetted)
+ * UserMapping-verified AWS accounts, so membership alone can never bind an
+ * unverified/arbitrary account id and inherit its asset visibility. This service
+ * trusts callers to have already authorized the operation.
  */
 @Singleton
 open class WorkgroupAwsAccountService(
