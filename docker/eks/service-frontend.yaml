@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: secman-frontend
+  namespace: secman
+spec:
+  selector:
+    app: secman-frontend
+  ports:
+    - port: 8443
+      targetPort: 8443

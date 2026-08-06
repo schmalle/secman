@@ -1,5 +1,13 @@
 # Secman Frontend Container
-# Multi-stage build: Node build → Nginx with SSL
+# Multi-stage build: Node build → Nginx + Node SSR server, both supervised
+# by docker/frontend/entrypoint.sh.
+#
+# Astro is configured with `output: "server"` (astro.config.mjs) — it is NOT
+# a static site. The build produces:
+#   dist/client/  static assets (served directly by nginx)
+#   dist/server/  the SSR entry point (must be run by Node — nginx alone
+#                 cannot render these pages). This runtime stage runs both,
+#                 same pattern as docker/aws/Dockerfile's entrypoint.
 FROM node:22-alpine AS builder
 
 WORKDIR /build
@@ -13,17 +21,23 @@ RUN npm ci --production=false
 # Copy frontend source
 COPY src/frontend/ ./
 
-# Build the Astro site
-RUN npm run build
+# Build the Astro site (dist/client + dist/server), then drop devDependencies —
+# the standalone Node adapter externalizes some packages, so production
+# node_modules must ship alongside dist/server for those to resolve at runtime.
+RUN npm run build \
+ && npm prune --omit=dev
 
-# --- Runtime stage: Nginx ---
-FROM nginx:1.27-alpine
+# --- Runtime stage: Nginx + Node SSR, both supervised ---
+# node:22-alpine (not nginx:1.27-alpine) so the SSR server runs the exact
+# same Node version it was built/pruned against; nginx is installed via apk.
+FROM node:22-alpine
 
 LABEL maintainer="secman"
-LABEL description="Secman frontend with Nginx reverse proxy (HTTPS)"
+LABEL description="Secman frontend: Nginx (TLS + static assets) + Astro SSR Node server"
 
-# Install openssl for self-signed cert generation
-RUN apk add --no-cache openssl curl
+# nginx + openssl (self-signed cert) + curl (HEALTHCHECK) + bash (entrypoint
+# uses `wait -n`, which Alpine's default busybox ash does not support)
+RUN apk add --no-cache nginx openssl curl bash
 
 # Create SSL directory
 RUN mkdir -p /etc/nginx/ssl
@@ -38,12 +52,20 @@ RUN openssl req -x509 -nodes -days 3650 \
 # Copy Nginx configuration
 COPY docker/frontend/nginx.conf /etc/nginx/nginx.conf
 
-# Copy built frontend assets from builder
-# Astro with Node adapter builds to dist/client (static) and dist/server (SSR)
-# For Nginx we serve the client assets statically and proxy SSR to backend
-COPY --from=builder /build/dist/client /usr/share/nginx/html
+# Astro build output (server + client) and production node_modules — same
+# layout as docker/aws/Dockerfile so entry.mjs resolves its dependencies via
+# Node's directory walk-up to /app/node_modules.
+WORKDIR /app
+COPY --from=builder /build/dist /app/frontend
+COPY --from=builder /build/node_modules /app/node_modules
+COPY --from=builder /build/package.json /app/package.json
+
+COPY docker/frontend/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8443
 
-HEALTHCHECK --interval=10s --timeout=5s --retries=6 --start-period=10s \
+HEALTHCHECK --interval=10s --timeout=5s --retries=6 --start-period=15s \
   CMD curl -kf https://localhost:8443/ || exit 1
+
+ENTRYPOINT ["/app/entrypoint.sh"]

@@ -1,0 +1,17 @@
+# kubectl apply -k docker/eks/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: secman
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - configmap.yaml
+  - secretstore.yaml
+  - externalsecret.yaml
+  - deployment-backend.yaml
+  - service-backend.yaml
+  - deployment-frontend.yaml
+  - service-frontend.yaml
+  - ingress.yaml
+  - hpa-backend.yaml
+  - hpa-frontend.yaml

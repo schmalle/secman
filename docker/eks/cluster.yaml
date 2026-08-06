@@ -1,0 +1,34 @@
+# eksctl cluster config — creates an EKS cluster with a Fargate profile.
+# Not applied automatically by anything in this repo (creates real, billable
+# AWS resources) — run via docker/eks/cluster-up.sh when you're ready.
+#
+#   eksctl create cluster -f docker/eks/cluster.yaml
+#
+# Replace REPLACE_WITH_AWS_REGION before use. See docs/DOCKER_EKS.md.
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: secman
+  region: REPLACE_WITH_AWS_REGION
+  version: "1.31"
+
+# Fargate runs the pods matching these namespace selectors — no EC2 nodes to
+# patch, size, or scale. `kube-system` is required so CoreDNS itself lands
+# on Fargate (eksctl patches the coredns Deployment for this automatically).
+fargateProfiles:
+  - name: secman
+    selectors:
+      - namespace: secman
+      - namespace: kube-system
+
+# Required for IRSA (IAM Roles for Service Accounts) — used by the AWS Load
+# Balancer Controller and the External Secrets Operator ServiceAccount
+# (docker/eks/serviceaccount.yaml) to assume least-privilege IAM roles
+# without any static AWS keys in the cluster.
+iam:
+  withOIDC: true
+
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["api", "audit", "authenticator"]

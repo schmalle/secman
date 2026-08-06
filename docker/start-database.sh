@@ -12,9 +12,11 @@ CONTAINER_NAME="secman-db"
 NETWORK_NAME="secman-net"
 VOLUME_NAME="secman-db-data"
 
-# Configurable via environment
-DB_ROOT_PASSWORD="${SECMAN_DB_ROOT_PASSWORD:-secman-root-pw}"
-DB_PASSWORD="${SECMAN_DB_PASSWORD:-secman-docker-pw}"
+# Required — no baked-in default (avoids shipping a well-known password).
+: "${SECMAN_DB_ROOT_PASSWORD:?Set SECMAN_DB_ROOT_PASSWORD, e.g. export SECMAN_DB_ROOT_PASSWORD=\$(openssl rand -hex 12)}"
+: "${SECMAN_DB_PASSWORD:?Set SECMAN_DB_PASSWORD, e.g. export SECMAN_DB_PASSWORD=\$(openssl rand -hex 12)}"
+DB_ROOT_PASSWORD="$SECMAN_DB_ROOT_PASSWORD"
+DB_PASSWORD="$SECMAN_DB_PASSWORD"
 
 echo "[database] Starting $CONTAINER_NAME..."
 

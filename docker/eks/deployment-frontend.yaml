@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secman-frontend
+  namespace: secman
+  labels:
+    app: secman-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: secman-frontend
+  template:
+    metadata:
+      labels:
+        app: secman-frontend
+    spec:
+      containers:
+        - name: secman-frontend
+          # Pushed by docker/eks/build-push.sh from docker/frontend/Dockerfile
+          # (nginx + Astro SSR Node server, same image used by
+          # docker-compose.split.yaml — see docker/frontend/entrypoint.sh).
+          image: REPLACE_WITH_ACCOUNT_ID.dkr.ecr.REPLACE_WITH_AWS_REGION.amazonaws.com/secman-frontend:latest
+          ports:
+            - containerPort: 8443
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 30
+            periodSeconds: 15

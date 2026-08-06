@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secman-backend
+  namespace: secman
+  labels:
+    app: secman-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: secman-backend
+  template:
+    metadata:
+      labels:
+        app: secman-backend
+    spec:
+      containers:
+        - name: secman-backend
+          # Pushed by docker/eks/build-push.sh from docker/backend/Dockerfile.
+          image: REPLACE_WITH_ACCOUNT_ID.dkr.ecr.REPLACE_WITH_AWS_REGION.amazonaws.com/secman-backend:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: secman-config
+            - secretRef:
+                name: secman-secrets
+          # Fargate requires requests to size the pod. limits == requests
+          # keeps JAVA_OPTS's MaxRAMPercentage math (configmap.yaml) predictable.
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 45
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 6

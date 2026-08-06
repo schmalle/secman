@@ -1,0 +1,14 @@
+# Name matters: docker/frontend/nginx.conf proxies /api,/oauth,/mcp,/health
+# to `secman-backend:8080` verbatim (same DNS name used in docker compose) —
+# do not rename this Service without also updating nginx.conf.
+apiVersion: v1
+kind: Service
+metadata:
+  name: secman-backend
+  namespace: secman
+spec:
+  selector:
+    app: secman-backend
+  ports:
+    - port: 8080
+      targetPort: 8080

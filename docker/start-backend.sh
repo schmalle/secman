@@ -11,9 +11,16 @@ set -euo pipefail
 CONTAINER_NAME="secman-backend"
 NETWORK_NAME="secman-net"
 
-# Configurable via environment
-DB_PASSWORD="${SECMAN_DB_PASSWORD:-secman-docker-pw}"
-JWT_SECRET="${SECMAN_JWT_SECRET:-docker-secman-jwt-secret-must-be-at-least-256-bits-long-for-hs256}"
+# Required — no baked-in default. DB_PASSWORD/JWT_SECRET avoid shipping a
+# well-known password; SECMAN_ENCRYPTION_PASSWORD/SALT avoid the equally
+# well-known application.yml fallback ("SecManDefaultEncryptionPassword2024")
+# that encrypts stored credentials (OAuth secrets, API keys) when unset.
+: "${SECMAN_DB_PASSWORD:?Set SECMAN_DB_PASSWORD to the same value used by start-database.sh}"
+: "${SECMAN_JWT_SECRET:?Set SECMAN_JWT_SECRET, e.g. export SECMAN_JWT_SECRET=\$(openssl rand -base64 32)}"
+: "${SECMAN_ENCRYPTION_PASSWORD:?Set SECMAN_ENCRYPTION_PASSWORD, e.g. export SECMAN_ENCRYPTION_PASSWORD=\$(openssl rand -hex 32)}"
+: "${SECMAN_ENCRYPTION_SALT:?Set SECMAN_ENCRYPTION_SALT (exactly 16 hex chars), e.g. export SECMAN_ENCRYPTION_SALT=\$(openssl rand -hex 8)}"
+DB_PASSWORD="$SECMAN_DB_PASSWORD"
+JWT_SECRET="$SECMAN_JWT_SECRET"
 
 echo "[backend] Starting $CONTAINER_NAME..."
 
@@ -40,6 +47,8 @@ docker run -d \
   -e DB_USERNAME=secman \
   -e DB_PASSWORD="$DB_PASSWORD" \
   -e JWT_SECRET="$JWT_SECRET" \
+  -e SECMAN_ENCRYPTION_PASSWORD="$SECMAN_ENCRYPTION_PASSWORD" \
+  -e SECMAN_ENCRYPTION_SALT="$SECMAN_ENCRYPTION_SALT" \
   -e SECMAN_AUTH_COOKIE_SECURE=false \
   -e FRONTEND_URL="https://localhost:8443" \
   -e SECMAN_BACKEND_URL="https://localhost:8443" \

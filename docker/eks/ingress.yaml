@@ -1,0 +1,41 @@
+# Requires the AWS Load Balancer Controller installed in-cluster (Helm chart
+# `eks/aws-load-balancer-controller`) — see docs/DOCKER_EKS.md. Provisions an
+# internet-facing ALB that terminates public TLS with an ACM certificate and
+# re-encrypts (backend-protocol HTTPS) to the frontend pod's self-signed cert
+# on :8443 — the ALB does not validate that cert (normal for HTTPS target
+# groups), so this stays TLS end-to-end without extra cert management.
+#
+# Everything routes to the frontend Service; the frontend's own nginx keeps
+# doing the /api, /oauth, /mcp, /health routing to the backend internally —
+# same single source of routing truth as docker compose, see
+# docker/frontend/nginx.conf.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: secman
+  namespace: secman
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:REPLACE_WITH_AWS_REGION:REPLACE_WITH_ACCOUNT_ID:certificate/REPLACE_WITH_CERT_ID"
+    alb.ingress.kubernetes.io/backend-protocol: HTTPS
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTPS
+    # The backend takes ~60-90s to boot (same as ECS) — a generous grace
+    # period keeps the ALB from cycling targets during a rolling deploy.
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "5"
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: secman-frontend
+                port:
+                  number: 8443

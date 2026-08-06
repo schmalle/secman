@@ -14,14 +14,17 @@ COPY docker/backend/app.jar app.jar
 # Backend port
 EXPOSE 8080
 
-# Environment defaults for Docker networking
+# Environment defaults for Docker networking (non-secret only — see below).
 ENV DB_CONNECT=jdbc:mariadb://secman-db:3306/secman
 ENV DB_USERNAME=secman
-ENV DB_PASSWORD=secman-docker-pw
-ENV JWT_SECRET=docker-secman-jwt-secret-must-be-at-least-256-bits-long-for-hs256
 ENV SECMAN_AUTH_COOKIE_SECURE=false
 ENV FRONTEND_URL=https://localhost:8443
 ENV SECMAN_BACKEND_URL=https://localhost:8443
+
+# Security-sensitive vars (DB_PASSWORD, JWT_SECRET, SECMAN_ENCRYPTION_PASSWORD,
+# SECMAN_ENCRYPTION_SALT, ...) intentionally have NO baked default — a dev
+# fallback here would eventually leak into a real deployment. Inject them at
+# `docker run -e` / compose `env_file` time. See docker/README.md.
 
 # Disable Flyway on fresh Docker databases — Hibernate auto-DDL creates the full schema.
 # Flyway migrations assume pre-existing tables (created by Hibernate on existing deployments).
