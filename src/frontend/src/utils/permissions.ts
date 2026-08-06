@@ -279,5 +279,11 @@ export function getPermissionErrorMessage(action: string): string {
     archive: 'You do not have permission to archive this release.',
   };
 
-  return messages[action] || 'You do not have permission to perform this action.';
+  // Look the key up on the object itself. A plain object literal inherits from
+  // Object.prototype, so `messages['constructor']` (or 'toString', 'valueOf',
+  // '__proto__', …) returns an inherited function instead of falling through to
+  // the default, and the declared `string` return type does not hold.
+  return Object.prototype.hasOwnProperty.call(messages, action)
+    ? messages[action]
+    : 'You do not have permission to perform this action.';
 }

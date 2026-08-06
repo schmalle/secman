@@ -158,9 +158,9 @@ confirm it arrived, so do not report success until they have looked.
 
 Show the checklist the driver printed (subject, use case, requirements version,
 assessor, deadline — read from the tracking rows, so they are accurate even when
-round-robin picked a different assessor) and ask the user (in Claude Code,
-`AskUserQuestion`) whether the mail arrived, arrived with wrong content, or did
-not arrive. Wait for the answer.
+round-robin picked a different assessor). Then ask the user (in Claude Code, `AskUserQuestion`)
+whether the mail arrived, arrived with wrong content, or did not arrive. Wait for
+the answer.
 
 - **Arrived, content correct** → done.
 - **Wrong content** → the defect is in `sendStartNotification`'s body, not the

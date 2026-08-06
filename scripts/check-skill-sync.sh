@@ -62,7 +62,7 @@ note() { FINDINGS+=("$1"); DRIFT=1; }
 
 # Counters live in files rather than an associative array: macOS ships bash 3.2,
 # which has no `declare -A`, and this script must run on the dev machines as-is.
-RULE_NAMES="sandbox_escape outside_sandbox sync_banner superpowers skills_root"
+RULE_NAMES="sandbox_escape outside_sandbox sync_banner superpowers skills_root ask_user"
 mkdir -p "$TMP/hits"
 for r in $RULE_NAMES; do echo 0 > "$TMP/hits/$r"; done
 
@@ -81,8 +81,11 @@ normalize() {   # normalize <file> -> canonical form on stdout
     count_hits sync_banner     "$f" '^> \*\*Sync policy\*\*'
     count_hits superpowers     "$f" 'superpowers:'
     count_hits skills_root     "$f" '\.(claude|agents)/skills/'
+    count_hits ask_user        "$f" 'AskUserQuestion|ask the user directly'
 
     sed -E \
+        -e 's/ask the user \(in Claude Code, `AskUserQuestion`\)/<<ASK_USER>>/g' \
+        -e 's/ask the user directly/<<ASK_USER>>/g' \
         -e 's/(Bash tool `)?dangerouslyDisableSandbox: true(`)?/<<SANDBOX_ESCAPE>>/g' \
         -e 's/`?sandbox_permissions: "require_escalated"`?/<<SANDBOX_ESCAPE>>/g' \
         -e 's/[Ii]n Codex, run these commands with //g' \

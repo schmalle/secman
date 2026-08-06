@@ -7,6 +7,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
+    "test": "node --experimental-strip-types --import ./test/register.mjs --test \"src/**/*.test.ts\"",
+    "test:watch": "node --experimental-strip-types --import ./test/register.mjs --test --watch \"src/**/*.test.ts\"",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix"
   },

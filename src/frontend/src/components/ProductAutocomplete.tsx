@@ -15,6 +15,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { getProductSuggestions } from './productSuggestions';
 
 interface ProductAutocompleteProps {
     value: string;
@@ -23,16 +24,7 @@ interface ProductAutocompleteProps {
     disabled?: boolean;
 }
 
-export function getProductSuggestions(value: string, allProducts: string[]): string[] {
-    if (!value.trim()) {
-        return allProducts;
-    }
-
-    const normalizedValue = value.toLowerCase();
-    return allProducts.filter(product =>
-        product.toLowerCase().includes(normalizedValue)
-    );
-}
+export { getProductSuggestions };
 
 const ProductAutocomplete: React.FC<ProductAutocompleteProps> = ({
     value,

@@ -70,8 +70,8 @@ writes it as the mapping owner, the backend mails that owner, and the assertion
 looks for a send to that exact address. Getting it wrong mails someone who never
 asked, and that cannot be taken back — so settle it before anything starts.
 
-- **Not supplied** → ask the user directly and wait for the answer. Do not
-  proceed on an assumption.
+- **Not supplied** → ask the user directly and wait
+  for the answer. Do not proceed on an assumption.
 - **Supplied as an argument** → read it back and confirm before Phase 1. An
   argument is a value, not consent to mail it; a typo in the domain reaches a
   stranger.
@@ -166,9 +166,9 @@ confirm it arrived, so do not report success until they have looked.
 
 Show the checklist the driver printed (subject, use case, requirements version,
 assessor, deadline — read from the tracking rows, so they are accurate even when
-round-robin picked a different assessor) and ask the user directly whether the
-mail arrived, arrived with wrong content, or did not arrive. Wait for the
-answer.
+round-robin picked a different assessor). Then ask the user directly
+whether the mail arrived, arrived with wrong content, or did not arrive. Wait for
+the answer.
 
 - **Arrived, content correct** → done.
 - **Wrong content** → the defect is in `sendStartNotification`'s body, not the

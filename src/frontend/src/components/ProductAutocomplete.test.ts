@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getProductSuggestions } from './ProductAutocomplete';
+import { getProductSuggestions } from './productSuggestions.ts';
 
 test('returns all known products when no filter is entered', () => {
     const products = Array.from({ length: 25 }, (_, index) => `Product ${index + 1}`);
