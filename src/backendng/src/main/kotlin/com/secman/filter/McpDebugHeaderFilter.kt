@@ -27,13 +27,29 @@ class McpDebugHeaderFilter : HttpServerFilter {
 
     private val logger = LoggerFactory.getLogger(McpDebugHeaderFilter::class.java)
 
+    companion object {
+        /**
+         * SECURITY: headers whose values are credentials and must never reach the log.
+         *
+         * `Cookie` carries `secman_auth=<JWT>` — a full 8-hour session — and `X-MCP-API-Key` is a
+         * standing MCP credential. Previously only `Authorization` was redacted, so enabling
+         * SECMAN_DEBUG wrote working credentials into the application log in cleartext.
+         */
+        private val REDACTED_HEADERS = setOf(
+            "authorization",
+            "cookie",
+            "set-cookie",
+            "x-mcp-api-key"
+        )
+    }
+
     override fun doFilter(request: HttpRequest<*>, chain: ServerFilterChain): Publisher<MutableHttpResponse<*>> {
         if (logger.isDebugEnabled) {
             val headers = request.headers.asMap()
                 .entries
                 .sortedBy { it.key }
                 .joinToString("\n  ") { (name, values) ->
-                    if (name.equals("Authorization", ignoreCase = true)) {
+                    if (name.lowercase() in REDACTED_HEADERS) {
                         "$name: [PRESENT - ${values.size} value(s)]"
                     } else {
                         "$name: ${values.joinToString(", ")}"

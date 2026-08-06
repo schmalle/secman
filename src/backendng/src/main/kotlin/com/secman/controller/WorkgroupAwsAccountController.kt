@@ -1,8 +1,10 @@
 package com.secman.controller
 
 import com.secman.dto.WorkgroupAwsAccountDto
+import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import com.secman.repository.WorkgroupRepository
+import com.secman.service.AwsAccountSharingService
 import com.secman.service.DuplicateAccountException
 import com.secman.service.WorkgroupAwsAccountService
 import io.micronaut.http.HttpResponse
@@ -21,16 +23,19 @@ import org.slf4j.LoggerFactory
  * Spec: docs/superpowers/specs/2026-04-28-workgroup-aws-account-assignment-design.md
  *
  * Endpoints:
- * - GET    /api/workgroups/{id}/aws-accounts                 — list (authenticated; access enforced by service+filter)
- * - POST   /api/workgroups/{id}/aws-accounts                 — add (ADMIN)
- * - DELETE /api/workgroups/{id}/aws-accounts/{awsAccountId}  — remove (ADMIN)
+ * - GET    /api/workgroups/{id}/aws-accounts                 — list (ADMIN or direct member)
+ * - POST   /api/workgroups/{id}/aws-accounts                 — add (ADMIN, or a direct member who
+ *                                                              already has access to the account)
+ * - DELETE /api/workgroups/{id}/aws-accounts/{awsAccountId}  — remove (ADMIN or direct member)
  */
 @Controller("/api/workgroups/{workgroupId}/aws-accounts")
 @Secured(SecurityRule.IS_AUTHENTICATED)
 open class WorkgroupAwsAccountController(
     private val service: WorkgroupAwsAccountService,
     private val userRepository: UserRepository,
-    private val workgroupRepository: WorkgroupRepository
+    private val workgroupRepository: WorkgroupRepository,
+    private val userMappingRepository: UserMappingRepository,
+    private val awsAccountSharingService: AwsAccountSharingService
 ) {
     private val logger = LoggerFactory.getLogger(WorkgroupAwsAccountController::class.java)
 
@@ -45,6 +50,29 @@ open class WorkgroupAwsAccountController(
         val workgroup = workgroupRepository.findById(workgroupId).orElse(null) ?: return false
         val user = userRepository.findByUsername(authentication.name).orElse(null) ?: return false
         return workgroup.users.any { it.id == user.id }
+    }
+
+    /**
+     * SECURITY: membership alone must not authorize *binding* an arbitrary AWS account.
+     *
+     * Any authenticated user can create a workgroup and is auto-enrolled as a member
+     * (WorkgroupController.createWorkgroup / WorkgroupService.createWorkgroupWithCreator).
+     * Without this check that member could bind any 12-digit account — which are trivially
+     * enumerable — and AssetRepository.findAccessibleAssets would then hand them every asset,
+     * scan result and vulnerability in it (unified asset access criterion 9). That is a
+     * privilege escalation from USER to "reads an entire AWS account".
+     *
+     * So a non-ADMIN actor may only bind an account they can *already* reach, via either:
+     *   - their own AWS UserMapping (criterion 5), or
+     *   - an AwsAccountSharing rule targeting them (criterion 7).
+     *
+     * Binding then only widens access for *other* workgroup members, never for the actor,
+     * so it cannot be used to escalate.
+     */
+    private fun canBindAccount(actorEmail: String, awsAccountId: String): Boolean {
+        val ownAccounts = userMappingRepository.findDistinctAwsAccountIdByEmail(actorEmail)
+        if (awsAccountId in ownAccounts) return true
+        return awsAccountId in awsAccountSharingService.getSharedAwsAccountIdsByEmail(actorEmail)
     }
 
     @Get(produces = [MediaType.APPLICATION_JSON])
@@ -74,6 +102,14 @@ open class WorkgroupAwsAccountController(
         }
         if (!isMemberOrAdmin(workgroupId, authentication)) {
             return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
+        }
+        if (!authentication.roles.contains("ADMIN") && !canBindAccount(actor.email, request.awsAccountId)) {
+            logger.warn(
+                "Rejected AWS account bind: user {} has no access to account {} (workgroup {})",
+                actor.username, request.awsAccountId, workgroupId
+            )
+            return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
+                .body(mapOf("error" to "You do not have access to AWS account ${request.awsAccountId}"))
         }
         return try {
             val saved = service.add(workgroupId, request.awsAccountId, actor.id!!)
