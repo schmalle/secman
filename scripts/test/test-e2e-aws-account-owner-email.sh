@@ -439,8 +439,10 @@ cleanup() {
         '(if type == "array" then . else (.content // []) end)[]? | select(.name == $n) | .id' 2>/dev/null \
         | while read -r r_id; do
             [[ -n "$r_id" ]] || continue
-            api DELETE "/api/releases/${r_id}?force=true" >/dev/null 2>&1 \
-                || api DELETE "/api/releases/${r_id}" >/dev/null 2>&1 || true
+            api DELETE "/api/releases/${r_id}?force=true" >/dev/null 2>&1
+            if [[ ! "$(api_status)" =~ ^2 ]]; then
+                log_warn "Could not delete release id=${r_id} (name=${SEEDED_RELEASE_NAME}, HTTP $(api_status)) — left in place"
+            fi
         done
 
     local reqs

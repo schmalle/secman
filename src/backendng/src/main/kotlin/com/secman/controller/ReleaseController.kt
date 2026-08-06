@@ -159,18 +159,37 @@ open class ReleaseController(
     /**
      * DELETE /api/releases/{id} - Delete release
      * Authorization: ADMIN or REQADMIN only
+     * `force=true` (ADMIN only) bypasses the ACTIVE-release guard — same escape hatch
+     * `DELETE /api/releases/all` already offers in bulk, exposed here per-release for
+     * callers (e.g. E2E test cleanup) that must remove a specific release regardless
+     * of its status.
      */
     @Delete("/{id}")
     @Secured("ADMIN", "REQADMIN")
-    fun deleteRelease(@PathVariable id: Long): HttpResponse<Void> {
-        logger.info("Deleting release: $id")
+    fun deleteRelease(
+        @PathVariable id: Long,
+        @QueryValue(defaultValue = "false") force: Boolean,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        logger.info("Deleting release: $id (force=$force)")
+
+        if (force && !authentication.roles.contains("ADMIN")) {
+            return HttpResponse.status<Map<String, Any>>(HttpStatus.FORBIDDEN).body(
+                mapOf("error" to "Forbidden", "message" to "force=true requires the ADMIN role")
+            )
+        }
 
         try {
-            releaseService.deleteRelease(id)
-            return HttpResponse.noContent()
+            releaseService.deleteRelease(id, force)
+            return HttpResponse.noContent<Void>()
         } catch (e: NoSuchElementException) {
             logger.warn("Release not found for deletion: $id")
-            return HttpResponse.notFound()
+            return HttpResponse.notFound<Void>()
+        } catch (e: IllegalStateException) {
+            logger.warn("Release deletion refused: ${e.message}")
+            return HttpResponse.status<Map<String, Any>>(HttpStatus.CONFLICT).body(
+                mapOf("error" to "Conflict", "message" to (e.message ?: "Cannot delete this release"))
+            )
         }
     }
 
