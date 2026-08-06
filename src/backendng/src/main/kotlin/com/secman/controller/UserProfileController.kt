@@ -346,7 +346,7 @@ open class UserProfileController(
      * reflected back. nosniff is applied globally by SecurityHeadersFilter and repeated here to
      * document the intent at the endpoint that needs it most.
      *
-     * SecurityHeadersFilter currently forces no-store on all /api/** responses, so the ETag is
+     * SecurityHeadersFilter currently forces no-store on all `/api` responses, so the ETag is
      * inert today; it is emitted anyway so correctness is already in place if a caching carve-out
      * is ever added.
      */
