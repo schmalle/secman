@@ -29,11 +29,11 @@ class ListGithubOwnerEmailMappingsTool(
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
 
-        val hasRequiredRole = context.isAdmin ||
-            context.delegatedUserRoles?.any { it == "VULN" || it == "SECCHAMPION" } == true
-        if (!hasRequiredRole) {
-            return McpToolResult.error("ADMIN_REQUIRED", "ADMIN, VULN, or SECCHAMPION role required to list GitHub owner email mappings")
-        }
+        requireAnyRole(
+            context, "VULN", "SECCHAMPION",
+            code = "ADMIN_REQUIRED",
+            message = "ADMIN, VULN, or SECCHAMPION role required to list GitHub owner email mappings"
+        )?.let { return it }
 
         return try {
             val mappings = mappingService.list().map { m ->

@@ -55,13 +55,11 @@ class CompareReleasesTool(
         // Check authorization - require User Delegation with ADMIN or RELEASE_MANAGER role
         requireDelegation(context)?.let { return it }
 
-        val userRoles = context.delegatedUserRoles?.map { it.uppercase() } ?: emptyList()
-        if (!userRoles.contains("ADMIN") && !userRoles.contains("RELEASE_MANAGER")) {
-            return McpToolResult.error(
-                "AUTHORIZATION_ERROR",
-                "ADMIN or RELEASE_MANAGER role required to compare releases"
-            )
-        }
+        requireAnyUserRole(
+            context, "ADMIN", "RELEASE_MANAGER",
+            code = "AUTHORIZATION_ERROR",
+            message = "ADMIN or RELEASE_MANAGER role required to compare releases"
+        )?.let { return it }
 
         // Extract parameters
         val fromReleaseId = (arguments["fromReleaseId"] as? Number)?.toLong()

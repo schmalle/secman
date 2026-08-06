@@ -63,15 +63,13 @@ class GetAlignmentStatusTool(
             )
         }
 
-        // Check role for detailed info
-        val userRoles = context.delegatedUserRoles?.map { it.uppercase() } ?: emptyList()
-        val hasManagerAccess = userRoles.contains("ADMIN") || userRoles.contains("RELEASE_MANAGER")
-
-        if ((includeReviewers || includeFeedback) && !hasManagerAccess) {
-            return McpToolResult.error(
-                "AUTHORIZATION_ERROR",
-                "ADMIN or RELEASE_MANAGER role required for detailed reviewer/feedback information"
-            )
+        // Detailed reviewer/feedback data is manager-only. Because this returns
+        // early, the blocks further down can test the flags alone.
+        if (includeReviewers || includeFeedback) {
+            requireAnyUserRole(
+                context, "ADMIN", "RELEASE_MANAGER",
+                message = "ADMIN or RELEASE_MANAGER role required for detailed reviewer/feedback information"
+            )?.let { return it }
         }
 
         try {
@@ -121,7 +119,7 @@ class GetAlignmentStatusTool(
             )
 
             // Add detailed reviewer info if requested
-            if (includeReviewers && hasManagerAccess) {
+            if (includeReviewers) {
                 val reviewerSummaries = alignmentService.getReviewerSummaries(status.session.id!!)
                 response["reviewers"] = reviewerSummaries.map { summary ->
                     mapOf(
@@ -141,7 +139,7 @@ class GetAlignmentStatusTool(
             }
 
             // Add per-requirement feedback if requested
-            if (includeFeedback && hasManagerAccess) {
+            if (includeFeedback) {
                 val feedbackSummaries = alignmentService.getRequirementReviewSummaries(status.session.id!!)
                 response["feedback"] = feedbackSummaries.map { summary ->
                     mapOf(

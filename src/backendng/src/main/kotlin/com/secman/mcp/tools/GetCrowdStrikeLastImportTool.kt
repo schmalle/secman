@@ -34,15 +34,11 @@ class GetCrowdStrikeLastImportTool(
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
 
-        val hasRequiredRole = context.isAdmin ||
-            context.delegatedUserRoles?.contains("VULN") == true
-
-        if (!hasRequiredRole) {
-            return McpToolResult.error(
-                "ROLE_REQUIRED",
-                "ADMIN or VULN role required to read CrowdStrike import status"
-            )
-        }
+        requireAnyRole(
+            context, "VULN",
+            code = "ROLE_REQUIRED",
+            message = "ADMIN or VULN role required to read CrowdStrike import status"
+        )?.let { return it }
 
         return try {
             val status = importService.getLatestImportStatus()

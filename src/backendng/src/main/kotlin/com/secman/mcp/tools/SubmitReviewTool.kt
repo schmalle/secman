@@ -55,13 +55,11 @@ class SubmitReviewTool(
         // Check authorization - require User Delegation with REQ role
         requireDelegation(context)?.let { return it }
 
-        val userRoles = context.delegatedUserRoles?.map { it.uppercase() } ?: emptyList()
-        if (!userRoles.contains("REQ") && !userRoles.contains("ADMIN")) {
-            return McpToolResult.error(
-                "AUTHORIZATION_ERROR",
-                "REQ or ADMIN role required to submit reviews"
-            )
-        }
+        requireAnyUserRole(
+            context, "REQ", "ADMIN",
+            code = "AUTHORIZATION_ERROR",
+            message = "REQ or ADMIN role required to submit reviews"
+        )?.let { return it }
 
         // Extract parameters
         val sessionId = (arguments["session_id"] as? Number)?.toLong()

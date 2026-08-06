@@ -130,14 +130,16 @@ This is the **API-key** permission each tool is gated on. It is only half the ch
 
 ### Two permission maps
 
-A tool call passes through **two independent name→permission maps**, and a tool must appear in both to be usable:
+A tool call passes through **two independent name→permission maps**, and a tool must appear in both to be usable. Both live in `src/backendng/.../mcp/McpToolPermissions.kt`:
 
-| Map | File | Governs |
+| Map | Read by | Governs |
 |---|---|---|
-| `McpToolRegistry.isToolAuthorized()` | `src/backendng/.../mcp/McpToolRegistry.kt` | which tools `tools/list` returns |
-| `McpToolPermissionService.checkPermissionSetForTool()` | `src/backendng/.../service/McpToolPermissionService.kt` | whether `tools/call` is allowed |
+| `McpToolPermissions.LISTING` | `McpToolRegistry.getAuthorizedTools()` | which tools `tools/list` returns |
+| `McpToolPermissions.CALLING` | `McpToolPermissionService.checkPermissionSetForTool()` | whether `tools/call` is allowed |
 
-Both end in `else -> false`, so a tool missing from either one silently disappears (absent from `tools/list`) or is rejected with `PERMISSION_DENIED` on call, regardless of the caller's roles. Adding a tool means adding it to the registry, to **both** maps, and to this document. The drift check is in [Keeping this document in sync](#keeping-this-document-in-sync).
+A tool missing from either map silently disappears (absent from `tools/list`) or is rejected with `PERMISSION_DENIED` on call, regardless of the caller's roles. Registration itself is automatic — every `@Singleton` `McpTool` bean is discovered by Micronaut — so adding a tool means adding it to **both** maps and to this document. The drift check is in [Keeping this document in sync](#keeping-this-document-in-sync).
+
+Within a map, a tool is authorized when the caller holds **any** of the permissions listed for it.
 
 ## Tool reference
 
@@ -416,36 +418,35 @@ ADMIN-only unless noted, delegation required.
 
 ## Keeping this document in sync
 
-Every tool below must appear in the registry, in both permission maps, and in this file. Run these from the repo root after adding or renaming a tool:
+Every tool below must appear in both permission maps and in this file. (Registration is automatic — a `@Singleton` `McpTool` bean is picked up by `McpToolRegistry` with no edit needed there.) Run these from the repo root after adding or renaming a tool:
 
 ```bash
-# 1. Tools missing from this document
-for t in $(grep -h 'override val name' \
+PERMS=src/backendng/src/main/kotlin/com/secman/mcp/McpToolPermissions.kt
+TOOLS=$(grep -h 'override val name' \
     src/backendng/src/main/kotlin/com/secman/mcp/tools/*.kt \
-    | sed -E 's/.*"(.*)".*/\1/'); do
+    | sed -E 's/.*"(.*)".*/\1/')
+sed -n '/val LISTING/,/val CALLING/p' "$PERMS" > /tmp/mcp-listing.kt
+sed -n '/val CALLING/,$p'            "$PERMS" > /tmp/mcp-calling.kt
+
+# 1. Tools missing from this document
+for t in $TOOLS; do
   grep -q "\`$t\`" docs/MCP.md || echo "UNDOCUMENTED: $t"
 done
 
-# 2. Tools missing from the tools/list map (McpToolRegistry.isToolAuthorized)
-for t in $(grep -h 'override val name' \
-    src/backendng/src/main/kotlin/com/secman/mcp/tools/*.kt \
-    | sed -E 's/.*"(.*)".*/\1/'); do
-  grep -q "\"$t\"" src/backendng/src/main/kotlin/com/secman/mcp/McpToolRegistry.kt \
-    || echo "NOT LISTABLE: $t"
+# 2. Tools missing from the tools/list map (McpToolPermissions.LISTING)
+for t in $TOOLS; do
+  grep -q "\"$t\"" /tmp/mcp-listing.kt || echo "NOT LISTABLE: $t"
 done
 
-# 3. Tools missing from the tools/call map (checkPermissionSetForTool + ToolCategories)
-for t in $(grep -h 'override val name' \
-    src/backendng/src/main/kotlin/com/secman/mcp/tools/*.kt \
-    | sed -E 's/.*"(.*)".*/\1/'); do
-  grep -qE "\"$t\"" \
-    src/backendng/src/main/kotlin/com/secman/service/McpToolPermissionService.kt \
+# 3. Tools missing from the tools/call map (McpToolPermissions.CALLING + ToolCategories)
+for t in $TOOLS; do
+  grep -qE "\"$t\"" /tmp/mcp-calling.kt \
     src/backendng/src/main/kotlin/com/secman/mcp/ToolCategories.kt \
     || echo "NOT CALLABLE: $t"
 done
 ```
 
-Check 3 currently reports a backlog of tools that are documented and listed but rejected with `PERMISSION_DENIED` on `tools/call`, because `checkPermissionSetForTool` has drifted behind `McpToolRegistry`. Run the command for the live list before relying on a tool in an automation.
+Check 3 currently reports a backlog of tools that are documented and listed but rejected with `PERMISSION_DENIED` on `tools/call`, because `CALLING` has drifted behind `LISTING`. Run the command for the live list before relying on a tool in an automation.
 
 ## Programmatic example (Python)
 

@@ -38,16 +38,11 @@ class ListProductsTool(
         // Require User Delegation - cannot verify role without knowing the user
         requireDelegation(context)?.let { return it }
 
-        // Require ADMIN or SECCHAMPION role
-        val hasRequiredRole = context.isAdmin ||
-            context.delegatedUserRoles?.contains("SECCHAMPION") == true
-
-        if (!hasRequiredRole) {
-            return McpToolResult.error(
-                "ROLE_REQUIRED",
-                "ADMIN or SECCHAMPION role required to list products"
-            )
-        }
+        requireAnyRole(
+            context, "SECCHAMPION",
+            code = "ROLE_REQUIRED",
+            message = "ADMIN or SECCHAMPION role required to list products"
+        )?.let { return it }
 
         try {
             // Get optional search parameter

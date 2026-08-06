@@ -33,10 +33,11 @@ class DeleteGithubOwnerEmailMappingTool(
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
 
-        val hasRequiredRole = context.isAdmin || context.delegatedUserRoles?.contains("VULN") == true
-        if (!hasRequiredRole) {
-            return McpToolResult.error("ADMIN_REQUIRED", "ADMIN or VULN role required to delete a GitHub owner email mapping")
-        }
+        requireAnyRole(
+            context, "VULN",
+            code = "ADMIN_REQUIRED",
+            message = "ADMIN or VULN role required to delete a GitHub owner email mapping"
+        )?.let { return it }
 
         val id = (arguments["id"] as? Number)?.toLong()
             ?: return McpToolResult.error("VALIDATION_ERROR", "id is required and must be a valid number")
