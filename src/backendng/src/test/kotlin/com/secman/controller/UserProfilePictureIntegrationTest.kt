@@ -92,6 +92,29 @@ class UserProfilePictureIntegrationTest : BaseIntegrationTest() {
         Map::class.java
     )
 
+    /**
+     * Uploads a part WITHOUT a per-part content type.
+     *
+     * This shape is the one that matters: Micronaut does not surface a Content-Type on
+     * CompletedFileUpload for the multipart parts real browsers and curl send, so the service
+     * receives null. Every other test here declares the type explicitly via MultipartBody's
+     * 4-arg overload, which is a wire shape no real client produces — that is exactly why this
+     * suite stayed green while every upload in production was rejected.
+     */
+    private fun uploadWithoutDeclaredType(
+        username: String,
+        bytes: ByteArray,
+        filename: String = "avatar.png"
+    ) = client.toBlocking().exchange(
+        HttpRequest.POST(
+            "/api/users/profile/picture",
+            MultipartBody.builder().addPart("file", filename, bytes).build()
+        )
+            .header("Authorization", authHeader(username))
+            .contentType(MediaType.MULTIPART_FORM_DATA),
+        Map::class.java
+    )
+
     private fun fetchPicture(username: String) = client.toBlocking().exchange(
         HttpRequest.GET<Any>("/api/users/profile/picture")
             .header("Authorization", authHeader(username)),
