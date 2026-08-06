@@ -228,12 +228,27 @@ cleanup() {
         done
 
     # Release (also drops its requirement snapshots).
+    #
+    # Matched by NAME ($RELEASE_NAME, constant across runs), never by this run's own
+    # $RELEASE_VERSION (a fresh timestamp each run). A version-only match can only ever
+    # catch the release THIS run just created, so any release orphaned by an earlier
+    # interrupted run (different version, same name) would never be swept up, and the
+    # e2e-awsra-release rows would pile up release over release exactly like the
+    # e2e-awsmail-release pile this cleanup pattern was copied from.
+    #
+    # force=true is required: setup_testbed() always sets its release ACTIVE, and the
+    # backend refuses to delete an ACTIVE release unless force=true actually bypasses
+    # that guard (see DELETE /api/releases/{id} in ReleaseController.kt).
     local releases
     releases=$(api GET "/api/releases" || echo '[]')
-    echo "$releases" | jq -r --arg v "$RELEASE_VERSION" \
-        '(if type == "array" then . else (.content // []) end)[]? | select(.version == $v) | .id' 2>/dev/null \
+    echo "$releases" | jq -r --arg n "$RELEASE_NAME" \
+        '(if type == "array" then . else (.content // []) end)[]? | select(.name == $n) | .id' 2>/dev/null \
         | while read -r r_id; do
-            [[ -n "$r_id" ]] && api DELETE "/api/releases/${r_id}" >/dev/null || true
+            [[ -n "$r_id" ]] || continue
+            api DELETE "/api/releases/${r_id}?force=true" >/dev/null 2>&1 || true
+            if [[ ! "$API_STATUS" =~ ^2 ]]; then
+                log_warn "Could not delete release id=${r_id} (name=${RELEASE_NAME}, HTTP ${API_STATUS}) — left in place"
+            fi
         done
 
     # Requirements, use case, users — all prefix-scoped.
