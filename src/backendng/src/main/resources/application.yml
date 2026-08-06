@@ -99,6 +99,21 @@ micronaut:
           max-age: 3600
   security:
     authentication: bearer
+    # SECURITY: disable Micronaut's built-in POST /login and POST /logout controllers.
+    # They are registered by default whenever a LoginHandler bean exists (which
+    # `authentication: bearer` guarantees) and are @Secured(IS_ANONYMOUS) on paths outside the
+    # /api/** catch-all, so they bypassed every control implemented in AuthController.login:
+    #   - the MFA gate (AuthenticationProviderUserPassword never consults user.mfaEnabled)
+    #   - the 5-attempt / 15-minute lockout
+    #   - input validation
+    #   - HttpOnly-cookie-only token delivery (the built-in endpoint returns access_token
+    #     in the JSON response body)
+    # This application authenticates exclusively via /api/auth/login; nothing calls /login.
+    endpoints:
+      login:
+        enabled: false
+      logout:
+        enabled: false
     token:
       jwt:
         signatures:
@@ -213,6 +228,16 @@ secman:
     # Controls the Secure flag on auth cookies (HTTPS-only transmission)
     # Default: true (production-safe). Set SECMAN_AUTH_COOKIE_SECURE=false for local HTTP development.
     cookie-secure: ${SECMAN_AUTH_COOKIE_SECURE:true}
+  profile-picture:
+    # Feature: Profile Picture Management. Uploads are validated and re-encoded, never stored raw.
+    # Hard cap on the uploaded bytes. Well below micronaut.server.multipart.max-file-size, which
+    # stays large for the XLSX/vulnerability importers.
+    max-upload-bytes: ${SECMAN_PROFILE_PICTURE_MAX_UPLOAD_BYTES:2097152}
+    # Decompression-bomb guards, checked against the image header before any raster is allocated.
+    max-source-dimension: ${SECMAN_PROFILE_PICTURE_MAX_SOURCE_DIMENSION:10000}
+    max-source-pixels: ${SECMAN_PROFILE_PICTURE_MAX_SOURCE_PIXELS:40000000}
+    # Edge length of the stored square thumbnail.
+    target-edge: ${SECMAN_PROFILE_PICTURE_TARGET_EDGE:256}
   encryption:
     # Encryption password for sensitive data - MUST be overridden in production
     password: ${SECMAN_ENCRYPTION_PASSWORD:SecManDefaultEncryptionPassword2024}

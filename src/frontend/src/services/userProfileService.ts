@@ -1,15 +1,32 @@
 import axios from 'axios';
+import { csrfDelete, csrfPost } from '../utils/csrf';
 
 /**
  * User profile data interface
  * Feature 028: User Profile Page
  * Feature 051: User Password Change (added canChangePassword)
+ * Feature: Profile Picture Management (added hasProfilePicture, profilePictureUpdatedAt)
  */
 export interface UserProfileData {
   username: string;
   email: string;
   roles: string[];
   canChangePassword: boolean;
+  hasProfilePicture: boolean;
+  profilePictureUpdatedAt: string | null;
+}
+
+/**
+ * Metadata about the current user's avatar
+ * Feature: Profile Picture Management
+ */
+export interface ProfilePictureMetadata {
+  hasProfilePicture: boolean;
+  contentType?: string | null;
+  fileSizeBytes?: number | null;
+  width?: number | null;
+  height?: number | null;
+  updatedAt?: string | null;
 }
 
 /**
@@ -110,6 +127,48 @@ class UserProfileService {
   async changePassword(request: ChangePasswordRequest): Promise<ChangePasswordResponse> {
     const response = await axios.put<ChangePasswordResponse>(`${this.baseUrl}/profile/change-password`, request);
     return response.data;
+  }
+
+  /**
+   * Upload or replace the current user's profile picture
+   * Feature: Profile Picture Management
+   *
+   * Uses csrfPost rather than bare axios: it adds the Csrf-Token header and is FormData-safe
+   * (it does not force a Content-Type, so the browser sets the multipart boundary).
+   *
+   * @param image - Cropped image blob produced by the profile picture cropper
+   * @param filename - Filename to send with the part
+   * @returns Promise<ProfilePictureMetadata> Metadata for the stored picture
+   */
+  async uploadProfilePicture(image: Blob, filename = 'profile-picture.png'): Promise<ProfilePictureMetadata> {
+    const formData = new FormData();
+    formData.append('file', image, filename);
+    const response = await csrfPost(`${this.baseUrl}/profile/picture`, formData);
+    return response.data;
+  }
+
+  /**
+   * Remove the current user's profile picture
+   * Feature: Profile Picture Management
+   *
+   * Idempotent server-side: succeeds whether or not a picture was set.
+   */
+  async deleteProfilePicture(): Promise<void> {
+    await csrfDelete(`${this.baseUrl}/profile/picture`);
+  }
+
+  /**
+   * Build the URL for the current user's profile picture
+   * Feature: Profile Picture Management
+   *
+   * Callers must only use this when the user is known to have a picture - requesting it
+   * otherwise produces a 404 on every page load.
+   *
+   * @param updatedAt - Last-modified stamp, appended as a cache-busting query parameter
+   */
+  profilePictureUrl(updatedAt?: string | null): string {
+    const base = `${this.baseUrl}/profile/picture`;
+    return updatedAt ? `${base}?v=${encodeURIComponent(updatedAt)}` : base;
   }
 }
 

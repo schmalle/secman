@@ -10,13 +10,18 @@ description: >
 context: fork
 ---
 
-> **Sync policy**: This file mirrors `.claude/skills/createtestdata/SKILL.md`,
-> which is the **leading, authoritative** copy for this repo (see
-> `CLAUDE.md` §"Tooling Conventions"). Whenever the Claude Code version
-> changes, port the same change here, translating Claude-specific mechanics
-> to their Codex equivalent (e.g. Bash tool `dangerouslyDisableSandbox: true`
-> ↔ `sandbox_permissions: "require_escalated"`). Never let this file diverge
-> ahead of the Claude Code version.
+> **Sync policy (two-way, mandatory)**: This file and
+> `.claude/skills/createtestdata/SKILL.md` are one skill kept in two harness
+> trees — Codex reads this copy, Claude Code reads the other. Whichever copy
+> an agent edits, the same change is ported to the other **in the same
+> commit**; translate harness-specific mechanics rather than copying verbatim
+> (e.g. `sandbox_permissions: "require_escalated"` ↔ Bash tool
+> `dangerouslyDisableSandbox: true`). `.claude/skills/` is the tie-breaker
+> when the two disagree — that is a conflict rule, not a licence to edit one
+> side only. Verify with `./scripts/check-skill-sync.sh` (exit 0) before
+> calling the change done. See `CLAUDE.md` §"Tooling Conventions" and
+> `AGENTS.md` §Skills.
+
 # Create Test Data — User, System, Vulnerability, Scoped Exception Request
 
 Seeds one self-contained fixture for manual/UI testing. Everything is created

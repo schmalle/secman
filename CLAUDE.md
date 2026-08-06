@@ -18,7 +18,14 @@ Security requirement, vulnerability and risk management platform.
 ## Tooling Conventions (canonical, do not deviate)
 
 - **Scripts**: `./scripts/` only.
-- **Skills**: `.claude/skills/` is the canonical, leading skill set for Claude Code sessions in this repo — authoritative over `.agents/skills/` (parallel copies maintained for Codex). On any divergence between the two trees, `.claude/skills/` wins. **Whenever a `.claude/skills/*/SKILL.md` file is edited, the matching `.agents/skills/*/SKILL.md` file must be updated in the same change** so the two never drift — translate Claude-specific mechanics to their Codex equivalent (e.g. Bash tool `dangerouslyDisableSandbox: true` ↔ `sandbox_permissions: "require_escalated"`) rather than copying verbatim. If a `.claude/skills/` entry has no `.agents/skills/` counterpart, flag it instead of silently creating one. When only asked to update "skills" without a harness specified, update `.claude/skills/` first, then port to `.agents/skills/`.
+- **Skills — two harness trees, one skill set**: every skill exists twice, once per agent harness. `.claude/skills/` is what **Claude Code** loads; `.agents/skills/` is what **Codex** (and other `AGENTS.md`-driven agents) load. They are two renderings of the same skill, not two skills.
+  - **Two-way sync is mandatory.** *Whichever* tree an agent edits — Claude Code editing `.claude/skills/`, Codex editing `.agents/skills/` — the same change must land in the counterpart file **in the same commit**. There is no "port it later"; a commit that touches one tree only is incomplete. This applies to every `*.md` under the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
+  - **Translate, don't copy.** Harness-specific mechanics get their equivalent on the other side rather than a verbatim paste: Bash tool `dangerouslyDisableSandbox: true` ↔ `sandbox_permissions: "require_escalated"`; `AskUserQuestion` ↔ "ask the user directly"; `.claude/skills/…` ↔ `.agents/skills/…` paths. Everything else — steps, commands, thresholds, credentials handling — must be word-for-word identical.
+  - **`.claude/skills/` is the tie-breaker, not the only writer.** When the two copies already disagree and neither is obviously newer, `.claude/skills/` wins. That is a conflict rule for resolving existing drift; it does not make a Codex-side edit second-class, and it never licenses leaving the other tree stale. Both copies have been the correct one historically.
+  - **New skill → create both.** Adding a skill means adding it to `.claude/skills/` *and* `.agents/skills/` in the same change. Deleting means deleting both. If you *discover* a pre-existing entry that exists in only one tree, report it — do not silently synthesize the missing side, since you cannot know whether the omission was deliberate.
+  - **Gate**: `./scripts/check-skill-sync.sh` must exit 0 before any skill change is complete (`--verbose` shows the differing lines). It is report-only and never edits either tree. `/testsuite` runs it as part of the fast tier.
+  - Each skill file carries a `> **Sync policy (two-way, mandatory)**` banner naming its counterpart, so the rule is visible to whichever agent opens the file. The sync checker strips the banner before diffing, so the two banners may differ in wording.
+  - When asked to update "skills" with no harness named, edit `.claude/skills/` first, then port to `.agents/skills/` — both in that one change.
 - **Secrets**: `pass-cli` (Proton Pass) only. Never hardcode secrets.
 - **Backend dev start**: always `./scripts/startbackenddev.sh` (sources `pass-cli` env, runs Micronaut). Never call `./gradlew run` directly.
 - **Frontend dev start**: always `./scripts/startfrontenddev.sh` (sources `pass-cli` env, runs `npm run dev`). Never call `npm run dev` directly.
@@ -62,7 +69,7 @@ Authoritative filter: `AssetFilterService.getAccessibleAssets()`. SQL pre-filter
 | Heatmap | `GET /api/vulnerability-heatmap`; `POST .../refresh` (ADMIN); `GET /api/external/vulnerability-heatmap` (API-key, CORS) | mixed |
 | Identity Providers | `GET/POST/PUT/DELETE /api/identity-providers[/{id}[/test]]` | ADMIN |
 | Maintenance Banners | `GET /api/maintenance-banners/active` (PUBLIC); `GET/POST/PUT/DELETE /api/maintenance-banners[/{id}]` (ADMIN) | mixed |
-| User Profile | `GET /api/users/profile`, `PUT .../change-password` (LOCAL only), `GET/PUT .../mfa-{status,toggle}` | auth |
+| User Profile | `GET /api/users/profile`, `PUT .../change-password` (LOCAL only), `GET/PUT .../mfa-{status,toggle}`; avatar `GET/POST/DELETE /api/users/profile/picture` (own only, no user id in the route) | auth |
 | User Dashboard | `GET /api/user-dashboard` (aggregated personal todos, single round-trip) | auth |
 | Security KPIs | `GET /api/dashboard/{aws-clean-server-kpi, edr-coverage-kpi}` — precomputed cache reads only, never live queries | ADMIN/SECCHAMPION |
 | Notifications | `GET/PUT /api/notification-preferences`; `GET /api/notification-logs`; `.../export` (ADMIN) | mixed |
@@ -95,7 +102,7 @@ CrowdStrike monitoring: `src/clinotify/check_crowdstrike_checkin.py` polls `/api
 
 ## Hard Principles
 
-1. Security-first: file validation, input sanitization, RBAC. Security review before completion.
+1. Security-first: file validation, input sanitization, RBAC. **All generated or edited code must satisfy §OWASP Top 10 Compliance below** — that checklist is binding, not advisory. Security review before completion.
 2. RBAC enforced at controller (`@Secured`) AND in UI.
 3. Schema = Flyway migrations + Hibernate auto-update. **New entities must declare
    `@GeneratedValue(strategy = GenerationType.IDENTITY)`** — a bare `@GeneratedValue`
@@ -112,6 +119,75 @@ CrowdStrike monitoring: `src/clinotify/check_crowdstrike_checkin.py` polls `/api
    - **`/e2evulnexception`** must run the full vuln + exception lifecycle (MCP + UI, setup + teardown) with **0 failures**.
 
    Doc-only edits outside `src/`, `tests/`, `scripts/` may skip the gates — state so explicitly. Otherwise both gates are non-negotiable.
+
+## OWASP Top 10 Compliance (mandatory)
+
+Hard Principle 1 in concrete terms. **Do not generate code that violates any rule below.** Categories are pinned to **OWASP Top 10:2021 (A01–A10)**; if the list is revised upstream, revisit this section rather than silently re-mapping names.
+
+Each rule names the control that already exists in this repo. **Reuse it — never write a second one**, and never work around one to make something build, start or pass.
+
+**A01 Broken Access Control**
+- Every endpoint carries `@Secured`. A public endpoint is an explicit, justified exception (`GET /api/crowdstrike/last-checkin`, `GET /api/maintenance-banners/active`), never a default and never "for now".
+- An id in a request is untrusted input. Resolve assets through `AssetFilterService.getAccessibleAssets()` / `getAccessibleAssetIds()` / `canAccessAsset(assetId, authentication)` — never `findById(userSuppliedId)` and return it. Same for any other owner-scoped entity.
+- SQL pre-filters in materialized views and native queries are perf hints, **never the auth boundary** (restated from §Unified Asset Access — it is the single most repeated bug class here).
+- A new MCP tool needs entries in **both** `McpToolPermissions.LISTING` and `.CALLING` plus a `McpToolGuards` check. A missing `CALLING` entry fails closed and looks like a bug; a missing guard fails **open** and looks like nothing.
+- RBAC at the controller **and** in the UI (Principle 2). The UI check is UX; the controller check is the boundary. Never only the former.
+
+**A02 Cryptographic Failures**
+- Passwords and API-key secrets: `BCryptPasswordEncoder` only. Never SHA-256/MD5/hand-rolled hashing for a secret — the SHA-256 API-key path in `McpAuthenticationService` exists solely to migrate legacy keys, do not extend or imitate it.
+- The JWT lives in the HttpOnly `secman_auth` cookie. Never write a token to `localStorage`, `sessionStorage`, a non-HttpOnly cookie, or any value that lands in a log. The SSE `?token=` query param is the one documented exception (EventSource has no headers).
+- Secrets come from `pass-cli`/env. No literal credential, key, token or internal host in source, tests, scripts or fixtures.
+- `JwtSigningValidator`, `DatabaseCredentialValidator` and `DatasourceUrlValidator` fail the boot on weak config **by design** — never relax or bypass one to make the backend start.
+
+**A03 Injection**
+- Persistence: derived queries or bound parameters (`:name`) only. **Never** concatenate a value into a query string — this includes the ~30 `nativeQuery = true` methods in `VulnerabilityRepository`, `WorkgroupRepository`, `AwsAccountSharingRepository`. Things that cannot be bound (column name, sort direction, table) map through a closed allowlist/enum; a request value never reaches SQL unbound.
+- HTML: no `innerHTML` / `dangerouslySetInnerHTML` without `DOMPurify.sanitize(...)` **at the assignment site** — see `RichContent.tsx` and `HtmlEditor.tsx`. Sanitizing on write is not sufficient: stored rows predate the control.
+- Excel/CSV export: every user-controlled cell goes through `ExcelSanitizer.sanitize()` (formula/DDE injection). No E2E gate ever opens an exported file, so a regression here is invisible at runtime and only `ExcelSanitizerTest` will catch it.
+- OS: no user-controlled string interpolated into a shell command, from Kotlin or from `./scripts/`. Pass argv arrays; quote every variable in bash.
+- Strip or encode CR/LF from user input before it reaches a log line (log forging).
+
+**A04 Insecure Design**
+- Deny by default: a new endpoint or MCP tool starts from the narrowest role that works and is widened deliberately — not `IS_AUTHENTICATED` with a TODO.
+- Unbounded is a design bug: page at the query (`findByAssetIdIn(ids, pageable)`), never `findAll()` then filter/slice in Kotlin. That exact pattern OOM'd `get_vulnerabilities` on 1.1M rows.
+- Business invariants (release status transitions, exception `kind`/subject/scope validity, ownership, workgroup membership) are enforced server-side. A rule that exists only in the UI is not a rule.
+
+**A05 Security Misconfiguration**
+- Do not weaken `SecurityHeadersFilter` — CSP, HSTS, `X-Frame-Options: DENY`, COOP/COEP/CORP, permissions policy. If a feature "requires" `unsafe-eval` or a wildcard `connect-src`, change the feature.
+- CORS: explicit origin allowlist. Never `*` combined with credentials.
+- Error responses carry a generic message; the detail goes to the server log. Never return a stack trace, SQL string, internal path or driver message to a client (`ValidationExceptionHandler` is the pattern).
+- No debug endpoint, verbose-logging toggle or seeded default credential enabled outside the `test` profile.
+
+**A06 Vulnerable and Outdated Components**
+- Prefer the stdlib and dependencies already on the classpath. A new third-party dependency needs a stated reason and must be called out in the PR body.
+- Pin exact versions in the Gradle/npm manifests — no floating ranges, no `latest`. `package-lock.json` must stay in step with `package.json` (`npm ci` is the gate).
+- `src/clinotify` is **stdlib-only by contract**; adding a dependency there breaks its deployment.
+
+**A07 Identification and Authentication Failures**
+- Authenticate through `AuthenticationProviderUserPassword`, `OAuthService` or `McpAuthenticationService`. Never a bespoke auth path, and never a header that grants access on its own: `X-MCP-User-Email` *identifies* a delegated user, it is not a credential and must always sit behind a verified API key.
+- Login, password-reset and lookup errors must not disclose whether an account exists.
+- Password change stays LOCAL-account-only; MFA state stays server-enforced.
+- Never lengthen a token/session lifetime, or loosen a cookie's `HttpOnly`/`Secure`/`SameSite`, to fix a UX or test problem.
+
+**A08 Software and Data Integrity Failures**
+- Every upload validates **size, extension and content type before parsing**, and rejects empty files — `ImportController.validateFile` is the reference; keep `MAX_FILE_SIZE` aligned with `application.yml`.
+- XML parsing keeps DTDs and external entities **disabled** (XXE). `NmapParserService`/`MasscanParserService` set `disallow-doctype-decl`, `external-general-entities`, `external-parameter-entities` and `load-external-dtd` — copy that block into any new XML parser; never construct a bare `DocumentBuilderFactory`.
+- Never deserialize untrusted input into a polymorphic or arbitrary type — parse into an explicit DTO.
+- Never fetch code, config or a template from a remote source at runtime and execute or eval it.
+- Archive handling: reject entry paths containing `..` and bound the decompressed size (zip bomb).
+
+**A09 Security Logging and Monitoring Failures**
+- Log authentication failures, RBAC denials, admin actions, imports and exports with **actor + target + outcome**.
+- Never log a password, token, cookie value, API key, or the body of an auth request. `logger.debug` counts — it runs in dev, where real `pass-cli` secrets are loaded.
+- No silent `catch (e: Exception) { }`. A swallowed security-relevant failure is itself a monitoring failure.
+
+**A10 Server-Side Request Forgery (SSRF)**
+- Any outbound URL derived from user input or DB-stored config — identity provider endpoints and JWKS, GitHub App, CrowdStrike, S3 endpoints, notification webhooks — is validated before use: `https` scheme allowlist, plus host allowlist or explicit rejection of loopback, link-local and RFC-1918 ranges and cloud metadata (`169.254.169.254`).
+- Re-apply the same check to redirect targets; never follow a redirect into a range the original request would have been denied.
+- `McpOriginValidationFilter` is the inbound analogue — do not disable it.
+
+### Review gate
+
+Before reporting any code change complete, re-read the diff against A01–A10 and state the result in one line, e.g. `OWASP: A01/A03/A09 touched — clean`. Changes to authentication, authorization, crypto, file upload, export or any outbound HTTP call additionally run `/security-review` on the branch diff (`/finalizer` includes a HIGH/CRITICAL pass). **A finding at HIGH or above blocks the change** — fix it, do not merely note it.
 
 ## Patterns (worth knowing)
 
@@ -209,6 +285,6 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
-- **Generic chat notifications (Slack + Telegram), per user** — users pick their own destination and, independently per channel, which events they want reported. Two events: "New CrowdStrike report completed" and "New AWS account import completed". Publishers stay transport-agnostic (`ChatNotificationEvent` → `@Async` listener → `ChatNotificationService`), subscriptions are `(user, channel, event_type)` rows so a new event or channel needs no migration, and destinations fall back personal→workspace on both channels. CrowdStrike has no last batch, so `ImportCompletionNotifier` debounces ~94 sub-batches into one event after a quiet period. Security-critical: the per-user Slack webhook URL is host-allowlisted (the only user-supplied URL the backend fetches) and the Telegram bot token's shape is validated because it goes in the request URL path; all credentials encrypted, never returned, mask-preserved. New: `/chat-notifications`, `/admin/chat-config`, `V251__chat_notifications.sql`. **Backend is compile-unverified** — egress policy blocked Gradle/Maven Central in that session. Full detail below.
-- **Test-coverage evaluation, repaired frontend test tier, `/testsuite` skill** — the frontend gate `npm ci && npm run build` was unrunnable (lockfile drifted from `package.json`), and 8 `*.test.ts` files existed with no npm script, no docs and 2 hard failures. Now `npm test` on Node's own runner (no framework dep) with a resolver hook in `src/frontend/test/`: **59 passing**. Found a real bug — `getPermissionErrorMessage('constructor')` returned an `Object.prototype` member instead of the fallback. New tests: `permissions` (UI half of Hard Principle #2), `cacheUtils`, `severityColors`, `ExcelSanitizerTest` (the export formula-injection control had zero), `AwsInstanceIdRecognitionTest` (two duplicated regexes must agree). New `./scripts/test-coverage-report.sh` (name-reference, **not** line coverage; controller/mcp-tools understated) and `/testsuite` skill for the whole fast tier. Fixed a permanent false positive in `check-skill-sync.sh`. Full detail below.
-- **Documentation correctness sweep (living docs)** — repo-wide review of root docs, `docs/`, `.claude`/`.agents` skills+commands, and `src/`/`scripts/`/`tests/`/`testdata/` READMEs (`specs/` excluded as frozen history). Fixed stale version banners (build files are ground truth, not the docs), Java 21→25 leftovers, docs telling readers to bypass the canonical dev-start scripts, two CLI docs whose examples used a deprecated/non-functional auth flag, a fabricated CLI config schema, and several `.claude`↔`.agents` skill-mirror drifts. Full detail below.
+- **Generic chat notifications (Slack + Telegram), per user** — users pick their own destination and, independently per channel, which events they want reported. Two events: "New CrowdStrike report completed" and "New AWS account import completed". Publishers stay transport-agnostic (`ChatNotificationEvent` → `@Async` listener → `ChatNotificationService`), subscriptions are `(user, channel, event_type)` rows so a new event or channel needs no migration, and destinations fall back personal→workspace on both channels. CrowdStrike has no last batch, so `ImportCompletionNotifier` debounces ~94 sub-batches into one event after a quiet period. Security-critical: the per-user Slack webhook URL is host-allowlisted (the only user-supplied URL the backend fetches) and the Telegram bot token's shape is validated because it goes in the request URL path; all credentials encrypted, never returned, mask-preserved. New: `/chat-notifications`, `/admin/chat-config`, `V252__chat_notifications.sql`. **Backend is compile-unverified** — egress policy blocked Gradle/Maven Central in that session. Full detail below.
+- **Profile picture management** — users upload/crop/replace/remove their own avatar on `/profile`; it replaces the person icon in the header dropdown. `GET/POST/DELETE /api/users/profile/picture` on `UserProfileController`, **own picture only — no user id in any route**, so cross-user access is structurally impossible. Bytes live in a side table `user_profile_picture` (V249, 1:1, cascade) *not* a column on `users`, because `@Basic(LAZY)` on a `@Lob` is inert without bytecode enhancement (not enabled here) — hot paths use the blob-free `findUpdatedAtByUserId`. Uploads are decoded, centre-cropped, scaled to 256 px and **re-encoded**; that round trip, not the magic-byte sniff, is what kills polyglots and strips EXIF. Dimension probe runs *before* `read(0)` (bomb guard). Header `<img>` is gated on `hasProfilePicture` and DELETE returns 204 unconditionally — an unconditional request or a 404 would fail the `/e2ejs` gate. Full detail below.
+- **Skill sync between Claude Code and Codex is now a two-way obligation, defined for both harnesses** — the rule lived only in `CLAUDE.md` and only in one direction ("whenever a `.claude/skills/*/SKILL.md` is edited, update the `.agents/` copy"), `AGENTS.md` said nothing about skills at all, and the per-file banner existed only in the `.agents/` tree telling it never to diverge *ahead of* Claude — so a Codex session editing its own tree was under no stated obligation and never saw the rule. Now symmetric: whichever tree an agent edits, the counterpart changes **in the same commit**, for every `*.md` under the trees (`SKILL.md`, `_shared/`, `references/`); mechanics are translated, not copied; `.claude/skills/` is the **tie-breaker for existing disagreements only**, not a licence to edit one side; new skill → both trees, deletion → both; `./scripts/check-skill-sync.sh` must exit 0 before a skill change is complete. `AGENTS.md` §Skills gained the mirror-image two-way sub-section, and all 32 skill files (both trees, previously 11 files in one tree) now carry a two-way `> **Sync policy**` banner naming their counterpart. `check-skill-sync.sh` updated so the new banner heading is still stripped before diffing, and its drift advice no longer implies only the Claude copy can be right. Doc/skill-only change — no `src/` or `tests/` files touched, so the principle-7 E2E gates do not apply. Full detail below.

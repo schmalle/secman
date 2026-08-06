@@ -14,6 +14,18 @@ description: >
   assessment", or similar.
 context: fork
 ---
+
+> **Sync policy (two-way, mandatory)**: This file and `.agents/skills/aws-
+> account-risk-assessment/SKILL.md` are one skill kept in two harness trees —
+> Claude Code reads this copy, Codex reads the other. Whichever copy an agent
+> edits, the same change is ported to the other **in the same commit**;
+> translate harness-specific mechanics rather than copying verbatim (e.g. Bash
+> tool `dangerouslyDisableSandbox: true` ↔ `sandbox_permissions:
+> "require_escalated"`). `.claude/skills/` is the tie-breaker when the two
+> disagree — that is a conflict rule, not a licence to edit one side only.
+> Verify with `./scripts/check-skill-sync.sh` (exit 0) before calling the
+> change done. See `CLAUDE.md` §"Tooling Conventions" and `AGENTS.md` §Skills.
+
 # AWS Account Risk Assessment — Iterative Fix Loop
 
 You are an orchestration agent. Bring up the stack, run the CLI + MCP driver, and

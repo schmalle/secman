@@ -74,6 +74,20 @@ class SlackClientTest {
     }
 
     @Test
+    fun `a failed webhook post never leaks the webhook URL into the error text`() {
+        // The webhook URL is itself the bearer credential, and the returned error is both
+        // logged and persisted into last_delivery_error. hooks.slack.com is allowlisted, so
+        // this reaches the request path; with no network the send throws and we assert the
+        // scrubbing on the way out.
+        val secret = "https://hooks.slack.com/services/T000/B000/SUPERSECRETPATH"
+
+        val result = client.postWebhook(secret, "hi")
+
+        assertThat(result.success).isFalse()
+        assertThat(result.error).doesNotContain("SUPERSECRETPATH")
+    }
+
+    @Test
     fun `postChatMessage refuses a malformed channel without attempting a request`() {
         val result = client.postChatMessage("xoxb-token", "bad channel", "hi")
 

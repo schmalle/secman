@@ -123,8 +123,24 @@ open class TelegramClient(
                 )
             }
         } catch (e: Exception) {
-            log.warn("Telegram sendMessage failed: {}", e.message)
-            ChatDeliveryResult.failed("Telegram API call failed: ${e.message}")
+            // Scrub before anything is logged or persisted: the token is in the request URI,
+            // and several JDK HttpClient exceptions echo the URI in their message.
+            val detail = redactToken(e.message, botToken)
+            log.warn("Telegram sendMessage failed: {}", detail)
+            ChatDeliveryResult.failed("Telegram API call failed: $detail")
         }
+    }
+
+    /**
+     * Remove the bot token from text that is about to be logged or stored.
+     *
+     * Not defensive decoration: `last_delivery_error` is persisted and rendered back into the
+     * UI, and CLAUDE.md A02 forbids a credential reaching any value that lands in a log.
+     */
+    private fun redactToken(message: String?, botToken: String): String {
+        val text = message ?: "unknown error"
+        val token = botToken.trim()
+        if (token.isEmpty()) return text
+        return text.replace(token, "***")
     }
 }

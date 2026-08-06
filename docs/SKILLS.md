@@ -1,11 +1,19 @@
 # Which secman skill to use when
 
-Eleven skills live in `.claude/skills/` (mirrored to `.agents/skills/` for Codex).
+Eleven skills live in `.claude/skills/` (Claude Code) and again in
+`.agents/skills/` (Codex). The two trees are one skill set: an edit to either
+side must be ported to the other in the same commit — see `CLAUDE.md`
+§"Tooling Conventions" and verify with `./scripts/check-skill-sync.sh`.
 They overlap enough that picking the wrong one wastes a run — and in three cases
 the wrong pick **destroys data**. This is the routing guide.
 
 Invoke a skill as `/<name>`, or just describe the task; the `description:` in each
 skill's frontmatter decides whether it triggers.
+
+Codex has no slash commands, so `AGENTS.md` §Skills carries the condensed version
+of this table plus the instruction to read `.agents/skills/<name>/SKILL.md` in
+full. Keep the two in step when a skill is added, removed, or changes what it
+writes.
 
 ---
 

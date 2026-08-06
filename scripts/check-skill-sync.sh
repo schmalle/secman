@@ -2,8 +2,13 @@
 #
 # check-skill-sync.sh — detect real drift between the two skill trees.
 #
-#   .claude/skills/  (canonical, Claude Code)
-#   .agents/skills/  (mirror, Codex)
+#   .claude/skills/  (Claude Code)
+#   .agents/skills/  (Codex)
+#
+# They are two renderings of the same skill set, and the sync obligation is
+# two-way: an edit in either tree must land in the other in the same commit
+# (CLAUDE.md §"Tooling Conventions" / AGENTS.md §Skills). `.claude/skills/` is
+# only the tie-breaker when the two already disagree.
 #
 # CLAUDE.md requires these to move together. They did not: 7 of 8 skills had
 # drifted when this check was written, including one where the *Codex* copy was
@@ -78,7 +83,7 @@ normalize() {   # normalize <file> -> canonical form on stdout
 
     count_hits sandbox_escape  "$f" 'dangerouslyDisableSandbox|sandbox_permissions'
     count_hits outside_sandbox "$f" 'outside the sandbox|outside any sandbox'
-    count_hits sync_banner     "$f" '^> \*\*Sync policy\*\*'
+    count_hits sync_banner     "$f" '^> \*\*Sync policy'
     count_hits superpowers     "$f" 'superpowers:'
     count_hits skills_root     "$f" '\.(claude|agents)/skills/'
     count_hits ask_user        "$f" 'AskUserQuestion|ask the user directly'
@@ -95,7 +100,7 @@ normalize() {   # normalize <file> -> canonical form on stdout
         -e 's/outside (the|any) sandbox/<<OUTSIDE_SANDBOX>>/g' \
         -e 's/\.(claude|agents)\/skills\//<<SKILLS_ROOT>>/g' \
         "$f" \
-    | awk '/^> \*\*Sync policy\*\*/{skip=1} skip&&/^>/{next} skip&&!/^>/{skip=0} {print}' \
+    | awk '/^> \*\*Sync policy/{skip=1} skip&&/^>/{next} skip&&!/^>/{skip=0} {print}' \
     | grep -v 'superpowers:' \
     | sed -E 's/[[:space:]]+$//' \
     | grep -v '^$'
@@ -163,8 +168,10 @@ printf '  %s\n' "${FINDINGS[@]}"
 cat <<'EOF'
 
 Not auto-fixable, deliberately. Decide per finding which side is correct — the
-Claude copy is authoritative by policy, but it has been the stale one before
-(e2ejs documented a scanner implementation that no longer existed). Port the
-correct content, then re-run. Use --verbose to see the differing lines.
+sync obligation is two-way, so either tree may hold the newer content. The
+Claude copy is the tie-breaker only when neither is clearly newer, and it has
+been the stale one before (e2ejs documented a scanner implementation that no
+longer existed). Port the correct content into the other tree, then re-run.
+Use --verbose to see the differing lines.
 EOF
 exit 1

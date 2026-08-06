@@ -5,6 +5,9 @@ interface User {
     username: string;
     email: string;
     roles: string[];
+    // Feature: Profile Picture Management. Supplied by GET /api/auth/status via window.currentUser.
+    hasProfilePicture?: boolean;
+    profilePictureUpdatedAt?: string | null;
 }
 
 // Window.currentUser is declared globally in src/utils/auth-init.ts.
@@ -12,6 +15,10 @@ interface User {
 
 const Header = () => {
     const [user, setUser] = useState<User | null | undefined>(undefined); // undefined initially, null if not logged in, User if logged in
+    // Guards against a cross-tab race (picture removed elsewhere) leaving a broken image. In the
+    // common path this never fires: the avatar is only requested when hasProfilePicture is true,
+    // so users without a picture produce no request and therefore no 404.
+    const [avatarFailed, setAvatarFailed] = useState(false);
 
     const handleLogout = async () => {
         try {
@@ -48,6 +55,7 @@ const Header = () => {
     useEffect(() => {
         const updateUserState = () => {
             setUser(window.currentUser);
+            setAvatarFailed(false);
         };
 
         // Initial check
@@ -96,7 +104,20 @@ const Header = () => {
                         {user ? (
                             <li className="nav-item dropdown">
                                 <a className="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLink" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i className="bi bi-person-circle me-1"></i> {user.username}
+                                    {user.hasProfilePicture && !avatarFailed ? (
+                                        <img
+                                            src={`/api/users/profile/picture${user.profilePictureUpdatedAt ? `?v=${encodeURIComponent(user.profilePictureUpdatedAt)}` : ''}`}
+                                            alt=""
+                                            width={24}
+                                            height={24}
+                                            className="rounded-circle me-1"
+                                            style={{ width: '24px', height: '24px', objectFit: 'cover' }}
+                                            onError={() => setAvatarFailed(true)}
+                                        />
+                                    ) : (
+                                        <i className="bi bi-person-circle me-1"></i>
+                                    )}
+                                    {' '}{user.username}
                                 </a>
                                 <ul className="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdownMenuLink">
                                     <li><a className="dropdown-item" href="/profile"><i className="bi bi-person-circle me-2"></i>Profile</a></li>

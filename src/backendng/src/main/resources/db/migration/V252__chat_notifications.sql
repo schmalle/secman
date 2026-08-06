@@ -1,4 +1,4 @@
--- V251: Generic chat notification support (Slack + Telegram).
+-- V252: Generic chat notification support (Slack + Telegram).
 --
 -- Five tables:
 --   slack_config                 workspace-level Slack bot token + default channel (ADMIN, optional singleton row)

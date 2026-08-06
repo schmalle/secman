@@ -121,8 +121,11 @@ open class SlackClient(
                 )
             }
         } catch (e: Exception) {
-            log.warn("Slack webhook delivery failed: {}", e.message)
-            ChatDeliveryResult.failed("Slack webhook delivery failed: ${e.message}")
+            // The webhook URL is itself the bearer credential, so scrub it out of any
+            // exception text before it is logged or persisted into last_delivery_error.
+            val detail = redactSecret(e.message, url.trim())
+            log.warn("Slack webhook delivery failed: {}", detail)
+            ChatDeliveryResult.failed("Slack webhook delivery failed: $detail")
         }
     }
 
@@ -157,8 +160,21 @@ open class SlackClient(
                 ChatDeliveryResult.failed("Slack API error: ${json.path("error").asText("unknown_error")}")
             }
         } catch (e: Exception) {
-            log.warn("Slack chat.postMessage failed: {}", e.message)
-            ChatDeliveryResult.failed("Slack API call failed: ${e.message}")
+            val detail = redactSecret(e.message, botToken.trim())
+            log.warn("Slack chat.postMessage failed: {}", detail)
+            ChatDeliveryResult.failed("Slack API call failed: $detail")
         }
+    }
+
+    /**
+     * Remove a credential from text that is about to be logged or stored.
+     *
+     * Not defensive decoration: `last_delivery_error` is persisted and rendered back into the
+     * UI, and CLAUDE.md A02 forbids a credential reaching any value that lands in a log.
+     */
+    private fun redactSecret(message: String?, secret: String): String {
+        val text = message ?: "unknown error"
+        if (secret.isEmpty()) return text
+        return text.replace(secret, "***")
     }
 }

@@ -72,6 +72,21 @@ class TelegramClientTest {
     }
 
     @Test
+    fun `a failed send never leaks the bot token into the error text`() {
+        // The token is in the request URI, and the returned error is both logged and
+        // persisted into last_delivery_error, which is rendered back into the UI.
+        // api.invalid does not resolve, so this exercises the real exception path.
+        val offline = TelegramClient(ObjectMapper(), "https://api.invalid", 1)
+        val token = "123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw"
+
+        val result = offline.sendMessage(token, "123456789", "hi")
+
+        assertThat(result.success).isFalse()
+        assertThat(result.error).doesNotContain(token)
+        assertThat(result.error).doesNotContain("AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw")
+    }
+
+    @Test
     fun `sendMessage refuses a malformed chat ID without attempting a request`() {
         val result = client.sendMessage("123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw", "not a chat", "hi")
 

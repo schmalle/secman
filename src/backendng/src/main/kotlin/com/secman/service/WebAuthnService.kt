@@ -15,6 +15,8 @@ import com.webauthn4j.data.client.Origin
 import com.webauthn4j.data.client.challenge.Challenge
 import com.webauthn4j.data.client.challenge.DefaultChallenge
 import com.webauthn4j.server.ServerProperty
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
@@ -22,6 +24,7 @@ import java.net.URI
 import java.security.SecureRandom
 import java.time.Instant
 import java.util.*
+import java.util.concurrent.TimeUnit
 
 /**
  * Service for WebAuthn/FIDO2 operations
@@ -40,12 +43,30 @@ class WebAuthnService(
     private val attestedCredentialDataConverter = AttestedCredentialDataConverter(objectConverter)
     private val secureRandom = SecureRandom()
 
-    // Store challenges temporarily in-memory (TODO: consider persistent cache for multi-instance deployments)
-    private val challengeStore = mutableMapOf<String, Challenge>()
+    /**
+     * Pending WebAuthn challenges, keyed by user id (registration) or username (authentication).
+     *
+     * SECURITY: this must be bounded and self-expiring. `POST /api/passkey/login-options` is
+     * IS_ANONYMOUS and performs no user-existence check, so an unauthenticated caller controls both
+     * the key and the insertion rate — a plain mutableMapOf grew without limit (heap exhaustion),
+     * never enforced the CHALLENGE_TIMEOUT_MS it advertises to the client, and was mutated
+     * concurrently from Netty worker threads without synchronization.
+     *
+     * Caffeine fixes all three: expireAfterWrite matches the advertised timeout so a challenge is
+     * unusable exactly as long as the client believes, maximumSize caps the memory an anonymous
+     * caller can pin, and the map is thread-safe.
+     *
+     * TODO: consider a persistent/shared cache for multi-instance deployments.
+     */
+    private val challengeStore: Cache<String, Challenge> = Caffeine.newBuilder()
+        .expireAfterWrite(CHALLENGE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        .maximumSize(MAX_PENDING_CHALLENGES)
+        .build()
 
     companion object {
         private const val RP_NAME = "SecMan"
         private const val CHALLENGE_TIMEOUT_MS = 120000L // 2 minutes
+        private const val MAX_PENDING_CHALLENGES = 10_000L
     }
 
     /**
@@ -92,7 +113,7 @@ class WebAuthnService(
         val challengeBase64 = Base64.getUrlEncoder().withoutPadding().encodeToString(challenge.value)
 
         // Store challenge with user ID
-        challengeStore[user.id.toString()] = challenge
+        challengeStore.put(user.id.toString(), challenge)
 
         val userIdBytes = user.id.toString().toByteArray()
         val userIdBase64 = Base64.getUrlEncoder().withoutPadding().encodeToString(userIdBytes)
@@ -134,7 +155,7 @@ class WebAuthnService(
     ): PasskeyCredential {
         try {
             // Retrieve stored challenge
-            val challenge = challengeStore.remove(user.id.toString())
+            val challenge = challengeStore.asMap().remove(user.id.toString())
                 ?: throw IllegalArgumentException("Challenge not found or expired")
 
             // Parse the registration response JSON
@@ -200,7 +221,7 @@ class WebAuthnService(
         val challengeBase64 = Base64.getUrlEncoder().withoutPadding().encodeToString(challenge.value)
 
         // Store challenge with username
-        challengeStore[username] = challenge
+        challengeStore.put(username, challenge)
 
         return AuthenticationOptionsResponse(
             challenge = challengeBase64,
@@ -220,7 +241,7 @@ class WebAuthnService(
     ): PasskeyCredential {
         try {
             // Retrieve stored challenge
-            val challenge = challengeStore.remove(username)
+            val challenge = challengeStore.asMap().remove(username)
                 ?: throw IllegalArgumentException("Challenge not found or expired")
 
             // Find credential by ID
