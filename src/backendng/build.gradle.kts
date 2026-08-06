@@ -34,7 +34,7 @@ dependencies {
     implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.1.1")
     implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.1.0")
     implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.1.0")
-    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.9")
+    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.10")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:8.1.0")
 	runtimeOnly("org.flywaydb:flyway-core:12.11.0")
@@ -45,8 +45,8 @@ dependencies {
     implementation("io.micronaut.security:micronaut-security-oauth2:5.3.1")
 
     // WebAuthn/Passkey support
-    implementation("com.webauthn4j:webauthn4j-core:0.31.8.RELEASE")
-    implementation("com.webauthn4j:webauthn4j-metadata:0.31.8.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-core:0.31.9.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-metadata:0.31.9.RELEASE")
 
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")
@@ -83,7 +83,7 @@ dependencies {
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.6.0")
+    runtimeOnly("ch.qos.logback:logback-classic:1.6.1")
     // Bridge Log4j to Logback (required for Apache POI)
     runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.26.1")
     // Logstash encoder for JSON logging (Feature 046)
@@ -110,7 +110,7 @@ dependencies {
     implementation("commons-net:commons-net:3.13.0")
 
     // HTML processing for email
-    implementation("org.jsoup:jsoup:1.22.2")
+    implementation("org.jsoup:jsoup:1.23.1")
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")
