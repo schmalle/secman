@@ -45,7 +45,7 @@ export default defineConfig({
     server: {
         allowedHosts: [
             allowedHost,
-            "secman.covestro.net"
+            "secman.schmall.io"
         ],
       proxy: {
         "/api": {
