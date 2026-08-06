@@ -398,11 +398,22 @@ open class RequirementController(
     @Secured("ADMIN")
     open fun deleteAllRequirements(): HttpResponse<*> {
         try {
-            // Delete all requirements (cascade will handle relationships)
+            val requirementCount = requirementRepository.count()
+            val normCount = normRepository.count()
+
+            // Delete all requirements (cascade will handle join-table relationships)
             requirementRepository.deleteAll()
+            // Delete all standards/norms too, now that no requirement references them
+            normRepository.deleteAll()
             // Reset the REQ-NNN sequence so the next imported requirement starts at REQ-001
             requirementIdService.resetSequence()
-            return HttpResponse.ok(mapOf("message" to "All requirements deleted successfully"))
+
+            return HttpResponse.ok(mapOf(
+                "message" to "All requirements and standards deleted successfully",
+                "deletedCount" to requirementCount,
+                "deletedRequirements" to requirementCount,
+                "deletedNorms" to normCount
+            ))
         } catch (e: Exception) {
             return HttpResponse.serverError<Any>().body(mapOf("error" to "An internal error occurred"))
         }
