@@ -48,13 +48,11 @@ class FinalizeAlignmentTool(
         // Check authorization - require User Delegation with ADMIN or RELEASE_MANAGER role
         requireDelegation(context)?.let { return it }
 
-        val userRoles = context.delegatedUserRoles?.map { it.uppercase() } ?: emptyList()
-        if (!userRoles.contains("ADMIN") && !userRoles.contains("RELEASE_MANAGER")) {
-            return McpToolResult.error(
-                "AUTHORIZATION_ERROR",
-                "ADMIN or RELEASE_MANAGER role required to finalize alignment"
-            )
-        }
+        requireAnyUserRole(
+            context, "ADMIN", "RELEASE_MANAGER",
+            code = "AUTHORIZATION_ERROR",
+            message = "ADMIN or RELEASE_MANAGER role required to finalize alignment"
+        )?.let { return it }
 
         // Extract parameters
         val sessionId = (arguments["session_id"] as? Number)?.toLong()

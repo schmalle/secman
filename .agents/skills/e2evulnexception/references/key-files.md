@@ -5,6 +5,7 @@ Fix priority: **backend first**, then frontend.
 | Concern                                  | File                                                                                             |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | MCP tool registry                        | `src/backendng/src/main/kotlin/com/secman/mcp/McpToolRegistry.kt`                                |
+| MCP tool permission maps                 | `src/backendng/src/main/kotlin/com/secman/mcp/McpToolPermissions.kt`                          |
 | Add user tool                            | `src/backendng/src/main/kotlin/com/secman/mcp/tools/AddUserTool.kt`                              |
 | Create asset tool                        | `src/backendng/src/main/kotlin/com/secman/mcp/tools/CreateAssetTool.kt`                          |
 | Add vulnerability tool                   | `src/backendng/src/main/kotlin/com/secman/mcp/tools/AddVulnerabilityTool.kt`                     |
@@ -51,7 +52,8 @@ Fix priority: **backend first**, then frontend.
 4. UI failures → Playwright artifacts in `tests/e2e/test-results/`
    (`screenshot: 'only-on-failure'`, `trace: 'retain-on-failure'`).
 5. Apply a **minimal** fix. Common categories:
-   - Missing tool registration in `McpToolRegistry`
+   - Tool missing from `McpToolPermissions.CALLING`/`LISTING` (tools are
+     auto-registered, so this is the usual cause of `PERMISSION_DENIED`)
    - Null-pointer in service (missing `?.`/`?: default`)
    - DTO/Serdeable shape mismatch in tool result vs assertion
    - RBAC: delegation header not honored, role intersection wrong

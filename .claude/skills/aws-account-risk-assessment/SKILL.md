@@ -88,7 +88,7 @@ Success is `Failed: 0` in the summary block. `[WARN]` lines are not failures.
 | `Questionnaire mismatch` | wrong requirement scoping | `service/ReleaseRequirementScopeService.kt`, `controller/ResponseController.kt` `getRequirementsForAssessment` |
 | `Questionnaire drifted` | pinning not honoured on read | `getRequirementsForAssessment` is falling through to the unpinned branch |
 | `Expected 1 tracked assessment, found 2` | idempotency guard broken | `createAssessment` open-assessment check |
-| MCP JSON-RPC `error` on `import_user_mappings` | tool not authorized on the streamable transport | `service/McpToolPermissionService.kt` `checkPermissionSetForTool` — **this map is separate from `McpToolRegistry.isToolAuthorized` and its `else -> false` silently denies** |
+| MCP JSON-RPC `error` on `import_user_mappings` | tool not authorized on the streamable transport | `mcp/McpToolPermissions.kt` `CALLING` — **this map is separate from the `LISTING` map used by `tools/list`, and a missing entry silently denies** |
 | `ADMIN_REQUIRED` where admin expected | delegation email wrong, or key lacks the permission | `SECMAN_MCP_KEY` needs `USER_ACTIVITY` and `ASSESSMENTS_READ` |
 | `CLI accepted the import despite no ACTIVE release` | validation gap | `validateStartRequest` |
 | `Could not create release` HTTP 4xx | version collides, or admin lacks ADMIN/REQADMIN | `controller/ReleaseController.kt` |

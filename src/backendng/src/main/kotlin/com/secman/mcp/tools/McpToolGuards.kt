@@ -11,7 +11,8 @@ import com.secman.dto.mcp.McpExecutionContext
  *     requireDelegation(context)?.let { return it }
  *
  * The error codes and messages are the exact strings the tools have always
- * returned; MCP clients and E2E scripts match on them, so never reword here.
+ * returned; MCP clients and E2E scripts match on them, so never reword here and
+ * always pass the caller's own `code`/`message` where the tool had one.
  */
 
 /** Gate for tools that require User Delegation (audit trail). */
@@ -31,10 +32,27 @@ fun requireDelegation(context: McpExecutionContext): McpToolResult.Error? =
 fun requireAnyRole(
     context: McpExecutionContext,
     vararg roles: String,
+    code: String = "FORBIDDEN",
     message: String = "Insufficient role to use this tool"
 ): McpToolResult.Error? =
     if (context.isAdmin || roles.any { context.delegatedUserRoles?.contains(it) == true }) {
         null
     } else {
-        McpToolResult.Error("FORBIDDEN", message)
+        McpToolResult.Error(code, message)
     }
+
+/**
+ * Gate that looks **only** at the delegated user's own roles — unlike
+ * [requireAnyRole] an admin API key does not bypass it, so "ADMIN" has to be
+ * listed explicitly when it should grant access. Role names are compared
+ * case-insensitively.
+ */
+fun requireAnyUserRole(
+    context: McpExecutionContext,
+    vararg roles: String,
+    code: String = "AUTHORIZATION_ERROR",
+    message: String
+): McpToolResult.Error? {
+    val held = context.delegatedUserRoles?.mapTo(mutableSetOf()) { it.uppercase() } ?: emptySet<String>()
+    return if (roles.any { it.uppercase() in held }) null else McpToolResult.Error(code, message)
+}

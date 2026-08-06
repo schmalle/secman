@@ -133,7 +133,7 @@ Success is `Failed: 0`. `[WARN]` lines are not failures.
 | `expected 1 tracked assessment, found 0` | import rejected up front | validation table in `docs/AWS_ACCOUNT_RISK_ASSESSMENT.md`; check the CLI/MCP output in the run log |
 | `assessment owner is '…', expected …` | the mapping did not carry the recipient | the generated CSV / MCP `mappings[]` payload |
 | `ACTIVE release … has no use-case-tagged requirements` | environment state, not a bug | tag requirements with a use case, or set `ALLOW_RELEASE_ACTIVATION=true` **only** if archiving that release is acceptable |
-| MCP JSON-RPC `error` on `import_user_mappings` | tool not authorized on the streamable transport | `service/McpToolPermissionService.kt` `checkPermissionSetForTool` — separate from `McpToolRegistry.isToolAuthorized`, and its `else -> false` denies silently |
+| MCP JSON-RPC `error` on `import_user_mappings` | tool not authorized on the streamable transport | `mcp/McpToolPermissions.kt` `CALLING` — separate from the `LISTING` map used by `tools/list`, and a missing entry denies silently |
 
 Backend stack traces: `tail -200 .e2e-logs/backend.log`, inside the run window.
 

@@ -58,13 +58,11 @@ class GetOverdueAssetsTool(
         requireDelegation(context)?.let { return it }
 
         // FR-003: Require ADMIN or VULN role
-        val hasRole = context.isAdmin || context.delegatedUserRoles?.contains("VULN") == true
-        if (!hasRole) {
-            return McpToolResult.error(
-                "ROLE_REQUIRED",
-                "ADMIN or VULN role required to view overdue assets"
-            )
-        }
+        requireAnyRole(
+            context, "VULN",
+            code = "ROLE_REQUIRED",
+            message = "ADMIN or VULN role required to view overdue assets"
+        )?.let { return it }
 
         try {
             // Parse parameters with defaults
