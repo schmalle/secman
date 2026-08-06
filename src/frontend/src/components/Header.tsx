@@ -121,6 +121,9 @@ const Header = () => {
                                 </a>
                                 <ul className="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdownMenuLink">
                                     <li><a className="dropdown-item" href="/profile"><i className="bi bi-person-circle me-2"></i>Profile</a></li>
+                                    {/* Every authenticated user configures their own Slack/Telegram
+                                        destination and picks which events they want, so this is role-independent. */}
+                                    <li><a className="dropdown-item" href="/chat-notifications"><i className="bi bi-chat-dots me-2"></i>Chat Notifications</a></li>
                                     <li><a className="dropdown-item" href="#">Settings</a></li> {/* Placeholder */}
                                     <li><hr className="dropdown-divider" /></li>
                                     <li>

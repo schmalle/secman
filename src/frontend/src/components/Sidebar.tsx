@@ -547,6 +547,12 @@ const Sidebar = () => {
                                     </a>
                                 </li>
                                 <li>
+                                    <a href="/admin/chat-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                        title="Workspace Slack and Telegram bot credentials for chat notifications">
+                                        <i className="bi bi-chat-dots me-2"></i> Chat Configuration
+                                    </a>
+                                </li>
+                                <li>
                                     <a href="/admin/falcon-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-shield-lock me-2"></i> CrowdStrike Falcon
                                     </a>
