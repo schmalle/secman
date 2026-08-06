@@ -2,9 +2,30 @@ import React, { useState, useEffect } from 'react';
 import userProfileService from '../services/userProfileService';
 import type { UserProfileData } from '../services/userProfileService';
 import PasskeyManagement from './PasskeyManagement';
-import { getDashboardPreferences, updateDashboardPreferences } from '../services/dashboardPreferenceService';
-import type { DashboardPreference } from '../services/dashboardPreferenceService';
+import { getDashboardPreferences, updateDashboardPreferences, toCardVisibility } from '../services/dashboardPreferenceService';
+import type { DashboardPreference, DashboardCardVisibility } from '../services/dashboardPreferenceService';
 import { hasRole } from '../utils/auth';
+
+/**
+ * The home dashboard cards a user can show or hide, in dashboard display order.
+ * `requiresRole` mirrors the role gate HomeStatisticsDashboard applies to each card —
+ * without it a user would see a toggle for a card they can never make appear.
+ */
+const DASHBOARD_CARD_TOGGLES: Array<{
+  field: keyof DashboardCardVisibility;
+  label: string;
+  requiresRole?: string | string[];
+}> = [
+  { field: 'showAssetInventory', label: 'Systems in Asset Inventory' },
+  { field: 'showUsers', label: 'Users', requiresRole: 'ADMIN' },
+  { field: 'showActiveUsers', label: 'Active Users', requiresRole: 'ADMIN' },
+  { field: 'showActiveReleases', label: 'Active Standard Releases' },
+  { field: 'showRunningRiskAssessments', label: 'Running Risk Assessments' },
+  { field: 'showLastCrowdStrikeImport', label: 'Last CrowdStrike Import' },
+  { field: 'showAwsCleanServerKpi', label: 'AWS Servers Without Old Vulnerabilities', requiresRole: ['ADMIN', 'SECCHAMPION'] },
+  { field: 'showEdrCoverageKpi', label: 'EC2 Instances With CrowdStrike Installed', requiresRole: ['ADMIN', 'SECCHAMPION'] },
+  { field: 'showAccountFindingAge', label: 'Longest-Open Findings By Account', requiresRole: 'ADMIN' }
+];
 
 /**
  * User Profile Component
@@ -31,7 +52,6 @@ export default function UserProfile() {
   const [mfaError, setMfaError] = useState<string | null>(null);
 
   // Dashboard KPI preferences (ADMIN/SECCHAMPION only)
-  const [dashboardPrefsVisible, setDashboardPrefsVisible] = useState(false);
   const [dashboardPrefs, setDashboardPrefs] = useState<DashboardPreference | null>(null);
   const [dashboardPrefsLoading, setDashboardPrefsLoading] = useState(false);
   const [dashboardPrefsError, setDashboardPrefsError] = useState<string | null>(null);
@@ -56,10 +76,9 @@ export default function UserProfile() {
       const data = await userProfileService.getProfile();
       setProfile(data);
       await fetchMfaStatus();
-      if (hasRole(['ADMIN', 'SECCHAMPION'])) {
-        setDashboardPrefsVisible(true);
-        await fetchDashboardPreferences();
-      }
+      // Every authenticated user has at least the role-free cards to configure, so this
+      // is no longer gated on ADMIN/SECCHAMPION; individual toggles carry their own gate.
+      await fetchDashboardPreferences();
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Failed to load profile. Please try again.';
       setError(errorMessage);
@@ -100,17 +119,18 @@ export default function UserProfile() {
     }
   };
 
-  const handleDashboardKpiToggle = async (
-    field: 'showAwsCleanServerKpi' | 'showEdrCoverageKpi',
+  const handleDashboardCardToggle = async (
+    field: keyof DashboardCardVisibility,
     value: boolean
   ) => {
     if (!dashboardPrefs) return;
     try {
       setDashboardPrefsLoading(true);
       setDashboardPrefsError(null);
+      // Send the current flags with just this one overridden — the PUT replaces the whole set.
       const updated = await updateDashboardPreferences({
-        showAwsCleanServerKpi: field === 'showAwsCleanServerKpi' ? value : dashboardPrefs.showAwsCleanServerKpi,
-        showEdrCoverageKpi: field === 'showEdrCoverageKpi' ? value : dashboardPrefs.showEdrCoverageKpi
+        ...toCardVisibility(dashboardPrefs),
+        [field]: value
       });
       setDashboardPrefs(updated);
     } catch (err: any) {
@@ -383,50 +403,37 @@ export default function UserProfile() {
         </div>
       </div>
 
-      {/* Dashboard KPI Preferences Card */}
-      {dashboardPrefsVisible && dashboardPrefs && (
+      {/* Dashboard Card Preferences */}
+      {dashboardPrefs && (
         <div className="card mt-3">
           <div className="card-body">
-            <h5 className="card-title">Dashboard KPI Preferences</h5>
+            <h5 className="card-title">Dashboard Card Preferences</h5>
             <p className="text-muted small">
-              Choose which security KPI cards appear on your home dashboard.
+              Choose which cards appear on your home dashboard. Hidden cards are not loaded at all.
             </p>
 
-            <div className="d-flex align-items-center justify-content-between mb-3">
-              <div>
-                <h6 className="mb-0">AWS Servers Without Old Vulnerabilities</h6>
-              </div>
-              <div className="form-check form-switch">
-                <input
-                  className="form-check-input"
-                  type="checkbox"
-                  role="switch"
-                  id="showAwsCleanServerKpiToggle"
-                  checked={dashboardPrefs.showAwsCleanServerKpi}
-                  onChange={(e) => handleDashboardKpiToggle('showAwsCleanServerKpi', e.target.checked)}
-                  disabled={dashboardPrefsLoading}
-                  style={{ cursor: dashboardPrefsLoading ? 'wait' : 'pointer', width: '3rem', height: '1.5rem' }}
-                />
-              </div>
-            </div>
-
-            <div className="d-flex align-items-center justify-content-between">
-              <div>
-                <h6 className="mb-0">EC2 Instances With CrowdStrike Installed</h6>
-              </div>
-              <div className="form-check form-switch">
-                <input
-                  className="form-check-input"
-                  type="checkbox"
-                  role="switch"
-                  id="showEdrCoverageKpiToggle"
-                  checked={dashboardPrefs.showEdrCoverageKpi}
-                  onChange={(e) => handleDashboardKpiToggle('showEdrCoverageKpi', e.target.checked)}
-                  disabled={dashboardPrefsLoading}
-                  style={{ cursor: dashboardPrefsLoading ? 'wait' : 'pointer', width: '3rem', height: '1.5rem' }}
-                />
-              </div>
-            </div>
+            {DASHBOARD_CARD_TOGGLES
+              .filter((toggle) => !toggle.requiresRole || hasRole(toggle.requiresRole))
+              .map((toggle) => (
+                <div className="d-flex align-items-center justify-content-between mb-3" key={toggle.field}>
+                  <div>
+                    <h6 className="mb-0">{toggle.label}</h6>
+                  </div>
+                  <div className="form-check form-switch">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      role="switch"
+                      id={`${toggle.field}Toggle`}
+                      aria-label={toggle.label}
+                      checked={dashboardPrefs[toggle.field]}
+                      onChange={(e) => handleDashboardCardToggle(toggle.field, e.target.checked)}
+                      disabled={dashboardPrefsLoading}
+                      style={{ cursor: dashboardPrefsLoading ? 'wait' : 'pointer', width: '3rem', height: '1.5rem' }}
+                    />
+                  </div>
+                </div>
+              ))}
 
             {dashboardPrefsError && (
               <div className="alert alert-danger mt-3 mb-0" role="alert">
