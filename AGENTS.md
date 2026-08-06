@@ -28,6 +28,7 @@ Always write tests for new code. JUnit 6 + Mockk for unit; integration tests run
 - Flag schema changes, feature toggles, manual data steps, new dependencies.
 
 ## Security & secrets
+- **All code you generate must comply with the OWASP Top 10 checklist in `CLAUDE.md` §OWASP Top 10 Compliance** (A01–A10, pinned to the 2021 list). It is binding, names the existing control to reuse for each category, and requires you to state the A01–A10 result for your diff before calling a change complete. A HIGH-or-above finding blocks the change.
 - Secrets via `pass-cli` only — never commit.
 - Copy `.env.example` → `.env` for local overrides (gitignored).
 - Update sample configs and docs when ports/env vars change.
