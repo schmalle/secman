@@ -338,7 +338,7 @@ const ReleaseList: React.FC = () => {
     // Render loading state
     if (loading && releases.length === 0) {
         return (
-            <div className="container mt-4">
+            <div className="container-fluid mt-4">
                 <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
                     <div className="spinner-border text-primary" role="status">
                         <span className="visually-hidden">Loading...</span>
@@ -351,7 +351,7 @@ const ReleaseList: React.FC = () => {
     // Render error state
     if (error) {
         return (
-            <div className="container mt-4">
+            <div className="container-fluid mt-4">
                 <div className="alert alert-danger" role="alert">
                     <strong>Error:</strong> {error}
                     <button className="btn btn-sm btn-outline-danger ms-3" onClick={loadReleases}>
@@ -365,7 +365,7 @@ const ReleaseList: React.FC = () => {
     // Render empty state
     if (!loading && filteredReleases.length === 0 && !debouncedSearch) {
         return (
-            <div className="container mt-4">
+            <div className="container-fluid mt-4">
                 <div className="row mb-4">
                     <div className="col">
                         <h2>Releases</h2>
@@ -385,7 +385,7 @@ const ReleaseList: React.FC = () => {
                 </div>
 
                 <div className="empty-state text-center py-5">
-                    <i className="bi bi-inbox" style={{ fontSize: '4rem', color: '#6c757d' }}></i>
+                    <i className="bi bi-inbox text-muted" style={{ fontSize: '4rem' }}></i>
                     <h4 className="mt-3">No releases found</h4>
                     <p className="text-muted">
                         {canCreate
@@ -420,7 +420,7 @@ const ReleaseList: React.FC = () => {
     }
 
     return (
-        <div className="container mt-4">
+        <div className="container-fluid mt-4">
             {/* Header with Create Button */}
             <div className="row mb-4">
                 <div className="col">

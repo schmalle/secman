@@ -254,7 +254,7 @@ const RequirementsAdmin = () => {
 
             {/* First Confirmation Modal */}
             {showFirstModal && (
-                <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'var(--scand-overlay)' }}>
                     <div className="modal-dialog modal-dialog-centered">
                         <div className="modal-content">
                             <div className="modal-header bg-warning">
@@ -289,7 +289,7 @@ const RequirementsAdmin = () => {
 
             {/* Second Confirmation Modal */}
             {showSecondModal && (
-                <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'var(--scand-overlay)' }}>
                     <div className="modal-dialog modal-dialog-centered">
                         <div className="modal-content">
                             <div className="modal-header bg-danger text-white">

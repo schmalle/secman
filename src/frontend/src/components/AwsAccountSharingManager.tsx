@@ -878,7 +878,7 @@ const AwsAccountSharingManager: React.FC = () => {
 
             {/* Edit Modal */}
             {editingRule && (
-                <div className="modal show d-block" tabIndex={-1} role="dialog" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                <div className="modal show d-block" tabIndex={-1} role="dialog" style={{ backgroundColor: 'var(--scand-overlay)' }}>
                     <div className="modal-dialog modal-lg" role="document">
                         <div className="modal-content">
                             <div className="modal-header">

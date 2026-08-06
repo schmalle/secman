@@ -330,7 +330,7 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
     // Render loading state
     if (loading && !release) {
         return (
-            <div className="container mt-4">
+            <div className="container-fluid mt-4">
                 <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
                     <div className="spinner-border text-primary" role="status">
                         <span className="visually-hidden">Loading...</span>
@@ -343,7 +343,7 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
     // Render error state
     if (error) {
         return (
-            <div className="container mt-4">
+            <div className="container-fluid mt-4">
                 <div className="alert alert-danger" role="alert">
                     <strong>Error:</strong> {error}
                     <div className="mt-3">
@@ -362,7 +362,7 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
     // Render not found state
     if (!release) {
         return (
-            <div className="container mt-4">
+            <div className="container-fluid mt-4">
                 <div className="alert alert-warning" role="alert">
                     <strong>Not Found:</strong> Release not found.
                     <div className="mt-3">
@@ -376,7 +376,7 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
     }
 
     return (
-        <div className="container mt-4">
+        <div className="container-fluid mt-4">
             {/* Header with Back Button */}
             <div className="row mb-4">
                 <div className="col">

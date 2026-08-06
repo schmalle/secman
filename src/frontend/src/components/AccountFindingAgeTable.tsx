@@ -78,7 +78,7 @@ export default function AccountFindingAgeTable() {
 
   if (!hasRole('ADMIN')) {
     return (
-      <div className="container mt-4">
+      <div className="container-fluid mt-4">
         <div className="alert alert-danger">Administrator access required.</div>
       </div>
     );

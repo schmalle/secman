@@ -98,7 +98,7 @@ const UserMappingUpload: React.FC = () => {
   };
 
   return (
-    <div className="container mt-4">
+    <div className="container-fluid mt-4">
       <h2>
         <i className="bi bi-diagram-3-fill me-2"></i>
         User Mapping Upload

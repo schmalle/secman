@@ -191,7 +191,7 @@ const FalconConfigManagement = () => {
 
     if (loading) {
         return (
-            <div className="container mt-4">
+            <div className="container-fluid mt-4">
                 <div className="d-flex justify-content-center">
                     <div className="spinner-border" role="status">
                         <span className="visually-hidden">Checking permissions…</span>
@@ -203,7 +203,7 @@ const FalconConfigManagement = () => {
 
     if (!isAdmin) {
         return (
-            <div className="container mt-4">
+            <div className="container-fluid mt-4">
                 <div className="alert alert-danger">
                     <i className="bi bi-shield-exclamation me-2"></i>
                     Access Denied: You do not have permission to view this page.
@@ -214,7 +214,7 @@ const FalconConfigManagement = () => {
 
 
     return (
-        <div className="container mt-4">
+        <div className="container-fluid mt-4">
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h2>
                     <i className="bi bi-shield-lock me-2"></i>

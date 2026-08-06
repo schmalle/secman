@@ -103,7 +103,7 @@ const PortHistory: React.FC<PortHistoryProps> = ({ assetId, assetName, onClose }
   };
 
   return (
-    <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+    <div className="modal show d-block" style={{ backgroundColor: 'var(--scand-overlay)' }}>
       <div className="modal-dialog modal-xl">
         <div className="modal-content">
           <div className="modal-header">

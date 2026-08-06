@@ -234,7 +234,7 @@ const McpApiKeyManagement: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="container mt-4">
+      <div className="container-fluid mt-4">
         <div className="d-flex justify-content-center">
           <div className="spinner-border" role="status">
             <span className="visually-hidden">Loading...</span>
@@ -245,7 +245,7 @@ const McpApiKeyManagement: React.FC = () => {
   }
 
   return (
-    <div className="container mt-4">
+    <div className="container-fluid mt-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>MCP API Keys</h2>
         <div className="d-flex gap-2 align-items-center">
@@ -294,7 +294,7 @@ const McpApiKeyManagement: React.FC = () => {
 
       {/* Create API Key Modal */}
       {showCreateForm && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div className="modal show d-block" style={{ backgroundColor: 'var(--scand-overlay)' }}>
           <div className="modal-dialog">
             <div className="modal-content">
               <div className="modal-header">

@@ -441,7 +441,7 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
   const isReadOnly = mode === 'review' || !assessmentData.canEdit;
 
   return (
-    <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+    <div className="modal fade show d-block" style={{ backgroundColor: 'var(--scand-overlay)' }}>
       <div className="modal-dialog modal-xl modal-dialog-scrollable">
         <div className="modal-content">
           <div className="modal-header">

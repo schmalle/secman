@@ -11,6 +11,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { formatServerDate } from '../utils/dateUtils';
 import { lookupCve, type CveLookupResult } from '../services/cveLookupService';
+import { severityHex } from '../utils/severityColors';
 
 interface CveLinkProps {
   cveId: string | null | undefined;
@@ -88,15 +89,7 @@ const CveLink: React.FC<CveLinkProps> = ({ cveId }) => {
     };
   }, []);
 
-  const severityColor = (severity: string | null): string => {
-    switch (severity?.toUpperCase()) {
-      case 'CRITICAL': return '#dc3545';
-      case 'HIGH': return '#fd7e14';
-      case 'MEDIUM': return '#ffc107';
-      case 'LOW': return '#28a745';
-      default: return '#6c757d';
-    }
-  };
+  const severityColor = severityHex;
 
   if (!cveId) {
     return <span className="text-muted">-</span>;

@@ -1131,7 +1131,7 @@ export default function RequirementManagement() {
 
             {/* First Confirmation Modal */}
             {showFirstDeleteModal && (
-                <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'var(--scand-overlay)' }}>
                     <div className="modal-dialog modal-dialog-centered">
                         <div className="modal-content">
                             <div className="modal-header bg-warning">
@@ -1166,7 +1166,7 @@ export default function RequirementManagement() {
 
             {/* Second Confirmation Modal */}
             {showSecondDeleteModal && (
-                <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'var(--scand-overlay)' }}>
                     <div className="modal-dialog modal-dialog-centered">
                         <div className="modal-content">
                             <div className="modal-header bg-danger text-white">
@@ -1328,7 +1328,7 @@ function MappingSuggestionsModal({ suggestions, onApply, onClose }: MappingSugge
     const selectedCount = selectedKeys.size;
 
     return (
-        <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'var(--scand-overlay)' }}>
             <div className="modal-dialog modal-xl modal-dialog-scrollable">
                 <div className="modal-content">
                     <div className="modal-header bg-info text-white">
