@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { normalizeChatSettings } from './chatSettingsNormalizer';
 
 // API base URL - always use relative URLs to go through Astro's proxy and avoid CORS issues
 const API_BASE_URL = import.meta.env.PUBLIC_API_URL || '';
@@ -100,14 +101,14 @@ const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } };
 /** Current user's Slack settings, plus the catalogue of subscribable events. */
 export async function getSlackSettings(): Promise<SlackSettings> {
   const response = await axios.get(`${API_BASE_URL}/api/slack/settings`);
-  return response.data;
+  return normalizeChatSettings<SlackSettings>(response.data);
 }
 
 export async function updateSlackSettings(
   request: UpdateSlackSettingsRequest
 ): Promise<SlackSettings> {
   const response = await axios.put(`${API_BASE_URL}/api/slack/settings`, request, JSON_HEADERS);
-  return response.data;
+  return normalizeChatSettings<SlackSettings>(response.data);
 }
 
 export async function sendSlackTestMessage(): Promise<ChatTestResult> {
@@ -118,14 +119,14 @@ export async function sendSlackTestMessage(): Promise<ChatTestResult> {
 /** Current user's Telegram settings, plus the catalogue of subscribable events. */
 export async function getTelegramSettings(): Promise<TelegramSettings> {
   const response = await axios.get(`${API_BASE_URL}/api/telegram/settings`);
-  return response.data;
+  return normalizeChatSettings<TelegramSettings>(response.data);
 }
 
 export async function updateTelegramSettings(
   request: UpdateTelegramSettingsRequest
 ): Promise<TelegramSettings> {
   const response = await axios.put(`${API_BASE_URL}/api/telegram/settings`, request, JSON_HEADERS);
-  return response.data;
+  return normalizeChatSettings<TelegramSettings>(response.data);
 }
 
 export async function sendTelegramTestMessage(): Promise<ChatTestResult> {
