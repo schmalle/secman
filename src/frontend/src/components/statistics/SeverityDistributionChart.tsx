@@ -19,20 +19,10 @@ import React, { useEffect, useState } from 'react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
 import { vulnerabilityStatisticsApi, type SeverityDistributionDto } from '../../services/api/vulnerabilityStatisticsApi';
+import { SEVERITY_HEX as SEVERITY_COLORS } from '../../utils/severityColors';
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
-
-/**
- * Color mapping for severity levels (Bootstrap color palette)
- */
-const SEVERITY_COLORS = {
-  critical: '#dc3545',    // Bootstrap danger (red)
-  high: '#fd7e14',        // Bootstrap warning (orange)
-  medium: '#ffc107',      // Bootstrap warning (yellow)
-  low: '#0dcaf0',         // Bootstrap info (cyan)
-  unknown: '#6c757d'      // Bootstrap secondary (gray)
-};
 
 /**
  * Handle segment click - navigate to filtered vulnerability list

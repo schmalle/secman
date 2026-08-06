@@ -28,6 +28,7 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { vulnerabilityStatisticsApi, type TemporalTrendsDto } from '../../services/api/vulnerabilityStatisticsApi';
+import { severityHex, severityHexAlpha } from '../../utils/severityColors';
 
 // Register Chart.js components
 ChartJS.register(
@@ -127,23 +128,23 @@ export default function TemporalTrendsChart() {
       {
         label: 'Total',
         data: data.dataPoints.map(dp => dp.totalCount),
-        borderColor: '#0d6efd',
-        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+        borderColor: '#4A7C6F', // --scand-primary (canvas can't resolve CSS var())
+        backgroundColor: '#E8F0ED', // --scand-primary-light
         tension: 0.4,
         fill: true
       },
       {
         label: 'Critical',
         data: data.dataPoints.map(dp => dp.criticalCount),
-        borderColor: '#dc3545',
-        backgroundColor: 'rgba(220, 53, 69, 0.1)',
+        borderColor: severityHex('CRITICAL'),
+        backgroundColor: severityHexAlpha('CRITICAL', 0.1),
         tension: 0.4
       },
       {
         label: 'High',
         data: data.dataPoints.map(dp => dp.highCount),
-        borderColor: '#fd7e14',
-        backgroundColor: 'rgba(253, 126, 20, 0.1)',
+        borderColor: severityHex('HIGH'),
+        backgroundColor: severityHexAlpha('HIGH', 0.1),
         tension: 0.4
       }
     ]

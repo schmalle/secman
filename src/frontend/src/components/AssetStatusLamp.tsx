@@ -37,9 +37,9 @@ const LABELS: Record<AssetInterventionStatus, string> = {
 };
 
 const COLORS: Record<AssetInterventionStatus, string> = {
-    GREEN: '#198754',
-    YELLOW: '#ffc107',
-    RED: '#dc3545',
+    GREEN: 'var(--scand-success)',
+    YELLOW: 'var(--scand-warning)',
+    RED: 'var(--scand-danger)',
 };
 
 const AssetStatusLamp: React.FC<AssetStatusLampProps> = ({

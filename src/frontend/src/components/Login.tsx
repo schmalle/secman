@@ -275,7 +275,7 @@ const Login = () => {
                                                 className="btn"
                                                 style={{
                                                     backgroundColor: provider.buttonColor,
-                                                    color: '#fff',
+                                                    color: 'var(--scand-text-light)',
                                                     border: 'none'
                                                 }}
                                                 onClick={() => handleExternalLogin(provider.id)}

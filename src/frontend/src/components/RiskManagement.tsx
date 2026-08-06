@@ -150,7 +150,15 @@ const RiskManagement: React.FC = () => {
     setError(null);
   };
 
-  if (loading) return <div className="text-center py-4">Loading risks...</div>;
+  if (loading) {
+    return (
+      <div className="d-flex justify-content-center py-5">
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container-fluid p-4">
@@ -171,6 +179,11 @@ const RiskManagement: React.FC = () => {
               {isAddingRisk ? 'Cancel' : 'Add New Risk'}
             </button>
           </div>
+          {error && (
+            <div className="alert alert-danger" role="alert">
+              {error}
+            </div>
+          )}
         </div>
       </div>
       {isAddingRisk && (

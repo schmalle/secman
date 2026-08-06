@@ -451,7 +451,7 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
   }
 
   return (
-    <div className="container mt-4">
+    <div className="container-fluid mt-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Workgroup Management</h2>
         <button className="btn btn-primary" onClick={() => setShowForm(true)}>
@@ -468,7 +468,7 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
 
       {/* Create/Edit Form Modal */}
       {showForm && (
-        <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: 'var(--scand-overlay)' }}>
           <div className="modal-dialog">
             <div className="modal-content">
               <div className="modal-header">
@@ -581,7 +581,7 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
 
       {/* Assign Users Modal */}
       {showAssignUsers && selectedWorkgroup && (
-        <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: 'var(--scand-overlay)' }}>
           <div className="modal-dialog modal-lg">
             <div className="modal-content">
               <div className="modal-header">
@@ -627,7 +627,7 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
                             <span
                               style={{
                                 textDecoration: pending ? 'line-through' : 'none',
-                                color: pending ? '#999' : 'inherit',
+                                color: pending ? 'var(--scand-text-secondary)' : 'inherit',
                               }}
                             >
                               <i className="bi bi-person-check me-1"></i>
@@ -874,7 +874,7 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
 
       {/* Manage Assets Modal */}
       {showAssignAssets && selectedWorkgroup && (
-        <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: 'var(--scand-overlay)' }}>
           <div className="modal-dialog modal-lg">
             <div className="modal-content">
               <div className="modal-header">
@@ -913,7 +913,7 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
                             <span
                               style={{
                                 textDecoration: pending ? 'line-through' : 'none',
-                                color: pending ? '#999' : 'inherit',
+                                color: pending ? 'var(--scand-text-secondary)' : 'inherit',
                               }}
                             >
                               <strong>{a.name}</strong>

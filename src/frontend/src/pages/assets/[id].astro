@@ -6,7 +6,7 @@ const { id } = Astro.params;
 const assetId = Number(id);
 ---
 
-<Layout title="Opening asset">
+<Layout title="Asset Details">
   {Number.isFinite(assetId) && assetId > 0 ? (
     <AssetIdRedirect client:load assetId={assetId} />
   ) : (

@@ -100,7 +100,7 @@ export default function WorkgroupAccountsModal({
     <div
       className="modal show d-block"
       tabIndex={-1}
-      style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+      style={{ backgroundColor: 'var(--scand-overlay)' }}
     >
       <div className="modal-dialog modal-lg">
         <div className="modal-content">

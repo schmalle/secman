@@ -177,7 +177,7 @@ const OutdatedAssetDetail: React.FC<OutdatedAssetDetailProps> = ({ assetId }) =>
   }, [asset, currentPage, pageSize, sortField, sortDirection]);
 
   return (
-    <div className="container mt-4">
+    <div className="container-fluid mt-4">
       {/* Back Button */}
       <div className="mb-3">
         <a href="/outdated-assets" className="btn btn-outline-secondary">

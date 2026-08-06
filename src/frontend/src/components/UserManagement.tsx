@@ -754,7 +754,7 @@ const UserManagement = () => {
 
             {/* Add User Modal */}
             {showAddUserModal && (
-                <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'var(--scand-overlay)' }}>
                     <div className="modal-dialog modal-dialog-centered">
                         <div className="modal-content">
                             <form onSubmit={handleAddUserSubmit}>
@@ -835,7 +835,7 @@ const UserManagement = () => {
 
             {/* Edit User Modal */}
             {showEditUserModal && editingUser && (
-                <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'var(--scand-overlay)' }}>
                     <div className="modal-dialog modal-dialog-centered modal-xl">
                         <div className="modal-content">
                             <form onSubmit={handleEditUserSubmit}>
@@ -894,7 +894,7 @@ const UserManagement = () => {
                                                 disabled={isSubmittingEdit}
                                             />
                                         )}
-                                        <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '0.375rem', padding: '0.5rem' }}>
+                                        <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--scand-border)', borderRadius: '0.375rem', padding: '0.5rem' }}>
                                             {workgroups.length === 0 ? (
                                                 <small className="text-muted">No workgroups available</small>
                                             ) : sortedEditWorkgroups.length === 0 ? (

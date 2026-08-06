@@ -367,7 +367,7 @@ export default function EmailBroadcastManager() {
           className="modal show d-block"
           tabIndex={-1}
           role="dialog"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
+          style={{ background: 'var(--scand-overlay)' }}
           onClick={() => !submitting && setConfirmOpen(false)}
         >
           <div className="modal-dialog modal-dialog-centered" onClick={(e) => e.stopPropagation()}>

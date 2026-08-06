@@ -180,7 +180,7 @@ export default function UserProfile() {
   // Loading state
   if (loading) {
     return (
-      <div className="container mt-4">
+      <div className="container-fluid mt-4">
         <h1>User Profile</h1>
         <div className="text-center my-5">
           <div className="spinner-border text-primary" role="status">
@@ -194,7 +194,7 @@ export default function UserProfile() {
   // Error state
   if (error) {
     return (
-      <div className="container mt-4">
+      <div className="container-fluid mt-4">
         <h1>User Profile</h1>
         <div className="alert alert-danger d-flex align-items-center justify-content-between mt-3" role="alert">
           <div>
@@ -212,7 +212,7 @@ export default function UserProfile() {
 
   // Success state
   return (
-    <div className="container mt-4">
+    <div className="container-fluid mt-4">
       <h1>User Profile</h1>
       <div className="card mt-3">
         <div className="card-body">
