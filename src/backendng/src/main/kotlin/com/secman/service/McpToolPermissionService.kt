@@ -3,6 +3,7 @@ package com.secman.service
 import com.secman.domain.*
 import com.secman.repository.McpToolPermissionRepository
 import com.secman.repository.McpApiKeyRepository
+import com.secman.mcp.McpToolPermissions
 import com.secman.mcp.ToolCategories
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
@@ -47,70 +48,61 @@ class McpToolPermissionService(
     fun checkRateLimitForApiKey(apiKeyId: Long, requestId: String? = null): RateLimitInfo {
         val now = System.currentTimeMillis()
 
-        // Get or create tracker for this API key
+        // Get or create tracker for this API key, then drop expired windows
         val tracker = rateLimitTrackers.computeIfAbsent(apiKeyId) { RateLimitTracker() }
-
-        // Clean up expired windows
         tracker.cleanup(now)
 
-        // Check minute window (1000 req/min)
-        val minuteKey = now / MINUTE_WINDOW_MS
-        val minuteCount = tracker.minuteWindow.computeIfAbsent(minuteKey) { AtomicInteger(0) }
-        val currentMinuteRequests = minuteCount.get()
+        val minute = SlidingWindow("minute", tracker.minuteWindow, MINUTE_WINDOW_MS, MAX_REQUESTS_PER_MINUTE, now)
+        val hour = SlidingWindow("hour", tracker.hourWindow, HOUR_WINDOW_MS, MAX_REQUESTS_PER_HOUR, now)
 
-        if (currentMinuteRequests >= MAX_REQUESTS_PER_MINUTE) {
-            val nextMinuteStartMs = (minuteKey + 1) * MINUTE_WINDOW_MS
-            val resetTime = LocalDateTime.now().plusSeconds((nextMinuteStartMs - now) / 1000)
+        for (window in listOf(minute, hour)) {
+            if (window.used >= window.limit) {
+                logger.warn("Rate limit exceeded ({} window): apiKeyId={}, requests={}/{}, requestId={}",
+                           window.label, apiKeyId, window.used, window.limit, requestId)
 
-            logger.warn("Rate limit exceeded (minute window): apiKeyId={}, requests={}/{}, requestId={}",
-                       apiKeyId, currentMinuteRequests, MAX_REQUESTS_PER_MINUTE, requestId)
-
-            return RateLimitInfo(
-                maxCallsPerHour = MAX_REQUESTS_PER_HOUR,
-                remainingCalls = 0,
-                resetTime = resetTime,
-                exceeded = true
-            )
+                return RateLimitInfo(
+                    maxCallsPerHour = MAX_REQUESTS_PER_HOUR,
+                    remainingCalls = 0,
+                    resetTime = window.resetTime(),
+                    exceeded = true
+                )
+            }
         }
 
-        // Check hour window (50,000 req/hour)
-        val hourKey = now / HOUR_WINDOW_MS
-        val hourCount = tracker.hourWindow.computeIfAbsent(hourKey) { AtomicInteger(0) }
-        val currentHourRequests = hourCount.get()
-
-        if (currentHourRequests >= MAX_REQUESTS_PER_HOUR) {
-            val nextHourStartMs = (hourKey + 1) * HOUR_WINDOW_MS
-            val resetTime = LocalDateTime.now().plusSeconds((nextHourStartMs - now) / 1000)
-
-            logger.warn("Rate limit exceeded (hour window): apiKeyId={}, requests={}/{}, requestId={}",
-                       apiKeyId, currentHourRequests, MAX_REQUESTS_PER_HOUR, requestId)
-
-            return RateLimitInfo(
-                maxCallsPerHour = MAX_REQUESTS_PER_HOUR,
-                remainingCalls = 0,
-                resetTime = resetTime,
-                exceeded = true
-            )
-        }
-
-        // Increment counters (request is allowed)
-        minuteCount.incrementAndGet()
-        hourCount.incrementAndGet()
-
-        // Calculate remaining calls (use the more restrictive limit)
-        val remainingMinute = MAX_REQUESTS_PER_MINUTE - currentMinuteRequests - 1
-        val remainingHour = MAX_REQUESTS_PER_HOUR - currentHourRequests - 1
-        val remaining = minOf(remainingMinute, remainingHour)
-
-        val nextHourStartMs = (hourKey + 1) * HOUR_WINDOW_MS
-        val resetTime = LocalDateTime.now().plusSeconds((nextHourStartMs - now) / 1000)
+        // Request is allowed — count it against both windows
+        minute.increment()
+        hour.increment()
 
         return RateLimitInfo(
             maxCallsPerHour = MAX_REQUESTS_PER_HOUR,
-            remainingCalls = remaining,
-            resetTime = resetTime,
+            // The more restrictive of the two windows governs
+            remainingCalls = minOf(minute.remaining, hour.remaining),
+            resetTime = hour.resetTime(),
             exceeded = false
         )
+    }
+
+    /**
+     * One sliding rate-limit window (minute or hour) resolved for a point in time.
+     * [used] is the count *before* this request, so [remaining] already excludes it.
+     */
+    private class SlidingWindow(
+        val label: String,
+        counters: ConcurrentHashMap<Long, AtomicInteger>,
+        private val widthMs: Long,
+        val limit: Int,
+        private val now: Long
+    ) {
+        private val key = now / widthMs
+        private val counter = counters.computeIfAbsent(key) { AtomicInteger(0) }
+
+        val used: Int = counter.get()
+        val remaining: Int get() = limit - used - 1
+
+        fun increment() = counter.incrementAndGet()
+
+        fun resetTime(): LocalDateTime =
+            LocalDateTime.now().plusSeconds(((key + 1) * widthMs - now) / 1000)
     }
 
     /**
@@ -152,127 +144,13 @@ class McpToolPermissionService(
     /**
      * Check if a permission set allows access to a specific tool.
      * Feature: 050-mcp-user-delegation
+     *
+     * A tool missing from [McpToolPermissions.CALLING] is denied — that is the
+     * `tools/call` path, so a tool added to the registry but not to that table
+     * stays unreachable no matter which role the delegated user holds.
      */
-    private fun checkPermissionSetForTool(permissions: Set<McpPermission>, toolName: String): Boolean {
-        return when (toolName) {
-            in ToolCategories.READ_ONLY_TOOLS -> {
-                permissions.contains(McpPermission.REQUIREMENTS_READ) ||
-                permissions.contains(McpPermission.ASSESSMENTS_READ) ||
-                permissions.contains(McpPermission.TAGS_READ)
-            }
-            in ToolCategories.WRITE_TOOLS -> {
-                permissions.contains(McpPermission.REQUIREMENTS_WRITE) ||
-                permissions.contains(McpPermission.ASSESSMENTS_WRITE)
-            }
-            in ToolCategories.ADMIN_TOOLS -> {
-                permissions.contains(McpPermission.SYSTEM_INFO) ||
-                permissions.contains(McpPermission.USER_ACTIVITY)
-            }
-            // Asset and vulnerability tools
-            "get_assets", "get_asset_profile", "search_assets" -> {
-                permissions.contains(McpPermission.ASSETS_READ)
-            }
-            "get_vulnerabilities", "search_vulnerabilities" -> {
-                permissions.contains(McpPermission.VULNERABILITIES_READ)
-            }
-            "get_scans", "get_scan_results", "search_products" -> {
-                permissions.contains(McpPermission.SCANS_READ)
-            }
-            "get_audit_log", "search_audit_logs" -> {
-                permissions.contains(McpPermission.AUDIT_READ)
-            }
-            "translate_requirement" -> {
-                permissions.contains(McpPermission.TRANSLATION_USE)
-            }
-            "get_requirement_files", "download_file" -> {
-                permissions.contains(McpPermission.FILES_READ)
-            }
-            // Feature 006: Enhanced MCP Tools
-            "get_all_assets_detail", "get_asset_scan_results", "get_asset_complete_profile" -> {
-                permissions.contains(McpPermission.ASSETS_READ)
-            }
-            "get_all_vulnerabilities_detail", "get_asset_most_vulnerabilities", "get_all_accessible_vulnerabilities" -> {
-                permissions.contains(McpPermission.VULNERABILITIES_READ)
-            }
-            // Feature 060-062: User, Product, and Vulnerability Exception Tools
-            "list_users", "add_user", "delete_user" -> {
-                permissions.contains(McpPermission.USER_ACTIVITY)
-            }
-            // Feature 064: User mapping tools — gated to USER_ACTIVITY here AND ADMIN
-            // role inside each tool's execute(). McpToolRegistry already lists these,
-            // but checkPermissionSetForTool is the path the streamable HTTP controller
-            // takes; without an entry here the fallback else->false denied every
-            // admin-delegated call, making import_user_mappings unreachable.
-            "import_user_mappings", "list_user_mappings" -> {
-                permissions.contains(McpPermission.USER_ACTIVITY)
-            }
-            // Auto risk assessments for newly discovered AWS accounts (ADMIN in execute()).
-            "list_aws_account_risk_assessments" -> {
-                permissions.contains(McpPermission.ASSESSMENTS_READ)
-            }
-            "list_products" -> {
-                permissions.contains(McpPermission.VULNERABILITIES_READ)
-            }
-            "get_overdue_assets", "create_exception_request", "get_my_exception_requests",
-            "get_pending_exception_requests", "approve_exception_request",
-            "reject_exception_request", "cancel_exception_request",
-            "list_vulnerability_exceptions" -> {
-                permissions.contains(McpPermission.VULNERABILITIES_READ)
-            }
-            // Bulk admin tool — gated to VULNERABILITIES_READ here AND ADMIN role
-            // inside the tool's execute(). Without this entry the
-            // checkPermissionSetForTool fallback (else -> false) denies the
-            // admin-delegated call before the tool's own role check runs.
-            "delete_all_vulnerability_exceptions" -> {
-                permissions.contains(McpPermission.VULNERABILITIES_READ)
-            }
-            // Feature 063: E2E Vulnerability Exception Workflow Tools
-            "delete_all_assets" -> {
-                permissions.contains(McpPermission.ASSETS_READ)
-            }
-            "add_vulnerability" -> {
-                permissions.contains(McpPermission.VULNERABILITIES_READ)
-            }
-            // Feature 074: MCP Tools for Workgroup Management
-            "create_workgroup", "delete_workgroup", "assign_assets_to_workgroup", "assign_users_to_workgroup" -> {
-                permissions.contains(McpPermission.WORKGROUPS_WRITE)
-            }
-            "delete_asset" -> {
-                permissions.contains(McpPermission.ASSETS_READ)
-            }
-            // Feature: MCP Asset Management Tools
-            "create_asset", "update_asset" -> {
-                permissions.contains(McpPermission.ASSETS_WRITE)
-            }
-            // Feature: AWS Account Sharing — gated to USER_ACTIVITY here AND
-            // ADMIN role inside each tool's execute(). The McpToolRegistry
-            // already lists these, but checkPermissionSetForTool is the path
-            // taken by the streamable HTTP controller; without an entry here
-            // the fallback else->false denied admin-delegated calls.
-            "list_aws_account_sharing", "create_aws_account_sharing", "delete_aws_account_sharing" -> {
-                permissions.contains(McpPermission.USER_ACTIVITY)
-            }
-            // Feature: GitHub repo vulnerability management — mirrors McpToolRegistry.kt's
-            // permission mapping for these tools. Missing here previously, which caused the
-            // fallback else->false to deny every delegated call regardless of role/permission.
-            "import_github_repos" -> {
-                permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN/VULN role checked in tool execute()
-            }
-            "send_github_repo_alerts" -> {
-                permissions.contains(McpPermission.NOTIFICATIONS_SEND) // ADMIN role checked in tool execute()
-            }
-            "list_github_owner_email_mappings" -> {
-                permissions.contains(McpPermission.VULNERABILITIES_READ) // Role checked in tool execute()
-            }
-            "create_github_owner_email_mapping", "delete_github_owner_email_mapping" -> {
-                permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN/VULN role checked in tool execute()
-            }
-            "discover_github_owner_email_mappings" -> {
-                permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN/VULN role checked in tool execute()
-            }
-            else -> false
-        }
-    }
+    private fun checkPermissionSetForTool(permissions: Set<McpPermission>, toolName: String): Boolean =
+        McpToolPermissions.allows(McpToolPermissions.CALLING, toolName, permissions)
 
     /**
      * Check if an API key has permission to call a specific tool with given parameters.
@@ -340,8 +218,8 @@ class McpToolPermissionService(
             }
 
             // Check rate limiting if applicable
-            val rateLimitInfo = checkRateLimit(permission, requestId)
-            if (rateLimitInfo != null && rateLimitInfo.exceeded) {
+            val rateLimitInfo = checkRateLimitForApiKey(permission.apiKeyId, requestId)
+            if (rateLimitInfo.exceeded) {
                 logPermissionDenied(apiKeyId, toolName, "RATE_LIMIT_EXCEEDED", requestId)
                 return PermissionCheckResult(
                     granted = false,
@@ -698,126 +576,18 @@ class McpToolPermissionService(
 
     // Private helper methods
 
+    /** Category-level check for API keys without an explicit per-tool permission row. */
     private fun checkBasicPermission(apiKey: McpApiKey, toolName: String): Boolean {
         val permissions = apiKey.getPermissionSet()
-
-        return when (toolName) {
-            in ToolCategories.READ_ONLY_TOOLS -> {
-                permissions.contains(McpPermission.REQUIREMENTS_READ) ||
-                permissions.contains(McpPermission.ASSESSMENTS_READ) ||
-                permissions.contains(McpPermission.TAGS_READ)
-            }
-            in ToolCategories.WRITE_TOOLS -> {
-                permissions.contains(McpPermission.REQUIREMENTS_WRITE) ||
-                permissions.contains(McpPermission.ASSESSMENTS_WRITE)
-            }
-            in ToolCategories.ADMIN_TOOLS -> {
-                permissions.contains(McpPermission.SYSTEM_INFO) ||
-                permissions.contains(McpPermission.USER_ACTIVITY)
-            }
-            else -> false
-        }
+        val category = ToolCategories.CATEGORY_PERMISSIONS.firstOrNull { (tools, _) -> toolName in tools }
+        return category?.second?.any { it in permissions } == true
     }
 
     private fun getBasicAuthorizedTools(apiKey: McpApiKey): Set<String> {
         val permissions = apiKey.getPermissionSet()
-        val tools = mutableSetOf<String>()
-
-        if (permissions.any { it in listOf(McpPermission.REQUIREMENTS_READ, McpPermission.ASSESSMENTS_READ, McpPermission.TAGS_READ) }) {
-            tools.addAll(ToolCategories.READ_ONLY_TOOLS)
-        }
-
-        if (permissions.any { it in listOf(McpPermission.REQUIREMENTS_WRITE, McpPermission.ASSESSMENTS_WRITE) }) {
-            tools.addAll(ToolCategories.WRITE_TOOLS)
-        }
-
-        if (permissions.any { it in listOf(McpPermission.SYSTEM_INFO, McpPermission.USER_ACTIVITY) }) {
-            tools.addAll(ToolCategories.ADMIN_TOOLS)
-        }
-
-        return tools
-    }
-
-    /**
-     * Check rate limit for an API key using sliding window algorithm.
-     * Feature 006: MCP Tools for Security Data
-     *
-     * Enforces:
-     * - 1000 requests per minute per API key
-     * - 50,000 requests per hour per API key
-     *
-     * @param permission The permission being checked (for legacy maxCallsPerHour if set)
-     * @param requestId Optional request ID for logging
-     * @return RateLimitInfo if rate limiting is applicable, null otherwise
-     */
-    private fun checkRateLimit(permission: McpToolPermission, requestId: String?): RateLimitInfo? {
-        val apiKeyId = permission.apiKeyId
-        val now = System.currentTimeMillis()
-
-        // Get or create tracker for this API key
-        val tracker = rateLimitTrackers.computeIfAbsent(apiKeyId) { RateLimitTracker() }
-
-        // Clean up expired windows
-        tracker.cleanup(now)
-
-        // Check minute window (1000 req/min)
-        val minuteKey = now / MINUTE_WINDOW_MS
-        val minuteCount = tracker.minuteWindow.computeIfAbsent(minuteKey) { AtomicInteger(0) }
-        val currentMinuteRequests = minuteCount.get()
-
-        if (currentMinuteRequests >= MAX_REQUESTS_PER_MINUTE) {
-            val nextMinuteStartMs = (minuteKey + 1) * MINUTE_WINDOW_MS
-            val resetTime = LocalDateTime.now().plusSeconds((nextMinuteStartMs - now) / 1000)
-
-            logger.warn("Rate limit exceeded (minute window): apiKeyId={}, requests={}/{}, requestId={}",
-                       apiKeyId, currentMinuteRequests, MAX_REQUESTS_PER_MINUTE, requestId)
-
-            return RateLimitInfo(
-                maxCallsPerHour = MAX_REQUESTS_PER_HOUR,
-                remainingCalls = 0,
-                resetTime = resetTime,
-                exceeded = true
-            )
-        }
-
-        // Check hour window (50,000 req/hour)
-        val hourKey = now / HOUR_WINDOW_MS
-        val hourCount = tracker.hourWindow.computeIfAbsent(hourKey) { AtomicInteger(0) }
-        val currentHourRequests = hourCount.get()
-
-        if (currentHourRequests >= MAX_REQUESTS_PER_HOUR) {
-            val nextHourStartMs = (hourKey + 1) * HOUR_WINDOW_MS
-            val resetTime = LocalDateTime.now().plusSeconds((nextHourStartMs - now) / 1000)
-
-            logger.warn("Rate limit exceeded (hour window): apiKeyId={}, requests={}/{}, requestId={}",
-                       apiKeyId, currentHourRequests, MAX_REQUESTS_PER_HOUR, requestId)
-
-            return RateLimitInfo(
-                maxCallsPerHour = MAX_REQUESTS_PER_HOUR,
-                remainingCalls = 0,
-                resetTime = resetTime,
-                exceeded = true
-            )
-        }
-
-        // Increment counters (request is allowed)
-        minuteCount.incrementAndGet()
-        hourCount.incrementAndGet()
-
-        // Calculate remaining calls (use the more restrictive limit)
-        val remainingMinute = MAX_REQUESTS_PER_MINUTE - currentMinuteRequests - 1
-        val remainingHour = MAX_REQUESTS_PER_HOUR - currentHourRequests - 1
-        val remaining = minOf(remainingMinute, remainingHour)
-
-        val nextHourStartMs = (hourKey + 1) * HOUR_WINDOW_MS
-        val resetTime = LocalDateTime.now().plusSeconds((nextHourStartMs - now) / 1000)
-
-        return RateLimitInfo(
-            maxCallsPerHour = MAX_REQUESTS_PER_HOUR,
-            remainingCalls = remaining,
-            resetTime = resetTime,
-            exceeded = false
-        )
+        return ToolCategories.CATEGORY_PERMISSIONS
+            .filter { (_, unlocking) -> unlocking.any { it in permissions } }
+            .flatMapTo(mutableSetOf()) { (tools, _) -> tools }
     }
 
     private fun logPermissionDenied(apiKeyId: Long, toolName: String, reason: String, requestId: String?) {

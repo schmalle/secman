@@ -35,10 +35,11 @@ class CreateGithubOwnerEmailMappingTool(
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
 
-        val hasRequiredRole = context.isAdmin || context.delegatedUserRoles?.contains("VULN") == true
-        if (!hasRequiredRole) {
-            return McpToolResult.error("ADMIN_REQUIRED", "ADMIN or VULN role required to create a GitHub owner email mapping")
-        }
+        requireAnyRole(
+            context, "VULN",
+            code = "ADMIN_REQUIRED",
+            message = "ADMIN or VULN role required to create a GitHub owner email mapping"
+        )?.let { return it }
 
         val owner = arguments["owner"] as? String
         val email = arguments["email"] as? String

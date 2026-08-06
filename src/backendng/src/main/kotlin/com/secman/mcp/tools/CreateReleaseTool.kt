@@ -49,13 +49,11 @@ class CreateReleaseTool(
         // Check authorization - require User Delegation with ADMIN or REQADMIN role
         requireDelegation(context)?.let { return it }
 
-        val userRoles = context.delegatedUserRoles?.map { it.uppercase() } ?: emptyList()
-        if (!userRoles.contains("ADMIN") && !userRoles.contains("REQADMIN")) {
-            return McpToolResult.error(
-                "AUTHORIZATION_ERROR",
-                "ADMIN or REQADMIN role required to create releases"
-            )
-        }
+        requireAnyUserRole(
+            context, "ADMIN", "REQADMIN",
+            code = "AUTHORIZATION_ERROR",
+            message = "ADMIN or REQADMIN role required to create releases"
+        )?.let { return it }
 
         // Extract and validate required parameters
         val version = (arguments["version"] as? String)?.trim()

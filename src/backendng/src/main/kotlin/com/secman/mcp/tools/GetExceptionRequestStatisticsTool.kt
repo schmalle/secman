@@ -42,14 +42,11 @@ class GetExceptionRequestStatisticsTool(
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
 
-        val hasApprovalRole = context.isAdmin ||
-            context.delegatedUserRoles?.contains("SECCHAMPION") == true
-        if (!hasApprovalRole) {
-            return McpToolResult.error(
-                "APPROVAL_ROLE_REQUIRED",
-                "ADMIN or SECCHAMPION role required to view exception statistics"
-            )
-        }
+        requireAnyRole(
+            context, "SECCHAMPION",
+            code = "APPROVAL_ROLE_REQUIRED",
+            message = "ADMIN or SECCHAMPION role required to view exception statistics"
+        )?.let { return it }
 
         try {
             val dateRange = (arguments["dateRange"] as? String) ?: "30days"

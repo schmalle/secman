@@ -170,7 +170,8 @@ Fix in priority order: **backend errors first**, then frontend.
 **Key files for this test:**
 
 - **MCP tool implementations**: `src/backendng/src/main/kotlin/com/secman/mcp/tools/`
-  (one file per tool) — registered in `com/secman/mcp/McpToolRegistry.kt`
+  (one file per tool) — auto-registered as `@Singleton` `McpTool` beans;
+  per-tool permissions in `com/secman/mcp/McpToolPermissions.kt`
 - **MCP controllers**: `controller/McpStreamableHttpController.kt` (the
   Streamable-HTTP JSON-RPC endpoint the test drives) and
   `controller/McpController.kt`
@@ -192,11 +193,12 @@ Fix in priority order: **backend errors first**, then frontend.
    near the time of the failure.
 3. **Trace the MCP call path**: test script calls `tools/call` with a tool name →
    `McpStreamableHttpController` authenticates (API key + `X-MCP-User-Email`
-   delegation) → `McpToolRegistry` resolves the name → the tool class under
+   delegation) → `McpToolPermissions.CALLING` authorizes the name →
+   `McpToolRegistry` resolves it → the tool class under
    `mcp/tools/` → service → repository.
 4. **Apply minimal fix** — common issues:
-   - Tool not registered in `McpToolRegistry`, or the name in the test does not
-     match the registered name
+   - Tool missing from `McpToolPermissions.CALLING` (rejected with
+     `PERMISSION_DENIED`), or the name in the test does not match `override val name`
    - Null pointer in service layer (missing `?.` or `?: default`)
    - Response format mismatch (tool returns different JSON structure than test expects)
    - RBAC issue — MCP delegation header not checked correctly

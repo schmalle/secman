@@ -254,6 +254,12 @@ data class McpToolPermission(
     companion object {
         /**
          * Standard tool categories for common permission groupings.
+         *
+         * NOTE: a near-copy of [com.secman.mcp.ToolCategories], which additionally
+         * lists `send_admin_summary` and `send_patch_notifications` under
+         * ADMIN_TOOLS. Kept separate on purpose for now: merging them would make
+         * [isValidToolName] accept those two names, which widens what
+         * `McpToolPermissionService.grantPermission` allows.
          */
         object ToolCategories {
             val READ_ONLY_TOOLS = setOf(
@@ -330,48 +336,6 @@ data class McpToolPermission(
         }
 
         /**
-         * Create all tool permissions for an API key.
-         */
-        fun createFullPermissions(
-            apiKeyId: Long,
-            includeAdminTools: Boolean = false,
-            createdBy: Long? = null
-        ): List<McpToolPermission> {
-            val tools = ToolCategories.READ_ONLY_TOOLS + ToolCategories.WRITE_TOOLS
-            val allTools = if (includeAdminTools) tools + ToolCategories.ADMIN_TOOLS else tools
-
-            return allTools.map { toolName ->
-                createBasicPermission(
-                    apiKeyId = apiKeyId,
-                    toolName = toolName,
-                    createdBy = createdBy,
-                    notes = "Auto-generated full permission"
-                )
-            }
-        }
-
-        /**
-         * Create parameter restrictions for limiting result size.
-         */
-        fun createSizeRestriction(maxLimit: Int): Map<String, Any> {
-            return mapOf("maxLimit" to maxLimit)
-        }
-
-        /**
-         * Create parameter restrictions for specific allowed values.
-         */
-        fun createValueRestriction(paramName: String, allowedValues: List<Any>): Map<String, Any> {
-            return mapOf("parameterValues" to mapOf(paramName to allowedValues))
-        }
-
-        /**
-         * Create parameter restrictions for forbidden parameters.
-         */
-        fun createForbiddenParamsRestriction(forbiddenParams: List<String>): Map<String, Any> {
-            return mapOf("forbiddenParams" to forbiddenParams)
-        }
-
-        /**
          * Validate a tool name against known tool categories.
          */
         fun isValidToolName(toolName: String): Boolean {
@@ -379,20 +343,6 @@ data class McpToolPermission(
                                ToolCategories.WRITE_TOOLS +
                                ToolCategories.ADMIN_TOOLS
             return toolName in allKnownTools
-        }
-
-        /**
-         * Query helper for finding permissions by API key.
-         */
-        fun byApiKeyQuery(): String {
-            return "apiKeyId = :apiKeyId AND isActive = true ORDER BY toolName"
-        }
-
-        /**
-         * Query helper for finding permissions by tool.
-         */
-        fun byToolQuery(): String {
-            return "toolName = :toolName AND isActive = true ORDER BY priority DESC"
         }
     }
 

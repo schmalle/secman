@@ -52,13 +52,11 @@ class RejectExceptionRequestTool(
         requireDelegation(context)?.let { return it }
 
         // Require ADMIN or SECCHAMPION role
-        val hasApprovalRole = context.isAdmin || context.delegatedUserRoles?.contains("SECCHAMPION") == true
-        if (!hasApprovalRole) {
-            return McpToolResult.error(
-                "APPROVAL_ROLE_REQUIRED",
-                "ADMIN or SECCHAMPION role required to reject requests"
-            )
-        }
+        requireAnyRole(
+            context, "SECCHAMPION",
+            code = "APPROVAL_ROLE_REQUIRED",
+            message = "ADMIN or SECCHAMPION role required to reject requests"
+        )?.let { return it }
 
         try {
             // Parse requestId
