@@ -2,6 +2,7 @@ package com.secman.mcp.tools
 
 import com.secman.domain.McpOperation
 import com.secman.dto.mcp.McpExecutionContext
+import com.secman.repository.NormRepository
 import com.secman.repository.RequirementRepository
 import com.secman.service.RequirementIdService
 import jakarta.inject.Inject
@@ -13,11 +14,13 @@ import jakarta.transaction.Transactional
  * Feature: 057-cli-mcp-requirements
  *
  * ADMIN role is required and confirmation flag must be true.
- * Returns the count of deleted requirements.
+ * Also deletes all standards/norms, since they only exist to be attached
+ * to requirements. Returns the count of deleted requirements and norms.
  */
 @Singleton
 open class DeleteAllRequirementsTool(
     @Inject private val requirementRepository: RequirementRepository,
+    @Inject private val normRepository: NormRepository,
     @Inject private val requirementIdService: RequirementIdService
 ) : McpTool {
 
@@ -60,16 +63,20 @@ open class DeleteAllRequirementsTool(
         try {
             // Count before delete for response
             val count = requirementRepository.count()
+            val normCount = normRepository.count()
 
             // Delete all requirements
             requirementRepository.deleteAll()
+            // Delete all standards/norms too, now that no requirement references them
+            normRepository.deleteAll()
             // Reset the REQ-NNN sequence so the next imported requirement starts at REQ-001
             requirementIdService.resetSequence()
 
             val result = mapOf(
                 "success" to true,
                 "deletedCount" to count,
-                "message" to "Deleted $count requirements"
+                "deletedNormCount" to normCount,
+                "message" to "Deleted $count requirements and $normCount standards"
             )
 
             return McpToolResult.success(result)

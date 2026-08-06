@@ -133,7 +133,7 @@ const RequirementsAdmin = () => {
             const data = await response.json();
 
             if (response.ok) {
-                setDeleteSuccess(`Successfully deleted ${data.deletedCount} requirements.`);
+                setDeleteSuccess(`Successfully deleted ${data.deletedRequirements ?? data.deletedCount} requirements and ${data.deletedNorms ?? 0} standards.`);
                 setRequirementsCount(0);
                 setShowSecondModal(false);
                 setConfirmationText('');
@@ -233,8 +233,8 @@ const RequirementsAdmin = () => {
                 <div className="card-body">
                     <h6>Delete All Requirements</h6>
                     <p className="text-muted">
-                        This action will permanently delete all requirements from the system. 
-                        This cannot be undone and will also remove all associated relationships.
+                        This action will permanently delete all requirements and all standards (norms)
+                        from the system. This cannot be undone and will also remove all associated relationships.
                     </p>
                     <button 
                         className="btn btn-danger"
@@ -266,12 +266,13 @@ const RequirementsAdmin = () => {
                             </div>
                             <div className="modal-body">
                                 <div className="alert alert-danger">
-                                    <strong>Warning:</strong> You are about to delete all requirements!
+                                    <strong>Warning:</strong> You are about to delete all requirements and all standards!
                                 </div>
                                 <p><strong>This action will:</strong></p>
                                 <ul>
                                     <li>Delete all <strong>{requirementsCount}</strong> requirements</li>
-                                    <li>Remove all associated relationships (use case associations)</li>
+                                    <li>Delete all standards (norms), e.g. ISO 27001, IEC 62443</li>
+                                    <li>Remove all associated relationships (use case and norm associations)</li>
                                     <li>Cannot be undone</li>
                                 </ul>
                                 <p className="mb-0">Are you sure you want to continue?</p>
@@ -303,7 +304,7 @@ const RequirementsAdmin = () => {
                                 <div className="alert alert-danger">
                                     <strong>FINAL WARNING:</strong> This action is irreversible!
                                 </div>
-                                <p>To confirm deletion of all <strong>{requirementsCount}</strong> requirements, type <strong>DELETE ALL</strong> in the box below:</p>
+                                <p>To confirm deletion of all <strong>{requirementsCount}</strong> requirements and all standards, type <strong>DELETE ALL</strong> in the box below:</p>
                                 
                                 {deleteError && <div className="alert alert-danger">{deleteError}</div>}
                                 
