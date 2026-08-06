@@ -81,8 +81,14 @@ MCP tool families mirror these (delegation required): `list_/create_/delete_rele
 ./gradlew :backendng:test --tests "*ServiceTest*"        # unit
 ./gradlew :backendng:test --tests "*IntegrationTest*"    # integration (external MariaDB, see Test Infrastructure)
 ./gradlew :cli:test
+cd src/frontend && npm test                              # frontend unit tier (node:test, no framework dep)
+./scripts/test-coverage-report.sh                        # name-reference coverage per area (NOT line coverage)
 ./tests/e2e/run-e2e.sh                                   # Playwright with pass-cli secrets
 ```
+
+`/testsuite` runs every tier above plus the frontend build gate, `check-skill-sync.sh`
+and the coverage report in one pass. It never starts the stack, so it does not
+discharge principle 5 or the principle-7 gates.
 
 CrowdStrike monitoring: `src/clinotify/check_crowdstrike_checkin.py` polls `/api/crowdstrike/last-checkin` and Telegrams when stale. Stdlib-only.
 
@@ -123,7 +129,7 @@ Per server: `findOrCreateAsset` → `vulnerabilityRepository.deleteByAssetId()` 
 
 ## Test Infrastructure
 
-JUnit 6, Mockk, AssertJ, `@MicronautTest`. Integration tests run against an **external MariaDB** (no Docker/Testcontainers). Helpers in `src/backendng/src/test/kotlin/com/secman/testutil/`:
+JUnit 6, Mockk, AssertJ, `@MicronautTest`. Integration tests run against an **external MariaDB** (no Docker/Testcontainers). **`junit-jupiter-params` is not on the classpath** — `@ParameterizedTest` will not compile; loop inside a plain `@Test`. Helpers in `src/backendng/src/test/kotlin/com/secman/testutil/`:
 - `BaseIntegrationTest` — base for DB-backed tests; datasource comes from `application-test.yml`.
 - `TestDataFactory` — admin/vuln/regular user, asset, vulnerability builders.
 - `TestAuthHelper` — JWT login → bearer token.
@@ -133,6 +139,13 @@ Datasource env (set via `pass-cli`; defaults to a local `secman_test`): `TEST_DB
 ```kotlin
 class MyIntegrationTest : BaseIntegrationTest() { @Inject lateinit var repo: Repository }
 ```
+
+**Frontend unit tier**: `cd src/frontend && npm test` — Node's own runner with native
+TypeScript stripping, no test-framework dependency. Tests live beside their module as
+`<module>.test.ts`. Imports resolve `.ts` only: Node cannot parse JSX, so pure logic
+must be extracted out of `.tsx` into a sibling `.ts` module to be unit-testable (the
+resolver hook in `src/frontend/test/` handles extensionless specifiers and raises a
+pointed error on `.tsx`). Details in `docs/TESTING.md` §Frontend.
 
 One-time local setup (admin DB user):
 ```sql
@@ -179,6 +192,6 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **Test-coverage evaluation, repaired frontend test tier, `/testsuite` skill** — the frontend gate `npm ci && npm run build` was unrunnable (lockfile drifted from `package.json`), and 8 `*.test.ts` files existed with no npm script, no docs and 2 hard failures. Now `npm test` on Node's own runner (no framework dep) with a resolver hook in `src/frontend/test/`: **59 passing**. Found a real bug — `getPermissionErrorMessage('constructor')` returned an `Object.prototype` member instead of the fallback. New tests: `permissions` (UI half of Hard Principle #2), `cacheUtils`, `severityColors`, `ExcelSanitizerTest` (the export formula-injection control had zero), `AwsInstanceIdRecognitionTest` (two duplicated regexes must agree). New `./scripts/test-coverage-report.sh` (name-reference, **not** line coverage; controller/mcp-tools understated) and `/testsuite` skill for the whole fast tier. Fixed a permanent false positive in `check-skill-sync.sh`. Full detail below.
 - **Documentation correctness sweep (living docs)** — repo-wide review of root docs, `docs/`, `.claude`/`.agents` skills+commands, and `src/`/`scripts/`/`tests/`/`testdata/` READMEs (`specs/` excluded as frozen history). Fixed stale version banners (build files are ground truth, not the docs), Java 21→25 leftovers, docs telling readers to bypass the canonical dev-start scripts, two CLI docs whose examples used a deprecated/non-functional auth flag, a fabricated CLI config schema, and several `.claude`↔`.agents` skill-mirror drifts. Full detail below.
 - **MCP simplification pass (no behaviour change)** — tools self-register: `McpToolRegistry` injects `List<McpTool>`, so a new `@Singleton` tool needs no registry edit. The two name→permission `when` blocks are now declarative tables in `mcp/McpToolPermissions.kt` — `LISTING` (gates `tools/list`) and `CALLING` (gates `tools/call`), "caller holds any of these permissions"; both verified identical to what they replaced for all 85 tools, and the known `LISTING`/`CALLING` drift is now visible in one file. Duplicate rate-limiter deleted, controller auth+delegation preambles extracted, 24 tools' inline role checks moved onto `McpToolGuards` (`requireAnyRole(code=…)`, new `requireAnyUserRole` for checks an admin API key must *not* bypass) with every error code/message preserved. Net −800 lines.
-- **EDR-coverage KPI + `NO_EDR` exception kind** — dashboard card (ADMIN/SECCHAMPION) showing the share of EC2 instances (`cloudInstanceId` non-blank) running a CrowdStrike sensor. `GET /api/dashboard/edr-coverage-kpi`, cache-only. Signal is the new `asset.crowdstrike_agent_seen_at` (V248), stamped from the reconcile-stale call's Stage-1 `queriedHosts` — **not** `crowdstrike_last_imported_at`, which the `--severity CRITICAL,HIGH` filter makes a systematic undercount. Freshness window 7 days. Third exception axis `kind {VULNERABILITY, NO_EDR}` (V247): NO_EDR is `scope=ASSET` only, reuses the whole request/approval workflow, **suppresses nothing** (guarded in all three match predicates; SQL guard tolerates NULL on purpose), and only leaves the KPI denominator. Docs: `docs/CROWDSTRIKE_IMPORT.md`.

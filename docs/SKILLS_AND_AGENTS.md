@@ -5,12 +5,17 @@ Project-local Claude Code automation defined under `.claude/` (mirrored to
 
 ## Skills — which one to use
 
-**See `docs/SKILLS.md`** for the authoritative routing guide to all ten
-E2E/testbed skills (`/finalizer`, `/e2ejs`, `/e2evulnexception`,
-`/e2eexception`, `/admin-asset-e2e`, `/importtest`, `/crowdstrike-vuln-match`,
-`/aws-account-risk-assessment`, `/aws-account-owner-email`,
-`/createtestdata`) — what each one does, which are destructive, and the
-pairs that get confused. This file does not duplicate that content.
+**See `docs/SKILLS.md`** for the authoritative routing guide to all eleven
+test/testbed skills (`/finalizer`, `/testsuite`, `/e2ejs`,
+`/e2evulnexception`, `/e2eexception`, `/admin-asset-e2e`, `/importtest`,
+`/crowdstrike-vuln-match`, `/aws-account-risk-assessment`,
+`/aws-account-owner-email`, `/createtestdata`) — what each one does, which are
+destructive, and the pairs that get confused. This file does not duplicate that
+content.
+
+Two of the eleven never touch the running stack: `/finalizer` (docs and
+contract drift) and `/testsuite` (unit/integration tests plus a coverage-gap
+report). The other nine cold-start backend and frontend.
 
 ## SpecKit commands (`/speckit.*`)
 
