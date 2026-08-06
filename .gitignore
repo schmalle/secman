@@ -114,3 +114,13 @@ crowdstrike-vulnerability-match-report-cs-owner-30d-post-sync.json
 /extensions/secman_ai_github/
 /extensions/secman_visual_check/
 /src/backendng/exports
+
+# Excel workbooks
+# Imports, exports and scratch spreadsheets must never be committed. Only
+# fixtures under a testdata/ directory (at any depth) and the one sample file
+# the frontend actually ships are tracked.
+*.xlsx
+!**/testdata/**/*.xlsx
+!src/frontend/public/sample-files/user-mapping-template.xlsx
+# Excel lock/temp files are never wanted, not even inside testdata/
+~$*.xlsx
