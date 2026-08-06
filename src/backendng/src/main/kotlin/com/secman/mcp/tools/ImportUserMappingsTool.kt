@@ -146,7 +146,7 @@ class ImportUserMappingsTool(
         }
 
         return try {
-            val result = bulkImportService.execute(request, context.delegatedUserId)
+            val result = bulkImportService.execute(request, context.delegatedUserId, "MCP import_user_mappings")
 
             log.info(
                 "AUDIT: operation=MCP_IMPORT_USER_MAPPINGS, actor={}, dryRun={}, " +

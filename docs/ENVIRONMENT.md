@@ -68,6 +68,22 @@ mid-import. The manual admin "Refresh Now" endpoint bypasses both.
 | `MATERIALIZED_VIEW_REFRESH_MIN_INTERVAL_SECONDS` | `60` | Minimum gap between one refresh cycle completing and the next starting. |
 | `MATERIALIZED_VIEW_REFRESH_QUIET_PERIOD_SECONDS` | `120` | A deferred refresh waits until this long has passed with **no** new request, so a whole import coalesces into one refresh. Raise if imports still overlap a refresh; lower for fresher dashboards sooner after an import. |
 
+### Chat notifications (Slack, Telegram)
+Per-user, per-channel subscriptions to reportable events (currently: CrowdStrike import run
+completed, AWS account import completed). All credentials — the workspace bot tokens, each
+user's Slack webhook URL and each user's Telegram chat ID / personal bot token — live in the
+database, encrypted; **none of them are environment variables**. These settings only cover
+transport endpoints and timing.
+
+| Var | Default | Effect |
+|---|---|---|
+| `SECMAN_SLACK_WEBHOOK_URL_PREFIX` | `https://hooks.slack.com/` | Required prefix (and host) for a user-supplied Slack incoming webhook. This is the **SSRF boundary** — the backend performs the outbound request against a value a non-admin user typed, so only point this at a deliberately chosen Slack-compatible relay. |
+| `SECMAN_SLACK_API_BASE_URL` | `https://slack.com/api` | Base URL for `chat.postMessage` (workspace-bot delivery). |
+| `SECMAN_SLACK_TIMEOUT_SECONDS` | `10` | Connect/read timeout for Slack calls. |
+| `SECMAN_TELEGRAM_API_BASE_URL` | `https://api.telegram.org` | Base URL for `sendMessage`. Fixed configuration, never user input. |
+| `SECMAN_TELEGRAM_TIMEOUT_SECONDS` | `10` | Connect/read timeout for Telegram calls. |
+| `SECMAN_CHAT_CROWDSTRIKE_QUIET_PERIOD_SECONDS` | `180` | A CrowdStrike import run counts as finished after this long with no import activity. A full CLI import arrives as ~94 sub-batch requests across 3 concurrent workers with no well-defined last batch, so exactly one "report completed" message is sent once the run goes quiet. Raise if one run is reported as several; lower for a faster message after an import. |
+
 ### Vulnerability dating
 | Var | Default | Effect |
 |---|---|---|

@@ -21,7 +21,8 @@ import org.slf4j.LoggerFactory
 open class UserMappingBulkImportService(
     private val userMappingService: UserMappingService,
     private val newAccountNotificationService: NewAccountNotificationService,
-    private val awsAccountRiskAssessmentService: AwsAccountRiskAssessmentService
+    private val awsAccountRiskAssessmentService: AwsAccountRiskAssessmentService,
+    private val importCompletionNotifier: ImportCompletionNotifier
 ) {
     private val logger = LoggerFactory.getLogger(UserMappingBulkImportService::class.java)
     private val emailRegex = Regex("^[^@]+@[^@]+\\.[^@]+$")
@@ -56,7 +57,11 @@ open class UserMappingBulkImportService(
      * @param requestorUserId the ADMIN who triggered the import; becomes the
      *        requestor of any risk assessment started here.
      */
-    open fun execute(request: BulkUserMappingRequest, requestorUserId: Long?): BulkUserMappingResponse {
+    open fun execute(
+        request: BulkUserMappingRequest,
+        requestorUserId: Long?,
+        source: String = "Bulk import"
+    ): BulkUserMappingResponse {
         val result = userMappingService.bulkCreateMappings(request)
 
         // Send the operator email AFTER the transaction has committed, so a
@@ -92,6 +97,21 @@ open class UserMappingBulkImportService(
             finalResult.totalProcessed, finalResult.created, finalResult.createdPending,
             finalResult.skipped, finalResult.newAccounts.size, finalResult.riskAssessments.size
         )
+
+        // Chat fan-out (Slack/Telegram), last and best-effort: a dry run changed nothing worth announcing,
+        // and like the two side effects above this runs only after the import committed.
+        if (!request.dryRun) {
+            importCompletionNotifier.awsAccountImportCompleted(
+                source = source,
+                triggeredBy = null,
+                processed = finalResult.totalProcessed,
+                imported = finalResult.created + finalResult.createdPending,
+                skipped = finalResult.skipped,
+                errorCount = finalResult.errors.size,
+                newAccountIds = finalResult.newAccounts.map { it.awsAccountId }
+            )
+        }
+
         return finalResult
     }
 }

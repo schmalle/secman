@@ -41,7 +41,8 @@ open class ImportController(
     private val userMappingImportService: com.secman.service.UserMappingImportService,
     private val csvUserMappingParser: com.secman.service.CSVUserMappingParser,
     private val assetImportService: com.secman.service.AssetImportService,
-    private val requirementImportService: com.secman.service.RequirementImportService
+    private val requirementImportService: com.secman.service.RequirementImportService,
+    private val importCompletionNotifier: com.secman.service.ImportCompletionNotifier
 ) {
     
     private val log = LoggerFactory.getLogger(ImportController::class.java)
@@ -486,6 +487,19 @@ open class ImportController(
             }
 
             log.info("Successfully imported user mappings: {}", response.message)
+
+            // Chat fan-out for "New AWS account import completed". This path parses the
+            // sheet row by row and has no new-vs-known account breakdown, so the event
+            // carries the counts only.
+            importCompletionNotifier.awsAccountImportCompleted(
+                source = "Excel upload (${xlsxFile.filename.orEmpty()})",
+                triggeredBy = null,
+                processed = response.imported + response.skipped,
+                imported = response.imported,
+                skipped = response.skipped,
+                errorCount = response.errors.size
+            )
+
             HttpResponse.ok(response)
 
         } catch (e: IllegalArgumentException) {
@@ -591,6 +605,17 @@ open class ImportController(
                 val duration = System.currentTimeMillis() - startTime
                 log.info("CSV upload completed: user={}, imported={}, skipped={}, duration={}ms",
                          username, result.imported, result.skipped, duration)
+
+                // Chat fan-out for "New AWS account import completed" (counts only — this
+                // path has no new-vs-known account breakdown).
+                importCompletionNotifier.awsAccountImportCompleted(
+                    source = "CSV upload (${csvFile.filename.orEmpty()})",
+                    triggeredBy = username,
+                    processed = result.imported + result.skipped,
+                    imported = result.imported,
+                    skipped = result.skipped,
+                    errorCount = result.errors.size
+                )
 
                 HttpResponse.ok(result)
 

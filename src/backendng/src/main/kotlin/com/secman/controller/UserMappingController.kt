@@ -175,7 +175,7 @@ open class UserMappingController(
 
         return try {
             HttpResponse.ok(
-                bulkImportService.execute(request, getUserIdFromAuthenticationOrNull(authentication))
+                bulkImportService.execute(request, getUserIdFromAuthenticationOrNull(authentication), "Bulk import API")
             )
         } catch (e: IllegalArgumentException) {
             logger.warn("Bulk create validation failed: ${e.message}")

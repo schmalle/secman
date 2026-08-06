@@ -66,6 +66,7 @@ Authoritative filter: `AssetFilterService.getAccessibleAssets()`. SQL pre-filter
 | User Dashboard | `GET /api/user-dashboard` (aggregated personal todos, single round-trip) | auth |
 | Security KPIs | `GET /api/dashboard/{aws-clean-server-kpi, edr-coverage-kpi}` — precomputed cache reads only, never live queries | ADMIN/SECCHAMPION |
 | Notifications | `GET/PUT /api/notification-preferences`; `GET /api/notification-logs`; `.../export` (ADMIN) | mixed |
+| Chat Notifications | `GET /api/notification-events` (event catalogue); `GET/PUT /api/slack/settings`, `POST .../test`; `GET/PUT /api/telegram/settings`, `POST .../test` (self-scoped); `GET/PUT /api/slack/config`, `POST .../test`, `GET/PUT /api/telegram/config` (ADMIN) | mixed |
 | CLI | `POST /api/vulnerabilities/cli-add` (ADMIN/VULN; auto-creates asset) | ADMIN/VULN |
 
 MCP tool families mirror these (delegation required): `list_/create_/delete_release`, `set_release_status`, `compare_releases`; `list_workgroup_aws_accounts`, `add_/remove_workgroup_aws_account`, `list_workgroup_ad_domains`, `add_/remove_workgroup_ad_domain`; `list_/create_/delete_aws_account_sharing`; `get_vulnerability_heatmap`, `refresh_vulnerability_heatmap`; etc. See `docs/MCP.md`.
@@ -121,6 +122,22 @@ Code samples in `docs/ARCHITECTURE.md` §Patterns — CSV/Excel import (validate
 - Frontend: the JWT lives in the **HttpOnly `secman_auth` cookie** (`AuthCookieService.AUTH_COOKIE_NAME`), not in JS-readable storage. Axios sends it via `withCredentials: true` (set globally in `utils/csrf.ts`); fetch calls use the `authenticated*` helpers in `utils/auth.ts` / `services/`. `sessionStorage["user"]` holds only the display/role payload — never a token.
 - External/CLI clients: `POST /api/auth/login` returns the JWT **only** in `Set-Cookie: secman_auth=…`; they re-send it as `Authorization: Bearer …` (the bearer reader stays active alongside cookie auth).
 - SSE: JWT in `?token=…` query param (EventSource has no header support).
+
+### Chat notifications (Slack / Telegram)
+Publishers stay transport-agnostic: publish a `ChatNotificationEvent` where the work completes;
+`ChatNotificationEventListener` (`@EventListener @Async`) → `ChatNotificationService` does
+subscriber lookup, destination resolution and rendering. **A new reportable event = one
+`NotificationEventType` constant + one publish call** (both settings APIs, both settings UIs and
+the dispatcher derive from the enum). Subscriptions are `(user_id, channel, event_type)` rows, so
+a new event or channel needs no migration and per-channel saves never disturb each other.
+Dispatch must stay non-`@Transactional` — it does per-recipient HTTP with a multi-second timeout.
+**Security**: the per-user Slack webhook URL is the only user-supplied URL the backend fetches —
+host-allowlisted in `SlackClient.validateWebhookUrl`, redirects never followed. The Telegram bot
+token goes in the request URL *path*, so `TelegramClient.validateBotToken` is a security control,
+not input hygiene. All credentials use `EncryptedStringConverter`, are never returned (only
+`…Configured` booleans), and accept `***HIDDEN***` back to mean "keep". Telegram sends with no
+`parse_mode` on purpose. CrowdStrike completion is detected by a quiet-period debounce in
+`ImportCompletionNotifier` (no last batch exists), AWS account imports publish inline post-commit.
 
 ### Transactional replace (CrowdStrike vuln import)
 Per server: `findOrCreateAsset` → `vulnerabilityRepository.deleteByAssetId()` → `saveAll`, all in one `@Transactional`. Idempotent; missing CVEs in the next import = remediation.
@@ -192,6 +209,6 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **Generic chat notifications (Slack + Telegram), per user** — users pick their own destination and, independently per channel, which events they want reported. Two events: "New CrowdStrike report completed" and "New AWS account import completed". Publishers stay transport-agnostic (`ChatNotificationEvent` → `@Async` listener → `ChatNotificationService`), subscriptions are `(user, channel, event_type)` rows so a new event or channel needs no migration, and destinations fall back personal→workspace on both channels. CrowdStrike has no last batch, so `ImportCompletionNotifier` debounces ~94 sub-batches into one event after a quiet period. Security-critical: the per-user Slack webhook URL is host-allowlisted (the only user-supplied URL the backend fetches) and the Telegram bot token's shape is validated because it goes in the request URL path; all credentials encrypted, never returned, mask-preserved. New: `/chat-notifications`, `/admin/chat-config`, `V251__chat_notifications.sql`. **Backend is compile-unverified** — egress policy blocked Gradle/Maven Central in that session. Full detail below.
 - **Test-coverage evaluation, repaired frontend test tier, `/testsuite` skill** — the frontend gate `npm ci && npm run build` was unrunnable (lockfile drifted from `package.json`), and 8 `*.test.ts` files existed with no npm script, no docs and 2 hard failures. Now `npm test` on Node's own runner (no framework dep) with a resolver hook in `src/frontend/test/`: **59 passing**. Found a real bug — `getPermissionErrorMessage('constructor')` returned an `Object.prototype` member instead of the fallback. New tests: `permissions` (UI half of Hard Principle #2), `cacheUtils`, `severityColors`, `ExcelSanitizerTest` (the export formula-injection control had zero), `AwsInstanceIdRecognitionTest` (two duplicated regexes must agree). New `./scripts/test-coverage-report.sh` (name-reference, **not** line coverage; controller/mcp-tools understated) and `/testsuite` skill for the whole fast tier. Fixed a permanent false positive in `check-skill-sync.sh`. Full detail below.
 - **Documentation correctness sweep (living docs)** — repo-wide review of root docs, `docs/`, `.claude`/`.agents` skills+commands, and `src/`/`scripts/`/`tests/`/`testdata/` READMEs (`specs/` excluded as frozen history). Fixed stale version banners (build files are ground truth, not the docs), Java 21→25 leftovers, docs telling readers to bypass the canonical dev-start scripts, two CLI docs whose examples used a deprecated/non-functional auth flag, a fabricated CLI config schema, and several `.claude`↔`.agents` skill-mirror drifts. Full detail below.
-- **MCP simplification pass (no behaviour change)** — tools self-register: `McpToolRegistry` injects `List<McpTool>`, so a new `@Singleton` tool needs no registry edit. The two name→permission `when` blocks are now declarative tables in `mcp/McpToolPermissions.kt` — `LISTING` (gates `tools/list`) and `CALLING` (gates `tools/call`), "caller holds any of these permissions"; both verified identical to what they replaced for all 85 tools, and the known `LISTING`/`CALLING` drift is now visible in one file. Duplicate rate-limiter deleted, controller auth+delegation preambles extracted, 24 tools' inline role checks moved onto `McpToolGuards` (`requireAnyRole(code=…)`, new `requireAnyUserRole` for checks an admin API key must *not* bypass) with every error code/message preserved. Net −800 lines.

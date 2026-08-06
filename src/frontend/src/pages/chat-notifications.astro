@@ -1,0 +1,38 @@
+---
+import Layout from '../layouts/Layout.astro';
+import SlackNotificationSettings from '../components/SlackNotificationSettings';
+import TelegramNotificationSettings from '../components/TelegramNotificationSettings';
+
+/**
+ * Per-user chat notification settings (Slack and Telegram).
+ *
+ * Route: /chat-notifications
+ * Access: any authenticated user — every user configures their own destinations and
+ * chooses, per channel, which events they want reported.
+ *
+ * The two cards load and save independently: subscriptions are stored per channel, so
+ * saving one never disturbs the other.
+ */
+---
+
+<Layout title="Chat Notifications">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-lg-9">
+        <h1 class="mt-4 mb-2">Chat Notifications</h1>
+        <p class="text-muted mb-4">
+          Choose where SecMan should message you and which events it should report. Slack and
+          Telegram are configured independently — you can enable either, both, or neither.
+        </p>
+      </div>
+    </div>
+    <div class="row g-4">
+      <div class="col-lg-6">
+        <SlackNotificationSettings client:load />
+      </div>
+      <div class="col-lg-6">
+        <TelegramNotificationSettings client:load />
+      </div>
+    </div>
+  </div>
+</Layout>
