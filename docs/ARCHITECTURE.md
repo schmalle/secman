@@ -18,7 +18,7 @@
         [CLI] ─── HTTPS ──► Backend REST API
 ```
 
-Stack: Kotlin 2.4.10 / Java 25 · Micronaut 5.0 · Hibernate JPA · Astro 7.1 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.6.1 · Picocli 4.7.7 · AWS SDK v2.
+Stack: Kotlin 2.4.10 / Java 25 · Micronaut 5.0 · Hibernate JPA · Astro 7.2 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.6.1 · Picocli 4.7.7 · AWS SDK v2.
 
 ## Backend (`src/backendng/`)
 
