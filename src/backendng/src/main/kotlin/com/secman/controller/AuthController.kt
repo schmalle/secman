@@ -3,6 +3,7 @@ package com.secman.controller
 import com.secman.domain.User
 import com.secman.repository.AwsAccountSharingRepository
 import com.secman.repository.UserMappingRepository
+import com.secman.repository.UserProfilePictureRepository
 import com.secman.repository.UserRepository
 import com.secman.repository.WorkgroupRepository
 import com.secman.service.ActiveUserTracker
@@ -36,7 +37,8 @@ open class AuthController(
     private val tokenGenerator: TokenGenerator,
     private val inputValidationService: InputValidationService,
     private val authCookieService: AuthCookieService,
-    private val activeUserTracker: ActiveUserTracker
+    private val activeUserTracker: ActiveUserTracker,
+    private val profilePictureRepository: UserProfilePictureRepository
 ) {
 
     private val passwordEncoder = BCryptPasswordEncoder()
@@ -115,7 +117,13 @@ open class AuthController(
         val roles: List<String>,
         val workgroupCount: Long = 0,
         val awsAccountCount: Long = 0,
-        val domainCount: Long = 0
+        val domainCount: Long = 0,
+        // Feature: Profile Picture Management. This endpoint runs on every page load
+        // (Layout.astro) and feeds window.currentUser, so it is the single channel that keeps the
+        // header avatar fresh everywhere. hasProfilePicture must gate the <img> - an
+        // unconditional request would 404 on every page for users without a picture.
+        val hasProfilePicture: Boolean = false,
+        val profilePictureUpdatedAt: java.time.Instant? = null
     )
 
     @Serdeable
@@ -257,6 +265,9 @@ open class AuthController(
         val directAwsCount = userMappingRepository.countDistinctAwsAccountsByEmail(user.email)
         val sharedAwsCount = awsAccountSharingRepository.countByTargetUserId(user.id!!)
 
+        // Blob-free projection: findByUserId would load the LONGBLOB on every page load.
+        val pictureUpdatedAt = profilePictureRepository.findUpdatedAtByUserId(user.id!!).orElse(null)
+
         val response = StatusResponse(
             id = user.id!!,
             username = user.username,
@@ -264,7 +275,9 @@ open class AuthController(
             roles = user.roles.map { it.name },
             workgroupCount = workgroupRepository.countEffectiveWorkgroupsByUserEmail(user.email),
             awsAccountCount = directAwsCount + sharedAwsCount,
-            domainCount = userMappingRepository.countDistinctDomainsByEmail(user.email)
+            domainCount = userMappingRepository.countDistinctDomainsByEmail(user.email),
+            hasProfilePicture = pictureUpdatedAt != null,
+            profilePictureUpdatedAt = pictureUpdatedAt
         )
 
         return HttpResponse.ok(response)
