@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import userProfileService from '../services/userProfileService';
 import type { UserProfileData } from '../services/userProfileService';
 import PasskeyManagement from './PasskeyManagement';
+import { getDashboardPreferences, updateDashboardPreferences } from '../services/dashboardPreferenceService';
+import type { DashboardPreference } from '../services/dashboardPreferenceService';
+import { hasRole } from '../utils/auth';
 
 /**
  * User Profile Component
@@ -27,6 +30,12 @@ export default function UserProfile() {
   const [mfaLoading, setMfaLoading] = useState(false);
   const [mfaError, setMfaError] = useState<string | null>(null);
 
+  // Dashboard KPI preferences (ADMIN/SECCHAMPION only)
+  const [dashboardPrefsVisible, setDashboardPrefsVisible] = useState(false);
+  const [dashboardPrefs, setDashboardPrefs] = useState<DashboardPreference | null>(null);
+  const [dashboardPrefsLoading, setDashboardPrefsLoading] = useState(false);
+  const [dashboardPrefsError, setDashboardPrefsError] = useState<string | null>(null);
+
   // Password change state (Feature 051)
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -47,6 +56,10 @@ export default function UserProfile() {
       const data = await userProfileService.getProfile();
       setProfile(data);
       await fetchMfaStatus();
+      if (hasRole(['ADMIN', 'SECCHAMPION'])) {
+        setDashboardPrefsVisible(true);
+        await fetchDashboardPreferences();
+      }
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Failed to load profile. Please try again.';
       setError(errorMessage);
@@ -75,6 +88,36 @@ export default function UserProfile() {
       setMfaError(errorMessage);
     } finally {
       setMfaLoading(false);
+    }
+  };
+
+  const fetchDashboardPreferences = async () => {
+    try {
+      const prefs = await getDashboardPreferences();
+      setDashboardPrefs(prefs);
+    } catch (err: any) {
+      console.error('Failed to fetch dashboard preferences', err);
+    }
+  };
+
+  const handleDashboardKpiToggle = async (
+    field: 'showAwsCleanServerKpi' | 'showEdrCoverageKpi',
+    value: boolean
+  ) => {
+    if (!dashboardPrefs) return;
+    try {
+      setDashboardPrefsLoading(true);
+      setDashboardPrefsError(null);
+      const updated = await updateDashboardPreferences({
+        showAwsCleanServerKpi: field === 'showAwsCleanServerKpi' ? value : dashboardPrefs.showAwsCleanServerKpi,
+        showEdrCoverageKpi: field === 'showEdrCoverageKpi' ? value : dashboardPrefs.showEdrCoverageKpi
+      });
+      setDashboardPrefs(updated);
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || 'Failed to update dashboard preferences';
+      setDashboardPrefsError(errorMessage);
+    } finally {
+      setDashboardPrefsLoading(false);
     }
   };
 
@@ -339,6 +382,61 @@ export default function UserProfile() {
           )}
         </div>
       </div>
+
+      {/* Dashboard KPI Preferences Card */}
+      {dashboardPrefsVisible && dashboardPrefs && (
+        <div className="card mt-3">
+          <div className="card-body">
+            <h5 className="card-title">Dashboard KPI Preferences</h5>
+            <p className="text-muted small">
+              Choose which security KPI cards appear on your home dashboard.
+            </p>
+
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <div>
+                <h6 className="mb-0">AWS Servers Without Old Vulnerabilities</h6>
+              </div>
+              <div className="form-check form-switch">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  role="switch"
+                  id="showAwsCleanServerKpiToggle"
+                  checked={dashboardPrefs.showAwsCleanServerKpi}
+                  onChange={(e) => handleDashboardKpiToggle('showAwsCleanServerKpi', e.target.checked)}
+                  disabled={dashboardPrefsLoading}
+                  style={{ cursor: dashboardPrefsLoading ? 'wait' : 'pointer', width: '3rem', height: '1.5rem' }}
+                />
+              </div>
+            </div>
+
+            <div className="d-flex align-items-center justify-content-between">
+              <div>
+                <h6 className="mb-0">EC2 Instances With CrowdStrike Installed</h6>
+              </div>
+              <div className="form-check form-switch">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  role="switch"
+                  id="showEdrCoverageKpiToggle"
+                  checked={dashboardPrefs.showEdrCoverageKpi}
+                  onChange={(e) => handleDashboardKpiToggle('showEdrCoverageKpi', e.target.checked)}
+                  disabled={dashboardPrefsLoading}
+                  style={{ cursor: dashboardPrefsLoading ? 'wait' : 'pointer', width: '3rem', height: '1.5rem' }}
+                />
+              </div>
+            </div>
+
+            {dashboardPrefsError && (
+              <div className="alert alert-danger mt-3 mb-0" role="alert">
+                <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                {dashboardPrefsError}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

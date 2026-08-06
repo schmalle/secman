@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { authenticatedGet, getUser, hasRole } from '../utils/auth';
 import { formatServerDate } from '../utils/dateUtils';
+import { getDashboardPreferences } from '../services/dashboardPreferenceService';
 
 type StatItem = {
   label: string;
@@ -98,12 +99,12 @@ const HomeStatisticsDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardState>(initialState);
   const [userName, setUserName] = useState('there');
   const [isAdmin, setIsAdmin] = useState(false);
-  const [showSecurityKpis, setShowAwsCleanServerKpi] = useState(false);
+  const [showAwsCleanServerKpiCard, setShowAwsCleanServerKpiCard] = useState(false);
+  const [showEdrCoverageKpiCard, setShowEdrCoverageKpiCard] = useState(false);
 
   useEffect(() => {
     setUserName(getUser()?.username ?? 'there');
     setIsAdmin(hasRole('ADMIN'));
-    setShowAwsCleanServerKpi(hasRole(['ADMIN', 'SECCHAMPION']));
 
     const load = async () => {
       const next: DashboardState = { ...initialState };
@@ -152,6 +153,20 @@ const HomeStatisticsDashboard: React.FC = () => {
       }
 
       if (hasRole(['ADMIN', 'SECCHAMPION'])) {
+        // Default both KPI cards to visible; only hide one if the preference fetch
+        // succeeds and explicitly says so. A failed preference fetch must not blank
+        // either KPI card.
+        setShowAwsCleanServerKpiCard(true);
+        setShowEdrCoverageKpiCard(true);
+
+        try {
+          const prefs = await getDashboardPreferences();
+          setShowAwsCleanServerKpiCard(prefs.showAwsCleanServerKpi);
+          setShowEdrCoverageKpiCard(prefs.showEdrCoverageKpi);
+        } catch (error) {
+          console.warn('Failed to load dashboard KPI visibility preferences:', error);
+        }
+
         try {
           const kpiResp = await authenticatedGet('/api/dashboard/aws-clean-server-kpi');
           if (kpiResp.ok) {
@@ -233,13 +248,15 @@ const HomeStatisticsDashboard: React.FC = () => {
     });
   }
 
-  if (showSecurityKpis) {
+  if (showAwsCleanServerKpiCard) {
     cards.push({
       label: 'AWS Servers Without Old Vulnerabilities',
       value: formatAwsCleanServerKpi(stats.awsCleanServerKpi),
       subtitle: 'Share of AWS servers with no vulnerability older than 30 days',
       icon: 'bi-cloud-check'
     });
+  }
+  if (showEdrCoverageKpiCard) {
     cards.push({
       label: 'EC2 Instances With CrowdStrike Installed',
       value: formatEdrCoverageKpi(stats.edrCoverageKpi),
