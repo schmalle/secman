@@ -273,4 +273,73 @@ class ProfilePictureServiceTest {
 
         assertThat(result).isInstanceOf(ProfilePictureService.Result.Ok::class.java)
     }
+
+    // A real browser or curl multipart part arrives with contentType absent: Micronaut does not
+    // surface it on CompletedFileUpload, so the controller passes null. Treating that as a
+    // rejection made every upload fail in production while the suites stayed green, because
+    // every other test hard-codes the type and the integration test uses Micronaut's own
+    // MultipartBody - a wire format no real client produces. The content itself is the
+    // authoritative signal, so an absent declaration must fall back to sniffing, not reject.
+
+    @Test
+    fun `accepts a PNG when the client declares no content type`() {
+        val result = service().normalize(imageBytes(300, 300, "png"), "avatar.png", null)
+
+        assertThat(result).isInstanceOf(ProfilePictureService.Result.Ok::class.java)
+    }
+
+    @Test
+    fun `accepts a JPEG when the client declares no content type`() {
+        val result = service().normalize(
+            imageBytes(300, 300, "jpeg", alpha = false),
+            "avatar.jpg",
+            null
+        )
+
+        assertThat(result).isInstanceOf(ProfilePictureService.Result.Ok::class.java)
+    }
+
+    @Test
+    fun `accepts a GIF when the client declares no content type`() {
+        val result = service().normalize(
+            imageBytes(300, 300, "gif", alpha = false),
+            "avatar.gif",
+            null
+        )
+
+        assertThat(result).isInstanceOf(ProfilePictureService.Result.Ok::class.java)
+    }
+
+    @Test
+    fun `accepts an image when the client declares a blank content type`() {
+        val result = service().normalize(imageBytes(300, 300, "png"), "avatar.png", "   ")
+
+        assertThat(result).isInstanceOf(ProfilePictureService.Result.Ok::class.java)
+    }
+
+    @Test
+    fun `still rejects a non-image when the client declares no content type`() {
+        val html = "<html><body><script>alert(1)</script></body></html>".toByteArray()
+
+        val result = service().normalize(html, "avatar.png", null)
+
+        assertThat(result).isInstanceOf(ProfilePictureService.Result.Rejected::class.java)
+    }
+
+    @Test
+    fun `still rejects SVG when the client declares no content type`() {
+        val svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>".toByteArray()
+
+        val result = service().normalize(svg, "avatar.svg", null)
+
+        assertThat(result).isInstanceOf(ProfilePictureService.Result.Rejected::class.java)
+    }
+
+    @Test
+    fun `rejects a filename extension that disagrees with sniffed content when none is declared`() {
+        // The extension gate must keep working off the sniffed type, not silently pass.
+        val result = service().normalize(imageBytes(200, 200, "png"), "avatar.gif", null)
+
+        assertThat(result).isInstanceOf(ProfilePictureService.Result.Rejected::class.java)
+    }
 }

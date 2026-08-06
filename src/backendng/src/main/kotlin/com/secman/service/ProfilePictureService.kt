@@ -109,10 +109,18 @@ open class ProfilePictureService(
             return Result.Rejected("Image must be ${maxUploadBytes / (1024 * 1024)} MB or smaller")
         }
 
-        // 2. Declared MIME against the allowlist. SVG never reaches step 5 (the JDK has no SVG
+        // 2. Effective MIME against the allowlist. SVG never reaches step 5 (the JDK has no SVG
         // reader) but is rejected here explicitly so the message is useful.
-        val declared = declaredContentType?.substringBefore(';')?.trim()?.lowercase()
-        if (declared == null || declared.isBlank() || declared !in ALLOWED_UPLOAD_TYPES) {
+        //
+        // The declared type is a client claim and, for the multipart parts real browsers and
+        // curl send, Micronaut does not surface it on CompletedFileUpload at all - so it arrives
+        // null and treating that as a rejection failed every upload of every format. Fall back
+        // to the magic bytes, which are the stronger signal. A declaration that IS present is
+        // still honoured, so step 4 continues to cross-check a real claim against the content,
+        // and step 6 re-checks the reader's own format regardless of where this value came from.
+        val declaredRaw = declaredContentType?.substringBefore(';')?.trim()?.lowercase()
+        val declared = if (declaredRaw.isNullOrBlank()) sniffContentType(bytes) else declaredRaw
+        if (declared == null || declared !in ALLOWED_UPLOAD_TYPES) {
             return Result.Rejected("Only PNG, JPEG and GIF images are allowed")
         }
         if (!securityService.isAllowedMimeType(declared)) {

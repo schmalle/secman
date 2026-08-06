@@ -25,7 +25,8 @@ class UserMappingBulkImportServiceTest {
     private val riskAssessmentService = mockk<AwsAccountRiskAssessmentService>(relaxed = true)
 
     private val service = UserMappingBulkImportService(
-        userMappingService, newAccountNotificationService, riskAssessmentService
+        userMappingService, newAccountNotificationService, riskAssessmentService,
+        mockk(relaxed = true)
     )
 
     private val newAccount = NewAccountImportInfo("111111111111", listOf("alice@corp.com"))
