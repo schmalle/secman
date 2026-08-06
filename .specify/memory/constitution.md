@@ -19,6 +19,14 @@ Sync Impact Report:
   ✅ spec-template.md - Requirements align with new testing principle
   ✅ tasks-template.md - Test task warnings align with new testing principle
 - Follow-up TODOs: Update CLAUDE.md to reference constitution and remove Docker-First mentions
+
+- Version change: v2.0.0 → v2.0.1 (PATCH — non-semantic doc correction)
+- The v2.0.0 headings above never actually included a "Principle II" (the
+  file jumped straight from I to III), a pre-existing gap this amendment's
+  own renumbering note didn't catch. Headings below are renumbered I-V with
+  no gap; principle content and order are unchanged. RBAC's role list and
+  the Technology Stack table were also corrected to match the current
+  codebase (see CLAUDE.md, the authoritative source for both).
 -->
 
 # Secman Constitution
@@ -39,7 +47,7 @@ All features MUST implement security as a primary concern, not an afterthought.
 
 **Rationale**: Security vulnerabilities in a security requirements management tool are unacceptable and undermine the entire purpose of the system.
 
-### III. API-First
+### II. API-First
 
 All backend functionality MUST be exposed through well-defined RESTful APIs with backward compatibility guarantees.
 
@@ -53,7 +61,7 @@ All backend functionality MUST be exposed through well-defined RESTful APIs with
 
 **Rationale**: API-first design enables frontend flexibility, third-party integrations, and MCP tool support.
 
-### IV. User-Requested Testing
+### III. User-Requested Testing
 
 Test planning and preparation MUST ONLY occur when explicitly requested by the user.
 
@@ -65,13 +73,13 @@ Test planning and preparation MUST ONLY occur when explicitly requested by the u
 
 **Rationale**: Respects user autonomy and avoids unnecessary preparation work. Users may have different testing strategies, timelines, or may wish to focus on implementation first. This principle separates the requirement to WRITE tests (TDD) from the requirement to PLAN tests (user-driven).
 
-### V. Role-Based Access Control (RBAC)
+### IV. Role-Based Access Control (RBAC)
 
 Access control MUST be consistently enforced across all layers.
 
 **Requirements**:
 - All API endpoints MUST use @Secured annotations
-- Roles: USER, ADMIN, VULN, RELEASE_MANAGER
+- Roles: USER, ADMIN, VULN, RELEASE_MANAGER, REQ, REQADMIN, RISK, SECCHAMPION, REPORT
 - Frontend MUST check roles before rendering UI elements
 - Workgroup-based filtering MUST be applied to data queries
 - Users MUST only see resources they have access to (workgroups + owned items)
@@ -79,7 +87,7 @@ Access control MUST be consistently enforced across all layers.
 
 **Rationale**: Fine-grained access control is essential for multi-tenant security and compliance.
 
-### VI. Schema Evolution
+### V. Schema Evolution
 
 Database schema changes MUST be managed through automated migration with appropriate constraints.
 
@@ -97,17 +105,13 @@ Database schema changes MUST be managed through automated migration with appropr
 
 ## Technology Stack
 
-**Backend**:
-- Language: Kotlin 2.3.0 / Java 25
-- Framework: Micronaut 4.10
-- ORM: Hibernate JPA
-- Database: MariaDB 11.4
-- File Processing: Apache POI 5.3 (Excel), Apache Commons CSV 1.11.0 (CSV)
-
-**Frontend**:
-- Framework: Astro 5.14 with React 19 islands
-- UI: Bootstrap 5.3
-- API Client: Axios
+See `CLAUDE.md` §Stack for the current authoritative versions (Kotlin,
+Java, Micronaut, Astro, Gradle, etc.) — this section previously hard-coded
+version numbers that drifted from the actual build files each time a
+dependency bumped. As of this amendment: Kotlin 2.4.10 / Java 25,
+Micronaut 5.1, Hibernate JPA, MariaDB 11.4, Apache POI 5.5.1, Apache
+Commons CSV 1.14.1 (backend); Astro 7.2 with React 19 islands, Bootstrap
+5.3, Axios (frontend).
 
 
 ## Development Workflow
@@ -162,4 +166,4 @@ Database schema changes MUST be managed through automated migration with appropr
 
 For detailed implementation patterns and examples, see `CLAUDE.md`.
 
-**Version**: 2.0.0 | **Ratified**: 2025-10-07 | **Last Amended**: 2025-10-19
+**Version**: 2.0.1 | **Ratified**: 2025-10-07 | **Last Amended**: 2026-08-06

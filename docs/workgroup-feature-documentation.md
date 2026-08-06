@@ -32,7 +32,7 @@ This document summarizes the Secman Workgroup feature and its access-rights mode
 - `delete_workgroup(workgroupId)`
 - `assign_assets_to_workgroup(workgroupId, assetIds[])`
 - `assign_users_to_workgroup(workgroupId, userIds[])`
-- `list_workgroup_aws_account(workgroupId)`
+- `list_workgroup_aws_accounts(workgroupId)`
 - `add_workgroup_aws_account(workgroupId, cloudAccountId)`
 - `remove_workgroup_aws_account(workgroupId, cloudAccountId)`
 - `list_workgroup_ad_domains(workgroupId)`

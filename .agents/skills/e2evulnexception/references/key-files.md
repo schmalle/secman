@@ -46,7 +46,7 @@ Fix priority: **backend first**, then frontend.
    `[FAIL]` and surrounding `[INFO]`/`[DEBUG]` context.
 2. Backend-related → also read `.e2e-logs/backend.log` for stack traces near
    the failure timestamp.
-3. Trace the MCP call: shell → `tools/call` → `McpController` → `McpToolService`
+3. Trace the MCP call: shell → `tools/call` → `McpController` → `McpToolRegistry`
    → tool class → service → repository.
 4. UI failures → Playwright artifacts in `tests/e2e/test-results/`
    (`screenshot: 'only-on-failure'`, `trace: 'retain-on-failure'`).

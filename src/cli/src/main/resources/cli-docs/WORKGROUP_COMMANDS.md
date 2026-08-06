@@ -21,9 +21,20 @@ The `manage-workgroups` command suite provides CLI tools for ADMIN users to mana
 ## Prerequisites
 
 ### Authentication
-All write operations require **ADMIN role** access. Specify admin credentials via:
-- `--admin-user <email>` flag on each command, OR
-- `SECMAN_ADMIN_EMAIL` environment variable
+All commands — including the read-only `list` command — require **ADMIN role** access on the backend account used to run them. Specify backend credentials via:
+- `--username <name>` flag (or the `SECMAN_ADMIN_NAME` environment variable), AND
+- `--password <pass>` flag (or the `SECMAN_ADMIN_PASS` environment variable)
+
+Both are required. Omitting `--username`/`SECMAN_ADMIN_NAME` fails fast with
+`Backend username required. Use --username flag or set SECMAN_ADMIN_NAME environment variable`;
+omitting `--password`/`SECMAN_ADMIN_PASS` fails the same way with the password equivalent.
+
+> **Note**: `--admin-user` / `-u` (and the `SECMAN_ADMIN_EMAIL` environment variable)
+> are also defined on the parent `manage-workgroups` command and still accepted, but
+> they are **not read by any subcommand** — `list`, `assign-assets`, and
+> `remove-assets` all authenticate using only the `--username`/`--password` backend
+> credentials above. Passing only `--admin-user` without `--username`/`--password`
+> will fail at runtime.
 
 ### Database Connection
 Commands connect to the backend database via Micronaut Data JPA. Ensure:
@@ -55,12 +66,13 @@ All commands support wildcard patterns for asset name matching:
 
 **Syntax**:
 ```bash
-./gradlew cli:run --args='manage-workgroups list \
+./scripts/secman manage-workgroups list \
   [--workgroup <name-or-id>] \
   [--name <pattern>] \
   [--search-assets <pattern>] \
   [--type <asset-type>] \
-  [--format <TABLE|JSON|CSV>]'
+  [--format <TABLE|JSON|CSV>] \
+  --username <backend-user> --password <backend-pass>
 ```
 
 **Options**:
@@ -69,12 +81,16 @@ All commands support wildcard patterns for asset name matching:
 - `--search-assets` or `-s`: Search all assets by name pattern (for preview before assigning)
 - `--type` or `-t`: Filter assets by type (e.g., SERVER, WORKSTATION)
 - `--format` or `-f`: Output format (default: TABLE)
+- `--username` (required, or `SECMAN_ADMIN_NAME` env var): Backend username
+- `--password` (required, or `SECMAN_ADMIN_PASS` env var): Backend password
+- `--admin-user` or `-u`: **(No effect)** identity is derived from `--username`/`--password`
 
 **Use Cases**:
 
 #### List All Workgroups
 ```bash
-./gradlew cli:run --args='manage-workgroups list'
+./scripts/secman manage-workgroups list \
+  --username admin --password '<password>'
 ```
 
 **Output**:
@@ -94,7 +110,8 @@ Total: 3 workgroup(s)
 
 #### List Assets in a Specific Workgroup
 ```bash
-./gradlew cli:run --args='manage-workgroups list --workgroup Production'
+./scripts/secman manage-workgroups list --workgroup Production \
+  --username admin --password '<password>'
 ```
 
 **Output**:
@@ -114,7 +131,8 @@ Total: 3 asset(s)
 
 #### Search Assets by Pattern (Preview Before Assigning)
 ```bash
-./gradlew cli:run --args='manage-workgroups list --search-assets "ip-10-*"'
+./scripts/secman manage-workgroups list --search-assets "ip-10-*" \
+  --username admin --password '<password>'
 ```
 
 **Output**:
@@ -134,12 +152,14 @@ Total: 3 asset(s)
 
 #### Filter by Type
 ```bash
-./gradlew cli:run --args='manage-workgroups list --search-assets "*" --type SERVER'
+./scripts/secman manage-workgroups list --search-assets "*" --type SERVER \
+  --username admin --password '<password>'
 ```
 
 #### Export to JSON
 ```bash
-./gradlew cli:run --args='manage-workgroups list --format JSON' > workgroups.json
+./scripts/secman manage-workgroups list --format JSON \
+  --username admin --password '<password>' > workgroups.json
 ```
 
 **JSON Output**:
@@ -159,7 +179,8 @@ Total: 3 asset(s)
 
 #### Export to CSV
 ```bash
-./gradlew cli:run --args='manage-workgroups list --format CSV' > workgroups.csv
+./scripts/secman manage-workgroups list --format CSV \
+  --username admin --password '<password>' > workgroups.csv
 ```
 
 ---
@@ -172,13 +193,13 @@ Total: 3 asset(s)
 
 **Syntax**:
 ```bash
-./gradlew cli:run --args='manage-workgroups assign-assets \
+./scripts/secman manage-workgroups assign-assets \
   --workgroup <name-or-id> \
   [--pattern <pattern> | --ids <id1,id2,...>] \
   [--type <asset-type>] \
   [--dry-run] \
   [--verbose] \
-  [--admin-user <email>]'
+  --username <backend-user> --password <backend-pass>
 ```
 
 **Options**:
@@ -188,7 +209,9 @@ Total: 3 asset(s)
 - `--type` or `-t`: Filter assets by type
 - `--dry-run` or `-d`: Preview without making changes
 - `--verbose` or `-v`: Show detailed output including asset names
-- `--admin-user` or `-u`: Admin user email
+- `--username` (required, or `SECMAN_ADMIN_NAME` env var): Backend username
+- `--password` (required, or `SECMAN_ADMIN_PASS` env var): Backend password
+- `--admin-user` or `-u`: **(No effect)** identity is derived from `--username`/`--password`
 
 **IMPORTANT**: Must specify either `--pattern` or `--ids`.
 
@@ -196,10 +219,10 @@ Total: 3 asset(s)
 
 #### Assign by Pattern
 ```bash
-./gradlew cli:run --args='manage-workgroups assign-assets \
+./scripts/secman manage-workgroups assign-assets \
   --workgroup Production \
   --pattern "ip-10-*" \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 **Output**:
@@ -213,27 +236,28 @@ Summary:
 
 #### Assign by Pattern with Type Filter
 ```bash
-./gradlew cli:run --args='manage-workgroups assign-assets \
+./scripts/secman manage-workgroups assign-assets \
   --workgroup Production \
   --pattern "*prod*" \
   --type SERVER \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 #### Assign Specific Assets by ID
 ```bash
-./gradlew cli:run --args='manage-workgroups assign-assets \
+./scripts/secman manage-workgroups assign-assets \
   --workgroup Production \
   --ids 101,102,103,104 \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 #### Dry Run (Preview Changes)
 ```bash
-./gradlew cli:run --args='manage-workgroups assign-assets \
+./scripts/secman manage-workgroups assign-assets \
   --workgroup Production \
   --pattern "ip-172-*" \
-  --dry-run'
+  --dry-run \
+  --username admin --password '<password>'
 ```
 
 **Dry Run Output**:
@@ -253,11 +277,11 @@ Summary: 3 would be assigned, 1 already assigned
 
 #### Verbose Output (Show Asset Names)
 ```bash
-./gradlew cli:run --args='manage-workgroups assign-assets \
+./scripts/secman manage-workgroups assign-assets \
   --workgroup Production \
   --pattern "web-*" \
   --verbose \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 **Verbose Output**:
@@ -286,14 +310,14 @@ Assigned assets:
 
 **Syntax**:
 ```bash
-./gradlew cli:run --args='manage-workgroups remove-assets \
+./scripts/secman manage-workgroups remove-assets \
   --workgroup <name-or-id> \
   [--pattern <pattern> | --ids <id1,id2,...> | --all] \
   [--type <asset-type>] \
   [--dry-run] \
   [--verbose] \
   [--force] \
-  [--admin-user <email>]'
+  --username <backend-user> --password <backend-pass>
 ```
 
 **Options**:
@@ -305,7 +329,9 @@ Assigned assets:
 - `--dry-run` or `-d`: Preview without making changes
 - `--verbose` or `-v`: Show detailed output including asset names
 - `--force` or `-f`: Skip confirmation prompt for `--all`
-- `--admin-user` or `-u`: Admin user email
+- `--username` (required, or `SECMAN_ADMIN_NAME` env var): Backend username
+- `--password` (required, or `SECMAN_ADMIN_PASS` env var): Backend password
+- `--admin-user` or `-u`: **(No effect)** identity is derived from `--username`/`--password`
 
 **IMPORTANT**: Must specify exactly one of `--pattern`, `--ids`, or `--all`.
 
@@ -313,10 +339,10 @@ Assigned assets:
 
 #### Remove by Pattern
 ```bash
-./gradlew cli:run --args='manage-workgroups remove-assets \
+./scripts/secman manage-workgroups remove-assets \
   --workgroup Test \
   --pattern "*test*" \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 **Output**:
@@ -330,18 +356,18 @@ Summary:
 
 #### Remove Specific Assets by ID
 ```bash
-./gradlew cli:run --args='manage-workgroups remove-assets \
+./scripts/secman manage-workgroups remove-assets \
   --workgroup Development \
   --ids 201,202,203 \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 #### Remove All Assets (with confirmation)
 ```bash
-./gradlew cli:run --args='manage-workgroups remove-assets \
+./scripts/secman manage-workgroups remove-assets \
   --workgroup OldProject \
   --all \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 **Prompt**:
@@ -353,19 +379,20 @@ SUCCESS: Removed 25 assets from workgroup 'OldProject' (skipped 0 not assigned)
 
 #### Remove All Assets (skip confirmation)
 ```bash
-./gradlew cli:run --args='manage-workgroups remove-assets \
+./scripts/secman manage-workgroups remove-assets \
   --workgroup OldProject \
   --all \
   --force \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 #### Dry Run (Preview Removal)
 ```bash
-./gradlew cli:run --args='manage-workgroups remove-assets \
+./scripts/secman manage-workgroups remove-assets \
   --workgroup Production \
   --pattern "*staging*" \
-  --dry-run'
+  --dry-run \
+  --username admin --password '<password>'
 ```
 
 **Dry Run Output**:
@@ -388,102 +415,108 @@ Summary: 3 would be removed, 42 would remain
 
 ```bash
 # Preview what would be assigned
-./gradlew cli:run --args='manage-workgroups list --search-assets "ip-10-255-*"'
+./scripts/secman manage-workgroups list --search-assets "ip-10-255-*" \
+  --username admin --password '<password>'
 
 # Assign all matching assets
-./gradlew cli:run --args='manage-workgroups assign-assets \
+./scripts/secman manage-workgroups assign-assets \
   --workgroup "AWS-Production" \
   --pattern "ip-10-255-*" \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # Verify assignment
-./gradlew cli:run --args='manage-workgroups list --workgroup "AWS-Production"'
+./scripts/secman manage-workgroups list --workgroup "AWS-Production" \
+  --username admin --password '<password>'
 ```
 
 ### 2. Migrate Assets Between Workgroups
 
 ```bash
 # Remove from old workgroup
-./gradlew cli:run --args='manage-workgroups remove-assets \
+./scripts/secman manage-workgroups remove-assets \
   --workgroup OldTeam \
   --pattern "*project-x*" \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # Add to new workgroup
-./gradlew cli:run --args='manage-workgroups assign-assets \
+./scripts/secman manage-workgroups assign-assets \
   --workgroup NewTeam \
   --pattern "*project-x*" \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 ### 3. Clean Up Test Workgroup
 
 ```bash
 # Preview what will be removed
-./gradlew cli:run --args='manage-workgroups remove-assets \
+./scripts/secman manage-workgroups remove-assets \
   --workgroup Test \
   --all \
-  --dry-run'
+  --dry-run \
+  --username admin --password '<password>'
 
 # Remove all with confirmation
-./gradlew cli:run --args='manage-workgroups remove-assets \
+./scripts/secman manage-workgroups remove-assets \
   --workgroup Test \
   --all \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 ### 4. Bulk Assignment from Multiple Patterns
 
 ```bash
 # Assign production servers
-./gradlew cli:run --args='manage-workgroups assign-assets \
+./scripts/secman manage-workgroups assign-assets \
   --workgroup Production \
   --pattern "*-prod-*" \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # Also add servers with different naming
-./gradlew cli:run --args='manage-workgroups assign-assets \
+./scripts/secman manage-workgroups assign-assets \
   --workgroup Production \
   --pattern "prod*" \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # And specific IP range
-./gradlew cli:run --args='manage-workgroups assign-assets \
+./scripts/secman manage-workgroups assign-assets \
   --workgroup Production \
   --pattern "ip-10-100-*" \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 ### 5. Export Workgroup Assets for Audit
 
 ```bash
 # Export workgroup list to JSON
-./gradlew cli:run --args='manage-workgroups list --format JSON' > workgroups_audit.json
+./scripts/secman manage-workgroups list --format JSON \
+  --username admin --password '<password>' > workgroups_audit.json
 
 # Export specific workgroup assets to CSV
-./gradlew cli:run --args='manage-workgroups list \
+./scripts/secman manage-workgroups list \
   --workgroup Production \
-  --format CSV' > production_assets.csv
+  --format CSV \
+  --username admin --password '<password>' > production_assets.csv
 ```
 
 ---
 
 ## Troubleshooting
 
-### Issue: "Admin user required" Error
-**Cause**: No admin user specified for write operations
-**Solution**: Set `SECMAN_ADMIN_EMAIL` environment variable or use `--admin-user` flag
+### Issue: "Backend username required" / "Backend password required" Error
+**Cause**: No `--username`/`--password` (or `SECMAN_ADMIN_NAME`/`SECMAN_ADMIN_PASS`) specified. Note that `--admin-user`/`SECMAN_ADMIN_EMAIL` do **not** satisfy this — they have no effect on any subcommand.
+**Solution**: Set `SECMAN_ADMIN_NAME`/`SECMAN_ADMIN_PASS` environment variables or use `--username`/`--password` flags
 ```bash
-export SECMAN_ADMIN_EMAIL=admin@example.com
+export SECMAN_ADMIN_NAME=admin
+export SECMAN_ADMIN_PASS='<password>'
 # OR
-./gradlew cli:run --args='manage-workgroups assign-assets ... --admin-user admin@example.com'
+./scripts/secman manage-workgroups assign-assets ... --username admin --password '<password>'
 ```
 
 ### Issue: "Workgroup not found" Error
 **Cause**: Workgroup name or ID doesn't exist
 **Solution**: List workgroups to verify the name
 ```bash
-./gradlew cli:run --args='manage-workgroups list'
+./scripts/secman manage-workgroups list --username admin --password '<password>'
 ```
 
 ### Issue: No Assets Match Pattern
@@ -491,14 +524,16 @@ export SECMAN_ADMIN_EMAIL=admin@example.com
 **Solution**: Use `list --search-assets` to test pattern
 ```bash
 # Test your pattern first
-./gradlew cli:run --args='manage-workgroups list --search-assets "your-pattern*"'
+./scripts/secman manage-workgroups list --search-assets "your-pattern*" \
+  --username admin --password '<password>'
 ```
 
 ### Issue: All Assets Already Assigned
 **Cause**: Assets matching pattern are already in the workgroup
 **Solution**: Use `--verbose` to see details, or check current workgroup assets
 ```bash
-./gradlew cli:run --args='manage-workgroups list --workgroup YourWorkgroup'
+./scripts/secman manage-workgroups list --workgroup YourWorkgroup \
+  --username admin --password '<password>'
 ```
 
 ### Issue: Pattern Matching Unexpected Results
@@ -515,57 +550,61 @@ export SECMAN_ADMIN_EMAIL=admin@example.com
 ### 1. Always Preview with Dry-Run for Bulk Operations
 ```bash
 # Preview before assigning
-./gradlew cli:run --args='manage-workgroups assign-assets \
+./scripts/secman manage-workgroups assign-assets \
   --workgroup Production \
   --pattern "ip-*" \
-  --dry-run'
+  --dry-run \
+  --username admin --password '<password>'
 
 # If satisfied, execute
-./gradlew cli:run --args='manage-workgroups assign-assets \
+./scripts/secman manage-workgroups assign-assets \
   --workgroup Production \
   --pattern "ip-*" \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 ### 2. Use Search to Test Patterns Before Assigning
 ```bash
 # Search first
-./gradlew cli:run --args='manage-workgroups list --search-assets "*prod*" --type SERVER'
+./scripts/secman manage-workgroups list --search-assets "*prod*" --type SERVER \
+  --username admin --password '<password>'
 
 # Then assign matching assets
-./gradlew cli:run --args='manage-workgroups assign-assets \
+./scripts/secman manage-workgroups assign-assets \
   --workgroup Production \
   --pattern "*prod*" \
   --type SERVER \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
-### 3. Use Environment Variable for Admin User
+### 3. Use Environment Variables for Backend Credentials
 ```bash
-export SECMAN_ADMIN_EMAIL=admin@example.com
+export SECMAN_ADMIN_NAME=admin
+export SECMAN_ADMIN_PASS='<password>'
 
-# Then omit --admin-user from all commands
-./gradlew cli:run --args='manage-workgroups assign-assets ...'
+# Then omit --username/--password from all commands
+./scripts/secman manage-workgroups assign-assets ...
 ```
 
 ### 4. Use Verbose Mode to Track Changes
 ```bash
-./gradlew cli:run --args='manage-workgroups assign-assets \
+./scripts/secman manage-workgroups assign-assets \
   --workgroup Production \
   --pattern "*" \
   --verbose \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 ### 5. Export Before Bulk Changes
 ```bash
 # Backup current state
-./gradlew cli:run --args='manage-workgroups list \
+./scripts/secman manage-workgroups list \
   --workgroup Production \
-  --format JSON' > backup_$(date +%Y%m%d).json
+  --format JSON \
+  --username admin --password '<password>' > backup_$(date +%Y%m%d).json
 
 # Then make changes
-./gradlew cli:run --args='manage-workgroups remove-assets ...'
+./scripts/secman manage-workgroups remove-assets ... --username admin --password '<password>'
 ```
 
 ---
@@ -584,8 +623,8 @@ export SECMAN_ADMIN_EMAIL=admin@example.com
 
 - **Main CLI Reference**: `docs/CLI.md`
 - **User Mapping Commands**: `cli-docs/USER_MAPPING_COMMANDS.md`
-- **Access Control**: CLAUDE.md - "Unified Access Control" section
-- **Workgroup API**: `docs/API.md` - Workgroup endpoints
+- **Access Control**: CLAUDE.md - "Roles (RBAC)" and "Unified Asset Access" sections
+- **Workgroup API**: CLAUDE.md - "API Endpoints" table (Workgroups row)
 
 ---
 
@@ -594,7 +633,7 @@ export SECMAN_ADMIN_EMAIL=admin@example.com
 For issues or questions:
 1. Check troubleshooting guide above
 2. Review audit logs in application logs
-3. Verify database connectivity: `./gradlew backendng:run`
+3. Verify database connectivity: `./scripts/startbackenddev.sh`
 4. Report bugs: https://github.com/schmalle/secman/issues
 
 ---

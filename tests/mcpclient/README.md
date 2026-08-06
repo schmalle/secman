@@ -168,7 +168,7 @@ Response Body: {
 ### Connection Refused
 Make sure the Secman backend is running:
 ```bash
-cd src/backendng && ./gradlew run
+./scripts/startbackenddev.sh
 ```
 
 ### Authentication Failed

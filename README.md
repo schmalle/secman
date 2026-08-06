@@ -30,7 +30,7 @@ Prereqs: Java 25, Node 20+, MariaDB 11.4+, Git.
 git clone https://github.com/schmalle/secman.git && cd secman
 cd scripts/install/db && ./installdb.sh && cd -    # creates DB 'secman' / user 'secman'/'CHANGEME'
 ./scripts/startbackenddev.sh                       # canonical dev start (pass-cli wraps gradle)
-cd src/frontend && npm install && npm run dev       # http://localhost:4321
+cd src/frontend && npm install && cd - && ./scripts/startfrontenddev.sh   # canonical dev start, http://localhost:4321
 ```
 
 On first startup the backend auto-creates `admin` with a 20-char random password printed once to stdout (look for `DEFAULT ADMIN USER CREATED`). Copy it immediately. Change it after first login.
@@ -55,7 +55,7 @@ specs/        historical implementation plans (frozen)
 # Build & run
 ./gradlew build                          # full build incl. unit + integration tests
 ./scripts/startbackenddev.sh            # backend dev (port 8080)
-cd src/frontend && npm run dev           # frontend dev (port 4321)
+./scripts/startfrontenddev.sh           # frontend dev (port 4321)
 
 # CLI (build once, then use wrapper)
 ./gradlew :cli:shadowJar

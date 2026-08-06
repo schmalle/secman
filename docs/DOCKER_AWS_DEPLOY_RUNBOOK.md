@@ -370,7 +370,7 @@ for the full catalog.
 | E-mail notifications | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` (secret), `SMTP_FROM_ADDRESS`, `SMTP_ENABLE_TLS` |
 | AI-assisted risk assessment | `OPENROUTER_API_KEY` (secret) + `AI_RISK_ASSESSMENT_ENABLED=true` |
 | CrowdStrike Falcon | `FALCON_CLIENT_ID`, `FALCON_CLIENT_SECRET` (secret), `FALCON_CLOUD_REGION` |
-| JVM sizing | `JAVA_OPTS` (default `-Xmx1024m -Xms256m -XX:+UseContainerSupport`; tune with the task CPU/memory) |
+| JVM sizing | `JAVA_OPTS` (default baked into the AWS image: `-XX:MaxRAMPercentage=45.0 -XX:InitialRAMPercentage=12.5 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/secman-backend-oom.hprof -XX:+ExitOnOutOfMemoryError`; tune with the task CPU/memory — see `docs/DOCKER_AWS.md` §Memory sizing) |
 | Existing Flyway-managed schema | `FLYWAY_DATASOURCES_DEFAULT_ENABLED=true` (leave `false` for a fresh DB) |
 
 ---

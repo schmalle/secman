@@ -23,9 +23,9 @@ secman config --client-id YOUR_CLIENT_ID --client-secret YOUR_CLIENT_SECRET
 
 ```bash
 # Monitor all devices with default 5-minute interval
-secman monitor --hostnames server01,server02,server03
+secman monitor
 
-# Monitor with custom interval
+# Monitor a specific set of hostnames only
 secman monitor --interval 10 --hostnames prod-server-01,prod-server-02
 
 # Dry run (no storage)
@@ -37,33 +37,28 @@ secman monitor --dry-run --hostnames test-server
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--interval <minutes>` | Polling interval in minutes | 5 |
-| `--hostnames <list>` | Comma-separated list of hostnames to monitor | (required) |
+| `--hostnames <list>` | Comma-separated list of hostnames to monitor. Omit to monitor all devices | (all devices) |
 | `--backend-url <url>` | Backend API URL | http://localhost:8080 |
-| `--config <path>` | Configuration file path | ~/.secman/monitor.conf |
+| `--config <path>` | Configuration file path. **Currently has no effect** — the option is parsed but not read; credentials are always resolved via the fallback chain below | n/a |
 | `--dry-run` | Query but don't store results | false |
 | `--no-storage` | Disable automatic storage | false |
 | `--verbose` | Enable verbose logging | false |
 
-## Configuration File
+## CrowdStrike Credentials
 
-Create `~/.secman/monitor.conf` for persistent configuration:
+The monitor loads CrowdStrike API credentials via a fallback chain (highest priority first):
+
+1. System properties: `-Dcrowdstrike.clientId=... -Dcrowdstrike.clientSecret=...`
+2. Environment variables: `CROWDSTRIKE_CLIENT_ID`/`CROWDSTRIKE_CLIENT_SECRET` (or `FALCON_CLIENT_ID`/`FALCON_CLIENT_SECRET` for compatibility with the Python helper tool)
+3. Config file: `~/.secman/crowdstrike.yaml` or `~/.secman/crowdstrike.conf` (YAML), shaped like:
 
 ```yaml
-crowdstrike:
-  polling_interval_minutes: 5
-  severity_filter:
-    - HIGH
-    - CRITICAL
-
-backend:
-  base_url: "http://localhost:8080"
-  timeout_seconds: 30
-  retry_attempts: 3
-
-monitor:
-  log_level: INFO
-  statistics_enabled: true
+clientId: "your-crowdstrike-client-id"
+clientSecret: "your-crowdstrike-client-secret"
+baseUrl: "https://api.crowdstrike.com"
 ```
+
+`secman config --client-id ... --client-secret ...` (see Quick Start above) writes this file for you. There is no separate polling-interval, severity-filter, backend, or monitor-logging config file — those are CLI-only options (`--interval`, `--backend-url`, `--verbose`, etc.), not part of this file.
 
 ## Usage Examples
 
@@ -240,8 +235,7 @@ sudo systemctl status secman-monitor
 
 ## Related Documentation
 
-- [CrowdStrike API Configuration](README.md#configuration)
-- [Query Command](README.md#query-command)
+- [CrowdStrike Import](../../docs/CROWDSTRIKE_IMPORT.md)
 - [Feature Specification](../../specs/026-crowdstrike-polling-monitor/spec.md)
 
 ## Support

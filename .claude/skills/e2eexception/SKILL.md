@@ -38,7 +38,7 @@ an 11-step MCP-based workflow:
 
 1. Clean up pre-existing test user (if any)
 2. Delete all assets (clean environment)
-3. Create test user (`sometestuser@sometestdomain.com`)
+3. Create test user (`sometestuser@e2e.test`)
 4. Add asset with 10-day HIGH vulnerability (not overdue)
 5. Query as user — verify no overdue vulnerabilities
 6. Add 40-day CRITICAL vulnerability (overdue)
@@ -81,44 +81,13 @@ running. This ensures a clean state for each attempt.
 
 ### Phase 1 — Environment Setup
 
-**Starting services:**
-
-**Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
-and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
-permissions (e.g. Bash tool `dangerouslyDisableSandbox: true`). Both scripts
-source secrets via `pass-cli`, which a sandboxed shell cannot reach — do not
-start either dev server inside the filesystem sandbox.
-
-1. **Create log directory** `.e2e-logs/` if it doesn't exist.
-
-2. **Kill any running services (mandatory, unconditional)** — never reuse an
-   already-running backend or frontend; a running instance may predate the
-   current working tree. Always run both stop scripts, even if the ports look
-   free (they are safe no-ops when nothing is running; never call `kill` or
-   `lsof | xargs kill` inline):
-   ```bash
-   ./scripts/stopbackenddev.sh
-   ./scripts/stopfrontenddev.sh
-   ```
-   Wait ~3 seconds, then verify with `lsof -iTCP:8080 -sTCP:LISTEN -n -P` and
-   `lsof -iTCP:4321 -sTCP:LISTEN -n -P` — both must print nothing.
-
-3. **Start backend** in background (outside the sandbox):
-   ```bash
-   nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
-   ```
-   Record the PID so you can kill it later.
-
-4. **Start frontend** in background (outside the sandbox):
-   ```bash
-   nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
-   ```
-   Record the PID.
-
-5. **Wait for liveness by port bind, not HTTP** — `../_shared/stack-lifecycle.md`
-   §3: `lsof -iTCP:8080 -sTCP:LISTEN -n -P` (120s) and `lsof -iTCP:4321 …` (60s).
-   If `:4321` never binds, check `:4322` before concluding the frontend failed
-   (§4).
+Follow `../_shared/stack-lifecycle.md` §1–3 in full: unconditional cold start
+(both stop scripts first, even if ports look free), start both dev servers
+outside the sandbox in the background under `.e2e-logs/{backend,frontend}.log`,
+then confirm liveness by port bind — `lsof -iTCP:8080 -sTCP:LISTEN -n -P`
+(120s) and `lsof -iTCP:4321 …` (60s), checking `:4322` per §4 before
+concluding the frontend failed to start. Create `.e2e-logs/` first if it
+doesn't exist.
 
 ### Phase 2 — Run Tests
 

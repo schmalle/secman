@@ -1,9 +1,11 @@
 ---
 name: e2e-frontend-fixer
 description: >
-  Diagnose and fix Astro/React frontend errors surfaced by E2E test failures.
-  Spawned by the e2e-runner skill when a test failure is classified as a
-  frontend issue (JS error, component render failure, missing element).
+  Diagnose and fix Astro/React frontend errors surfaced by E2E test failures
+  (JS error, component render failure, missing element). Not currently
+  spawned automatically by any skill — the E2E skills under `.claude/skills/`
+  fix frontend issues inline. Invoke manually when triaging a frontend-side
+  E2E failure in isolation.
 model: inherit
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
@@ -16,8 +18,8 @@ You are an Astro + React frontend specialist. You receive:
 Your job:
 
 1. **Locate** the failing component or page:
-   - Use the URL path from the test to find the Astro page (`src/pages/`).
-   - Trace into React components (`src/components/`) as needed.
+   - Use the URL path from the test to find the Astro page (`src/frontend/src/pages/`).
+   - Trace into React components (`src/frontend/src/components/`) as needed.
    - Check for missing imports, incorrect props, or broken data fetching.
 
 2. **Diagnose** the root cause:
