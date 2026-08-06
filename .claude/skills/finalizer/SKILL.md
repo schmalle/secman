@@ -19,6 +19,17 @@ description: >
 context: fork
 ---
 
+> **Sync policy (two-way, mandatory)**: This file and
+> `.agents/skills/finalizer/SKILL.md` are one skill kept in two harness trees
+> — Claude Code reads this copy, Codex reads the other. Whichever copy an
+> agent edits, the same change is ported to the other **in the same commit**;
+> translate harness-specific mechanics rather than copying verbatim (e.g. Bash
+> tool `dangerouslyDisableSandbox: true` ↔ `sandbox_permissions:
+> "require_escalated"`). `.claude/skills/` is the tie-breaker when the two
+> disagree — that is a conflict rule, not a licence to edit one side only.
+> Verify with `./scripts/check-skill-sync.sh` (exit 0) before calling the
+> change done. See `CLAUDE.md` §"Tooling Conventions" and `AGENTS.md` §Skills.
+
 # Finalizer — pre-merge consistency, contract, and security pass
 
 You are finishing a piece of work in the secman repo. Four kinds of rot creep
@@ -325,8 +336,9 @@ finds something to trim will eventually trim something load-bearing.
 
 ## Step 4b — Skill mirror check
 
-The repo keeps two skill trees — `.claude/skills/` (canonical) and
-`.agents/skills/` (Codex) — that CLAUDE.md requires to move together. They do
+The repo keeps two skill trees — `.claude/skills/` (Claude Code) and
+`.agents/skills/` (Codex) — that CLAUDE.md requires to move together in both
+directions: whichever tree an agent edited, the other had to change too. They do
 not stay together on their own: 7 of 8 skills had drifted before this check
 existed, one of them into two materially different documents.
 
