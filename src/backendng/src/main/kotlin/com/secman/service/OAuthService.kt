@@ -455,11 +455,12 @@ open class OAuthService(
                     logger.info("[{}] ID token validated successfully. Claims: {}", correlationId,
                         idTokenClaims.keys.joinToString(", "))
 
-                    // Log all claims for debugging
-                    logger.info("[{}] === ID Token Claims ===", correlationId)
-                    idTokenClaims.forEach { (key, value) ->
-                        logger.info("[{}]   {}: {}", correlationId, key, value)
-                    }
+                    // SECURITY: log claim NAMES only, never values. The ID token carries directory
+                    // PII (oid, upn, tid, employee identifiers, group memberships) and the nonce;
+                    // dumping every value at INFO wrote all of it into the application log on every
+                    // OIDC login. The names alone are what troubleshooting actually needs.
+                    logger.debug("[{}] ID token claim names: {}", correlationId,
+                        idTokenClaims.keys.joinToString(", "))
 
                     // Validate tenant ID for Microsoft providers
                     if (!validateTenantId(provider, idTokenClaims)) {
@@ -480,15 +481,18 @@ open class OAuthService(
 
                     // For Microsoft providers, email is required
                     if (provider.name.contains("Microsoft", ignoreCase = true) && emailFromIdToken.isNullOrBlank()) {
-                        logger.error("[{}] Email extraction FAILED for Microsoft provider - checking available claims...", correlationId)
-                        idTokenClaims.forEach { (key, value) ->
-                            if (key.contains("mail", ignoreCase = true) ||
+                        // SECURITY: name the candidate claims, do not print their values (PII).
+                        val candidateClaims = idTokenClaims.keys.filter { key ->
+                            key.contains("mail", ignoreCase = true) ||
                                 key.contains("email", ignoreCase = true) ||
                                 key.contains("upn", ignoreCase = true) ||
-                                key.contains("unique_name", ignoreCase = true)) {
-                                logger.error("[{}]   Found potential email claim: {} = {}", correlationId, key, value)
-                            }
+                                key.contains("unique_name", ignoreCase = true)
                         }
+                        logger.error(
+                            "[{}] Email extraction FAILED for Microsoft provider. Candidate email claims present: {}",
+                            correlationId,
+                            if (candidateClaims.isEmpty()) "none" else candidateClaims.joinToString(", ")
+                        )
                         deleteOAuthStateQuietly(state)
                         return CallbackResult.Error(OAuthErrorCode.EMAIL_REQUIRED.userMessage)
                     }

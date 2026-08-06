@@ -1,6 +1,6 @@
 # Testing
 
-Three tiers: unit (Mockk), integration (**external MariaDB**, no Docker/Testcontainers), CLI (Picocli arg validation).
+Four tiers: backend unit (Mockk), backend integration (**external MariaDB**, no Docker/Testcontainers), CLI (Picocli arg validation), and frontend unit (`node:test`, no test framework dependency).
 
 Integration tests run **unconditionally** — they *fail*, not skip, when no test database is reachable. There is no Docker gate and no `@EnabledIf`; Testcontainers was removed from the build.
 
@@ -24,10 +24,19 @@ assertj 3.27.7
 ./gradlew :cli:test
 ./gradlew :cli:test --tests "AddVulnerabilityCommandTest"
 
+# Frontend unit tests (no framework dependency — Node's own runner)
+cd src/frontend && npm test
+cd src/frontend && npm run test:watch
+cd src/frontend && node --experimental-strip-types --import ./test/register.mjs \
+  --test src/utils/permissions.test.ts        # one file
+
 # HTML reports
 open src/backendng/build/reports/tests/test/index.html
 open src/cli/build/reports/tests/test/index.html
 ```
+
+`/testsuite` runs all four tiers plus the frontend build gate, the skill-sync
+check, and the coverage report in one pass — see `docs/SKILLS.md`.
 
 > All HTTP traffic in tests goes through `SECMAN_HOST` (resolved via `pass-cli`). Never hardcode `http://localhost:8080` / `:4321`.
 
@@ -68,9 +77,17 @@ src/backendng/src/test/kotlin/com/secman/
     TestDataFactory.kt     # createAdminUser, createAsset, createVulnerability, ...
     TestAuthHelper.kt      # JWT login → bearer
 src/cli/src/test/kotlin/com/secman/cli/commands/  # *CommandTest.kt
+
+src/frontend/
+  test/
+    register.mjs           # --import entry point; installs the resolver hook
+    resolve-ts.mjs         # extensionless-import resolver (see Frontend below)
+  src/**/<module>.test.ts  # test sits next to the module it covers
 ```
 
-Naming: file `<Class>Test.kt`. Method either `addVulnerabilityFromCli_createsNewAsset` (descriptive) or `@DisplayName("VS-001: …")`. ID prefixes used in DisplayName tags: `VS-*` (VulnerabilityService), `VI-*` (Vuln Integration), `CLI-*` (CLI), `EC-*` (edge cases).
+Naming: file `<Class>Test.kt`. Method either `addVulnerabilityFromCli_createsNewAsset` (descriptive) or `@DisplayName("VS-001: …")`. ID prefixes used in DisplayName tags: `VS-*` (VulnerabilityService), `VI-*` (Vuln Integration), `CLI-*` (CLI), `EC-*` (edge cases), `ES-*` (ExcelSanitizer), `AID-*` (AWS instance-id recognition).
+
+> **Do not add a test dependency without checking the classpath.** `junit-jupiter-params` is *not* declared, so `@ParameterizedTest` does not compile — loop inside a plain `@Test` and attach `.as("…")` to each assertion instead. The frontend tier deliberately has **no** test-framework dependency at all.
 
 ## Patterns
 
@@ -153,6 +170,74 @@ class AddVulnerabilityCommandTest {
 }
 ```
 
+### Frontend (`node:test`, zero dependencies)
+
+Tests run on Node's built-in runner with native TypeScript stripping — there is no
+Vitest, no Jest, no jsdom, and nothing to install beyond what `npm ci` already
+brings. `npm test` expands to:
+
+```
+node --experimental-strip-types --import ./test/register.mjs --test "src/**/*.test.ts"
+```
+
+Two rules follow from that toolchain, and both have bitten this repo:
+
+1. **Imports resolve `.ts`, never `.tsx`.** Node's type stripping cannot parse JSX.
+   `test/resolve-ts.mjs` completes extensionless specifiers (`../utils/auth`) the
+   way Vite does, so tests can import production modules as written; when a path
+   exists only as `.tsx` it raises a pointed error instead of a syntax error.
+2. **Component logic must be extracted to be unit-testable.** Pure logic living in
+   a `.tsx` file can only be asserted against its *source text*. Both styles are in
+   use — prefer extraction:
+
+```ts
+// Preferred: pure logic in a sibling .ts module (productSuggestions.ts,
+// productSearchResults.ts, exceptionReviewDto.ts, …), imported directly.
+import { getProductSuggestions } from './productSuggestions.ts';
+
+test('empty filter returns every product', () => {
+  assert.deepEqual(getProductSuggestions('', ['a', 'b']), ['a', 'b']);
+});
+
+// Fallback for markup that cannot be extracted: assert on the source text.
+test('sidebar labels the products link', () => {
+  const source = readFileSync(new URL('./Sidebar.tsx', import.meta.url), 'utf8');
+  assert.match(source, /href="\/products"[\s\S]*Vulnerable products/);
+});
+```
+
+Source-text assertions are brittle by nature — they break on reformatting and pass
+on logic that never runs. Use them only when the alternative is no test at all.
+
+> `npm run build` is a separate obligation from `npm test` (CLAUDE.md principle 5a).
+> The tests do not type-check the app; the build does.
+
+## Coverage
+
+**There is no line-coverage tooling.** No JaCoCo, no Kover, no c8 — nothing in this
+build records which lines executed. Adding Kover to `src/backendng/build.gradle.kts`
+is the natural next step if a real figure is ever needed.
+
+What exists instead is a name-reference report:
+
+```bash
+./scripts/test-coverage-report.sh            # per-area summary + the untested names
+./scripts/test-coverage-report.sh --summary  # counts only
+./scripts/test-coverage-report.sh --area service
+```
+
+For each production unit it asks whether *any* test file mentions its name. That is
+a floor, and it is biased in both directions:
+
+- A unit counted as covered may carry a single trivial assertion.
+- `controller` and `mcp-tools` are **understated**: the E2E gates and `tests/e2e/`
+  exercise controllers over HTTP without naming a Kotlin class, and
+  `McpToolPermissionsTest` asserts over all 85 MCP tools in one table.
+
+`service`, `util` and the frontend areas are close to honest, because those units
+are normally reached by a unit test or not at all. Never quote the total as "test
+coverage" without that caveat.
+
 ## Helpers
 
 ### `BaseIntegrationTest`
@@ -202,6 +287,10 @@ A CI job would need a reachable MariaDB and the `TEST_DB_*` vars exported; there
 Docker service to provision and no skip flag to set, because integration tests no longer
 gate themselves.
 
+The frontend tier is the exception and would be the cheapest thing to wire up first:
+`cd src/frontend && npm ci && npm test && npm run build` needs no database, no
+secrets, and no `pass-cli` — only Node ≥ 22 for `--experimental-strip-types`.
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -212,3 +301,6 @@ gate themselves.
 | Gradle build dies mid-run on a dev machine | IntelliJ's daemon-stop can kill CLI Gradle builds — isolate with `-Dorg.gradle.daemon.registry.base` |
 | `verify` fails unexpectedly | check `MockKAnnotations.init(this, relaxed=true/false)` choice; missing `every {}` setup |
 | Tests pass alone, fail together | unique test data (`"host-${System.nanoTime()}"`); cleanup in `@AfterEach`; per-test transactions |
+| `npm ci` fails with "lock file's X does not satisfy Y" | `package-lock.json` drifted from `package.json`, which makes the whole frontend gate unrunnable. `npm install` to rewrite the lock, then re-run `npm ci` to confirm, and commit the lock |
+| `npm test`: `ERR_MODULE_NOT_FOUND` on a component path | the module is `.tsx`; JSX cannot be imported. Extract the logic to a sibling `.ts` module (see [Frontend](#frontend-nodetest-zero-dependencies)) |
+| `@ParameterizedTest` unresolved | `junit-jupiter-params` is not on the classpath. Loop inside a plain `@Test` |

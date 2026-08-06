@@ -99,6 +99,21 @@ micronaut:
           max-age: 3600
   security:
     authentication: bearer
+    # SECURITY: disable Micronaut's built-in POST /login and POST /logout controllers.
+    # They are registered by default whenever a LoginHandler bean exists (which
+    # `authentication: bearer` guarantees) and are @Secured(IS_ANONYMOUS) on paths outside the
+    # /api/** catch-all, so they bypassed every control implemented in AuthController.login:
+    #   - the MFA gate (AuthenticationProviderUserPassword never consults user.mfaEnabled)
+    #   - the 5-attempt / 15-minute lockout
+    #   - input validation
+    #   - HttpOnly-cookie-only token delivery (the built-in endpoint returns access_token
+    #     in the JSON response body)
+    # This application authenticates exclusively via /api/auth/login; nothing calls /login.
+    endpoints:
+      login:
+        enabled: false
+      logout:
+        enabled: false
     token:
       jwt:
         signatures:

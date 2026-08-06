@@ -1,11 +1,16 @@
 # Which secman skill to use when
 
-Ten skills live in `.claude/skills/` (mirrored to `.agents/skills/` for Codex).
+Eleven skills live in `.claude/skills/` (mirrored to `.agents/skills/` for Codex).
 They overlap enough that picking the wrong one wastes a run — and in three cases
 the wrong pick **destroys data**. This is the routing guide.
 
 Invoke a skill as `/<name>`, or just describe the task; the `description:` in each
 skill's frontmatter decides whether it triggers.
+
+Codex has no slash commands, so `AGENTS.md` §Skills carries the condensed version
+of this table plus the instruction to read `.agents/skills/<name>/SKILL.md` in
+full. Keep the two in step when a skill is added, removed, or changes what it
+writes.
 
 ---
 
@@ -16,6 +21,7 @@ skill's frontmatter decides whether it triggers.
 | I want to… | Skill | Writes data? |
 |---|---|---|
 | Finish a change and check it before merging | `/finalizer` | Docs only |
+| Run the unit/integration tests, or ask where coverage is thin | `/testsuite` | No |
 | Prove no page throws JS errors | `/e2ejs` | No |
 | Exercise the full exception lifecycle (MCP + UI) | `/e2evulnexception` | **Wipes the DB** |
 | Quick MCP-only exception smoke test | `/e2eexception` | **Deletes all assets** |
@@ -47,6 +53,11 @@ rather than staying silent.
 separate requirements (Hard Principle 5) — no skill runs them for you.
 Compile-clean is not runtime-clean: Micronaut bean wiring, Flyway and the
 SessionFactory only fail at startup.
+
+`/testsuite` runs the test half of that (`:backendng:test`, `:cli:test`, and the
+frontend `npm ci && npm test && npm run build` gate) but it deliberately never
+starts the stack, so it does not discharge either Hard Principle 5 or the two
+gates above. It is the cheap check you run *first*, not a substitute for them.
 
 ---
 
@@ -137,6 +148,20 @@ starts the stack. It **fixes and commits** drift inside the `extensions/` repos
 design decision that is yours to make.
 
 Does **not** run the mandatory gates. It will remind you they still apply.
+
+### `/testsuite` — fast test tier + coverage evaluation
+**Never starts the stack.** It *stops* the dev backend first, because the
+integration tests bind 8080 and a running backend turns the suite into a hang.
+
+Runs `./scripts/runbackendtests.sh` (needs `TEST_DB_*` from `pass-cli`),
+`./gradlew :cli:test`, `npm ci && npm test && npm run build` in `src/frontend`,
+`./scripts/check-skill-sync.sh`, and finally `./scripts/test-coverage-report.sh`.
+Fixes what it can, up to 5 iterations, and never disables or deletes a test to
+reach green.
+
+Use it when you want to know whether the units are sound, or which areas have no
+tests at all. Its coverage output is **name-reference** coverage, not line
+coverage — see [Testing → Coverage](TESTING.md#coverage) for how far to trust it.
 
 ### `/e2ejs` — JS error scanner (mandatory gate)
 Cold-starts the stack, then scans every discovered page twice — once as admin,

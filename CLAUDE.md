@@ -81,14 +81,20 @@ MCP tool families mirror these (delegation required): `list_/create_/delete_rele
 ./gradlew :backendng:test --tests "*ServiceTest*"        # unit
 ./gradlew :backendng:test --tests "*IntegrationTest*"    # integration (external MariaDB, see Test Infrastructure)
 ./gradlew :cli:test
+cd src/frontend && npm test                              # frontend unit tier (node:test, no framework dep)
+./scripts/test-coverage-report.sh                        # name-reference coverage per area (NOT line coverage)
 ./tests/e2e/run-e2e.sh                                   # Playwright with pass-cli secrets
 ```
+
+`/testsuite` runs every tier above plus the frontend build gate, `check-skill-sync.sh`
+and the coverage report in one pass. It never starts the stack, so it does not
+discharge principle 5 or the principle-7 gates.
 
 CrowdStrike monitoring: `src/clinotify/check_crowdstrike_checkin.py` polls `/api/crowdstrike/last-checkin` and Telegrams when stale. Stdlib-only.
 
 ## Hard Principles
 
-1. Security-first: file validation, input sanitization, RBAC. Security review before completion.
+1. Security-first: file validation, input sanitization, RBAC. **All generated or edited code must satisfy §OWASP Top 10 Compliance below** — that checklist is binding, not advisory. Security review before completion.
 2. RBAC enforced at controller (`@Secured`) AND in UI.
 3. Schema = Flyway migrations + Hibernate auto-update. **New entities must declare
    `@GeneratedValue(strategy = GenerationType.IDENTITY)`** — a bare `@GeneratedValue`
@@ -105,6 +111,75 @@ CrowdStrike monitoring: `src/clinotify/check_crowdstrike_checkin.py` polls `/api
    - **`/e2evulnexception`** must run the full vuln + exception lifecycle (MCP + UI, setup + teardown) with **0 failures**.
 
    Doc-only edits outside `src/`, `tests/`, `scripts/` may skip the gates — state so explicitly. Otherwise both gates are non-negotiable.
+
+## OWASP Top 10 Compliance (mandatory)
+
+Hard Principle 1 in concrete terms. **Do not generate code that violates any rule below.** Categories are pinned to **OWASP Top 10:2021 (A01–A10)**; if the list is revised upstream, revisit this section rather than silently re-mapping names.
+
+Each rule names the control that already exists in this repo. **Reuse it — never write a second one**, and never work around one to make something build, start or pass.
+
+**A01 Broken Access Control**
+- Every endpoint carries `@Secured`. A public endpoint is an explicit, justified exception (`GET /api/crowdstrike/last-checkin`, `GET /api/maintenance-banners/active`), never a default and never "for now".
+- An id in a request is untrusted input. Resolve assets through `AssetFilterService.getAccessibleAssets()` / `getAccessibleAssetIds()` / `canAccessAsset(assetId, authentication)` — never `findById(userSuppliedId)` and return it. Same for any other owner-scoped entity.
+- SQL pre-filters in materialized views and native queries are perf hints, **never the auth boundary** (restated from §Unified Asset Access — it is the single most repeated bug class here).
+- A new MCP tool needs entries in **both** `McpToolPermissions.LISTING` and `.CALLING` plus a `McpToolGuards` check. A missing `CALLING` entry fails closed and looks like a bug; a missing guard fails **open** and looks like nothing.
+- RBAC at the controller **and** in the UI (Principle 2). The UI check is UX; the controller check is the boundary. Never only the former.
+
+**A02 Cryptographic Failures**
+- Passwords and API-key secrets: `BCryptPasswordEncoder` only. Never SHA-256/MD5/hand-rolled hashing for a secret — the SHA-256 API-key path in `McpAuthenticationService` exists solely to migrate legacy keys, do not extend or imitate it.
+- The JWT lives in the HttpOnly `secman_auth` cookie. Never write a token to `localStorage`, `sessionStorage`, a non-HttpOnly cookie, or any value that lands in a log. The SSE `?token=` query param is the one documented exception (EventSource has no headers).
+- Secrets come from `pass-cli`/env. No literal credential, key, token or internal host in source, tests, scripts or fixtures.
+- `JwtSigningValidator`, `DatabaseCredentialValidator` and `DatasourceUrlValidator` fail the boot on weak config **by design** — never relax or bypass one to make the backend start.
+
+**A03 Injection**
+- Persistence: derived queries or bound parameters (`:name`) only. **Never** concatenate a value into a query string — this includes the ~30 `nativeQuery = true` methods in `VulnerabilityRepository`, `WorkgroupRepository`, `AwsAccountSharingRepository`. Things that cannot be bound (column name, sort direction, table) map through a closed allowlist/enum; a request value never reaches SQL unbound.
+- HTML: no `innerHTML` / `dangerouslySetInnerHTML` without `DOMPurify.sanitize(...)` **at the assignment site** — see `RichContent.tsx` and `HtmlEditor.tsx`. Sanitizing on write is not sufficient: stored rows predate the control.
+- Excel/CSV export: every user-controlled cell goes through `ExcelSanitizer.sanitize()` (formula/DDE injection). No E2E gate ever opens an exported file, so a regression here is invisible at runtime and only `ExcelSanitizerTest` will catch it.
+- OS: no user-controlled string interpolated into a shell command, from Kotlin or from `./scripts/`. Pass argv arrays; quote every variable in bash.
+- Strip or encode CR/LF from user input before it reaches a log line (log forging).
+
+**A04 Insecure Design**
+- Deny by default: a new endpoint or MCP tool starts from the narrowest role that works and is widened deliberately — not `IS_AUTHENTICATED` with a TODO.
+- Unbounded is a design bug: page at the query (`findByAssetIdIn(ids, pageable)`), never `findAll()` then filter/slice in Kotlin. That exact pattern OOM'd `get_vulnerabilities` on 1.1M rows.
+- Business invariants (release status transitions, exception `kind`/subject/scope validity, ownership, workgroup membership) are enforced server-side. A rule that exists only in the UI is not a rule.
+
+**A05 Security Misconfiguration**
+- Do not weaken `SecurityHeadersFilter` — CSP, HSTS, `X-Frame-Options: DENY`, COOP/COEP/CORP, permissions policy. If a feature "requires" `unsafe-eval` or a wildcard `connect-src`, change the feature.
+- CORS: explicit origin allowlist. Never `*` combined with credentials.
+- Error responses carry a generic message; the detail goes to the server log. Never return a stack trace, SQL string, internal path or driver message to a client (`ValidationExceptionHandler` is the pattern).
+- No debug endpoint, verbose-logging toggle or seeded default credential enabled outside the `test` profile.
+
+**A06 Vulnerable and Outdated Components**
+- Prefer the stdlib and dependencies already on the classpath. A new third-party dependency needs a stated reason and must be called out in the PR body.
+- Pin exact versions in the Gradle/npm manifests — no floating ranges, no `latest`. `package-lock.json` must stay in step with `package.json` (`npm ci` is the gate).
+- `src/clinotify` is **stdlib-only by contract**; adding a dependency there breaks its deployment.
+
+**A07 Identification and Authentication Failures**
+- Authenticate through `AuthenticationProviderUserPassword`, `OAuthService` or `McpAuthenticationService`. Never a bespoke auth path, and never a header that grants access on its own: `X-MCP-User-Email` *identifies* a delegated user, it is not a credential and must always sit behind a verified API key.
+- Login, password-reset and lookup errors must not disclose whether an account exists.
+- Password change stays LOCAL-account-only; MFA state stays server-enforced.
+- Never lengthen a token/session lifetime, or loosen a cookie's `HttpOnly`/`Secure`/`SameSite`, to fix a UX or test problem.
+
+**A08 Software and Data Integrity Failures**
+- Every upload validates **size, extension and content type before parsing**, and rejects empty files — `ImportController.validateFile` is the reference; keep `MAX_FILE_SIZE` aligned with `application.yml`.
+- XML parsing keeps DTDs and external entities **disabled** (XXE). `NmapParserService`/`MasscanParserService` set `disallow-doctype-decl`, `external-general-entities`, `external-parameter-entities` and `load-external-dtd` — copy that block into any new XML parser; never construct a bare `DocumentBuilderFactory`.
+- Never deserialize untrusted input into a polymorphic or arbitrary type — parse into an explicit DTO.
+- Never fetch code, config or a template from a remote source at runtime and execute or eval it.
+- Archive handling: reject entry paths containing `..` and bound the decompressed size (zip bomb).
+
+**A09 Security Logging and Monitoring Failures**
+- Log authentication failures, RBAC denials, admin actions, imports and exports with **actor + target + outcome**.
+- Never log a password, token, cookie value, API key, or the body of an auth request. `logger.debug` counts — it runs in dev, where real `pass-cli` secrets are loaded.
+- No silent `catch (e: Exception) { }`. A swallowed security-relevant failure is itself a monitoring failure.
+
+**A10 Server-Side Request Forgery (SSRF)**
+- Any outbound URL derived from user input or DB-stored config — identity provider endpoints and JWKS, GitHub App, CrowdStrike, S3 endpoints, notification webhooks — is validated before use: `https` scheme allowlist, plus host allowlist or explicit rejection of loopback, link-local and RFC-1918 ranges and cloud metadata (`169.254.169.254`).
+- Re-apply the same check to redirect targets; never follow a redirect into a range the original request would have been denied.
+- `McpOriginValidationFilter` is the inbound analogue — do not disable it.
+
+### Review gate
+
+Before reporting any code change complete, re-read the diff against A01–A10 and state the result in one line, e.g. `OWASP: A01/A03/A09 touched — clean`. Changes to authentication, authorization, crypto, file upload, export or any outbound HTTP call additionally run `/security-review` on the branch diff (`/finalizer` includes a HIGH/CRITICAL pass). **A finding at HIGH or above blocks the change** — fix it, do not merely note it.
 
 ## Patterns (worth knowing)
 
@@ -123,7 +198,7 @@ Per server: `findOrCreateAsset` → `vulnerabilityRepository.deleteByAssetId()` 
 
 ## Test Infrastructure
 
-JUnit 6, Mockk, AssertJ, `@MicronautTest`. Integration tests run against an **external MariaDB** (no Docker/Testcontainers). Helpers in `src/backendng/src/test/kotlin/com/secman/testutil/`:
+JUnit 6, Mockk, AssertJ, `@MicronautTest`. Integration tests run against an **external MariaDB** (no Docker/Testcontainers). **`junit-jupiter-params` is not on the classpath** — `@ParameterizedTest` will not compile; loop inside a plain `@Test`. Helpers in `src/backendng/src/test/kotlin/com/secman/testutil/`:
 - `BaseIntegrationTest` — base for DB-backed tests; datasource comes from `application-test.yml`.
 - `TestDataFactory` — admin/vuln/regular user, asset, vulnerability builders.
 - `TestAuthHelper` — JWT login → bearer token.
@@ -133,6 +208,13 @@ Datasource env (set via `pass-cli`; defaults to a local `secman_test`): `TEST_DB
 ```kotlin
 class MyIntegrationTest : BaseIntegrationTest() { @Inject lateinit var repo: Repository }
 ```
+
+**Frontend unit tier**: `cd src/frontend && npm test` — Node's own runner with native
+TypeScript stripping, no test-framework dependency. Tests live beside their module as
+`<module>.test.ts`. Imports resolve `.ts` only: Node cannot parse JSX, so pure logic
+must be extracted out of `.tsx` into a sibling `.ts` module to be unit-testable (the
+resolver hook in `src/frontend/test/` handles extensionless specifiers and raises a
+pointed error on `.tsx`). Details in `docs/TESTING.md` §Frontend.
 
 One-time local setup (admin DB user):
 ```sql
@@ -180,5 +262,5 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
 - **Profile picture management** — users upload/crop/replace/remove their own avatar on `/profile`; it replaces the person icon in the header dropdown. `GET/POST/DELETE /api/users/profile/picture` on `UserProfileController`, **own picture only — no user id in any route**, so cross-user access is structurally impossible. Bytes live in a side table `user_profile_picture` (V249, 1:1, cascade) *not* a column on `users`, because `@Basic(LAZY)` on a `@Lob` is inert without bytecode enhancement (not enabled here) — hot paths use the blob-free `findUpdatedAtByUserId`. Uploads are decoded, centre-cropped, scaled to 256 px and **re-encoded**; that round trip, not the magic-byte sniff, is what kills polyglots and strips EXIF. Dimension probe runs *before* `read(0)` (bomb guard). Header `<img>` is gated on `hasProfilePicture` and DELETE returns 204 unconditionally — an unconditional request or a 404 would fail the `/e2ejs` gate. Full detail below.
-- **Documentation correctness sweep (living docs)** — repo-wide review of root docs, `docs/`, `.claude`/`.agents` skills+commands, and `src/`/`scripts/`/`tests/`/`testdata/` READMEs (`specs/` excluded as frozen history). Fixed stale version banners (build files are ground truth, not the docs), Java 21→25 leftovers, docs telling readers to bypass the canonical dev-start scripts, two CLI docs whose examples used a deprecated/non-functional auth flag, a fabricated CLI config schema, and several `.claude`↔`.agents` skill-mirror drifts. Full detail below.
-- **MCP simplification pass (no behaviour change)** — tools self-register: `McpToolRegistry` injects `List<McpTool>`, so a new `@Singleton` tool needs no registry edit. The two name→permission `when` blocks are now declarative tables in `mcp/McpToolPermissions.kt` — `LISTING` (gates `tools/list`) and `CALLING` (gates `tools/call`), "caller holds any of these permissions"; both verified identical to what they replaced for all 85 tools, and the known `LISTING`/`CALLING` drift is now visible in one file. Duplicate rate-limiter deleted, controller auth+delegation preambles extracted, 24 tools' inline role checks moved onto `McpToolGuards` (`requireAnyRole(code=…)`, new `requireAnyUserRole` for checks an admin API key must *not* bypass) with every error code/message preserved. Net −800 lines.
+- **Codex can now find the skills that were already mirrored for it** — the *file* mirror was complete (all 16 files under `.claude/skills/` have `.agents/skills/` counterparts, frontmatter byte-identical, `check-skill-sync.sh` green), but `AGENTS.md` — the only file a Codex session is guaranteed to read — never mentioned `.agents/skills/`, and named the two mandatory gates as `/e2ejs` and `/e2evulnexception`, slash commands that do not exist outside Claude Code. New `AGENTS.md` §Skills tabulates all eleven skills with what each does and **whether it writes data**, points at `.agents/skills/<name>/SKILL.md` as the thing to read in full, names `_shared/stack-lifecycle.md` as mandatory pre-reading, records the Codex `sandbox_permissions: "require_escalated"` requirement for the dev-start scripts, and states what is deliberately **not** mirrored (the nine `speckit.*` commands, the two unused subagents) so their absence reads as a decision, not drift. Doc-only — no `src/`, `tests/` or `scripts/` files touched, so the principle-7 E2E gates do not apply. Full detail below.
+- **OWASP Top 10 compliance is now a binding rule for generated code** — new `CLAUDE.md` §OWASP Top 10 Compliance turns Hard Principle 1 ("security-first") from a slogan into an enforceable A01–A10 checklist, pinned explicitly to the **2021** list so it cannot drift silently. Each category names the control that already exists here and must be reused rather than reimplemented — `AssetFilterService.canAccessAsset` (A01), `BCryptPasswordEncoder` + the three startup config validators (A02), bound parameters incl. the ~30 `nativeQuery = true` methods, `DOMPurify` at the assignment site, `ExcelSanitizer.sanitize()` (A03), `SecurityHeadersFilter` and `ValidationExceptionHandler` (A05), `ImportController.validateFile` and the four XXE features set by `NmapParserService`/`MasscanParserService` (A08), `McpOriginValidationFilter` (A10) — and each carries the repo-specific failure mode that makes it non-obvious. Principle 1 now points at it; `AGENTS.md` gained a pointer for Codex. New **review gate**: state the A01–A10 result for the diff before declaring a change complete, run `/security-review` for auth/crypto/upload/export/outbound-HTTP changes, and treat any HIGH-or-above finding as blocking. Doc-only change — no `src/`, `tests/` or `scripts/` files touched, so the principle-7 E2E gates do not apply. Full detail below.

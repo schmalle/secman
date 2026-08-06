@@ -24,8 +24,8 @@ open class DashboardPreferenceController(
     private val logger = LoggerFactory.getLogger(DashboardPreferenceController::class.java)
 
     /**
-     * Get current user's dashboard KPI preferences
-     * Returns default values (both KPIs visible) if no preferences exist
+     * Get current user's dashboard card preferences
+     * Returns default values (all cards visible) if no preferences exist
      */
     @Get
     fun getUserPreferences(authentication: Authentication): DashboardPreferenceResponse {
@@ -52,26 +52,29 @@ open class DashboardPreferenceController(
 
         val existing = dashboardPreferenceRepository.findByUserId(userId)
 
+        // Apply the request onto either the existing row or a fresh one, so the card list
+        // is enumerated once rather than duplicated across an update and an insert branch.
+        val merged = existing.orElseGet { DashboardPreference(userId = userId) }.copy(
+            showAwsCleanServerKpi = request.showAwsCleanServerKpi,
+            showEdrCoverageKpi = request.showEdrCoverageKpi,
+            showAccountFindingAge = request.showAccountFindingAge,
+            showAssetInventory = request.showAssetInventory,
+            showUsers = request.showUsers,
+            showActiveUsers = request.showActiveUsers,
+            showActiveReleases = request.showActiveReleases,
+            showRunningRiskAssessments = request.showRunningRiskAssessments,
+            showLastCrowdStrikeImport = request.showLastCrowdStrikeImport,
+            updatedAt = Instant.now()
+        )
+
         val preference = if (existing.isPresent) {
-            // Update existing
-            val updated = existing.get().copy(
-                showAwsCleanServerKpi = request.showAwsCleanServerKpi,
-                showEdrCoverageKpi = request.showEdrCoverageKpi,
-                updatedAt = Instant.now()
-            )
-            dashboardPreferenceRepository.update(updated)
-            updated
+            dashboardPreferenceRepository.update(merged)
+            merged
         } else {
-            // Create new
-            val newPref = DashboardPreference(
-                userId = userId,
-                showAwsCleanServerKpi = request.showAwsCleanServerKpi,
-                showEdrCoverageKpi = request.showEdrCoverageKpi
-            )
-            dashboardPreferenceRepository.save(newPref)
+            dashboardPreferenceRepository.save(merged)
         }
 
-        logger.info("Updated dashboard preferences for user $userId: showAwsCleanServerKpi=${request.showAwsCleanServerKpi}, showEdrCoverageKpi=${request.showEdrCoverageKpi}")
+        logger.info("Updated dashboard card preferences for user $userId: $request")
 
         return DashboardPreferenceResponse.from(preference)
     }
@@ -79,7 +82,14 @@ open class DashboardPreferenceController(
     @Serdeable
     data class UpdatePreferenceRequest(
         val showAwsCleanServerKpi: Boolean,
-        val showEdrCoverageKpi: Boolean
+        val showEdrCoverageKpi: Boolean,
+        val showAccountFindingAge: Boolean,
+        val showAssetInventory: Boolean,
+        val showUsers: Boolean,
+        val showActiveUsers: Boolean,
+        val showActiveReleases: Boolean,
+        val showRunningRiskAssessments: Boolean,
+        val showLastCrowdStrikeImport: Boolean
     )
 
     @Serdeable
@@ -88,6 +98,13 @@ open class DashboardPreferenceController(
         val userId: Long,
         val showAwsCleanServerKpi: Boolean,
         val showEdrCoverageKpi: Boolean,
+        val showAccountFindingAge: Boolean,
+        val showAssetInventory: Boolean,
+        val showUsers: Boolean,
+        val showActiveUsers: Boolean,
+        val showActiveReleases: Boolean,
+        val showRunningRiskAssessments: Boolean,
+        val showLastCrowdStrikeImport: Boolean,
         val createdAt: Instant,
         val updatedAt: Instant
     ) {
@@ -97,6 +114,13 @@ open class DashboardPreferenceController(
                 userId = preference.userId,
                 showAwsCleanServerKpi = preference.showAwsCleanServerKpi,
                 showEdrCoverageKpi = preference.showEdrCoverageKpi,
+                showAccountFindingAge = preference.showAccountFindingAge,
+                showAssetInventory = preference.showAssetInventory,
+                showUsers = preference.showUsers,
+                showActiveUsers = preference.showActiveUsers,
+                showActiveReleases = preference.showActiveReleases,
+                showRunningRiskAssessments = preference.showRunningRiskAssessments,
+                showLastCrowdStrikeImport = preference.showLastCrowdStrikeImport,
                 createdAt = preference.createdAt,
                 updatedAt = preference.updatedAt
             )
