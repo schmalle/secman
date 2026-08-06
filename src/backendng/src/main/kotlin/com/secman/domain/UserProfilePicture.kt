@@ -25,7 +25,7 @@ import java.time.Instant
  *
  * Uses a plain [userId] rather than a `@OneToOne User` relation: reading a picture must not load
  * a User, and a lazy proxy inside a `data class` equals/hashCode is a known hazard. The foreign
- * key is still enforced at the database level (see V249).
+ * key is still enforced at the database level (see V251).
  */
 @Entity
 @Table(
