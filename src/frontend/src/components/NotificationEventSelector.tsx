@@ -24,13 +24,19 @@ export default function NotificationEventSelector({
   disabled = false,
   onToggle,
 }: Props) {
-  if (availableEventTypes.length === 0) {
+  // Both lists arrive from an API response, and Micronaut Serde drops empty collections
+  // from the body rather than sending `[]`. A missing key used to throw here and take the
+  // whole settings card down, so treat "absent" as "empty" instead of trusting the type.
+  const eventTypes = Array.isArray(availableEventTypes) ? availableEventTypes : [];
+  const selectedNames = Array.isArray(selected) ? selected : [];
+
+  if (eventTypes.length === 0) {
     return <p className="text-muted">No notification events are available.</p>;
   }
 
   return (
     <>
-      {availableEventTypes.map((eventType) => {
+      {eventTypes.map((eventType) => {
         const id = `${idPrefix}-event-${eventType.name}`;
         return (
           <div className="form-check mb-3" key={eventType.name}>
@@ -38,7 +44,7 @@ export default function NotificationEventSelector({
               className="form-check-input"
               type="checkbox"
               id={id}
-              checked={selected.includes(eventType.name)}
+              checked={selectedNames.includes(eventType.name)}
               onChange={() => onToggle(eventType.name)}
               disabled={disabled}
             />
