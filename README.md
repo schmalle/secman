@@ -158,8 +158,9 @@ Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings):
 | [docs/E2E_EXCEPTION_WORKFLOW_TEST.md](docs/E2E_EXCEPTION_WORKFLOW_TEST.md) | Vuln-exception MCP E2E |
 | [docs/SKILLS_AND_AGENTS.md](docs/SKILLS_AND_AGENTS.md) | Claude Code skills + sub-agents wired to this repo |
 | [docs/PASS_CLI.md](docs/PASS_CLI.md) | `pass-cli` (Proton Pass) secret resolution |
-| [docker/README.md](docker/README.md) | Docker deployment: Compose (bundled DB or RDS), single-container, multi-container |
+| [docker/README.md](docker/README.md) | Docker deployment: Compose (bundled DB or RDS), single-container, split 3-container (macOS), Kubernetes |
 | [docs/DOCKER_AWS.md](docs/DOCKER_AWS.md) | All-in-one AWS image: ECS/Fargate, Secrets Manager, RDS |
+| [docs/DOCKER_EKS.md](docs/DOCKER_EKS.md) | Kubernetes on AWS EKS/Fargate: manifests, ALB, External Secrets Operator, RDS |
 | [INSTALL.md](INSTALL.md) | Step-by-step install |
 
 ## Workflow

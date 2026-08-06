@@ -1,0 +1,23 @@
+# Non-secret backend configuration. Secrets live in externalsecret.yaml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: secman-config
+  namespace: secman
+data:
+  # RDS MariaDB 11.4 endpoint — see docs/DOCKER_EKS.md Step 3.
+  DB_CONNECT: "jdbc:mariadb://REPLACE_WITH_RDS_ENDPOINT:3306/secman"
+  DB_USERNAME: "secman"
+  # Public HTTPS hostname (ALB) — drives CORS, OAuth callbacks, email links.
+  FRONTEND_URL: "https://REPLACE_WITH_PUBLIC_HOSTNAME"
+  SECMAN_BACKEND_URL: "https://REPLACE_WITH_PUBLIC_HOSTNAME"
+  # TLS terminates at the ALB (re-encrypted to the frontend pod, see
+  # ingress.yaml) — the auth cookie must still be marked Secure.
+  SECMAN_AUTH_COOKIE_SECURE: "true"
+  # false = fresh RDS database: Hibernate auto-creates the schema on first
+  # boot. Set true once the schema is Flyway-managed (existing deployment).
+  FLYWAY_DATASOURCES_DEFAULT_ENABLED: "false"
+  # 75% is safe here (unlike docker/aws/Dockerfile's 45%): this Deployment
+  # runs ONLY the JVM in its container — no nginx/node sharing the cgroup.
+  # Tune together with deployment-backend.yaml's resources.limits.memory.
+  JAVA_OPTS: "-XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=25.0 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/secman-backend-oom.hprof -XX:+ExitOnOutOfMemoryError"

@@ -1,0 +1,22 @@
+# Optional. Requires the metrics-server add-on in-cluster — without it this
+# HPA object applies cleanly but never scales (metrics stay "unknown").
+# See docs/DOCKER_EKS.md.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: secman-backend
+  namespace: secman
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: secman-backend
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

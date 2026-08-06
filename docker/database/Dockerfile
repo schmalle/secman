@@ -5,11 +5,14 @@ FROM mariadb:11.4
 LABEL maintainer="secman"
 LABEL description="Secman MariaDB database container"
 
-# Environment defaults (override at runtime)
-ENV MYSQL_ROOT_PASSWORD=secman-root-pw
+# Non-secret defaults (override at runtime).
 ENV MYSQL_DATABASE=secman
 ENV MYSQL_USER=secman
-ENV MYSQL_PASSWORD=secman-docker-pw
+
+# MYSQL_ROOT_PASSWORD / MYSQL_PASSWORD intentionally have NO baked default —
+# a dev fallback here would eventually leak into a real deployment. The
+# upstream mariadb image refuses to start without one of these set anyway.
+# Inject them at `docker run -e` / compose `env_file` time. See docker/README.md.
 
 # Copy initialization SQL (runs on first container start only)
 COPY init.sql /docker-entrypoint-initdb.d/01-init.sql

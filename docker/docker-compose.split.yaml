@@ -1,0 +1,79 @@
+# Secman — Docker Compose for the split (three-container) topology
+# =============================================================================
+# Three real containers: database, backend (Micronaut), frontend (nginx +
+# Astro SSR). This is the compose equivalent of the manual
+# start-database.sh/start-backend.sh/start-frontend.sh scripts, but reads
+# secrets from ./.env instead of falling back to weak baked-in defaults.
+#
+# Configuration is read from ./.env (copy .env.example -> .env first, or let
+# ./compose-up-split.sh generate one with fresh secrets — the same .env file
+# used by docker-compose.yml, the all-in-one flow). See docker/README.md.
+#
+# Convenience wrapper:  ./docker/compose-up-split.sh
+# Raw compose:  docker compose -f docker/docker-compose.split.yaml --env-file docker/.env up
+#
+# Only DB_PASSWORD/JWT_SECRET/SECMAN_ENCRYPTION_PASSWORD/SECMAN_ENCRYPTION_SALT
+# are passed through explicitly below (not the whole .env via `env_file:`) —
+# FRONTEND_URL/SECMAN_BACKEND_URL/DB_CONNECT in .env are tuned for the
+# all-in-one flow's port (8080) and would be wrong for this flow's frontend
+# port (8443); the split images already bake in the correct defaults for
+# this topology (see docker/backend/Dockerfile, docker/frontend/nginx.conf).
+# =============================================================================
+
+services:
+  db:
+    build:
+      context: database
+    image: secman-db:latest
+    container_name: secman-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD must be set in docker/.env}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in docker/.env}
+      MYSQL_DATABASE: ${DB_NAME:-secman}
+      MYSQL_USER: ${DB_USERNAME:-secman}
+    volumes:
+      - secman-split-db-data:/var/lib/mysql
+    ports:
+      # Exposed for host-side inspection only; the app reaches it via the
+      # compose network as host `secman-db`.
+      - "${DB_HOST_PORT:-3307}:3306"
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend/Dockerfile
+    image: secman-backend:latest
+    container_name: secman-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in docker/.env}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in docker/.env}
+      SECMAN_ENCRYPTION_PASSWORD: ${SECMAN_ENCRYPTION_PASSWORD:?SECMAN_ENCRYPTION_PASSWORD must be set in docker/.env}
+      SECMAN_ENCRYPTION_SALT: ${SECMAN_ENCRYPTION_SALT:?SECMAN_ENCRYPTION_SALT must be set in docker/.env}
+      FLYWAY_DATASOURCES_DEFAULT_ENABLED: ${FLYWAY_DATASOURCES_DEFAULT_ENABLED:-false}
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend/Dockerfile
+    image: secman-frontend:latest
+    container_name: secman-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8443:8443"
+
+volumes:
+  secman-split-db-data:
+    # Deliberately a different volume than the all-in-one flow's
+    # secman-db-data — running both flows against the same volume
+    # concurrently risks two MariaDB instances writing the same data dir.
+    name: secman-split-db-data
