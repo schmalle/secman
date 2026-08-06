@@ -1,6 +1,7 @@
 package com.secman.service
 
 import com.secman.domain.RiskAssessment
+import com.secman.domain.User
 import com.secman.repository.RiskAssessmentRepository
 import com.secman.repository.UserRepository
 import io.micronaut.http.exceptions.HttpStatusException
@@ -34,7 +35,34 @@ class AssessmentOwnershipGuard(
      * @throws HttpStatusException(403) when the caller has no claim to it.
      * @return the assessment when the check passes.
      */
-    fun check(assessmentId: Long, authentication: Authentication): RiskAssessment {
+    fun check(assessmentId: Long, authentication: Authentication): RiskAssessment =
+        checkAuthorized(assessmentId, authentication) { user, assessment ->
+            assessment.assessor.id == user.id || assessment.requestor.id == user.id
+        }
+
+    /**
+     * Same claim as [check] (assessor, requestor, or ADMIN) plus the
+     * assessment's assigned `respondent` — used by [com.secman.controller.ResponseController],
+     * whose whole purpose is letting a designated respondent answer a
+     * questionnaire while authenticated. [check] deliberately excludes the
+     * respondent for the AI-suggestion feature; this is a separate claim,
+     * not a widening of that one.
+     * @throws HttpStatusException(404) when the assessment is unknown.
+     * @throws HttpStatusException(403) when the caller has no claim to it.
+     * @return the assessment when the check passes.
+     */
+    fun checkWithRespondent(assessmentId: Long, authentication: Authentication): RiskAssessment =
+        checkAuthorized(assessmentId, authentication) { user, assessment ->
+            assessment.assessor.id == user.id ||
+                assessment.requestor.id == user.id ||
+                assessment.respondent?.id == user.id
+        }
+
+    private fun checkAuthorized(
+        assessmentId: Long,
+        authentication: Authentication,
+        isOwner: (User, RiskAssessment) -> Boolean
+    ): RiskAssessment {
         val assessment = riskAssessmentRepository.findById(assessmentId).orElse(null)
             ?: throw HttpStatusException(HttpStatus.NOT_FOUND, "Assessment not found")
 
@@ -49,11 +77,10 @@ class AssessmentOwnershipGuard(
             throw HttpStatusException(HttpStatus.FORBIDDEN, "User not recognized")
         }
 
-        val isOwner = assessment.assessor.id == user.id || assessment.requestor.id == user.id
-        if (!isOwner) {
+        if (!isOwner(user, assessment)) {
             log.info(
-                "AssessmentOwnershipGuard: forbidden — user {} (id={}) is neither assessor (id={}) nor requestor (id={}) of assessment {}",
-                username, user.id, assessment.assessor.id, assessment.requestor.id, assessmentId
+                "AssessmentOwnershipGuard: forbidden — user {} (id={}) has no claim to assessment {} (assessor={}, requestor={}, respondent={})",
+                username, user.id, assessmentId, assessment.assessor.id, assessment.requestor.id, assessment.respondent?.id
             )
             throw HttpStatusException(HttpStatus.FORBIDDEN, "You do not have access to this assessment")
         }
