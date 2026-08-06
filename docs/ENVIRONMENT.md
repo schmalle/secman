@@ -105,6 +105,18 @@ What is sent to OpenRouter (audit guarantee, NFR-4 in spec):
 
 What is NEVER sent: owner emails, IP addresses, internal hostnames, full asset descriptions. Verified by a unit test on the prompt builder.
 
+### Profile pictures
+Uploads are validated and **re-encoded** (decode → centre-crop → scale → re-encode), never stored
+as sent. That round trip is what removes polyglot payloads and EXIF metadata, so lowering these
+limits weakens nothing but raising `max-source-*` raises the memory a single request can demand.
+
+| Var | Default | Effect |
+|---|---|---|
+| `SECMAN_PROFILE_PICTURE_MAX_UPLOAD_BYTES` | `2097152` (2 MB) | hard cap on the uploaded bytes. Independent of `micronaut.server.multipart.max-file-size`, which stays at 100 MB for the XLSX/vulnerability importers. |
+| `SECMAN_PROFILE_PICTURE_MAX_SOURCE_DIMENSION` | `10000` | max pixels per edge, read from the image header **before** any raster is allocated (decompression-bomb guard). |
+| `SECMAN_PROFILE_PICTURE_MAX_SOURCE_PIXELS` | `40000000` | max total pixels, same header-only guard. A 2 MB PNG can otherwise decode to a multi-GB `BufferedImage`. |
+| `SECMAN_PROFILE_PICTURE_TARGET_EDGE` | `256` | edge length of the stored square thumbnail. Sources smaller than this are not upscaled. |
+
 ### Debug & logging
 | Var | Default | Effect |
 |---|---|---|

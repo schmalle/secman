@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import userProfileService from '../services/userProfileService';
 import type { UserProfileData } from '../services/userProfileService';
 import PasskeyManagement from './PasskeyManagement';
+import ProfilePictureCard from './ProfilePictureCard';
 import { getDashboardPreferences, updateDashboardPreferences, toCardVisibility } from '../services/dashboardPreferenceService';
 import type { DashboardPreference, DashboardCardVisibility } from '../services/dashboardPreferenceService';
 import { hasRole } from '../utils/auth';
@@ -234,6 +235,15 @@ export default function UserProfile() {
   return (
     <div className="container-fluid mt-4">
       <h1>User Profile</h1>
+      {/*
+        Feature: Profile Picture Management. Seeded from the profile fetch that already ran, so
+        no extra metadata request is needed. Keyed on the fetched values so a Retry re-seeds it.
+      */}
+      <ProfilePictureCard
+        key={`${profile?.username ?? ''}-${profile?.profilePictureUpdatedAt ?? ''}`}
+        initialHasPicture={profile?.hasProfilePicture ?? false}
+        initialUpdatedAt={profile?.profilePictureUpdatedAt ?? null}
+      />
       <div className="card mt-3">
         <div className="card-body">
           <div className="mb-3">
