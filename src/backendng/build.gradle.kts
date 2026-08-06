@@ -142,7 +142,10 @@ application {
         "-Xms256m",
         "-XX:+HeapDumpOnOutOfMemoryError",
         "-XX:HeapDumpPath=build/secman-backend-oom.hprof",
-        "-XX:+ExitOnOutOfMemoryError"
+        "-XX:+ExitOnOutOfMemoryError",
+        // ProfilePictureService uses ImageIO/Graphics2D. Raster work needs no display, but pin
+        // headless so a stray DISPLAY can never push the JVM onto a windowing toolkit.
+        "-Djava.awt.headless=true"
     )
 }
 

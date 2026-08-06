@@ -8,6 +8,14 @@ export interface User {
     workgroupCount?: number;
     awsAccountCount?: number;
     domainCount?: number;
+    /**
+     * Profile Picture Management. Supplied by GET /api/auth/status, which runs on every page
+     * load. The header MUST gate its <img> on hasProfilePicture — requesting the picture
+     * unconditionally would 404 on every page for users who have not set one.
+     */
+    hasProfilePicture?: boolean;
+    /** Last-modified stamp, used as a cache-busting query parameter on the picture URL. */
+    profilePictureUpdatedAt?: string | null;
 }
 
 declare global {
