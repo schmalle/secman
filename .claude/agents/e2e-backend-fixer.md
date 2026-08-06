@@ -1,9 +1,11 @@
 ---
 name: e2e-backend-fixer
 description: >
-  Diagnose and fix Kotlin/Micronaut backend errors surfaced by E2E test failures.
-  Spawned by the e2e-runner skill when a test failure is classified as a
-  backend issue (HTTP 5xx, 403, 404, Kotlin/Java exception in logs).
+  Diagnose and fix Kotlin/Micronaut backend errors surfaced by E2E test failures
+  (HTTP 5xx, 403, 404, Kotlin/Java exception in logs). Not currently spawned
+  automatically by any skill — the E2E skills under `.claude/skills/` fix
+  backend issues inline. Invoke manually when triaging a backend-side E2E
+  failure in isolation.
 model: inherit
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---

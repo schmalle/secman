@@ -10,7 +10,7 @@ See repo-root `CLAUDE.md` for the authoritative rules. Quick reference for agent
 
 ## Build / test
 - Backend: `cd ../scripts && ./startbackenddev.sh` (canonical) or from repo root `./gradlew build` / `./gradlew :backendng:test`.
-- Frontend: `cd frontend && npm install`, then `npm run dev`, `npm run build`, `npm run preview`, `npm run test` (full Playwright) or `npm run test:checkin` (lite).
+- Frontend: `cd frontend && npm install`, then `../scripts/startfrontenddev.sh` (canonical dev start — never `npm run dev` directly), `npm run build`, `npm run preview`. Playwright E2E: `./tests/e2e/run-e2e.sh` from repo root (or `npx playwright test` manually with `SECMAN_ADMIN_NAME`/`SECMAN_ADMIN_PASS` etc. set) — there is no `npm run test`/`test:checkin` script.
 - CLI: `./gradlew :cli:shadowJar`, then `./scripts/secman <cmd>`.
 
 ## Style
@@ -23,7 +23,7 @@ See repo-root `CLAUDE.md` for the authoritative rules. Quick reference for agent
 - HTTP in tests goes through `SECMAN_HOST` env var (resolved via `pass-cli`). Never hardcode `localhost:8080` / `localhost:4321`.
 
 ## Commits & PRs
-`type(scope): description` (or short `Type: Summary`). Imperative ≤72 chars. PR covers motivation, verification (`./gradlew build`, `npm run test:checkin`), and screenshots for UI changes. Highlight new dependencies — especially anything touching auth, storage, or crypto — and confirm license compatibility.
+`type(scope): description` (or short `Type: Summary`). Imperative ≤72 chars. PR covers motivation, verification (`./gradlew build`, `./tests/e2e/run-e2e.sh`), and screenshots for UI changes. Highlight new dependencies — especially anything touching auth, storage, or crypto — and confirm license compatibility.
 
 ## Secrets
 Never commit credentials or DB dumps. Use env vars or `application-local.yml` overrides; resolve secrets via `pass-cli` (Proton Pass).

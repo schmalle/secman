@@ -20,9 +20,23 @@ The `manage-user-mappings` command suite provides CLI tools for ADMIN users to m
 ## Prerequisites
 
 ### Authentication
-All commands require **ADMIN role** access. Specify admin credentials via:
-- `--admin-user <email>` flag on each command, OR
-- `SECMAN_ADMIN_EMAIL` environment variable
+All commands require **ADMIN role** access on the backend account used to run them. Specify backend credentials via:
+- `--username <name>` flag (or the `SECMAN_ADMIN_NAME` environment variable), AND
+- `--password <pass>` flag (or the `SECMAN_ADMIN_PASS` environment variable)
+
+Both are required. Omitting `--username`/`SECMAN_ADMIN_NAME` fails fast with
+`Backend username required. Use --username flag or set SECMAN_ADMIN_NAME environment variable`;
+omitting `--password`/`SECMAN_ADMIN_PASS` fails the same way with the password equivalent.
+
+> **Deprecated flag**: `--admin-user` / `-u` (and the `SECMAN_ADMIN_EMAIL` environment
+> variable) are still accepted for backward compatibility but are **not read by any
+> subcommand** — identity and authorization are derived entirely from the
+> `--username`/`--password` backend credentials above. Passing only `--admin-user`
+> without `--username`/`--password` will fail at runtime.
+
+Commands that talk directly to S3 without contacting the backend (`download-s3`,
+`print-s3`, `download-parse`) do **not** need `--username`/`--password` — only AWS
+credentials, documented in their own sections below.
 
 ### Database Connection
 Commands connect to the backend database via Micronaut Data JPA. Ensure:
@@ -39,16 +53,18 @@ Commands connect to the backend database via Micronaut Data JPA. Ensure:
 
 **Syntax**:
 ```bash
-./gradlew cli:run --args='manage-user-mappings add-domain \
+./scripts/secman manage-user-mappings add-domain \
   --emails <email1>,<email2> \
   --domains <domain1>,<domain2> \
-  [--admin-user <admin-email>]'
+  --username <backend-user> --password <backend-pass>
 ```
 
 **Options**:
 - `--emails` (required): Comma-separated list of user email addresses
 - `--domains` (required): Comma-separated list of AD domains
-- `--admin-user` or `-u`: Admin user email (or set SECMAN_ADMIN_EMAIL)
+- `--username` (required, or `SECMAN_ADMIN_NAME` env var): Backend username
+- `--password` (required, or `SECMAN_ADMIN_PASS` env var): Backend password
+- `--admin-user` or `-u`: **(Deprecated, no effect)** identity is derived from `--username`/`--password`
 
 **Behavior**:
 - Creates **n×m mappings** (cross product of emails and domains)
@@ -60,22 +76,23 @@ Commands connect to the backend database via Micronaut Data JPA. Ensure:
 **Examples**:
 ```bash
 # Single user, single domain
-./gradlew cli:run --args='manage-user-mappings add-domain \
+./scripts/secman manage-user-mappings add-domain \
   --emails alice@example.com \
   --domains corp.local \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # Multiple users and domains (creates 4 mappings)
-./gradlew cli:run --args='manage-user-mappings add-domain \
+./scripts/secman manage-user-mappings add-domain \
   --emails alice@example.com,bob@example.com \
   --domains corp.local,dev.local \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
-# Using environment variable for admin
-export SECMAN_ADMIN_EMAIL=admin@example.com
-./gradlew cli:run --args='manage-user-mappings add-domain \
+# Using environment variables for backend credentials
+export SECMAN_ADMIN_NAME=admin
+export SECMAN_ADMIN_PASS='<password>'
+./scripts/secman manage-user-mappings add-domain \
   --emails alice@example.com \
-  --domains example.com'
+  --domains example.com
 ```
 
 **Output**:
@@ -84,7 +101,7 @@ export SECMAN_ADMIN_EMAIL=admin@example.com
 Add Domain Mappings
 ============================================================
 
-Admin user: admin@example.com
+Backend: https://secman.example.com
 
 Processing domain mappings...
 Emails: alice@example.com, bob@example.com
@@ -115,16 +132,18 @@ Created: 2 pending
 
 **Syntax**:
 ```bash
-./gradlew cli:run --args='manage-user-mappings add-aws \
+./scripts/secman manage-user-mappings add-aws \
   --emails <email1>,<email2> \
   --accounts <account1>,<account2> \
-  [--admin-user <admin-email>]'
+  --username <backend-user> --password <backend-pass>
 ```
 
 **Options**:
 - `--emails` (required): Comma-separated list of user email addresses
 - `--accounts` (required): Comma-separated list of 12-digit AWS account IDs
-- `--admin-user` or `-u`: Admin user email
+- `--username` (required, or `SECMAN_ADMIN_NAME` env var): Backend username
+- `--password` (required, or `SECMAN_ADMIN_PASS` env var): Backend password
+- `--admin-user` or `-u`: **(Deprecated, no effect)** identity is derived from `--username`/`--password`
 
 **Validation**:
 - AWS account IDs must be exactly **12 digits**
@@ -133,25 +152,25 @@ Created: 2 pending
 **Examples**:
 ```bash
 # Single mapping
-./gradlew cli:run --args='manage-user-mappings add-aws \
+./scripts/secman manage-user-mappings add-aws \
   --emails alice@example.com \
   --accounts 123456789012 \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # Multiple accounts
-./gradlew cli:run --args='manage-user-mappings add-aws \
+./scripts/secman manage-user-mappings add-aws \
   --emails alice@example.com,bob@example.com \
   --accounts 123456789012,987654321098 \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 **Error Handling**:
 ```bash
 # Invalid account ID
-./gradlew cli:run --args='manage-user-mappings add-aws \
+./scripts/secman manage-user-mappings add-aws \
   --emails alice@example.com \
   --accounts 12345 \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # Output:
 ❌ Error: Invalid AWS account ID (must be 12 digits): 12345
@@ -167,7 +186,7 @@ Created: 2 pending
 
 **Syntax**:
 ```bash
-./gradlew cli:run --args='manage-user-mappings list \
+./scripts/secman manage-user-mappings list \
   [--email <email>] \
   [--status <ACTIVE|PENDING|ALL>] \
   [--type <AWS|DOMAIN|ALL>] \
@@ -176,7 +195,7 @@ Created: 2 pending
   [--send-email] \
   [--dry-run] \
   [--verbose | -v] \
-  [--admin-user <admin-email>]'
+  --username <backend-user> --password <backend-pass>
 ```
 
 **Options**:
@@ -188,7 +207,9 @@ Created: 2 pending
 - `--send-email`: **(Feature 085)** After printing the console output, email the statistics report (aggregates + per-user detail) to every user holding the `ADMIN` or `REPORT` role with a valid email address. Recipient selection matches the existing `send-admin-summary` command.
 - `--dry-run`: Used with `--send-email`. Preview the intended recipient list without dispatching any email. Still prints the console output and still writes a `DRY_RUN` row to the audit log.
 - `--verbose`, `-v`: Used with `--send-email`. Show per-recipient send status (`SUCCESS <addr>` / `FAILED <addr>`) in addition to the summary block.
-- `--admin-user` or `-u`: Admin user email
+- `--username` (required, or `SECMAN_ADMIN_NAME` env var): Backend username
+- `--password` (required, or `SECMAN_ADMIN_PASS` env var): Backend password
+- `--admin-user` or `-u`: **(Deprecated, no effect)** identity is derived from `--username`/`--password`
 
 **Output Formats**:
 
@@ -250,60 +271,64 @@ bob@example.com,DOMAIN,corp.local,PENDING,2025-01-19T10:00:00Z,
 **Examples**:
 ```bash
 # List all mappings
-./gradlew cli:run --args='manage-user-mappings list --admin-user admin@example.com'
+./scripts/secman manage-user-mappings list --username admin --password '<password>'
 
 # Filter by specific user
-./gradlew cli:run --args='manage-user-mappings list \
+./scripts/secman manage-user-mappings list \
   --email alice@example.com \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # Show only pending mappings
-./gradlew cli:run --args='manage-user-mappings list \
+./scripts/secman manage-user-mappings list \
   --status PENDING \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # Export to JSON
-./gradlew cli:run --args='manage-user-mappings list \
+./scripts/secman manage-user-mappings list \
   --format JSON \
-  --admin-user admin@example.com' > mappings.json
+  --username admin --password '<password>' > mappings.json
 
 # Export to CSV (stdout redirection)
-./gradlew cli:run --args='manage-user-mappings list \
+./scripts/secman manage-user-mappings list \
   --format CSV \
-  --admin-user admin@example.com' > mappings.csv
+  --username admin --password '<password>' > mappings.csv
 
 # Download AWS account mappings only to a file (round-trip compatible with `import`)
-./gradlew cli:run --args='manage-user-mappings list \
+./scripts/secman manage-user-mappings list \
   --type AWS \
   --format CSV \
-  --output aws-mappings.csv'
+  --output aws-mappings.csv \
+  --username admin --password '<password>'
 
 # Download all domain mappings as JSON
-./gradlew cli:run --args='manage-user-mappings list \
+./scripts/secman manage-user-mappings list \
   --type DOMAIN \
   --format JSON \
-  --output domain-mappings.json'
+  --output domain-mappings.json \
+  --username admin --password '<password>'
 
 # Download AWS mappings for one user only
-./gradlew cli:run --args='manage-user-mappings list \
+./scripts/secman manage-user-mappings list \
   --type AWS \
   --email alice@example.com \
   --format CSV \
-  --output alice-aws.csv'
+  --output alice-aws.csv \
+  --username admin --password '<password>'
 
 # Feature 085: Email statistics to all ADMIN/REPORT users (happy path)
-./gradlew cli:run --args='manage-user-mappings list --send-email'
+# Uses SECMAN_ADMIN_NAME / SECMAN_ADMIN_PASS from the environment (set via pass-cli)
+./scripts/secman manage-user-mappings list --send-email
 
 # Preview intended recipients without dispatching
-./gradlew cli:run --args='manage-user-mappings list --send-email --dry-run'
+./scripts/secman manage-user-mappings list --send-email --dry-run
 
 # Per-recipient delivery status (useful for troubleshooting SMTP)
-./gradlew cli:run --args='manage-user-mappings list --send-email --verbose'
+./scripts/secman manage-user-mappings list --send-email --verbose
 
 # Email a filtered view (only mappings for one user)
-./gradlew cli:run --args='manage-user-mappings list \
+./scripts/secman manage-user-mappings list \
   --email alice@example.com \
-  --send-email'
+  --send-email
 ```
 
 **Email Distribution (Feature 085)**
@@ -351,10 +376,10 @@ command retains its pre-Feature-085 exit behavior (0 on success, 1 on error).
 
 **Syntax**:
 ```bash
-./gradlew cli:run --args='manage-user-mappings remove \
+./scripts/secman manage-user-mappings remove \
   --email <email> \
   [--domain <domain> | --account <account> | --all] \
-  [--admin-user <admin-email>]'
+  --username <backend-user> --password <backend-pass>
 ```
 
 **Options**:
@@ -362,29 +387,31 @@ command retains its pre-Feature-085 exit behavior (0 on success, 1 on error).
 - `--domain`: Remove specific domain mapping
 - `--account`: Remove specific AWS account mapping
 - `--all`: Remove ALL mappings for the user
-- `--admin-user` or `-u`: Admin user email
+- `--username` (required, or `SECMAN_ADMIN_NAME` env var): Backend username
+- `--password` (required, or `SECMAN_ADMIN_PASS` env var): Backend password
+- `--admin-user` or `-u`: **(Deprecated, no effect)** identity is derived from `--username`/`--password`
 
 **IMPORTANT**: Must specify **exactly one** of `--domain`, `--account`, or `--all`.
 
 **Examples**:
 ```bash
 # Remove specific domain
-./gradlew cli:run --args='manage-user-mappings remove \
+./scripts/secman manage-user-mappings remove \
   --email alice@example.com \
   --domain corp.local \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # Remove specific AWS account
-./gradlew cli:run --args='manage-user-mappings remove \
+./scripts/secman manage-user-mappings remove \
   --email alice@example.com \
   --account 123456789012 \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # Remove all mappings for user
-./gradlew cli:run --args='manage-user-mappings remove \
+./scripts/secman manage-user-mappings remove \
   --email alice@example.com \
   --all \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 **Output**:
@@ -393,7 +420,7 @@ command retains its pre-Feature-085 exit behavior (0 on success, 1 on error).
 Remove User Mappings
 ============================================================
 
-Admin user: admin@example.com
+Backend: https://secman.example.com
 
 Removing: domain mapping: alice@example.com → corp.local
 
@@ -419,18 +446,20 @@ Summary
 
 **Syntax**:
 ```bash
-./gradlew cli:run --args='manage-user-mappings import \
+./scripts/secman manage-user-mappings import \
   --file <path> \
   [--format <CSV|JSON|AUTO>] \
   [--dry-run] \
-  [--admin-user <admin-email>]'
+  --username <backend-user> --password <backend-pass>
 ```
 
 **Options**:
 - `--file` or `-f` (required): Path to import file
 - `--format`: File format (default: AUTO for auto-detection)
 - `--dry-run`: Validate file without creating mappings
-- `--admin-user` or `-u`: Admin user email
+- `--username` (required, or `SECMAN_ADMIN_NAME` env var): Backend username
+- `--password` (required, or `SECMAN_ADMIN_PASS` env var): Backend password
+- `--admin-user` or `-u`: **(Deprecated, no effect)** identity is derived from `--username`/`--password`
 
 **CSV Format**:
 ```csv
@@ -470,26 +499,26 @@ bob@example.com,DOMAIN,dev.local
 **Examples**:
 ```bash
 # Import CSV
-./gradlew cli:run --args='manage-user-mappings import \
+./scripts/secman manage-user-mappings import \
   --file /path/to/mappings.csv \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # Import JSON
-./gradlew cli:run --args='manage-user-mappings import \
+./scripts/secman manage-user-mappings import \
   --file /path/to/mappings.json \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # Dry-run validation
-./gradlew cli:run --args='manage-user-mappings import \
+./scripts/secman manage-user-mappings import \
   --file /path/to/mappings.csv \
   --dry-run \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # Force specific format
-./gradlew cli:run --args='manage-user-mappings import \
+./scripts/secman manage-user-mappings import \
   --file /path/to/data.txt \
   --format CSV \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 **Output**:
@@ -498,7 +527,7 @@ bob@example.com,DOMAIN,dev.local
 Import User Mappings
 ============================================================
 
-Admin user: admin@example.com
+Backend: https://secman.example.com
 File: /path/to/mappings.csv
 Format: AUTO
 
@@ -548,7 +577,7 @@ Errors:
   [--aws-profile <profile>] \
   [--format <CSV|JSON|AUTO>] \
   [--dry-run] \
-  [--admin-user <admin-email>]
+  --username <backend-user> --password <backend-pass>
 ```
 
 **Options**:
@@ -558,7 +587,9 @@ Errors:
 - `--aws-profile`: AWS credential profile name (default: default credential chain)
 - `--format`: File format (default: AUTO for auto-detection)
 - `--dry-run`: Validate file without creating mappings
-- `--admin-user` or `-u`: Admin user email
+- `--username` (required, or `SECMAN_ADMIN_NAME` env var): Backend username
+- `--password` (required, or `SECMAN_ADMIN_PASS` env var): Backend password
+- `--admin-user` or `-u`: **(Deprecated, no effect)** identity is derived from `--username`/`--password`
 
 **AWS Authentication**:
 The command uses the standard AWS SDK credential chain:
@@ -591,7 +622,7 @@ The command uses the standard AWS SDK credential chain:
 ./scripts/secman manage-user-mappings import-s3 \
   --bucket my-mapping-bucket \
   --key user-mappings/current.csv \
-  --admin-user admin@example.com
+  --username admin --password '<password>'
 
 # With specific region and profile
 ./scripts/secman manage-user-mappings import-s3 \
@@ -599,14 +630,14 @@ The command uses the standard AWS SDK credential chain:
   --key user-mappings/current.csv \
   --aws-region eu-west-1 \
   --aws-profile production \
-  --admin-user admin@example.com
+  --username admin --password '<password>'
 
 # Dry-run validation
 ./scripts/secman manage-user-mappings import-s3 \
   --bucket my-mapping-bucket \
   --key user-mappings/current.csv \
   --dry-run \
-  --admin-user admin@example.com
+  --username admin --password '<password>'
 ```
 
 **Email Notification (Feature 085)**:
@@ -622,17 +653,19 @@ See [Section 3 (List Mappings)](#3-list-mappings) for full `--send-email` docume
 **Cron Setup** (daily import at 2 AM with email notification):
 ```bash
 # Using environment variables — import then notify admins
+# SECMAN_ADMIN_NAME / SECMAN_ADMIN_PASS supply the backend credentials
 0 2 * * * root AWS_ACCESS_KEY_ID=xxx AWS_SECRET_ACCESS_KEY=xxx \
+  SECMAN_ADMIN_NAME=admin SECMAN_ADMIN_PASS=xxx \
   /opt/secman/bin/secman manage-user-mappings import-s3 \
   --bucket company-mappings --key daily/users.csv \
-  --admin-user admin@company.com \
   && /opt/secman/bin/secman manage-user-mappings list --send-email \
   >> /var/log/secman/s3-import.log 2>&1
 
 # Using IAM role (EC2) — import only, no email
-0 2 * * * root /opt/secman/bin/secman manage-user-mappings import-s3 \
+0 2 * * * root SECMAN_ADMIN_NAME=admin SECMAN_ADMIN_PASS=xxx \
+  /opt/secman/bin/secman manage-user-mappings import-s3 \
   --bucket company-mappings --key daily/users.csv \
-  --admin-user admin@company.com >> /var/log/secman/s3-import.log 2>&1
+  >> /var/log/secman/s3-import.log 2>&1
 ```
 
 **Output**:
@@ -641,7 +674,7 @@ See [Section 3 (List Mappings)](#3-list-mappings) for full `--send-email` docume
 Import User Mappings from S3
 ============================================================
 
-Admin user: admin@example.com
+Backend: https://secman.example.com
 Source: s3://my-bucket/user-mappings/current.csv
 AWS Region: us-east-1
 Format: AUTO
@@ -674,7 +707,7 @@ This is the read-only counterpart to `import-s3`:
 
 **Syntax**:
 ```bash
-./gradlew cli:run --args='manage-user-mappings download-s3 \
+./scripts/secman manage-user-mappings download-s3 \
   --bucket <bucket-name> \
   --key <object-key> \
   --output <local-file> \
@@ -685,7 +718,7 @@ This is the read-only counterpart to `import-s3`:
   [--aws-secret-access-key <secret>] \
   [--aws-session-token <token>] \
   [--endpoint-url <url>] \
-  [--quiet | -q]'
+  [--quiet | -q]
 ```
 
 **Required Options**:
@@ -716,18 +749,18 @@ This is the read-only counterpart to `import-s3`:
 **Examples**:
 ```bash
 # Download with default credential chain
-./gradlew cli:run --args='manage-user-mappings download-s3 \
+./scripts/secman manage-user-mappings download-s3 \
   --bucket my-bucket \
   --key mappings.csv \
-  --output ./aws-mappings.csv'
+  --output ./aws-mappings.csv
 
 # Use a named AWS profile, overwrite if file exists
-./gradlew cli:run --args='manage-user-mappings download-s3 \
+./scripts/secman manage-user-mappings download-s3 \
   --bucket my-bucket \
   --key data/users.json \
   --aws-profile prod \
   --output ./users.json \
-  --force'
+  --force
 
 # Explicit credentials + region (typical cron usage)
 ./scripts/secman manage-user-mappings download-s3 \
@@ -740,17 +773,18 @@ This is the read-only counterpart to `import-s3`:
   --quiet
 
 # Local S3Mock testing
-./gradlew cli:run --args='manage-user-mappings download-s3 \
+./scripts/secman manage-user-mappings download-s3 \
   --bucket test-bucket \
   --key mappings.csv \
   --endpoint-url http://localhost:9090 \
-  --output /tmp/mappings.csv'
+  --output /tmp/mappings.csv
 
 # Diff S3 source-of-truth against backend state
-./gradlew cli:run --args='manage-user-mappings download-s3 \
-  --bucket my-bucket --key mappings.csv --output /tmp/s3.csv'
-./gradlew cli:run --args='manage-user-mappings list \
-  --type AWS --format CSV --output /tmp/db.csv'
+./scripts/secman manage-user-mappings download-s3 \
+  --bucket my-bucket --key mappings.csv --output /tmp/s3.csv
+./scripts/secman manage-user-mappings list \
+  --type AWS --format CSV --output /tmp/db.csv \
+  --username admin --password '<password>'
 diff /tmp/s3.csv /tmp/db.csv
 ```
 
@@ -798,7 +832,7 @@ This is the parse-and-pretty-print counterpart in the S3 family:
 
 **Syntax**:
 ```bash
-./gradlew cli:run --args='manage-user-mappings print-s3 \
+./scripts/secman manage-user-mappings print-s3 \
   --bucket <bucket-name> \
   --key <object-key> \
   [--type <AWS|DOMAIN|ALL>] \
@@ -811,7 +845,7 @@ This is the parse-and-pretty-print counterpart in the S3 family:
   [--aws-secret-access-key <secret>] \
   [--aws-session-token <token>] \
   [--endpoint-url <url>] \
-  [--quiet | -q]'
+  [--quiet | -q]
 ```
 
 **Required Options**:
@@ -842,16 +876,16 @@ This split lets you do things like `print-s3 ... --format CSV --quiet | jq -R 's
 **Examples**:
 ```bash
 # Print AWS account mappings as a table (default)
-./gradlew cli:run --args='manage-user-mappings print-s3 \
+./scripts/secman manage-user-mappings print-s3 \
   --bucket my-bucket \
-  --key mappings.csv'
+  --key mappings.csv
 
 # Print everything (AWS + domains) as JSON
-./gradlew cli:run --args='manage-user-mappings print-s3 \
+./scripts/secman manage-user-mappings print-s3 \
   --bucket my-bucket \
   --key mappings.csv \
   --type ALL \
-  --format JSON'
+  --format JSON
 
 # Print as CSV, pipe through downstream tooling
 ./scripts/secman manage-user-mappings print-s3 \
@@ -863,14 +897,15 @@ This split lets you do things like `print-s3 ... --format CSV --quiet | jq -R 's
   --bucket my-bucket --key mappings.csv \
   --format CSV --quiet > /tmp/s3.csv
 ./scripts/secman manage-user-mappings list \
-  --type AWS --format CSV --output /tmp/db.csv
+  --type AWS --format CSV --output /tmp/db.csv \
+  --username admin --password '<password>'
 diff /tmp/s3.csv /tmp/db.csv
 
 # Troubleshoot a malformed file
-./gradlew cli:run --args='manage-user-mappings print-s3 \
+./scripts/secman manage-user-mappings print-s3 \
   --bucket my-bucket \
   --key broken.csv \
-  --show-errors'
+  --show-errors
 ```
 
 **Exit codes**:
@@ -927,49 +962,49 @@ bob@example.com,AWS_ACCOUNT,555566667777
 ### 1. Onboard New User with Multiple Domains
 ```bash
 # User joins organization, needs access to multiple domains
-./gradlew cli:run --args='manage-user-mappings add-domain \
+./scripts/secman manage-user-mappings add-domain \
   --emails newuser@example.com \
   --domains corp.local,dev.local,staging.local \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # Verify mappings were created
-./gradlew cli:run --args='manage-user-mappings list \
+./scripts/secman manage-user-mappings list \
   --email newuser@example.com \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 ### 2. Bulk Import from Spreadsheet
 ```bash
 # 1. Export from Excel/Google Sheets to CSV
 # 2. Validate with dry-run
-./gradlew cli:run --args='manage-user-mappings import \
+./scripts/secman manage-user-mappings import \
   --file users_mappings.csv \
   --dry-run \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # 3. If validation passes, import
-./gradlew cli:run --args='manage-user-mappings import \
+./scripts/secman manage-user-mappings import \
   --file users_mappings.csv \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # 4. Verify results
-./gradlew cli:run --args='manage-user-mappings list \
-  --admin-user admin@example.com'
+./scripts/secman manage-user-mappings list \
+  --username admin --password '<password>'
 ```
 
 ### 3. Migrate User to Different AWS Account
 ```bash
 # Remove old account
-./gradlew cli:run --args='manage-user-mappings remove \
+./scripts/secman manage-user-mappings remove \
   --email user@example.com \
   --account 123456789012 \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 
 # Add new account
-./gradlew cli:run --args='manage-user-mappings add-aws \
+./scripts/secman manage-user-mappings add-aws \
   --emails user@example.com \
   --accounts 987654321098 \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 ### 4. S3 Import with Admin Notification
@@ -993,28 +1028,31 @@ bob@example.com,AWS_ACCOUNT,555566667777
 ### 5. Audit User Access
 ```bash
 # Export all mappings to JSON for analysis
-./gradlew cli:run --args='manage-user-mappings list \
+./scripts/secman manage-user-mappings list \
   --format JSON \
-  --admin-user admin@example.com' > audit_$(date +%Y%m%d).json
+  --username admin --password '<password>' > audit_$(date +%Y%m%d).json
 
 # Export to CSV for spreadsheet analysis
-./gradlew cli:run --args='manage-user-mappings list \
+./scripts/secman manage-user-mappings list \
   --format CSV \
-  --admin-user admin@example.com' > audit_$(date +%Y%m%d).csv
+  --username admin --password '<password>' > audit_$(date +%Y%m%d).csv
 ```
 
 ---
 
 ## Troubleshooting
 
-### Issue: "Admin user required" Error
-**Cause**: No admin user specified
-**Solution**: Set `SECMAN_ADMIN_EMAIL` environment variable or use `--admin-user` flag
+### Issue: "Backend username required. Use --username flag or set SECMAN_ADMIN_NAME environment variable" Error
+**Cause**: No backend username specified (the deprecated `--admin-user` flag does not supply credentials)
+**Solution**: Set `SECMAN_ADMIN_NAME` (and `SECMAN_ADMIN_PASS`) environment variables, or use `--username`/`--password` flags
 ```bash
-export SECMAN_ADMIN_EMAIL=admin@example.com
+export SECMAN_ADMIN_NAME=admin
+export SECMAN_ADMIN_PASS='<password>'
 # OR
-./gradlew cli:run --args='manage-user-mappings <command> --admin-user admin@example.com ...'
+./scripts/secman manage-user-mappings <command> --username admin --password '<password>' ...
 ```
+
+The password equivalent (`Backend password required. Use --password flag or set SECMAN_ADMIN_PASS environment variable`) is raised the same way when only the username is supplied.
 
 ### Issue: "Invalid email format" Error
 **Cause**: Email doesn't match required pattern
@@ -1033,12 +1071,14 @@ export SECMAN_ADMIN_EMAIL=admin@example.com
 **Solution**: Use absolute path or verify relative path
 ```bash
 # Absolute path
-./gradlew cli:run --args='manage-user-mappings import \
-  --file /Users/admin/mappings.csv'
+./scripts/secman manage-user-mappings import \
+  --file /Users/admin/mappings.csv \
+  --username admin --password '<password>'
 
 # Relative path (from project root)
-./gradlew cli:run --args='manage-user-mappings import \
-  --file ./data/mappings.csv'
+./scripts/secman manage-user-mappings import \
+  --file ./data/mappings.csv \
+  --username admin --password '<password>'
 ```
 
 ### Issue: CSV Import Parsing Errors
@@ -1053,52 +1093,57 @@ export SECMAN_ADMIN_EMAIL=admin@example.com
 **Behavior**: This is expected - duplicates are detected and skipped with warning
 **Action**: Review skipped count in summary output. If unexpected, check existing mappings:
 ```bash
-./gradlew cli:run --args='manage-user-mappings list \
+./scripts/secman manage-user-mappings list \
   --email <email> \
-  --admin-user admin@example.com'
+  --username admin --password '<password>'
 ```
 
 ---
 
 ## Best Practices
 
-### 1. Use Environment Variable for Admin
+### 1. Use Environment Variables for Backend Credentials
 ```bash
 # Set once per session
-export SECMAN_ADMIN_EMAIL=admin@example.com
+export SECMAN_ADMIN_NAME=admin
+export SECMAN_ADMIN_PASS='<password>'
 
-# Then omit --admin-user from all commands
-./gradlew cli:run --args='manage-user-mappings add-domain ...'
+# Then omit --username/--password from all commands
+./scripts/secman manage-user-mappings add-domain ...
 ```
 
 ### 2. Always Test with Dry-Run for Bulk Imports
 ```bash
 # Test before importing
-./gradlew cli:run --args='manage-user-mappings import \
+./scripts/secman manage-user-mappings import \
   --file large_import.csv \
-  --dry-run'
+  --dry-run \
+  --username admin --password '<password>'
 
 # If successful, import
-./gradlew cli:run --args='manage-user-mappings import \
-  --file large_import.csv'
+./scripts/secman manage-user-mappings import \
+  --file large_import.csv \
+  --username admin --password '<password>'
 ```
 
 ### 3. Export Mappings Before Bulk Operations
 ```bash
 # Backup before bulk remove
-./gradlew cli:run --args='manage-user-mappings list \
-  --format JSON' > backup_$(date +%Y%m%d).json
+./scripts/secman manage-user-mappings list \
+  --format JSON \
+  --username admin --password '<password>' > backup_$(date +%Y%m%d).json
 
 # Then proceed with operation
-./gradlew cli:run --args='manage-user-mappings remove ...'
+./scripts/secman manage-user-mappings remove ...
 ```
 
 ### 4. Use Pending Mappings for Future Users
 ```bash
 # Create mappings before user account exists
-./gradlew cli:run --args='manage-user-mappings add-domain \
+./scripts/secman manage-user-mappings add-domain \
   --emails future.hire@example.com \
-  --domains corp.local'
+  --domains corp.local \
+  --username admin --password '<password>'
 
 # Mappings auto-activate when user is created via:
 # - OAuth login
@@ -1109,12 +1154,14 @@ export SECMAN_ADMIN_EMAIL=admin@example.com
 ### 5. Regular Audits
 ```bash
 # Weekly: Export all mappings
-./gradlew cli:run --args='manage-user-mappings list \
-  --format CSV' > audit_$(date +%Y%m%d).csv
+./scripts/secman manage-user-mappings list \
+  --format CSV \
+  --username admin --password '<password>' > audit_$(date +%Y%m%d).csv
 
 # Monthly: Review pending mappings
-./gradlew cli:run --args='manage-user-mappings list \
-  --status PENDING'
+./scripts/secman manage-user-mappings list \
+  --status PENDING \
+  --username admin --password '<password>'
 ```
 
 ---
@@ -1135,7 +1182,7 @@ export SECMAN_ADMIN_EMAIL=admin@example.com
 - **Implementation Plan**: `specs/049-cli-user-mappings/plan.md`
 - **Task Breakdown**: `specs/049-cli-user-mappings/tasks.md`
 - **API Endpoints**: Feature 042 (Future User Mappings) for web interface
-- **Access Control**: CLAUDE.md - "Unified Access Control" section
+- **Access Control**: CLAUDE.md - "Roles (RBAC)" and "Unified Asset Access" sections
 
 ---
 
@@ -1144,7 +1191,7 @@ export SECMAN_ADMIN_EMAIL=admin@example.com
 For issues or questions:
 1. Check troubleshooting guide above
 2. Review audit logs: `SELECT * FROM user_mapping WHERE email = '...' ORDER BY created_at DESC`
-3. Verify database connectivity: `./gradlew backendng:run`
+3. Verify database connectivity: `./scripts/startbackenddev.sh`
 4. Report bugs: https://github.com/schmalle/secman/issues
 
 ---

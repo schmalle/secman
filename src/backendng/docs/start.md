@@ -1,9 +1,8 @@
 # Backend Quick Start
 
 ```bash
-# Start the backend
-cd src/backendng
-./gradlew run
+# Start the backend (from repository root — outside any sandbox, pass-cli required)
+./scripts/startbackenddev.sh
 
 # CLI usage (from repository root)
 ./gradlew :cli:shadowJar
@@ -13,4 +12,4 @@ cd src/backendng
 export SECMAN_BACKEND_URL=https://api.yourdomain.com
 ```
 
-See [docs/CLI.md](../../docs/CLI.md) for full CLI reference.
+See [docs/CLI.md](../../../docs/CLI.md) for full CLI reference.

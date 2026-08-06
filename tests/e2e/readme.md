@@ -1,3 +1,5 @@
+# Running the E2E suite
+
 ```
   # With Proton Pass:
   ./tests/e2e/run-e2e.sh

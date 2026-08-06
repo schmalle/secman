@@ -10,7 +10,7 @@ sudo systemctl status secman-backend
 sudo journalctl -u secman-backend -n 100
 ls /opt/secman/app/src/backendng/build/libs/backendng-*-all.jar
 ```
-Causes: wrong Java (`java -version` must be 21); DB unreachable (`mysql -u secman -p secman`; check `DB_*` env); port in use (`lsof -i :8080`, set `MICRONAUT_SERVER_PORT`); missing required env (`JWT_SECRET`, `SECMAN_ENCRYPTION_PASSWORD`).
+Causes: wrong Java (`java -version` must be 25); DB unreachable (`mysql -u secman -p secman`; check `DB_*` env); port in use (`lsof -i :8080`, set `MICRONAUT_SERVER_PORT`); missing required env (`JWT_SECRET`, `SECMAN_ENCRYPTION_PASSWORD`).
 
 **Health check fails**
 ```bash

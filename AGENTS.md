@@ -7,12 +7,12 @@
 - `src/frontend/` — Astro + React; pages in `src/pages/`, components in `src/components/`, Playwright in `tests/`.
 - `src/cli/` — Picocli CLI.
 - `src/shared/` — code shared between backend and CLI.
-- `scripts/` — **all** scripts (`./scripts/` is deprecated). `tests/`, `docker/`, `docs/`.
+- `scripts/` — **all** scripts, invoked as `./scripts/<name>.sh` (canonical — do not call `gradlew`/`npm` directly for dev start). `tests/`, `docker/`, `docs/`.
 
 ## Build, run, test
 - Backend dev: `./scripts/startbackenddev.sh` (canonical — wraps `gradle run` with `pass-cli`-resolved env).
 - Build everything (incl. tests): `./gradlew build`.
-- Frontend: `cd src/frontend && npm install && npm run dev`; production check `npm run build && npm run preview`; lint `npm run lint`.
+- Frontend: `cd src/frontend && npm install`, then `./scripts/startfrontenddev.sh` (canonical dev start — never `npm run dev` directly); production check `npm run build && npm run preview`; lint `npm run lint`.
 - CLI: build once `./gradlew :cli:shadowJar`, then `./scripts/secman <cmd>`.
 
 ## Style
@@ -20,7 +20,7 @@
 - TS/TSX: 2-space indent, named exports, ESLint via `npm run lint`. Import order: external → internal → relative.
 
 ## Tests (mandatory)
-Always write tests for new code. JUnit 6 + Mockk for unit; Testcontainers (MariaDB) for integration via `BaseIntegrationTest`. Tests must route HTTP through `SECMAN_HOST` (sourced from `pass-cli`) — never hardcode `http://localhost:*`. After **every** change, `/e2ejs` and `/e2evulnexception` must exit clean (see `CLAUDE.md` principle 7).
+Always write tests for new code. JUnit 6 + Mockk for unit; integration tests run against an **external MariaDB** (no Docker/Testcontainers — removed from the build) via `BaseIntegrationTest`. Tests must route HTTP through `SECMAN_HOST` (sourced from `pass-cli`) — never hardcode `http://localhost:*`. After **every** change, `/e2ejs` and `/e2evulnexception` must exit clean (see `CLAUDE.md` principle 7).
 
 ## Commits / PRs
 - `type(scope): description` (Conventional Commits) or short `Type: Summary` form.

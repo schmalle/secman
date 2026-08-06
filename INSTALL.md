@@ -4,7 +4,7 @@
 
 | | Version |
 |---|---|
-| JDK | 21 (Amazon Corretto recommended) |
+| JDK | 25 (Amazon Corretto recommended) |
 | Node | 20+ |
 | MariaDB | 11.4+ |
 | Git | 2.x |
@@ -16,21 +16,21 @@ System: 2 cores / 4 GB RAM / 20 GB disk minimum (4 cores / 8 GB / 50 GB SSD reco
 
 ```bash
 # Ubuntu / Debian
-sudo apt install -y openjdk-21-jdk git build-essential
+sudo apt install -y openjdk-25-jdk git build-essential
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version=11.4
 sudo apt install -y mariadb-server mariadb-client
 
 # Amazon Linux 2023 / RHEL
-sudo dnf install -y java-21-amazon-corretto-devel git
+sudo dnf install -y java-25-amazon-corretto-devel git
 curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
 sudo dnf install -y nodejs
 curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version=11.4
 sudo dnf install -y MariaDB-server MariaDB-client
 
 # macOS
-brew install openjdk@21 node@20 mariadb@11.4 git
+brew install openjdk@25 node@20 mariadb@11.4 git
 ```
 
 ## Quick start (dev)
@@ -40,7 +40,7 @@ git clone https://github.com/schmalle/secman.git && cd secman
 sudo systemctl enable --now mariadb
 cd scripts/install/db && ./installdb.sh && cd -    # DB 'secman', user 'secman'/'CHANGEME'
 ./scripts/startbackenddev.sh                       # canonical dev start
-cd src/frontend && npm install && npm run dev       # http://localhost:4321
+cd src/frontend && npm install && cd - && ./scripts/startfrontenddev.sh   # canonical dev start, http://localhost:4321
 ```
 
 On first startup the backend logs a 20-char random admin password — **copy it immediately**:
@@ -170,7 +170,7 @@ curl -X POST http://localhost:8080/api/auth/login \
 | "Cannot connect to database" | `systemctl status mariadb`; verify `DB_*` env vars; `mysql -u secman -p secman` |
 | Missed admin password | `./scripts/reset_database.sh` then restart |
 | Port 8080 / 4321 in use | `lsof -i :8080`; kill or set `MICRONAUT_SERVER_PORT=8081` / edit `astro.config.mjs` |
-| Gradle build fails | `java -version` (must be 21); `./gradlew clean build` |
+| Gradle build fails | `java -version` (must be 25); `./gradlew clean build` |
 | `npm install` fails | `npm cache clean --force`; `rm -rf src/frontend/node_modules src/frontend/package-lock.json && npm install` |
 | Flyway checksum mismatch | `./gradlew flywayInfo` then `flywayRepair` |
 | 5 failed logins → locked 15min | wait or restart backend |

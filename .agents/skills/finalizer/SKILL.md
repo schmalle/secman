@@ -333,7 +333,7 @@ finds something to trim will eventually trim something load-bearing.
 
 ## Step 4b — Skill mirror check
 
-The repo keeps two skill trees — `.agents/skills/` (canonical) and
+The repo keeps two skill trees — `.claude/skills/` (canonical) and
 `.agents/skills/` (Codex) — that CLAUDE.md requires to move together. They do
 not stay together on their own: 7 of 8 skills had drifted before this check
 existed, one of them into two materially different documents.

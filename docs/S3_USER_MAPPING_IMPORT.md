@@ -196,7 +196,7 @@ export AWS_ENDPOINT_URL=http://localhost:9090
 ## Security
 
 - Temp files: system temp dir, owner-only `0600`, deleted on exit (even on error).
-- Credentials only via SDK chain — never CLI args.
+- Prefer the default SDK credential chain (env vars, `~/.aws/credentials`, IAM role, SSO) or `--aws-profile` over raw `--aws-access-key-id`/`--aws-secret-access-key`/`--aws-session-token` flags — those are supported (§ above) but visible in shell history and process listings, so avoid them on shared hosts.
 - 10 MB pre-download cap; 100k-row cap.
 - Stack traces only at debug level.
 - Audit log entries for every operation (admin email, op type, mapping details).

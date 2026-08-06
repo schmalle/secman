@@ -21,10 +21,9 @@ Generated for Feature 013-user-mapping-upload
 
 ## Usage
 
-```bash
-# Generate files
-python3 scripts/generate_e2e_test_files.py
-
-# Run E2E tests
-npm test -- user-mapping-upload.spec.ts
-```
+These `.xlsx`/`.txt` fixtures are hand-maintained — the generator script and
+Playwright spec that originally produced/consumed them (`scripts/
+generate_e2e_test_files.py`, `user-mapping-upload.spec.ts`) no longer exist
+in this repo. Edit the fixture files directly if the expected behavior
+above needs to change, and reference them from whichever current test
+exercises user-mapping upload (see `tests/e2e/`).
