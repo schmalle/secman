@@ -1,0 +1,45 @@
+{
+  "name": "delete_all_assets",
+  "description": "Delete ALL assets from the system. This is a destructive operation that cascade-deletes all associated vulnerabilities, scan results, and exception requests. Requires ADMIN role via User Delegation.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "confirmation": {
+        "type": "boolean",
+        "description": "Must be true to confirm deletion. Safety check to prevent accidental deletion."
+      }
+    },
+    "required": ["confirmation"]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean"
+      },
+      "deletedAssets": {
+        "type": "integer",
+        "description": "Number of assets deleted"
+      },
+      "deletedVulnerabilities": {
+        "type": "integer",
+        "description": "Number of vulnerabilities cascade-deleted"
+      },
+      "deletedScanResults": {
+        "type": "integer",
+        "description": "Number of scan results cascade-deleted"
+      },
+      "deletedExceptionRequests": {
+        "type": "integer",
+        "description": "Number of exception requests cascade-deleted"
+      },
+      "message": {
+        "type": "string"
+      }
+    }
+  },
+  "requiredRoles": ["ADMIN"],
+  "requiresDelegation": true,
+  "operation": "DELETE",
+  "dangerous": true
+}

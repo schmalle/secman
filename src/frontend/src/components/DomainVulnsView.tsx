@@ -1,0 +1,447 @@
+/**
+ * Domain Vulns View Component
+ *
+ * Feature: 043-crowdstrike-domain-import
+ *
+ * Main component for Domain Vulns feature - displays vulnerabilities grouped by AD domain.
+ * Queries secman database based on user's domain mappings.
+ *
+ * Features:
+ * - Fetches domain vulnerability summary from secman database via backend
+ * - Displays devices grouped by Active Directory domain
+ * - Displays severity breakdown (critical, high, medium, low) at all levels
+ * - Handles loading, error, and empty states
+ * - Admin redirect handling
+ * - No domain mapping error handling
+ * - Data from secman database (not CrowdStrike Falcon API)
+ *
+ * Similar to AccountVulnsView but uses domain mappings instead of AWS account mappings.
+ */
+
+import React, { useState, useEffect } from 'react';
+import { getDomainVulns, syncDomainFromCrowdStrike, type DomainVulnsSummary } from '../services/domainVulnsService';
+import SeverityBadge from './SeverityBadge';
+import { isAdmin } from '../utils/auth';
+import { formatServerDateTime } from '../utils/dateUtils';
+
+const DomainVulnsView: React.FC = () => {
+    console.log('[DomainVulnsView] Component mounting...');
+
+    const [summary, setSummary] = useState<DomainVulnsSummary | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [isAdminRedirect, setIsAdminRedirect] = useState(false);
+    const [syncing, setSyncing] = useState<string | null>(null);  // Domain being synced, or null
+    const [syncError, setSyncError] = useState<string | null>(null);
+
+    const formatTimestamp = (timestamp: string): string => {
+        return formatServerDateTime(timestamp, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        }, timestamp);
+    };
+
+    useEffect(() => {
+        console.log('[DomainVulnsView] useEffect triggered, calling fetchDomainVulns...');
+        // Admin users should use System Vulnerabilities view — skip the API call entirely
+        if (isAdmin()) {
+            setIsAdminRedirect(true);
+            setLoading(false);
+            return;
+        }
+        fetchDomainVulns();
+    }, []);
+
+    const fetchDomainVulns = async () => {
+        try {
+            console.log('[DomainVulnsView] fetchDomainVulns started - setting loading=true');
+            setLoading(true);
+            setError(null);
+            setIsAdminRedirect(false);
+
+            console.log('[DomainVulnsView] Calling getDomainVulns() API...');
+            const data = await getDomainVulns();
+            console.log('[DomainVulnsView] API call successful, received data:', data);
+            console.log('[DomainVulnsView] - Domain groups:', data.domainGroups?.length || 0);
+            console.log('[DomainVulnsView] - Total devices:', data.totalDevices);
+            console.log('[DomainVulnsView] - Total vulnerabilities:', data.totalVulnerabilities);
+
+            setSummary(data);
+            console.log('[DomainVulnsView] State updated with summary data');
+        } catch (err) {
+            console.warn('[DomainVulnsView] Error in fetchDomainVulns:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Failed to load domain vulnerabilities';
+            console.log('[DomainVulnsView] Error message:', errorMessage);
+
+            // Check if it's an admin redirect error (403)
+            if (errorMessage.includes('System Vulns') || errorMessage.includes('Admin') || errorMessage.includes('403')) {
+                console.log('[DomainVulnsView] Detected admin redirect error');
+                setIsAdminRedirect(true);
+            }
+
+            setError(errorMessage);
+        } finally {
+            console.log('[DomainVulnsView] fetchDomainVulns completed - setting loading=false');
+            setLoading(false);
+        }
+    };
+
+    const handleSyncDomain = async (domain: string) => {
+        console.log('[DomainVulnsView] Starting sync for domain:', domain);
+        setSyncing(domain);
+        setSyncError(null);
+
+        try {
+            const result = await syncDomainFromCrowdStrike(domain);
+            console.log('[DomainVulnsView] Sync completed:', result);
+
+            // Refresh data after sync
+            await fetchDomainVulns();
+        } catch (err) {
+            console.error('[DomainVulnsView] Sync error:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Sync failed';
+            setSyncError(errorMessage);
+        } finally {
+            setSyncing(null);
+        }
+    };
+
+    // Loading state
+    console.log('[DomainVulnsView] Render - loading:', loading, 'error:', error, 'isAdminRedirect:', isAdminRedirect, 'summary:', summary);
+
+    if (loading) {
+        console.log('[DomainVulnsView] Rendering loading state');
+        return (
+            <div className="container-fluid p-4">
+                <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
+                    <div className="text-center">
+                        <div className="spinner-border text-primary mb-3" role="status">
+                            <span className="visually-hidden">Loading...</span>
+                        </div>
+                        <p className="text-muted">Loading domain vulnerabilities...</p>
+                        <small className="text-muted">This may take a few moments...</small>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Admin redirect error state
+    if (isAdminRedirect) {
+        return (
+            <div className="container-fluid p-4">
+                <div className="alert alert-warning" role="alert">
+                    <h4 className="alert-heading">
+                        <i className="bi bi-shield-lock me-2"></i>
+                        Admin Access Notice
+                    </h4>
+                    <p>
+                        Admin users should use the System Vulns view to see all vulnerabilities across all accounts and domains.
+                    </p>
+                    <hr />
+                    <div className="mb-0">
+                        <a href="/vulnerabilities/system" className="btn btn-primary me-2">
+                            <i className="bi bi-arrow-right me-2"></i>
+                            Go to System Vulns
+                        </a>
+                        <a href="/" className="btn btn-outline-secondary">
+                            <i className="bi bi-house me-2"></i>
+                            Back to Home
+                        </a>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // General error state
+    if (error) {
+        return (
+            <div className="container-fluid p-4">
+                <div className="alert alert-danger" role="alert">
+                    <h4 className="alert-heading">
+                        <i className="bi bi-exclamation-triangle me-2"></i>
+                        Error Loading Domain Vulnerabilities
+                    </h4>
+                    <p>{error}</p>
+                    <hr />
+                    <div className="mb-0">
+                        <button className="btn btn-primary me-2" onClick={fetchDomainVulns}>
+                            <i className="bi bi-arrow-clockwise me-2"></i>
+                            Try Again
+                        </button>
+                        <a href="/" className="btn btn-outline-secondary">
+                            <i className="bi bi-house me-2"></i>
+                            Back to Home
+                        </a>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // No data state
+    if (!summary || summary.domainGroups.length === 0) {
+        return (
+            <div className="container-fluid p-4">
+                <div className="alert alert-info" role="alert">
+                    <h4 className="alert-heading">
+                        <i className="bi bi-info-circle me-2"></i>
+                        No Domains Found
+                    </h4>
+                    <p>
+                        You don't have any AD domains mapped to your user account, or there are no assets in the database for your mapped domains.
+                    </p>
+                    <p className="mb-0">
+                        Please contact your administrator to set up domain mappings.
+                    </p>
+                </div>
+                <a href="/" className="btn btn-secondary">
+                    <i className="bi bi-house me-2"></i>
+                    Back to Home
+                </a>
+            </div>
+        );
+    }
+
+    // Success state - display domain groups
+    return (
+        <div className="container-fluid p-4">
+            {/* Header */}
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <h2>
+                    <i className="bi bi-hdd-network me-2"></i>
+                    Domain Vulnerabilities
+                </h2>
+                <button className="btn btn-outline-primary" onClick={fetchDomainVulns}>
+                    <i className="bi bi-arrow-clockwise me-2"></i>
+                    Refresh
+                </button>
+            </div>
+
+            {/* Info banner */}
+            <div className="alert alert-info d-flex align-items-center mb-4" role="alert">
+                <i className="bi bi-info-circle-fill me-2"></i>
+                <div>
+                    <strong>Database Vulnerabilities</strong> - This view displays vulnerabilities from the secman database based on your domain mappings.
+                </div>
+            </div>
+
+            {/* Summary Stats */}
+            <div className="row mb-4">
+                <div className="col-md-3">
+                    <div className="card text-center border-0 shadow-sm">
+                        <div className="card-body">
+                            <h6 className="card-title text-muted mb-3">AD Domains</h6>
+                            <p className="h3 mb-0">{summary.domainGroups.length}</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="col-md-3">
+                    <div className="card text-center border-0 shadow-sm">
+                        <div className="card-body">
+                            <h6 className="card-title text-muted mb-3">Total Devices</h6>
+                            <p className="h3 mb-0">{summary.totalDevices}</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="col-md-3">
+                    <div className="card text-center border-0 shadow-sm">
+                        <div className="card-body">
+                            <h6 className="card-title text-muted mb-3">Total Vulnerabilities</h6>
+                            <p className="h3 mb-0">{summary.totalVulnerabilities}</p>
+                        </div>
+                    </div>
+                </div>
+                {/* Global severity summary */}
+                <div className="col-md-3">
+                    <div className="card text-center border-0 shadow-sm">
+                        <div className="card-body">
+                            <h6 className="card-title text-muted mb-3">By Severity</h6>
+                            <div className="d-flex flex-column gap-2 align-items-center">
+                                <SeverityBadge
+                                    severity="CRITICAL"
+                                    count={summary.globalCritical ?? 0}
+                                />
+                                <SeverityBadge
+                                    severity="HIGH"
+                                    count={summary.globalHigh ?? 0}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Sync error alert */}
+            {syncError && (
+                <div className="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+                    <i className="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Sync Error:</strong> {syncError}
+                    <button type="button" className="btn-close" onClick={() => setSyncError(null)} aria-label="Close"></button>
+                </div>
+            )}
+
+            {/* Timestamps row */}
+            <div className="row mb-4">
+                <div className="col-md-6">
+                    <div className="card border-0 shadow-sm bg-light">
+                        <div className="card-body">
+                            <h6 className="text-muted mb-1">
+                                <i className="bi bi-clock-history me-2"></i>
+                                Last Synced with CrowdStrike
+                            </h6>
+                            <div className="fw-semibold">
+                                {summary.lastSyncedAt
+                                    ? formatTimestamp(summary.lastSyncedAt)
+                                    : <span className="text-warning">Never synced</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div className="col-md-6">
+                    <div className="card border-0 shadow-sm bg-light">
+                        <div className="card-body">
+                            <h6 className="text-muted mb-1">
+                                <i className="bi bi-arrow-repeat me-2"></i>
+                                Data Refreshed
+                            </h6>
+                            <div className="fw-semibold">{formatTimestamp(summary.queriedAt)}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Domain Groups */}
+            {summary.domainGroups.map((group) => {
+                console.log('[DomainVulnsView] Rendering group:', {
+                    domain: group.domain,
+                    totalDevices: group.totalDevices,
+                    devicesArray: group.devices,
+                    devicesLength: group.devices?.length,
+                    fullGroup: group
+                });
+
+                return (
+                    <div key={group.domain} className="card mb-4 border-0 shadow-sm">
+                        <div className="card-header bg-light border-bottom">
+                            <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <div className="d-flex align-items-center gap-3">
+                                    <h5 className="mb-0 text-dark">
+                                        <i className="bi bi-hdd-network me-2 text-primary"></i>
+                                        Domain: {group.domain}
+                                    </h5>
+                                    <button
+                                        className="btn btn-sm btn-outline-primary"
+                                        onClick={() => handleSyncDomain(group.domain)}
+                                        disabled={syncing !== null}
+                                        title="Sync vulnerabilities from CrowdStrike"
+                                    >
+                                        {syncing === group.domain ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                                Syncing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="bi bi-cloud-download me-1"></i>
+                                                Sync
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                                {/* Domain-level severity breakdown */}
+                                <div className="d-flex gap-2 flex-wrap align-items-center">
+                                    <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary">
+                                        {group.totalDevices} device{group.totalDevices !== 1 ? 's' : ''}
+                                    </span>
+                                    <SeverityBadge
+                                        severity="CRITICAL"
+                                        count={group.totalCritical ?? 0}
+                                    />
+                                    <SeverityBadge
+                                        severity="HIGH"
+                                        count={group.totalHigh ?? 0}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="card-body">
+                            {/* Device table */}
+                            <div className="table-responsive">
+                                <table className="table table-hover align-middle mb-0">
+                                    <thead className="table-light">
+                                        <tr>
+                                            <th>Hostname</th>
+                                            <th>IP Address</th>
+                                            <th className="text-end">Vulnerabilities</th>
+                                            <th className="text-end">Critical</th>
+                                            <th className="text-end">High</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {group.devices && group.devices.length > 0 ? (
+                                            group.devices.map((device) => (
+                                                <tr key={device.hostname}>
+                                                    <td>
+                                                        <a
+                                                            href={`/vulnerabilities/system?hostname=${encodeURIComponent(device.hostname)}`}
+                                                            className="text-decoration-none fw-bold"
+                                                            title={`View vulnerabilities for ${device.hostname} in CrowdStrike`}
+                                                        >
+                                                            {device.hostname}
+                                                            <i className="bi bi-box-arrow-up-right ms-1 small"></i>
+                                                        </a>
+                                                    </td>
+                                                    <td>
+                                                        <code className="text-muted">{device.ip || 'N/A'}</code>
+                                                    </td>
+                                                    <td className="text-end">
+                                                        <span className="badge bg-primary">
+                                                            {device.vulnerabilityCount}
+                                                        </span>
+                                                    </td>
+                                                    <td className="text-end">
+                                                        <span className="badge bg-danger">
+                                                            {device.criticalCount ?? 0}
+                                                        </span>
+                                                    </td>
+                                                    <td className="text-end">
+                                                        <span className="badge bg-warning text-dark">
+                                                            {device.highCount ?? 0}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan={5} className="text-center text-muted py-4">
+                                                    No devices found in this domain
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })}
+
+            {/* Back to Home button */}
+            <div className="mt-4">
+                <a href="/" className="btn btn-secondary">
+                    <i className="bi bi-house me-2"></i>
+                    Back to Home
+                </a>
+            </div>
+        </div>
+    );
+};
+
+export default DomainVulnsView;

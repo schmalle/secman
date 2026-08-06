@@ -1,0 +1,176 @@
+openapi: 3.0.3
+info:
+  title: Export API Extensions for Releases
+  description: Extensions to existing requirement export endpoints to support release-based historical exports
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/requirements/export/xlsx:
+    get:
+      summary: Export requirements to Excel
+      description: |
+        Export requirements to Excel format (.xlsx).
+        - If `releaseId` is provided: Export frozen requirement snapshots from that release
+        - If `releaseId` is omitted: Export current requirements (backward compatible)
+      operationId: exportRequirementsToExcel
+      security:
+        - bearerAuth: []
+      tags:
+        - Requirement Export
+      parameters:
+        - name: releaseId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: Optional release ID for historical export. Omit for current requirements.
+          example: 123
+        - name: usecaseId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: Filter by use case ID (works with both current and historical)
+      responses:
+        '200':
+          description: Excel file containing requirements
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename="requirements_v1.0.0_2024-10-05.xlsx"'
+              description: Filename includes release version if releaseId provided
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Release not found (if releaseId provided)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Not Found"
+                message: "Release with ID 123 not found"
+
+  /api/requirements/export/word:
+    get:
+      summary: Export requirements to Word
+      description: |
+        Export requirements to Word format (.docx).
+        - If `releaseId` is provided: Export frozen requirement snapshots from that release
+        - If `releaseId` is omitted: Export current requirements (backward compatible)
+      operationId: exportRequirementsToWord
+      security:
+        - bearerAuth: []
+      tags:
+        - Requirement Export
+      parameters:
+        - name: releaseId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: Optional release ID for historical export. Omit for current requirements.
+          example: 123
+        - name: usecaseId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: Filter by use case ID (works with both current and historical)
+        - name: language
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [en, de]
+            default: en
+          description: Export language
+      responses:
+        '200':
+          description: Word document containing requirements
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename="requirements_v1.0.0_2024-10-05.docx"'
+              description: Filename includes release version if releaseId provided
+          content:
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Release not found (if releaseId provided)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+          nullable: true
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Unauthorized"
+            message: "Please log in to access this resource"
+
+# Additional Implementation Notes (not part of OpenAPI spec):
+#
+# Backward Compatibility:
+# - Existing calls without releaseId parameter continue to work unchanged
+# - Return current requirements (isCurrent=true filter)
+#
+# Release Export Behavior:
+# - Load Release entity to get metadata (version, name, date)
+# - Load RequirementSnapshot entities via findByReleaseId()
+# - Generate export with release metadata in header/footer
+# - Filename format: "requirements_v{version}_{date}.{ext}"
+# - Example: "requirements_v1.0.0_2024-10-05.xlsx"
+#
+# Current Export Behavior (unchanged):
+# - Load current Requirements (isCurrent=true)
+# - Filename format: "requirements_current_{date}.{ext}"
+# - Example: "requirements_current_2024-10-05.xlsx"
+#
+# Error Handling:
+# - 404 if releaseId provided but release doesn't exist
+# - 200 with empty file if release exists but has no snapshots (edge case)

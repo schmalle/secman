@@ -1,0 +1,21 @@
+---
+/**
+ * Alignment Dashboard Page
+ * Feature: 068-requirements-alignment-process
+ *
+ * Shows alignment progress and allows Release Managers to finalize.
+ */
+import Layout from '../../../layouts/Layout.astro';
+import AlignmentDashboard from '../../../components/AlignmentDashboard.tsx';
+
+const { id } = Astro.params;
+const releaseId = parseInt(id || '0', 10);
+
+if (!releaseId || isNaN(releaseId)) {
+    return Astro.redirect('/releases');
+}
+---
+
+<Layout title={`Alignment Dashboard - Release ${id} - Secman`}>
+    <AlignmentDashboard releaseId={releaseId} client:load />
+</Layout>

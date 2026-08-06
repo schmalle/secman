@@ -1,0 +1,516 @@
+openapi: 3.0.3
+info:
+  title: Asset Criticality API
+  description: API endpoints for managing asset criticality classification with inheritance support
+  version: 1.0.0
+  contact:
+    name: Secman API Team
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local development server
+
+tags:
+  - name: assets
+    description: Asset management operations with criticality support
+
+paths:
+  /assets:
+    get:
+      tags:
+        - assets
+      summary: List all assets
+      description: Retrieve all assets with criticality information (explicit and effective). Workgroup-based access control applied.
+      operationId: listAssets
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: criticality
+          in: query
+          description: Filter by explicit criticality level
+          required: false
+          schema:
+            $ref: '#/components/schemas/Criticality'
+        - name: effectiveCriticality
+          in: query
+          description: Filter by effective criticality level (including inherited)
+          required: false
+          schema:
+            $ref: '#/components/schemas/Criticality'
+        - name: type
+          in: query
+          description: Filter by asset type
+          required: false
+          schema:
+            type: string
+        - name: workgroupId
+          in: query
+          description: Filter by workgroup ID
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssetListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - assets
+      summary: Create a new asset
+      description: Create a new asset with optional criticality override. Authenticated users can create assets.
+      operationId: createAsset
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAssetRequest'
+      responses:
+        '201':
+          description: Asset created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /assets/{id}:
+    get:
+      tags:
+        - assets
+      summary: Get asset by ID
+      description: Retrieve a single asset with criticality information. Workgroup-based access control applied.
+      operationId: getAsset
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Asset ID
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - assets
+      summary: Update asset
+      description: Update asset properties including criticality override. ADMIN/VULN roles can modify criticality.
+      operationId: updateAsset
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Asset ID
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAssetRequest'
+      responses:
+        '200':
+          description: Asset updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    delete:
+      tags:
+        - assets
+      summary: Delete asset
+      description: Delete an asset. ADMIN role required.
+      operationId: deleteAsset
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Asset ID
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Asset deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /assets/export:
+    get:
+      tags:
+        - assets
+      summary: Export assets to Excel
+      description: Export assets with criticality information to Excel file. Workgroup-based access control applied.
+      operationId: exportAssets
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: criticality
+          in: query
+          description: Filter by explicit criticality level
+          required: false
+          schema:
+            $ref: '#/components/schemas/Criticality'
+        - name: effectiveCriticality
+          in: query
+          description: Filter by effective criticality level (including inherited)
+          required: false
+          schema:
+            $ref: '#/components/schemas/Criticality'
+      responses:
+        '200':
+          description: Successful export
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Criticality:
+      type: string
+      enum:
+        - CRITICAL
+        - HIGH
+        - MEDIUM
+        - LOW
+      description: Security criticality classification level
+
+    CreateAssetRequest:
+      type: object
+      required:
+        - name
+        - type
+        - owner
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Asset name
+          example: "db-prod-01"
+        type:
+          type: string
+          minLength: 1
+          description: Asset type
+          example: "Database"
+        ip:
+          type: string
+          nullable: true
+          description: IP address
+          example: "10.0.1.50"
+        owner:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Asset owner email
+          example: "admin@example.com"
+        description:
+          type: string
+          maxLength: 1024
+          nullable: true
+          description: Asset description
+          example: "Production database server"
+        criticality:
+          allOf:
+            - $ref: '#/components/schemas/Criticality'
+          nullable: true
+          description: Explicit criticality override (null = inherit from workgroup)
+          example: null
+        workgroupIds:
+          type: array
+          description: Workgroup IDs to assign this asset to
+          items:
+            type: integer
+            format: int64
+          example: [1, 2]
+
+    UpdateAssetRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Updated asset name
+          example: "db-prod-01"
+        type:
+          type: string
+          minLength: 1
+          description: Updated asset type
+          example: "Database"
+        ip:
+          type: string
+          nullable: true
+          description: Updated IP address
+          example: "10.0.1.50"
+        owner:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Updated asset owner email
+          example: "admin@example.com"
+        description:
+          type: string
+          maxLength: 1024
+          nullable: true
+          description: Updated asset description
+          example: "Mission-critical production database"
+        criticality:
+          allOf:
+            - $ref: '#/components/schemas/Criticality'
+          nullable: true
+          description: Updated criticality override (null = revert to inheritance)
+          example: CRITICAL
+        workgroupIds:
+          type: array
+          description: Updated workgroup IDs
+          items:
+            type: integer
+            format: int64
+          example: [1]
+
+    Asset:
+      type: object
+      required:
+        - id
+        - name
+        - type
+        - owner
+        - effectiveCriticality
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Asset ID
+          example: 100
+        name:
+          type: string
+          description: Asset name
+          example: "db-prod-01"
+        type:
+          type: string
+          description: Asset type
+          example: "Database"
+        ip:
+          type: string
+          nullable: true
+          description: IP address
+          example: "10.0.1.50"
+        owner:
+          type: string
+          description: Asset owner email
+          example: "admin@example.com"
+        description:
+          type: string
+          nullable: true
+          description: Asset description
+          example: "Production database server"
+        criticality:
+          allOf:
+            - $ref: '#/components/schemas/Criticality'
+          nullable: true
+          description: Explicit criticality override (null = inherited from workgroup)
+          example: null
+        effectiveCriticality:
+          $ref: '#/components/schemas/Criticality'
+          description: Computed effective criticality (explicit or inherited)
+          example: CRITICAL
+        workgroups:
+          type: array
+          description: Workgroups this asset belongs to
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                format: int64
+              name:
+                type: string
+              criticality:
+                $ref: '#/components/schemas/Criticality'
+          example:
+            - id: 1
+              name: "Production Servers"
+              criticality: "CRITICAL"
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2025-01-01T00:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2025-11-01T12:00:00Z"
+        lastSeen:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last seen timestamp (from scan)
+          example: "2025-11-01T10:30:00Z"
+
+    AssetListResponse:
+      allOf:
+        - $ref: '#/components/schemas/Asset'
+        - type: object
+          properties:
+            vulnerabilityCount:
+              type: integer
+              description: Number of vulnerabilities on this asset
+              example: 5
+            criticalVulnerabilityCount:
+              type: integer
+              description: Number of critical vulnerabilities
+              example: 2
+
+    AssetDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/Asset'
+        - type: object
+          required:
+            - vulnerabilities
+          properties:
+            vulnerabilities:
+              type: array
+              description: Vulnerabilities on this asset
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    format: int64
+                  vulnerabilityId:
+                    type: string
+                  cvssSeverity:
+                    type: string
+                  daysOpen:
+                    type: integer
+            criticalitySource:
+              type: string
+              description: Source of effective criticality (explicit/inherited from workgroup name)
+              example: "Inherited from Production Servers"
+
+    ErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Invalid criticality value"
+        details:
+          type: array
+          description: Detailed error information
+          items:
+            type: string
+          example: ["criticality must be one of: CRITICAL, HIGH, MEDIUM, LOW, or null"]
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Validation failed"
+            details: ["criticality must be one of: CRITICAL, HIGH, MEDIUM, LOW, or null"]
+
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Unauthorized"
+
+    Forbidden:
+      description: Insufficient permissions (workgroup access or role required)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Forbidden: ADMIN or VULN role required to modify criticality"
+
+    NotFound:
+      description: Asset not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Asset not found"
+
+    Conflict:
+      description: Concurrent modification conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Conflict: Asset was modified by another user. Please refresh and try again."

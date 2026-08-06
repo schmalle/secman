@@ -1,0 +1,420 @@
+# Data Model: VULN Role & Vulnerability Management UI
+
+**Feature**: 004-i-want-to
+**Date**: 2025-10-03
+
+## Overview
+
+This feature introduces:
+1. New `VULN` role in the User entity
+2. New `VulnerabilityException` entity for managing vulnerability exceptions
+
+---
+
+## Entity Changes
+
+### 1. User Entity (MODIFICATION)
+
+**File**: `src/backendng/src/main/kotlin/com/secman/domain/User.kt`
+
+**Change**: Add `VULN` to the `Role` enum
+
+```kotlin
+enum class Role {
+    USER, ADMIN, VULN  // Add VULN role
+}
+```
+
+**Migration Notes**:
+- Hibernate will automatically update the enum values
+- Existing users retain their current roles (USER, ADMIN)
+- No data migration required
+- `user_roles` table structure unchanged (uses `@ElementCollection`)
+
+**Validation**:
+- User can have multiple roles: e.g., `{ADMIN, VULN}` or `{USER}` or `{VULN}`
+- Role checks use `hasRole(Role.VULN)` or `roles.contains(Role.VULN)`
+
+---
+
+### 2. VulnerabilityException Entity (NEW)
+
+**File**: `src/backendng/src/main/kotlin/com/secman/domain/VulnerabilityException.kt`
+
+```kotlin
+package com.secman.domain
+
+import io.micronaut.serde.annotation.Serdeable
+import jakarta.persistence.*
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotNull
+import jakarta.validation.constraints.Size
+import java.time.LocalDateTime
+
+/**
+ * VulnerabilityException entity representing an exception rule for vulnerabilities.
+ *
+ * Exceptions can be IP-based (applies to all vulnerabilities on a specific IP)
+ * or product-based (applies to all vulnerabilities matching a product pattern).
+ *
+ * Exceptions can be time-limited (with expirationDate) or permanent (expirationDate = null).
+ *
+ * Related to: Feature 004-i-want-to (VULN Role & Vulnerability Management UI)
+ */
+@Entity
+@Table(
+    name = "vulnerability_exception",
+    indexes = [
+        Index(name = "idx_vuln_exception_type", columnList = "exception_type"),
+        Index(name = "idx_vuln_exception_expiration", columnList = "expiration_date")
+    ]
+)
+@Serdeable
+data class VulnerabilityException(
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    var id: Long? = null,
+
+    /**
+     * Type of exception: IP or PRODUCT
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "exception_type", nullable = false, length = 20)
+    @NotNull
+    var exceptionType: ExceptionType,
+
+    /**
+     * Target value for the exception:
+     * - For IP: exact IP address (e.g., "192.168.1.10")
+     * - For PRODUCT: product name/version pattern (e.g., "OpenSSH 7.4")
+     */
+    @Column(name = "target_value", nullable = false, length = 512)
+    @NotBlank
+    @Size(max = 512)
+    var targetValue: String,
+
+    /**
+     * Expiration date for the exception
+     * - null = permanent exception (never expires)
+     * - non-null = exception expires after this date
+     */
+    @Column(name = "expiration_date")
+    var expirationDate: LocalDateTime? = null,
+
+    /**
+     * Reason/justification for the exception
+     */
+    @Column(name = "reason", nullable = false, length = 1024)
+    @NotBlank
+    @Size(max = 1024)
+    var reason: String,
+
+    /**
+     * User who created the exception
+     */
+    @Column(name = "created_by", nullable = false, length = 255)
+    @NotBlank
+    @Size(max = 255)
+    var createdBy: String,
+
+    @Column(name = "created_at", updatable = false)
+    var createdAt: LocalDateTime? = null,
+
+    @Column(name = "updated_at")
+    var updatedAt: LocalDateTime? = null
+) {
+    enum class ExceptionType {
+        IP,      // Exception applies to specific IP address
+        PRODUCT  // Exception applies to product name/version pattern
+    }
+
+    @PrePersist
+    fun onCreate() {
+        val now = LocalDateTime.now()
+        createdAt = now
+        updatedAt = now
+    }
+
+    @PreUpdate
+    fun onUpdate() {
+        updatedAt = LocalDateTime.now()
+    }
+
+    /**
+     * Check if this exception is currently active
+     */
+    fun isActive(): Boolean {
+        return expirationDate == null || expirationDate!!.isAfter(LocalDateTime.now())
+    }
+
+    /**
+     * Check if this exception matches the given vulnerability and asset
+     */
+    fun matches(vulnerability: Vulnerability, asset: Asset): Boolean {
+        if (!isActive()) return false
+
+        return when (exceptionType) {
+            ExceptionType.IP -> asset.ip == targetValue
+            ExceptionType.PRODUCT -> vulnerability.vulnerableProductVersions?.contains(targetValue) == true
+        }
+    }
+
+    override fun toString(): String {
+        return "VulnerabilityException(id=$id, type=$exceptionType, target='$targetValue', " +
+                "expires=${expirationDate ?: "never"}, active=${isActive()})"
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is VulnerabilityException) return false
+        return id != null && id == other.id
+    }
+
+    override fun hashCode(): Int {
+        return id?.hashCode() ?: 0
+    }
+}
+```
+
+**Table Schema** (auto-generated by Hibernate):
+```sql
+CREATE TABLE vulnerability_exception (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    exception_type VARCHAR(20) NOT NULL,
+    target_value VARCHAR(512) NOT NULL,
+    expiration_date DATETIME NULL,
+    reason VARCHAR(1024) NOT NULL,
+    created_by VARCHAR(255) NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+
+    INDEX idx_vuln_exception_type (exception_type),
+    INDEX idx_vuln_exception_expiration (expiration_date)
+);
+```
+
+**Field Descriptions**:
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `id` | Long | No | Primary key (auto-increment) |
+| `exceptionType` | Enum | No | IP or PRODUCT exception type |
+| `targetValue` | String(512) | No | IP address or product name pattern |
+| `expirationDate` | LocalDateTime | Yes | When exception expires (null = permanent) |
+| `reason` | String(1024) | No | Justification for the exception |
+| `createdBy` | String(255) | No | Username who created the exception |
+| `createdAt` | LocalDateTime | No | When exception was created |
+| `updatedAt` | LocalDateTime | No | Last update timestamp |
+
+**Indexes**:
+- `idx_vuln_exception_type`: Speed up queries filtering by exception type
+- `idx_vuln_exception_expiration`: Speed up active exception queries (WHERE expiration_date IS NULL OR expiration_date > NOW())
+
+**Validation Rules**:
+1. `exceptionType` must be IP or PRODUCT
+2. `targetValue` must not be blank, max 512 characters
+3. `reason` must not be blank, max 1024 characters
+4. `createdBy` must not be blank, max 255 characters
+5. If `exceptionType` is IP, `targetValue` should be valid IP format (validated at service layer)
+
+**Business Rules**:
+1. **Active Exception**: An exception is active if `expirationDate` is null OR `expirationDate > now()`
+2. **IP Matching**: Exception matches if `asset.ip == targetValue` (exact match)
+3. **Product Matching**: Exception matches if `vulnerability.vulnerableProductVersions.contains(targetValue)` (substring match)
+4. **Multiple Exceptions**: Multiple exceptions can apply to the same vulnerability (OR logic)
+
+---
+
+## Repository Layer
+
+### VulnerabilityExceptionRepository (NEW)
+
+**File**: `src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityExceptionRepository.kt`
+
+```kotlin
+package com.secman.repository
+
+import com.secman.domain.VulnerabilityException
+import com.secman.domain.VulnerabilityException.ExceptionType
+import io.micronaut.data.annotation.Repository
+import io.micronaut.data.jpa.repository.JpaRepository
+import java.time.LocalDateTime
+
+@Repository
+interface VulnerabilityExceptionRepository : JpaRepository<VulnerabilityException, Long> {
+
+    /**
+     * Find all active exceptions (not expired)
+     * Used for checking if vulnerabilities are excepted
+     */
+    fun findByExpirationDateIsNullOrExpirationDateGreaterThan(date: LocalDateTime): List<VulnerabilityException>
+
+    /**
+     * Find exceptions by type (IP or PRODUCT)
+     */
+    fun findByExceptionType(type: ExceptionType): List<VulnerabilityException>
+
+    /**
+     * Find exceptions created by a specific user
+     */
+    fun findByCreatedBy(username: String): List<VulnerabilityException>
+}
+```
+
+---
+
+## DTOs (Data Transfer Objects)
+
+### VulnerabilityExceptionDto (NEW)
+
+**File**: `src/backendng/src/main/kotlin/com/secman/dto/VulnerabilityExceptionDto.kt`
+
+```kotlin
+package com.secman.dto
+
+import com.secman.domain.VulnerabilityException.ExceptionType
+import io.micronaut.serde.annotation.Serdeable
+import java.time.LocalDateTime
+
+@Serdeable
+data class VulnerabilityExceptionDto(
+    val id: Long?,
+    val exceptionType: ExceptionType,
+    val targetValue: String,
+    val expirationDate: LocalDateTime?,
+    val reason: String,
+    val createdBy: String,
+    val createdAt: LocalDateTime?,
+    val isActive: Boolean,
+    val affectedVulnerabilityCount: Int? = null  // Optional: for Exceptions list view
+)
+
+@Serdeable
+data class CreateVulnerabilityExceptionRequest(
+    val exceptionType: ExceptionType,
+    val targetValue: String,
+    val expirationDate: LocalDateTime?,
+    val reason: String
+)
+
+@Serdeable
+data class UpdateVulnerabilityExceptionRequest(
+    val exceptionType: ExceptionType,
+    val targetValue: String,
+    val expirationDate: LocalDateTime?,
+    val reason: String
+)
+```
+
+### VulnerabilityWithExceptionDto (NEW)
+
+**File**: `src/backendng/src/main/kotlin/com/secman/dto/VulnerabilityDto.kt` (extend existing)
+
+```kotlin
+package com.secman.dto
+
+import io.micronaut.serde.annotation.Serdeable
+import java.time.LocalDateTime
+
+@Serdeable
+data class VulnerabilityWithExceptionDto(
+    val id: Long?,
+    val assetId: Long,
+    val assetName: String,
+    val assetIp: String?,
+    val vulnerabilityId: String?,
+    val cvssSeverity: String?,
+    val vulnerableProductVersions: String?,
+    val daysOpen: String?,
+    val scanTimestamp: LocalDateTime,
+    val hasException: Boolean,  // NEW: Indicates if vulnerability is covered by active exception
+    val exceptionReason: String? = null  // NEW: Reason for exception (if applicable)
+)
+```
+
+---
+
+## Relationships & Cardinality
+
+```
+User (1) ─────────< (N) VulnerabilityException
+               (created_by FK - not enforced as foreign key, stored as string)
+
+VulnerabilityException (N) ─────── (N) Vulnerability
+               (no direct FK - matching done in service layer via business logic)
+
+VulnerabilityException (N) ─────── (N) Asset
+               (no direct FK - matching done in service layer via IP or product)
+```
+
+**Rationale for No Foreign Keys**:
+- `createdBy` is a username string, not a User entity FK (consistent with existing patterns)
+- Exception matching is dynamic (IP or product pattern), not a static relationship
+- Exceptions apply to multiple vulnerabilities/assets based on runtime logic
+
+---
+
+## Migration Strategy
+
+**Hibernate Auto-Migration** (configured in `application.yml`):
+```yaml
+jpa:
+  default:
+    properties:
+      hibernate:
+        hbm2ddl:
+          auto: update  # Auto-create new tables and columns
+```
+
+**Migration Steps**:
+1. Deploy new code with `VulnerabilityException` entity
+2. Hibernate will auto-create `vulnerability_exception` table on startup
+3. Hibernate will add `VULN` to the enum values in `user_roles` table
+4. No manual SQL scripts required
+5. No downtime required (new table, no existing data)
+
+**Rollback Plan**:
+- If deployment fails, table `vulnerability_exception` can be dropped
+- User roles remain unchanged (VULN role simply unused)
+- No data loss risk (new feature, no existing data)
+
+---
+
+## Validation & Constraints
+
+### Database Constraints:
+- `NOT NULL` on required fields (enforced at DB level)
+- `VARCHAR` length limits prevent oversized data
+- Indexes on `exception_type` and `expiration_date` for query performance
+
+### Application Constraints (via Jakarta Validation):
+- `@NotBlank` on targetValue, reason, createdBy
+- `@NotNull` on exceptionType
+- `@Size(max = X)` on all string fields
+- Custom validation in service layer:
+  - IP format validation for IP-type exceptions
+  - Expiration date must be in the future (if provided)
+
+---
+
+## Testing Considerations
+
+### Unit Tests:
+- `VulnerabilityException.isActive()` with various expiration dates
+- `VulnerabilityException.matches()` for IP and product matching
+- Edge cases: null expirationDate, null IP, null vulnerableProductVersions
+
+### Integration Tests:
+- Hibernate schema generation (ensure table created correctly)
+- Repository query methods (findByExpirationDateIsNullOrExpirationDateGreaterThan)
+- Transaction rollback on validation errors
+
+### Contract Tests:
+- POST /api/vulnerability-exceptions with invalid data (400 Bad Request)
+- PUT /api/vulnerability-exceptions/{id} with non-existent ID (404 Not Found)
+- GET /api/vulnerabilities/current with excepted vulnerabilities (hasException = true)
+
+---
+
+**Data Model Status**: ✅ Complete
+**Next Step**: Generate API contracts (Phase 1 continuation)

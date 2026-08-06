@@ -1,0 +1,238 @@
+openapi: 3.0.3
+info:
+  title: Asset Import API
+  description: API endpoint for importing assets from Excel format with validation and duplicate handling
+  version: 1.0.0
+  contact:
+    name: Secman API Team
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://secman.example.com
+    description: Production server
+
+paths:
+  /api/import/upload-assets-xlsx:
+    post:
+      summary: Import assets from Excel file
+      description: |
+        Imports assets from an uploaded Excel (.xlsx) file. Validates each row and
+        skips invalid/duplicate rows while importing valid ones.
+
+        **Required Excel Columns** (case-insensitive, flexible order):
+        - Name (required)
+        - Type (required)
+        - Owner (required)
+        - IP Address (optional)
+        - Description (optional)
+        - Groups (optional)
+        - Cloud Account ID (optional)
+        - Cloud Instance ID (optional)
+        - OS Version (optional)
+        - AD Domain (optional)
+        - Workgroups (optional, comma-separated workgroup names)
+        - Created At (optional, date format)
+        - Updated At (optional, date format)
+        - Last Seen (optional, date format)
+
+        **Duplicate Handling**: Assets with duplicate names are skipped (no updates to existing assets).
+
+        **Workgroup Assignment**:
+        - If Workgroups column provided: Parsed and matched to existing workgroups by name
+        - If Workgroups column empty: Assets assigned to importing user's workgroups
+        - Invalid workgroup names: Skipped, assets imported without those workgroups
+
+        **Validation**:
+        - Name: Required, non-blank
+        - Type: Required, non-blank
+        - Owner: Required, non-blank
+        - IP Address: Optional, validated for IPv4/IPv6 format if provided
+
+        **Performance**: Expected to import 5,000 assets in <60 seconds with 95%+ success rate for valid data.
+
+        **File Constraints**:
+        - Maximum file size: 10MB
+        - Format: Excel 2007+ (.xlsx only)
+        - Maximum rows: No hard limit, but performance degrades beyond 10,000 rows
+      operationId: importAssets
+      tags:
+        - Assets
+        - Import
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - xlsxFile
+              properties:
+                xlsxFile:
+                  type: string
+                  format: binary
+                  description: Excel (.xlsx) file containing asset data
+            encoding:
+              xlsxFile:
+                contentType: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        '200':
+          description: Import completed (partial success possible)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+              examples:
+                fullSuccess:
+                  summary: All assets imported successfully
+                  value:
+                    message: "Created 500 assets, updated 0, skipped 0"
+                    imported: 500
+                    skipped: 0
+                    assetsCreated: 500
+                    assetsUpdated: 0
+                    errors: []
+                partialSuccess:
+                  summary: Some assets skipped due to validation errors
+                  value:
+                    message: "Created 450 assets, updated 0, skipped 50"
+                    imported: 450
+                    skipped: 50
+                    assetsCreated: 450
+                    assetsUpdated: 0
+                    errors:
+                      - "Row 5: Asset name is required"
+                      - "Row 12: Duplicate asset name 'server-01'"
+                      - "Row 28: Invalid IP address format '192.168'"
+                      - "Row 45: Asset type is required"
+                      - "Row 67: Duplicate asset name 'workstation-03'"
+        '400':
+          description: Bad request - Invalid file format or validation errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidFile:
+                  summary: Invalid file format
+                  value:
+                    error: "Invalid file format. Please upload a valid Excel file."
+                    code: "INVALID_FILE_FORMAT"
+                fileTooLarge:
+                  summary: File size exceeds limit
+                  value:
+                    error: "File size exceeds maximum limit of 10MB"
+                    code: "FILE_TOO_LARGE"
+                emptyFile:
+                  summary: Empty file uploaded
+                  value:
+                    error: "File is empty"
+                    code: "EMPTY_FILE"
+                missingHeaders:
+                  summary: Required headers missing
+                  value:
+                    error: "Missing required columns: Name, Type, Owner"
+                    code: "MISSING_HEADERS"
+        '401':
+          description: Unauthorized - Missing or invalid authentication token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                unauthorized:
+                  value:
+                    error: "Unauthorized"
+                    message: "Authentication required"
+        '500':
+          description: Internal server error - Import failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                importFailed:
+                  value:
+                    error: "Failed to import assets"
+                    code: "IMPORT_ERROR"
+                    details: "Database constraint violation"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login
+
+  schemas:
+    ImportResult:
+      type: object
+      required:
+        - message
+        - imported
+        - skipped
+      properties:
+        message:
+          type: string
+          description: Human-readable summary of import operation
+          example: "Created 450 assets, updated 0, skipped 50"
+        imported:
+          type: integer
+          format: int32
+          description: Total number of assets successfully imported (created + updated)
+          example: 450
+        skipped:
+          type: integer
+          format: int32
+          description: Number of rows skipped due to validation errors or duplicates
+          example: 50
+        assetsCreated:
+          type: integer
+          format: int32
+          description: Number of new assets created
+          example: 450
+        assetsUpdated:
+          type: integer
+          format: int32
+          description: Number of existing assets updated (always 0 - feature skips duplicates)
+          example: 0
+        errors:
+          type: array
+          description: List of error messages for skipped rows (limited to first 20)
+          items:
+            type: string
+          example:
+            - "Row 5: Asset name is required"
+            - "Row 12: Duplicate asset name 'server-01'"
+            - "Row 28: Invalid IP address format '192.168'"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "File size exceeds maximum limit of 10MB"
+        code:
+          type: string
+          description: Error code for programmatic handling
+          enum:
+            - INVALID_FILE_FORMAT
+            - FILE_TOO_LARGE
+            - EMPTY_FILE
+            - MISSING_HEADERS
+            - IMPORT_ERROR
+          example: "FILE_TOO_LARGE"
+        details:
+          type: string
+          description: Additional error details (optional)
+          example: "Database constraint violation"
+        message:
+          type: string
+          description: Human-readable message (optional, for backward compatibility)
+          example: "Authentication required"

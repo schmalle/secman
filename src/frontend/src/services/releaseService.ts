@@ -1,0 +1,663 @@
+/**
+ * Release Service
+ *
+ * Handles API calls for release management functionality
+ *
+ * Related to: Feature 012-build-ui-for (Release Management UI Enhancement)
+ * Backend APIs from: Feature 011-i-want-to (Release-Based Requirement Version Management)
+ */
+
+import { authenticatedFetch } from '../utils/auth';
+
+export interface Release {
+    id: number;
+    version: string;
+    name: string;
+    description: string;
+    status: 'PREPARATION' | 'ALIGNMENT' | 'ACTIVE' | 'ARCHIVED';
+    releaseDate: string | null;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+    requirementCount: number;
+}
+
+// Feature 185: Requirements Alignment Process Types
+export interface AlignmentSession {
+    id: number;
+    releaseId: number;
+    releaseName: string;
+    releaseVersion: string;
+    status: 'OPEN' | 'COMPLETED' | 'CANCELLED';
+    changedRequirementsCount: number;
+    initiatedBy: string;
+    baselineReleaseId: number | null;
+    reviewScope: 'CHANGED' | 'ALL';
+    startedAt: string;
+    completedAt: string | null;
+    completionNotes: string | null;
+}
+
+export interface AlignmentReviewer {
+    id: number;
+    userId: number;
+    username: string;
+    email: string;
+    status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
+    reviewedCount: number;
+    totalCount: number;
+    completionPercent: number;
+    assessments: AssessmentCounts;
+    startedAt: string | null;
+    completedAt: string | null;
+    notifiedAt: string | null;
+    reminderCount: number;
+}
+
+export interface AlignmentSnapshot {
+    id: number;
+    requirementId: string;
+    changeType: 'ADDED' | 'MODIFIED' | 'DELETED';
+    shortreq: string;
+    previousShortreq: string | null;
+    details: string | null;
+    previousDetails: string | null;
+    chapter: string | null;
+    previousChapter: string | null;
+    changeSummary: string;
+    existingReview?: {
+        id: number;
+        assessment: 'OK' | 'CHANGE' | 'NOGO';
+        comment: string | null;
+    } | null;
+}
+
+export interface AssessmentCounts {
+    ok: number;
+    change: number;
+    nogo: number;
+}
+
+export interface AdminDecision {
+    id: number;
+    decision: 'ACCEPTED' | 'REJECTED';
+    comment: string | null;
+    decidedBy: string;
+    createdAt: string | null;
+}
+
+export interface AlignmentStatus {
+    session: AlignmentSession;
+    reviewers: {
+        total: number;
+        completed: number;
+        inProgress: number;
+        pending: number;
+        completionPercent: number;
+    };
+    requirements: {
+        total: number;
+        reviewed: number;
+    };
+    assessments: AssessmentCounts;
+}
+
+export interface EligibleReviewer {
+    id: number;
+    username: string;
+    email: string;
+}
+
+export interface AlignmentStartResult {
+    success: boolean;
+    message: string;
+    session: AlignmentSession;
+    reviewerCount: number;
+    changedRequirements: number;
+    changes: {
+        added: number;
+        modified: number;
+        deleted: number;
+    };
+}
+
+export interface ReviewPageData {
+    reviewer: {
+        id: number;
+        username: string;
+        status: string;
+        reviewedCount: number;
+    };
+    session: {
+        id: number;
+        status: string;
+        releaseName: string;
+        releaseVersion: string;
+        changedCount: number;
+        startedAt: string;
+    };
+    snapshots: AlignmentSnapshot[];
+    isOpen: boolean;
+}
+
+export interface RequirementSnapshot {
+    id: number;
+    releaseId: number;
+    originalRequirementId: number;
+    shortreq: string;
+    chapter: string;
+    norm: string;
+    details: string;
+    motivation: string;
+    example: string;
+    usecase: string;
+    usecaseIdsSnapshot: string; // JSON array
+    normIdsSnapshot: string; // JSON array
+    snapshotTimestamp: string;
+}
+
+export interface ReleaseComparison {
+    fromRelease: Release;
+    toRelease: Release;
+    added: RequirementSnapshot[];
+    deleted: RequirementSnapshot[];
+    modified: ModifiedRequirement[];
+}
+
+export interface ModifiedRequirement {
+    requirementId: number;
+    fromSnapshot: RequirementSnapshot;
+    toSnapshot: RequirementSnapshot;
+    fieldChanges: FieldChange[];
+}
+
+export interface FieldChange {
+    fieldName: string;
+    oldValue: string;
+    newValue: string;
+}
+
+export interface PaginatedResponse<T> {
+    data: T[];
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    pageSize: number;
+}
+
+export interface CreateReleaseRequest {
+    version: string;
+    name: string;
+    description?: string;
+}
+
+/**
+ * Release Service API wrapper
+ */
+export const releaseService = {
+    /**
+     * List all releases with optional filtering and pagination
+     *
+     * @param status Optional status filter (PREPARATION, ALIGNMENT, ACTIVE, ARCHIVED)
+     * @param page Page number (1-indexed)
+     * @param pageSize Number of items per page
+     * @returns Paginated list of releases
+     */
+    async list(
+        status?: string,
+        page: number = 1,
+        pageSize: number = 20
+    ): Promise<PaginatedResponse<Release>> {
+        const params = new URLSearchParams();
+        if (status && status !== 'ALL') {
+            params.append('status', status);
+        }
+        params.append('page', page.toString());
+        params.append('pageSize', pageSize.toString());
+
+        const response = await authenticatedFetch(`/api/releases?${params}`);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to list releases: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Get release by ID
+     *
+     * @param id Release ID
+     * @returns Release details
+     */
+    async getById(id: number): Promise<Release> {
+        const response = await authenticatedFetch(`/api/releases/${id}`);
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw new Error('Release not found');
+            }
+            throw new Error(`Failed to get release: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Create a new release
+     *
+     * @param data Release creation data
+     * @returns Created release (with PREPARATION status)
+     */
+    async create(data: CreateReleaseRequest): Promise<Release> {
+        const response = await authenticatedFetch('/api/releases', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || `Failed to create release: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Update release status
+     *
+     * @param id Release ID
+     * @param status New status (ACTIVE only)
+     * @returns Updated release
+     */
+    async updateStatus(id: number, status: 'ACTIVE'): Promise<Release> {
+        const response = await authenticatedFetch(`/api/releases/${id}/status`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ status }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to update release status: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Delete release
+     *
+     * @param id Release ID
+     */
+    async delete(id: number): Promise<void> {
+        const response = await authenticatedFetch(`/api/releases/${id}`, {
+            method: 'DELETE',
+        });
+
+        if (!response.ok) {
+            if (response.status === 403) {
+                throw new Error('You do not have permission to delete this release.');
+            }
+            throw new Error(`Failed to delete release: ${response.statusText}`);
+        }
+    },
+
+    /**
+     * Delete every release (ADMIN-only debug helper).
+     *
+     * Backend refuses with 409 if any risk assessment is currently running.
+     * @returns number of releases deleted
+     */
+    async deleteAll(): Promise<number> {
+        const response = await authenticatedFetch('/api/releases/all', {
+            method: 'DELETE',
+        });
+
+        if (!response.ok) {
+            if (response.status === 403) {
+                throw new Error('You do not have permission to delete all releases.');
+            }
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to delete all releases: ${response.statusText}`);
+        }
+
+        const data = await response.json().catch(() => ({}));
+        return Number(data.deletedCount ?? 0);
+    },
+
+    /**
+     * Get requirement snapshots for a release
+     *
+     * @param id Release ID
+     * @param page Page number (1-indexed)
+     * @param pageSize Number of items per page
+     * @returns Paginated list of requirement snapshots
+     */
+    async getSnapshots(
+        id: number,
+        page: number = 1,
+        pageSize: number = 50
+    ): Promise<PaginatedResponse<RequirementSnapshot>> {
+        const params = new URLSearchParams();
+        params.append('page', page.toString());
+        params.append('pageSize', pageSize.toString());
+
+        const response = await authenticatedFetch(`/api/releases/${id}/requirements?${params}`);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to get release snapshots: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Compare two releases
+     *
+     * @param fromReleaseId Source release ID
+     * @param toReleaseId Target release ID
+     * @returns Comparison results
+     */
+    async compare(fromReleaseId: number, toReleaseId: number): Promise<ReleaseComparison> {
+        const params = new URLSearchParams();
+        params.append('fromReleaseId', fromReleaseId.toString());
+        params.append('toReleaseId', toReleaseId.toString());
+
+        const response = await authenticatedFetch(`/api/releases/compare?${params}`);
+
+        if (!response.ok) {
+            throw new Error(`Failed to compare releases: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    // ========== Feature 185: Requirements Alignment Process ==========
+
+    /**
+     * Check if a release has changes that need alignment review
+     *
+     * @param releaseId Release ID
+     * @returns Whether the release has changes to review
+     */
+    async checkAlignmentRequired(releaseId: number): Promise<{ hasChanges: boolean }> {
+        const response = await authenticatedFetch(`/api/releases/${releaseId}/alignment/check`);
+
+        if (!response.ok) {
+            throw new Error(`Failed to check alignment status: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Get users eligible to be selected as alignment reviewers (REQ-role users)
+     *
+     * @returns List of eligible reviewers
+     */
+    async getEligibleReviewers(): Promise<{ reviewers: EligibleReviewer[]; totalCount: number }> {
+        const response = await authenticatedFetch('/api/alignment/eligible-reviewers');
+
+        if (!response.ok) {
+            throw new Error(`Failed to load eligible reviewers: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Start alignment process for a PREPARATION release
+     *
+     * @param releaseId Release ID
+     * @param reviewAll If true, include all requirements (not just changed ones)
+     * @param reviewerUserIds Optional subset of REQ-role user IDs to enroll as reviewers (default: all)
+     * @returns Alignment start result with session details
+     */
+    async startAlignment(releaseId: number, reviewAll: boolean = false, reviewerUserIds?: number[]): Promise<AlignmentStartResult> {
+        const response = await authenticatedFetch(`/api/releases/${releaseId}/alignment/start`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ reviewAll, reviewerUserIds: reviewerUserIds ?? null }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to start alignment: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Get alignment status for a release
+     *
+     * @param releaseId Release ID
+     * @returns Alignment status including reviewer progress
+     */
+    async getAlignmentStatus(releaseId: number): Promise<AlignmentStatus> {
+        const response = await authenticatedFetch(`/api/releases/${releaseId}/alignment`);
+
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw new Error('No active alignment session for this release');
+            }
+            throw new Error(`Failed to get alignment status: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Get alignment session details by session ID
+     *
+     * @param sessionId Alignment session ID
+     * @returns Alignment status
+     */
+    async getAlignmentSessionStatus(sessionId: number): Promise<AlignmentStatus> {
+        const response = await authenticatedFetch(`/api/alignment/${sessionId}`);
+
+        if (!response.ok) {
+            throw new Error(`Failed to get alignment session: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Get alignment snapshots (changed requirements)
+     *
+     * @param sessionId Alignment session ID
+     * @param changeType Optional filter by change type
+     * @returns List of requirement changes
+     */
+    async getAlignmentSnapshots(
+        sessionId: number,
+        changeType?: 'ADDED' | 'MODIFIED' | 'DELETED'
+    ): Promise<{ snapshots: AlignmentSnapshot[]; totalCount: number }> {
+        const params = new URLSearchParams();
+        if (changeType) {
+            params.append('changeType', changeType);
+        }
+
+        const response = await authenticatedFetch(`/api/alignment/${sessionId}/snapshots?${params}`);
+
+        if (!response.ok) {
+            throw new Error(`Failed to get alignment snapshots: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Get reviewer details for an alignment session
+     *
+     * @param sessionId Alignment session ID
+     * @returns List of reviewers with their progress
+     */
+    async getAlignmentReviewers(sessionId: number): Promise<{ reviewers: AlignmentReviewer[] }> {
+        const response = await authenticatedFetch(`/api/alignment/${sessionId}/reviewers`);
+
+        if (!response.ok) {
+            throw new Error(`Failed to get alignment reviewers: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Get aggregated feedback for all requirements
+     *
+     * @param sessionId Alignment session ID
+     * @returns Per-requirement feedback summary
+     */
+    async getAlignmentFeedback(sessionId: number): Promise<any> {
+        const response = await authenticatedFetch(`/api/alignment/${sessionId}/feedback`);
+
+        if (!response.ok) {
+            throw new Error(`Failed to get alignment feedback: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Send reminder emails to incomplete reviewers
+     *
+     * @param sessionId Alignment session ID
+     * @returns Reminder send result
+     */
+    async sendAlignmentReminders(sessionId: number): Promise<{ success: boolean; remindersSent: number }> {
+        const response = await authenticatedFetch(`/api/alignment/${sessionId}/remind`, {
+            method: 'POST',
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to send reminders: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Finalize alignment and optionally activate release
+     *
+     * @param sessionId Alignment session ID
+     * @param activateRelease Whether to activate the release
+     * @param notes Optional completion notes
+     * @returns Finalization result
+     */
+    async finalizeAlignment(
+        sessionId: number,
+        activateRelease: boolean,
+        notes?: string
+    ): Promise<{ success: boolean; message: string; session: AlignmentSession }> {
+        const response = await authenticatedFetch(`/api/alignment/${sessionId}/finalize`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ activateRelease, notes }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to finalize alignment: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Cancel alignment and return release to PREPARATION
+     *
+     * @param sessionId Alignment session ID
+     * @param notes Optional cancellation notes
+     * @returns Cancellation result
+     */
+    async cancelAlignment(
+        sessionId: number,
+        notes?: string
+    ): Promise<{ success: boolean; message: string; session: AlignmentSession }> {
+        const response = await authenticatedFetch(`/api/alignment/${sessionId}/cancel`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ notes }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to cancel alignment: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Submit an admin decision (ACCEPTED/REJECTED) on a reviewer's assessment
+     *
+     * @param sessionId Alignment session ID
+     * @param reviewId Review ID
+     * @param decision ACCEPTED or REJECTED
+     * @param comment Optional admin comment
+     * @returns Decision result
+     */
+    /**
+     * Export CHANGE/NOGO reviews as Excel file
+     *
+     * @param sessionId Alignment session ID
+     * @returns Triggers file download
+     */
+    async exportAlignmentReviews(sessionId: number): Promise<void> {
+        const response = await authenticatedFetch(`/api/alignment/${sessionId}/export-reviews`);
+
+        if (!response.ok) {
+            throw new Error(`Failed to export reviews: ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+
+        // Extract filename from Content-Disposition header, or use fallback
+        const disposition = response.headers.get('Content-Disposition');
+        const filenameMatch = disposition?.match(/filename="?([^"]+)"?/);
+        link.download = filenameMatch?.[1] || `Review.${sessionId}.xlsx`;
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+    },
+
+    async submitReviewDecision(
+        sessionId: number,
+        reviewId: number,
+        decision: 'ACCEPTED' | 'REJECTED',
+        comment?: string
+    ): Promise<{ success: boolean; message: string }> {
+        const response = await authenticatedFetch(`/api/alignment/${sessionId}/decisions`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ reviewId, decision, comment }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to submit decision: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+};

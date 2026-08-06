@@ -1,0 +1,183 @@
+openapi: 3.0.0
+info:
+  title: Asset Vulnerabilities API
+  version: 1.0.0
+  description: API contract for retrieving vulnerabilities associated with an asset
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/assets/{assetId}/vulnerabilities:
+    get:
+      summary: Get vulnerabilities for a specific asset
+      description: |
+        Retrieve all vulnerabilities associated with the specified asset.
+        Results are sorted by scan timestamp (most recent first) by default.
+        Supports pagination via query parameters.
+
+      operationId: getAssetVulnerabilities
+
+      tags:
+        - Assets
+        - Vulnerabilities
+
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: Unique identifier of the asset
+          schema:
+            type: integer
+            format: int64
+            example: 123
+
+        - name: page
+          in: query
+          required: false
+          description: Page number (0-indexed)
+          schema:
+            type: integer
+            default: 0
+            example: 0
+
+        - name: size
+          in: query
+          required: false
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+            example: 20
+
+        - name: sort
+          in: query
+          required: false
+          description: Sort field and direction (e.g., "scanTimestamp,desc")
+          schema:
+            type: string
+            default: "scanTimestamp,desc"
+            example: "scanTimestamp,desc"
+
+      responses:
+        '200':
+          description: List of vulnerabilities for the asset
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Vulnerability'
+                  totalElements:
+                    type: integer
+                    description: Total number of vulnerabilities for this asset
+                    example: 45
+                  totalPages:
+                    type: integer
+                    description: Total number of pages
+                    example: 3
+                  currentPage:
+                    type: integer
+                    description: Current page number (0-indexed)
+                    example: 0
+                  pageSize:
+                    type: integer
+                    description: Number of items per page
+                    example: 20
+
+        '401':
+          description: Unauthorized - Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Unauthorized"
+
+        '404':
+          description: Asset not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Asset with ID 123 not found"
+
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Error retrieving vulnerabilities"
+
+components:
+  schemas:
+    Vulnerability:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique identifier of the vulnerability record
+          example: 456
+        vulnerabilityId:
+          type: string
+          nullable: true
+          description: CVE or vulnerability identifier
+          example: "CVE-2016-2183"
+        cvssSeverity:
+          type: string
+          nullable: true
+          description: CVSS severity level
+          enum: [Critical, High, Medium, Low, Informational]
+          example: "High"
+        vulnerableProductVersions:
+          type: string
+          nullable: true
+          description: Affected product versions
+          example: "Windows 19 29h2"
+        daysOpen:
+          type: string
+          nullable: true
+          description: Text representation of days open
+          example: "58 days"
+        scanTimestamp:
+          type: string
+          format: date-time
+          description: When the scan was performed
+          example: "2025-10-03T14:30:00"
+        createdAt:
+          type: string
+          format: date-time
+          description: When the vulnerability was imported into the system
+          example: "2025-10-03T15:45:00"
+      required:
+        - id
+        - scanTimestamp
+        - createdAt
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login

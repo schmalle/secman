@@ -1,0 +1,278 @@
+openapi: 3.0.3
+info:
+  title: CrowdStrike Vulnerability Save API
+  description: |
+    API for persisting CrowdStrike vulnerabilities to the local database.
+
+    Feature: 015-we-have-currently (CrowdStrike System Vulnerability Lookup)
+
+    This endpoint saves vulnerabilities retrieved from CrowdStrike to the local database,
+    creating Asset records if needed and linking to existing VulnerabilityException records.
+  version: 1.0.0
+  contact:
+    name: Secman API Team
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local development
+  - url: https://secman.example.com/api
+    description: Production
+
+tags:
+  - name: CrowdStrike
+    description: CrowdStrike Falcon API integration
+
+paths:
+  /crowdstrike/vulnerabilities/save:
+    post:
+      tags:
+        - CrowdStrike
+      summary: Save vulnerabilities to database
+      description: |
+        Persists CrowdStrike vulnerabilities to the local database in the same format
+        as imported vulnerabilities.
+
+        **Behavior**:
+        - Finds or creates Asset by hostname (case-insensitive) or IP
+        - Creates Vulnerability records linked to Asset
+        - Preserves historical data (duplicate CVE + Asset allowed if different scanTimestamp)
+        - Uses detectedAt as scanTimestamp
+
+        **Permissions**: Requires ADMIN or VULN role
+      operationId: saveVulnerabilities
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrowdStrikeSaveRequest'
+            example:
+              hostname: web-server-01
+              vulnerabilities:
+                - id: "cs-vuln-12345"
+                  hostname: web-server-01
+                  ip: "192.168.1.100"
+                  cveId: "CVE-2021-44228"
+                  severity: "Critical"
+                  cvssScore: 10.0
+                  affectedProduct: "Apache Log4j 2.14.1"
+                  daysOpen: "15 days"
+                  detectedAt: "2025-09-26T10:30:00Z"
+                  status: "open"
+                  hasException: false
+                  exceptionReason: null
+      responses:
+        '200':
+          description: Successfully saved vulnerabilities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrowdStrikeSaveResponse'
+              examples:
+                success:
+                  summary: All vulnerabilities saved
+                  value:
+                    message: "Saved 2 vulnerabilities for system 'web-server-01'"
+                    vulnerabilitiesSaved: 2
+                    assetsCreated: 0
+                    errors: []
+                successWithAssetCreation:
+                  summary: Vulnerabilities saved and asset created
+                  value:
+                    message: "Saved 5 vulnerabilities for system 'app-server-03'. Created new asset."
+                    vulnerabilitiesSaved: 5
+                    assetsCreated: 1
+                    errors: []
+                partialSuccess:
+                  summary: Partial save with errors
+                  value:
+                    message: "Saved 8 of 10 vulnerabilities for system 'db-server-02'"
+                    vulnerabilitiesSaved: 8
+                    assetsCreated: 0
+                    errors:
+                      - "Failed to save CVE-2021-12345: Invalid CVSS score"
+                      - "Failed to save CVE-2021-67890: Detection date in future"
+        '400':
+          description: Invalid request (validation errors)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingHostname:
+                  summary: Missing hostname
+                  value:
+                    error: "Hostname is required"
+                emptyVulnerabilities:
+                  summary: Empty vulnerabilities list
+                  value:
+                    error: "At least one vulnerability is required"
+                invalidVulnerability:
+                  summary: Invalid vulnerability data
+                  value:
+                    error: "Invalid CVSS score: must be between 0.0 and 10.0"
+        '401':
+          description: Unauthorized (missing or invalid JWT token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Authentication required"
+        '403':
+          description: Forbidden (user lacks ADMIN or VULN role)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Insufficient permissions. ADMIN or VULN role required."
+        '500':
+          description: Internal server error (database error, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Database error: Unable to save vulnerabilities"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token from /api/auth/login endpoint
+
+  schemas:
+    CrowdStrikeSaveRequest:
+      type: object
+      required:
+        - hostname
+        - vulnerabilities
+      properties:
+        hostname:
+          type: string
+          description: System hostname (used for asset matching/creation)
+          minLength: 1
+          maxLength: 255
+          example: web-server-01
+        vulnerabilities:
+          type: array
+          description: List of vulnerabilities to save (at least one required)
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CrowdStrikeVulnerabilityDto'
+
+    CrowdStrikeSaveResponse:
+      type: object
+      required:
+        - message
+        - vulnerabilitiesSaved
+        - assetsCreated
+      properties:
+        message:
+          type: string
+          description: Human-readable summary of save operation
+          example: "Saved 2 vulnerabilities for system 'web-server-01'"
+        vulnerabilitiesSaved:
+          type: integer
+          description: Count of Vulnerability records created
+          example: 2
+        assetsCreated:
+          type: integer
+          description: Count of new Asset records created (0 if asset existed)
+          example: 0
+        errors:
+          type: array
+          description: List of errors encountered during save (if any)
+          items:
+            type: string
+          example: []
+
+    CrowdStrikeVulnerabilityDto:
+      type: object
+      required:
+        - id
+        - hostname
+        - severity
+        - detectedAt
+        - status
+        - hasException
+      properties:
+        id:
+          type: string
+          description: Unique vulnerability ID from CrowdStrike
+          example: "cs-vuln-12345"
+        hostname:
+          type: string
+          description: System hostname
+          example: web-server-01
+        ip:
+          type: string
+          description: System IP address
+          nullable: true
+          example: "192.168.1.100"
+        cveId:
+          type: string
+          description: CVE identifier
+          nullable: true
+          example: "CVE-2021-44228"
+        severity:
+          type: string
+          description: CVSS severity level
+          enum:
+            - Critical
+            - High
+            - Medium
+            - Low
+            - Informational
+          example: Critical
+        cvssScore:
+          type: number
+          format: double
+          description: Numeric CVSS score (0.0-10.0)
+          nullable: true
+          minimum: 0.0
+          maximum: 10.0
+          example: 10.0
+        affectedProduct:
+          type: string
+          description: Vulnerable product and version
+          nullable: true
+          example: "Apache Log4j 2.14.1"
+        daysOpen:
+          type: string
+          description: Days since detection (calculated)
+          nullable: true
+          example: "15 days"
+        detectedAt:
+          type: string
+          format: date-time
+          description: Detection timestamp (ISO 8601) - used as scanTimestamp
+          example: "2025-09-26T10:30:00Z"
+        status:
+          type: string
+          description: Vulnerability status
+          example: open
+        hasException:
+          type: boolean
+          description: Whether this vulnerability matches an active exception
+          example: false
+        exceptionReason:
+          type: string
+          description: Reason for exception if hasException is true
+          nullable: true
+          example: "Vendor patch scheduled for 2025-10-15"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: "Hostname is required"

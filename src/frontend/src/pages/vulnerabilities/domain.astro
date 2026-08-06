@@ -1,0 +1,27 @@
+---
+/**
+ * Domain Vulnerabilities Page
+ *
+ * Feature: 043-crowdstrike-domain-import
+ *
+ * Page route: /vulnerabilities/domain
+ *
+ * Purpose:
+ * - Displays vulnerabilities from secman database grouped by AD domain
+ * - Data queried from local database (not CrowdStrike Falcon API)
+ * - Based on user's domain mappings in UserMapping table
+ * - Similar to /account-vulns but for domain-based filtering
+ *
+ * Access:
+ * - Authenticated users only (non-admin)
+ * - Admin users redirected to System Vulns view
+ * - User must have domain mappings
+ */
+
+import Layout from '../../layouts/Layout.astro';
+import DomainVulnsView from '../../components/DomainVulnsView';
+---
+
+<Layout title="Domain Vulnerabilities">
+    <DomainVulnsView client:load />
+</Layout>

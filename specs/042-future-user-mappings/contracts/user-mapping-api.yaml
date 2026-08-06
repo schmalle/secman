@@ -1,0 +1,406 @@
+openapi: 3.0.3
+info:
+  title: User Mapping API - Future User Support
+  description: |
+    API extensions for supporting future user mappings (mappings for users who don't yet exist).
+    This extends the existing User Mapping functionality from Feature 013/016.
+  version: 1.1.0
+  contact:
+    name: Secman Development Team
+
+servers:
+  - url: http://localhost:4321/api
+    description: Local development server
+  - url: https://api.secman.example.com/api
+    description: Production server
+
+paths:
+  /import/upload-user-mappings:
+    post:
+      summary: Upload user mappings (Excel)
+      description: |
+        Upload Excel file containing user mappings. Now supports mappings for users who don't yet exist.
+        BACKWARD COMPATIBLE: Existing behavior preserved - accepts both existing and future user emails.
+      operationId: uploadUserMappingsExcel
+      tags:
+        - Import
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Excel file (.xlsx) with columns: Email Address, AWS Account ID, Domain
+      responses:
+        '200':
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+        '400':
+          description: Validation error (invalid file format, missing columns, validation failures)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized (missing or invalid JWT)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (not ADMIN role)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: File too large (>10MB)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /import/upload-user-mappings-csv:
+    post:
+      summary: Upload user mappings (CSV)
+      description: |
+        Upload CSV file containing user mappings. Now supports mappings for users who don't yet exist.
+        BACKWARD COMPATIBLE: Existing behavior preserved - accepts both existing and future user emails.
+      operationId: uploadUserMappingsCSV
+      tags:
+        - Import
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file with columns: account_id (or Email Address), owner_email, domain
+      responses:
+        '200':
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (not ADMIN role)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: File too large (>10MB)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /user-mappings:
+    get:
+      summary: List user mappings (current)
+      description: |
+        Retrieve paginated list of current user mappings (future + active, excluding applied history).
+        Used for "Current Mappings" tab in UI.
+      operationId: listCurrentUserMappings
+      tags:
+        - UserMappings
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number (0-indexed)
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - name: size
+          in: query
+          description: Page size
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserMappingPage'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (not ADMIN role)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /user-mappings/history:
+    get:
+      summary: List applied mapping history
+      description: |
+        Retrieve paginated list of applied historical mappings (mappings that were applied to users).
+        Used for "Applied History" tab in UI.
+      operationId: listAppliedUserMappings
+      tags:
+        - UserMappings
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number (0-indexed)
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - name: size
+          in: query
+          description: Page size
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserMappingPage'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (not ADMIN role)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /user-mappings/{id}:
+    delete:
+      summary: Delete user mapping
+      description: |
+        Delete a user mapping (future or active). Used for managing future user mappings before they are applied.
+      operationId: deleteUserMapping
+      tags:
+        - UserMappings
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User mapping ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Successfully deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (not ADMIN role)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User mapping not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    UserMapping:
+      type: object
+      required:
+        - id
+        - email
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique identifier
+          example: 42
+        email:
+          type: string
+          format: email
+          description: User email address (unique, case-insensitive)
+          example: john.doe@example.com
+        userId:
+          type: integer
+          format: int64
+          nullable: true
+          description: User ID (null for future user mappings)
+          example: 123
+        awsAccountId:
+          type: string
+          nullable: true
+          pattern: '^[0-9]{12}$'
+          description: 12-digit AWS account ID
+          example: '123456789012'
+        domain:
+          type: string
+          nullable: true
+          description: Active Directory domain
+          example: CONTOSO
+        appliedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Timestamp when mapping was applied to user. NULL = not yet applied (future user mapping).
+            NON-NULL = applied historical mapping.
+          example: '2025-11-07T10:30:00Z'
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: '2025-11-06T14:20:00Z'
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: '2025-11-06T14:20:00Z'
+        userExists:
+          type: boolean
+          description: Computed field - true if userId is not null
+          example: false
+
+    UserMappingPage:
+      type: object
+      required:
+        - content
+        - page
+        - size
+        - totalElements
+        - totalPages
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserMapping'
+        page:
+          type: integer
+          description: Current page number (0-indexed)
+          example: 0
+        size:
+          type: integer
+          description: Page size
+          example: 50
+        totalElements:
+          type: integer
+          format: int64
+          description: Total number of elements
+          example: 156
+        totalPages:
+          type: integer
+          description: Total number of pages
+          example: 4
+
+    ImportResult:
+      type: object
+      required:
+        - imported
+        - skipped
+        - errors
+      properties:
+        imported:
+          type: integer
+          description: Number of mappings successfully imported/updated
+          example: 45
+        skipped:
+          type: integer
+          description: Number of mappings skipped (duplicates within file)
+          example: 2
+        errors:
+          type: array
+          items:
+            type: string
+          description: List of error messages for failed rows
+          example:
+            - "Row 12: Invalid email format 'notanemail'"
+            - "Row 23: AWS Account ID must be 12 digits"
+
+    Error:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: Human-readable error message
+          example: Unauthorized - Invalid JWT token
+        details:
+          type: string
+          description: Additional error details (optional)
+          example: Token expired at 2025-11-07T10:00:00Z
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Import
+    description: File import operations
+  - name: UserMappings
+    description: User mapping management operations

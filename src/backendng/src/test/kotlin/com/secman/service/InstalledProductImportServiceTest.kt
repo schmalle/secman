@@ -1,0 +1,281 @@
+package com.secman.service
+
+import com.secman.crowdstrike.dto.InstalledProductDto
+import com.secman.domain.Asset
+import com.secman.domain.InstalledProduct
+import com.secman.repository.AssetRepository
+import com.secman.repository.InstalledProductRepository
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.slot
+import io.mockk.verify
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+
+class InstalledProductImportServiceTest {
+    private lateinit var assetRepository: AssetRepository
+    private lateinit var installedProductRepository: InstalledProductRepository
+    private lateinit var service: InstalledProductImportService
+
+    @BeforeEach
+    fun setUp() {
+        assetRepository = mockk()
+        installedProductRepository = mockk()
+        service = InstalledProductImportService(assetRepository, installedProductRepository)
+    }
+
+    @Test
+    fun `imports product for known asset`() {
+        val asset = asset(1L, "server01")
+        every { assetRepository.findAll() } returns mutableListOf(asset)
+        every { installedProductRepository.deleteByAssetId(1L) } returns 0
+        every { installedProductRepository.findByExternalIdAndAssetId("app-1", 1L) } returns null
+        every { installedProductRepository.findByExternalId("app-1") } returns null
+        every { installedProductRepository.findLogicalDuplicate(1L, "Chrome", "Google", "1.2.3") } returns null
+        val saved = slot<InstalledProduct>()
+        every { installedProductRepository.save(capture(saved)) } answers { saved.captured.apply { id = 10L } }
+
+        val result = service.importProducts(
+            listOf(InstalledProductDto(externalId = "app-1", hostname = "server01.example.com", name = "Chrome", vendor = "Google", version = "1.2.3")),
+            dryRun = false
+        )
+
+        assertThat(result.productsProcessed).isEqualTo(1)
+        assertThat(result.productsImported).isEqualTo(1)
+        assertThat(result.productsUpdated).isEqualTo(0)
+        assertThat(saved.captured.asset.name).isEqualTo("server01")
+        assertThat(saved.captured.name).isEqualTo("Chrome")
+    }
+
+    @Test
+    fun `replaces existing products for asset by deleting non-run rows when importRunId supplied`() {
+        val asset = asset(1L, "server01")
+        every { assetRepository.findAll() } returns mutableListOf(asset)
+        every { installedProductRepository.deleteByAssetIdAndImportRunIdNot(1L, "run-1") } returns 3
+        every { installedProductRepository.findByExternalIdAndAssetId(any(), any()) } returns null
+        every { installedProductRepository.findByExternalId(any()) } returns null
+        every { installedProductRepository.findLogicalDuplicate(any(), any(), any(), any()) } returns null
+        val saved = slot<InstalledProduct>()
+        every { installedProductRepository.save(capture(saved)) } answers { saved.captured.apply { id = 10L } }
+
+        val result = service.importProducts(
+            listOf(
+                InstalledProductDto(externalId = "app-1", hostname = "server01", name = "Chrome"),
+                InstalledProductDto(externalId = "app-2", hostname = "server01", name = "Firefox")
+            ),
+            dryRun = false,
+            importRunId = "run-1"
+        )
+
+        assertThat(result.productsDeleted).isEqualTo(3)
+        assertThat(result.productsImported).isEqualTo(2)
+        // Stale rows cleared exactly once even though two products target the same asset.
+        verify(exactly = 1) { installedProductRepository.deleteByAssetIdAndImportRunIdNot(1L, "run-1") }
+        verify(exactly = 0) { installedProductRepository.deleteByAssetId(any()) }
+        assertThat(saved.captured.importRunId).isEqualTo("run-1")
+    }
+
+    @Test
+    fun `second batch of same run does not delete rows from first batch`() {
+        val asset = asset(1L, "server01")
+        every { assetRepository.findAll() } returns mutableListOf(asset)
+        // Run id is stable; the backend query only removes rows not stamped with run-1, so the
+        // second call returns 0 (first batch's rows are kept) — proves cross-batch idempotency.
+        every { installedProductRepository.deleteByAssetIdAndImportRunIdNot(1L, "run-1") } returnsMany listOf(2, 0)
+        every { installedProductRepository.findByExternalIdAndAssetId(any(), any()) } returns null
+        every { installedProductRepository.findByExternalId(any()) } returns null
+        every { installedProductRepository.findLogicalDuplicate(any(), any(), any(), any()) } returns null
+        every { installedProductRepository.save(any()) } answers { firstArg<InstalledProduct>().apply { id = 1L } }
+
+        val batch1 = service.importProducts(
+            listOf(InstalledProductDto(externalId = "app-1", hostname = "server01", name = "Chrome")),
+            dryRun = false, importRunId = "run-1"
+        )
+        val batch2 = service.importProducts(
+            listOf(InstalledProductDto(externalId = "app-2", hostname = "server01", name = "Firefox")),
+            dryRun = false, importRunId = "run-1"
+        )
+
+        assertThat(batch1.productsDeleted).isEqualTo(2)
+        assertThat(batch2.productsDeleted).isEqualTo(0)
+        verify(exactly = 0) { installedProductRepository.deleteByAssetId(any()) }
+    }
+
+    @Test
+    fun `falls back to deleting all asset rows when no importRunId supplied`() {
+        val asset = asset(1L, "server01")
+        every { assetRepository.findAll() } returns mutableListOf(asset)
+        every { installedProductRepository.deleteByAssetId(1L) } returns 5
+        every { installedProductRepository.findByExternalIdAndAssetId(any(), any()) } returns null
+        every { installedProductRepository.findByExternalId(any()) } returns null
+        every { installedProductRepository.findLogicalDuplicate(any(), any(), any(), any()) } returns null
+        every { installedProductRepository.save(any()) } answers { firstArg<InstalledProduct>().apply { id = 1L } }
+
+        val result = service.importProducts(
+            listOf(InstalledProductDto(externalId = "app-1", hostname = "server01", name = "Chrome")),
+            dryRun = false
+        )
+
+        assertThat(result.productsDeleted).isEqualTo(5)
+        verify(exactly = 1) { installedProductRepository.deleteByAssetId(1L) }
+        verify(exactly = 0) { installedProductRepository.deleteByAssetIdAndImportRunIdNot(any(), any()) }
+    }
+
+    @Test
+    fun `dry run counts known products without saving`() {
+        val asset = asset(2L, "workstation01")
+        every { assetRepository.findAll() } returns mutableListOf(asset)
+
+        val result = service.importProducts(
+            listOf(InstalledProductDto(hostname = "workstation01", name = "Firefox")),
+            dryRun = true
+        )
+
+        assertThat(result.dryRun).isTrue()
+        assertThat(result.productsImported).isEqualTo(1)
+        verify(exactly = 0) { installedProductRepository.save(any()) }
+        verify(exactly = 0) { installedProductRepository.update(any<InstalledProduct>()) }
+        verify(exactly = 0) { installedProductRepository.deleteByAssetId(any()) }
+        verify(exactly = 0) { installedProductRepository.deleteByAssetIdAndImportRunIdNot(any(), any()) }
+    }
+
+    @Test
+    fun `skips products for unknown systems`() {
+        every { assetRepository.findAll() } returns mutableListOf()
+
+        val result = service.importProducts(
+            listOf(InstalledProductDto(hostname = "unknown", name = "Chrome")),
+            dryRun = false
+        )
+
+        assertThat(result.productsSkipped).isEqualTo(1)
+        assertThat(result.unknownSystems).isEqualTo(1)
+        assertThat(result.unknownSystemSamples).contains("unknown")
+    }
+
+    @Test
+    fun `unknown systems counts distinct hosts not product rows`() {
+        // Two products on the same unmatched host: 2 rows skipped, but 1 unknown SYSTEM.
+        every { assetRepository.findAll() } returns mutableListOf()
+
+        val result = service.importProducts(
+            listOf(
+                InstalledProductDto(hostname = "ghost01", name = "Chrome"),
+                InstalledProductDto(hostname = "ghost01", name = "Firefox")
+            ),
+            dryRun = false
+        )
+
+        assertThat(result.productsSkipped).isEqualTo(2)
+        assertThat(result.unknownSystems).isEqualTo(1)
+        assertThat(result.unknownSystemSamples).containsExactly("ghost01")
+    }
+
+    @Test
+    fun `matches CrowdStrike short name against asset stored as FQDN`() {
+        val asset = asset(7L, "ip-10-221-36-224.814396193842.aws.glpoly.net")
+        every { assetRepository.findAll() } returns mutableListOf(asset)
+        every { installedProductRepository.deleteByAssetId(7L) } returns 0
+        every { installedProductRepository.findByExternalIdAndAssetId(any(), any()) } returns null
+        every { installedProductRepository.findByExternalId(any()) } returns null
+        every { installedProductRepository.findLogicalDuplicate(any(), any(), any(), any()) } returns null
+        val saved = slot<InstalledProduct>()
+        every { installedProductRepository.save(capture(saved)) } answers { saved.captured.apply { id = 1L } }
+
+        val result = service.importProducts(
+            listOf(InstalledProductDto(hostname = "ip-10-221-36-224", name = "Chrome")),
+            dryRun = false
+        )
+
+        assertThat(result.productsImported).isEqualTo(1)
+        assertThat(result.unknownSystems).isEqualTo(0)
+        assertThat(saved.captured.asset.id).isEqualTo(7L)
+    }
+
+    @Test
+    fun `matches case-insensitively`() {
+        val asset = asset(8L, "SERVER01")
+        every { assetRepository.findAll() } returns mutableListOf(asset)
+        every { installedProductRepository.deleteByAssetId(8L) } returns 0
+        every { installedProductRepository.findByExternalIdAndAssetId(any(), any()) } returns null
+        every { installedProductRepository.findByExternalId(any()) } returns null
+        every { installedProductRepository.findLogicalDuplicate(any(), any(), any(), any()) } returns null
+        every { installedProductRepository.save(any()) } answers { firstArg<InstalledProduct>().apply { id = 1L } }
+
+        val result = service.importProducts(
+            listOf(InstalledProductDto(hostname = "server01", name = "Chrome")),
+            dryRun = false
+        )
+
+        assertThat(result.productsImported).isEqualTo(1)
+        assertThat(result.unknownSystems).isEqualTo(0)
+    }
+
+    @Test
+    fun `refuses to guess when short name is ambiguous across FQDN assets`() {
+        // Same short name in two AWS accounts — do not assign arbitrarily.
+        val a = asset(1L, "ip-10-0-0-1.acctA.aws.glpoly.net")
+        val b = asset(2L, "ip-10-0-0-1.acctB.aws.glpoly.net")
+        every { assetRepository.findAll() } returns mutableListOf(a, b)
+
+        val result = service.importProducts(
+            listOf(InstalledProductDto(hostname = "ip-10-0-0-1", name = "Chrome")),
+            dryRun = false
+        )
+
+        assertThat(result.productsImported).isEqualTo(0)
+        assertThat(result.productsSkipped).isEqualTo(1)
+        assertThat(result.unknownSystems).isEqualTo(1)
+        verify(exactly = 0) { installedProductRepository.save(any()) }
+    }
+
+
+    @Test
+    fun `skips import when external id belongs to another asset`() {
+        val targetAsset = asset(1L, "server01")
+        val otherAsset = asset(2L, "server02")
+        every { assetRepository.findAll() } returns mutableListOf(targetAsset, otherAsset)
+        every { installedProductRepository.deleteByAssetId(1L) } returns 0
+        every { installedProductRepository.findByExternalIdAndAssetId("app-1", 1L) } returns null
+        every { installedProductRepository.findLogicalDuplicate(1L, "Chrome", "Google", "1.2.3") } returns null
+        every { installedProductRepository.findByExternalId("app-1") } returns InstalledProduct(
+            id = 99L,
+            asset = otherAsset,
+            externalId = "app-1",
+            name = "Chrome"
+        )
+
+        val result = service.importProducts(
+            listOf(InstalledProductDto(externalId = "app-1", hostname = "server01", name = "Chrome", vendor = "Google", version = "1.2.3")),
+            dryRun = false
+        )
+
+        assertThat(result.productsSkipped).isEqualTo(1)
+        assertThat(result.errors).anySatisfy { error ->
+            assertThat(error).contains("external id is already assigned to another asset")
+        }
+        verify(exactly = 0) { installedProductRepository.save(any()) }
+        verify(exactly = 0) { installedProductRepository.update(any<InstalledProduct>()) }
+    }
+
+    @Test
+    fun `rejects oversized import batches`() {
+        val products = List(InstalledProductImportService.MAX_PRODUCTS_PER_REQUEST + 1) { index ->
+            InstalledProductDto(hostname = "server$index", name = "Product $index")
+        }
+
+        val thrown = org.junit.jupiter.api.assertThrows<IllegalArgumentException> {
+            service.importProducts(products, dryRun = true)
+        }
+
+        assertThat(thrown.message).contains("At most ${InstalledProductImportService.MAX_PRODUCTS_PER_REQUEST} products")
+    }
+
+    private fun asset(id: Long, name: String): Asset = Asset(
+        id = id,
+        name = name,
+        type = "SERVER",
+        owner = "owner"
+    )
+}

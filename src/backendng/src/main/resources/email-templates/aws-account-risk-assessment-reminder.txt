@@ -1,0 +1,19 @@
+Risk assessment for AWS account {awsAccountId} due in {dayWord}
+===============================================================
+
+The risk assessment for AWS account {awsAccountId} is due in {dayWord},
+on {deadline}.
+
+Use case:              {useCaseName}
+{ifVersion}
+Requirements version:  {requirementsVersion}
+{/ifVersion}
+Deadline:              {deadline}
+
+Please complete the assessment before the deadline.
+
+Open the assessment in SecMan: {assessmentsUrl}
+
+---
+You are receiving this because your email address is mapped to this AWS
+account in SecMan. If that is not correct, contact your SecMan administrator.

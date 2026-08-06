@@ -1,0 +1,43 @@
+⚠️ URGENT: IMMEDIATE ACTION REQUIRED - OUTDATED ASSETS
+======================================================
+
+*** THIS IS AN ESCALATED REMINDER ***
+
+These [(${totalCount})] assets have been outdated for 7+ days without remediation.
+Immediate action is required to maintain security compliance and reduce organizational risk.
+
+Hello [(${recipientName} ?: 'Asset Owner')],
+
+This is a second reminder for [(${totalCount})] asset(s) that remain outdated.
+These vulnerabilities pose continued risk to the organization.
+
+SEVERITY BREAKDOWN
+------------------
+Critical: [(${criticalCount})]
+High: [(${highCount})]
+Medium: [(${mediumCount})]
+Low: [(${lowCount})]
+
+AFFECTED ASSETS
+---------------
+[# th:each="asset : ${assets}"]
+- [(${asset.name})] ([(${asset.type})]) - [(${asset.vulnerabilityCount})] vulnerabilities,
+  oldest: [(${asset.oldestVulnDays})] days ([(${asset.oldestVulnId})])
+[/]
+
+POTENTIAL CONSEQUENCES
+----------------------
+- Increased risk of security breach or data compromise
+- Non-compliance with security policies and regulatory requirements
+- Possible escalation to senior management and security leadership
+- Audit findings and remediation mandates
+
+TAKE ACTION NOW: [(${dashboardUrl})]
+
+IMPORTANT: Continued delays in addressing these vulnerabilities may result in formal
+escalation and mandatory remediation actions.
+
+---
+This is an automated notification from the Security Management System.
+If you have questions, please contact the security team immediately.
+Do not reply to this email.

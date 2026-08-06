@@ -1,0 +1,17 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ReleaseDetail from '../../components/ReleaseDetail.tsx';
+
+// Get the release ID from the URL
+const { id } = Astro.params;
+const releaseId = parseInt(id || '0', 10);
+
+// Validate release ID
+if (!releaseId || isNaN(releaseId)) {
+    return Astro.redirect('/releases');
+}
+---
+
+<Layout title={`Release ${id} - Secman`}>
+    <ReleaseDetail releaseId={releaseId} client:load />
+</Layout>

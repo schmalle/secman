@@ -1,0 +1,759 @@
+package com.secman.controller
+
+import com.secman.repository.AssetRepository
+import com.secman.repository.OutdatedAssetMaterializedViewRepository
+import com.secman.repository.UserMappingRepository
+import com.secman.service.AdminSummaryService
+import com.secman.service.AwsAccountRecipientResolver
+import com.secman.service.GithubRepoAlertService
+import com.secman.service.NewAccountNotificationService
+import com.secman.service.NotificationService
+import com.secman.service.UserMappingStatisticsService
+import com.secman.service.UserVulnerabilityNotificationService
+import com.secman.service.ApplicationRegisterReminderService
+import com.secman.service.VulnerabilityExceptionExpiryReminderService
+import io.micronaut.data.model.Pageable
+import io.micronaut.http.HttpResponse
+import io.micronaut.http.MediaType
+import io.micronaut.http.annotation.Body
+import io.micronaut.http.annotation.Controller
+import io.micronaut.http.annotation.Get
+import io.micronaut.http.annotation.Post
+import io.micronaut.http.annotation.Produces
+import io.micronaut.security.annotation.Secured
+import io.micronaut.security.authentication.Authentication
+import io.micronaut.serde.annotation.Serdeable
+import org.slf4j.LoggerFactory
+
+/**
+ * REST API controller for CLI-specific operations.
+ *
+ * These endpoints allow the CLI to operate without direct database access,
+ * by proxying operations through the backend REST API.
+ *
+ * Access: All endpoints require ADMIN role.
+ */
+@Controller("/api/cli")
+@Secured("ADMIN")
+class CliController(
+    private val notificationService: NotificationService,
+    private val outdatedAssetRepository: OutdatedAssetMaterializedViewRepository,
+    private val assetRepository: AssetRepository,
+    private val userMappingRepository: UserMappingRepository,
+    private val adminSummaryService: AdminSummaryService,
+    private val userVulnerabilityNotificationService: UserVulnerabilityNotificationService,
+    private val userMappingStatisticsService: UserMappingStatisticsService,
+    private val applicationRegisterReminderService: ApplicationRegisterReminderService,
+    private val newAccountNotificationService: NewAccountNotificationService,
+    private val recipientResolver: AwsAccountRecipientResolver,
+    private val githubRepoAlertService: GithubRepoAlertService,
+    private val vulnerabilityExceptionExpiryReminderService: VulnerabilityExceptionExpiryReminderService,
+    private val accountFindingAgeReportService: com.secman.service.AccountFindingAgeReportService
+) {
+    private val logger = LoggerFactory.getLogger(CliController::class.java)
+
+    // --- Notification Endpoints ---
+
+    @Serdeable
+    data class SendNotificationsRequest(
+        val dryRun: Boolean = false,
+        val verbose: Boolean = false
+    )
+
+    @Serdeable
+    data class NotificationResultDto(
+        val assetsProcessed: Int,
+        val emailsSent: Int,
+        val failures: Int,
+        val skipped: List<String>
+    )
+
+    /**
+     * POST /api/cli/notifications/send-outdated
+     *
+     * Sends outdated asset notification emails. Replicates the logic previously
+     * in the CLI's NotificationCliService: query outdated assets, resolve owners,
+     * and send notification emails.
+     */
+    @Post("/notifications/send-outdated")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendOutdatedNotifications(
+        @Body request: SendNotificationsRequest,
+        authentication: Authentication
+    ): HttpResponse<NotificationResultDto> {
+        logger.info("CLI send-outdated-notifications requested by user: {} (dryRun={})",
+            authentication.name, request.dryRun)
+
+        return try {
+            val outdatedAssets = queryOutdatedAssets(request.verbose)
+            val result = notificationService.processOutdatedAssets(outdatedAssets, request.dryRun)
+
+            HttpResponse.ok(NotificationResultDto(
+                assetsProcessed = result.assetsProcessed,
+                emailsSent = result.emailsSent,
+                failures = result.failures,
+                skipped = result.skipped
+            ))
+        } catch (e: Exception) {
+            logger.error("Error sending outdated notifications", e)
+            HttpResponse.serverError()
+        }
+    }
+
+    /**
+     * Query outdated assets from materialized view and resolve owner emails.
+     * Ported from NotificationCliService.queryOutdatedAssets().
+     */
+    private fun queryOutdatedAssets(verbose: Boolean): List<NotificationService.OutdatedAssetData> {
+        val pageable = Pageable.unpaged()
+        val outdatedView = outdatedAssetRepository.findOutdatedAssets(
+            workgroupId = null,
+            searchTerm = null,
+            minSeverity = null,
+            adDomain = null,
+            pageable = pageable
+        )
+
+        val results = mutableListOf<NotificationService.OutdatedAssetData>()
+
+        outdatedView.content.forEach { view ->
+            val asset = assetRepository.findByIdWithWorkgroups(view.assetId).orElse(null)
+            if (asset == null) {
+                if (verbose) logger.warn("Asset {} not found, skipping", view.assetId)
+                return@forEach
+            }
+
+            // Resolve the full recipient set for this asset (deduped, case-insensitive):
+            //  - workgroup members + AWS-account-sharing targets + owner mapping, keyed on
+            //    the canonical cloudAccountId (also covers CrowdStrike-imported assets), and
+            //  - the legacy owner-mapping lookup (asset.owner) for backward compatibility.
+            val recipients = mutableSetOf<String>()
+            recipients.addAll(recipientResolver.resolveAwsAccountRecipients(asset.cloudAccountId ?: ""))
+            userMappingRepository.findByAwsAccountId(asset.owner).forEach { mapping ->
+                recipients.add(mapping.email.lowercase())
+            }
+
+            if (recipients.isEmpty()) {
+                if (verbose) logger.warn(
+                    "No recipients found for asset {} (account={}, owner={}), skipping",
+                    asset.name, asset.cloudAccountId, asset.owner
+                )
+                return@forEach
+            }
+
+            val severity = when {
+                view.criticalCount > 0 -> "CRITICAL"
+                view.highCount > 0 -> "HIGH"
+                view.mediumCount > 0 -> "MEDIUM"
+                else -> "LOW"
+            }
+
+            val criticality = asset.getEffectiveCriticality().name
+
+            // Emit one row per (recipient, asset). NotificationService groups by recipient
+            // email and sends each recipient a single consolidated email.
+            recipients.forEach { recipientEmail ->
+                results.add(
+                    NotificationService.OutdatedAssetData(
+                        assetId = view.assetId,
+                        assetName = view.assetName,
+                        assetType = view.assetType,
+                        ownerEmail = recipientEmail,
+                        vulnerabilityCount = view.totalOverdueCount,
+                        oldestVulnDays = view.oldestVulnDays,
+                        oldestVulnId = view.oldestVulnId ?: "unknown",
+                        severity = severity,
+                        criticality = criticality
+                    )
+                )
+            }
+        }
+
+        logger.info("Mapped {} outdated-asset notifications across recipients", results.size)
+        return results
+    }
+
+    // --- Admin Summary Endpoints ---
+
+    @Serdeable
+    data class SystemStatisticsDto(
+        val userCount: Long,
+        val vulnerabilityCount: Long,
+        val assetCount: Long,
+        val vulnerabilityStatisticsUrl: String,
+        val topProducts: List<ProductSummaryDto>,
+        val topServers: List<ServerSummaryDto>
+    )
+
+    @Serdeable
+    data class ProductSummaryDto(val name: String, val vulnerabilityCount: Long)
+
+    @Serdeable
+    data class ServerSummaryDto(val name: String, val vulnerabilityCount: Long)
+
+    @Serdeable
+    data class SendAdminSummaryRequest(
+        val dryRun: Boolean = false,
+        val verbose: Boolean = false
+    )
+
+    @Serdeable
+    data class AdminSummaryResultDto(
+        val status: String,
+        val recipientCount: Int,
+        val emailsSent: Int,
+        val emailsFailed: Int,
+        val recipients: List<String>,
+        val failedRecipients: List<String>
+    )
+
+    @Serdeable
+    data class SendAccountFindingAgeReportRequest(
+        val limit: Int = 10,
+        val dryRun: Boolean = false,
+        val verbose: Boolean = false
+    )
+
+    @Serdeable
+    data class AccountFindingAgeReportResultDto(
+        val status: String,
+        val recipientCount: Int,
+        val emailsSent: Int,
+        val emailsFailed: Int,
+        val recipients: List<String>,
+        val failedRecipients: List<String>,
+        val accountCount: Int
+    )
+
+    /**
+     * GET /api/cli/admin-summary/statistics
+     *
+     * Returns system statistics for the admin summary email.
+     */
+    @Get("/admin-summary/statistics")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun getAdminSummaryStatistics(authentication: Authentication): HttpResponse<SystemStatisticsDto> {
+        logger.info("CLI admin-summary statistics requested by user: {}", authentication.name)
+
+        return try {
+            val stats = adminSummaryService.getSystemStatistics()
+            HttpResponse.ok(SystemStatisticsDto(
+                userCount = stats.userCount,
+                vulnerabilityCount = stats.vulnerabilityCount,
+                assetCount = stats.assetCount,
+                vulnerabilityStatisticsUrl = stats.vulnerabilityStatisticsUrl,
+                topProducts = stats.topProducts.map { ProductSummaryDto(it.name, it.vulnerabilityCount) },
+                topServers = stats.topServers.map { ServerSummaryDto(it.name, it.vulnerabilityCount) }
+            ))
+        } catch (e: Exception) {
+            logger.error("Error fetching admin summary statistics", e)
+            HttpResponse.serverError()
+        }
+    }
+
+    /**
+     * POST /api/cli/admin-summary/send
+     *
+     * Sends admin summary email to all ADMIN/REPORT users.
+     */
+    @Post("/admin-summary/send")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendAdminSummary(
+        @Body request: SendAdminSummaryRequest,
+        authentication: Authentication
+    ): HttpResponse<AdminSummaryResultDto> {
+        logger.info("CLI admin-summary send requested by user: {} (dryRun={})",
+            authentication.name, request.dryRun)
+
+        return try {
+            val result = adminSummaryService.sendSummaryEmail(request.dryRun, request.verbose)
+            HttpResponse.ok(AdminSummaryResultDto(
+                status = result.status.name,
+                recipientCount = result.recipientCount,
+                emailsSent = result.emailsSent,
+                emailsFailed = result.emailsFailed,
+                recipients = result.recipients,
+                failedRecipients = result.failedRecipients
+            ))
+        } catch (e: Exception) {
+            logger.error("Error sending admin summary", e)
+            HttpResponse.serverError()
+        }
+    }
+
+    /**
+     * POST /api/cli/account-finding-age-report/send
+     *
+     * Emails the "accounts with the longest-open findings" report to all ADMIN users.
+     * The controller is class-level @Secured("ADMIN").
+     */
+    @Post("/account-finding-age-report/send")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendAccountFindingAgeReport(
+        @Body request: SendAccountFindingAgeReportRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        logger.info(
+            "CLI account-finding-age-report send requested by user: {} (limit={}, dryRun={})",
+            authentication.name, request.limit, request.dryRun
+        )
+
+        return try {
+            val result = accountFindingAgeReportService.sendReport(
+                limit = request.limit,
+                dryRun = request.dryRun,
+                verbose = request.verbose
+            )
+            HttpResponse.ok(
+                AccountFindingAgeReportResultDto(
+                    status = result.status.name,
+                    recipientCount = result.recipientCount,
+                    emailsSent = result.emailsSent,
+                    emailsFailed = result.emailsFailed,
+                    recipients = result.recipients,
+                    failedRecipients = result.failedRecipients,
+                    accountCount = result.accountCount
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            HttpResponse.badRequest(mapOf("message" to (e.message ?: "Invalid limit")))
+        } catch (e: Exception) {
+            logger.error("Error sending account finding-age report", e)
+            HttpResponse.serverError<Any>()
+        }
+    }
+
+    // --- User Mapping Statistics Email Endpoint (Feature 085) ---
+
+    @Serdeable
+    data class SendUserMappingStatisticsRequest(
+        val filterEmail: String? = null,
+        val filterStatus: String? = null,
+        val dryRun: Boolean = false,
+        val verbose: Boolean = false,
+        val importSummary: ImportSummaryDto? = null
+    )
+
+    @Serdeable
+    data class ImportSummaryDto(
+        val source: String? = null,
+        val totalProcessed: Int? = null,
+        val created: Int? = null,
+        val createdPending: Int? = null,
+        val skipped: Int? = null,
+        val errorCount: Int? = null,
+        val dbMappingCount: Int? = null,
+        val fileMappingCount: Int? = null,
+        val newCount: Int? = null,
+        val unchangedCount: Int? = null,
+        val removedCount: Int? = null
+    )
+
+    @Serdeable
+    data class AggregatesDto(
+        val totalUsers: Int,
+        val totalMappings: Int,
+        val activeMappings: Int,
+        val pendingMappings: Int,
+        val domainMappings: Int,
+        val awsAccountMappings: Int
+    )
+
+    @Serdeable
+    data class UserMappingStatisticsResultDto(
+        val status: String,
+        val recipientCount: Int,
+        val emailsSent: Int,
+        val emailsFailed: Int,
+        val recipients: List<String>,
+        val failedRecipients: List<String>,
+        val appliedFilters: Map<String, String>,
+        val aggregates: AggregatesDto
+    )
+
+    /**
+     * POST /api/cli/user-mappings/send-statistics-email
+     *
+     * Computes user-mapping statistics (aggregates + per-user detail) for the given
+     * filters and emails the report to every ADMIN or REPORT user with a valid email
+     * address. Writes one audit row to user_mapping_statistics_log per invocation.
+     *
+     * Feature: 085-cli-mappings-email
+     */
+    @Post("/user-mappings/send-statistics-email")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendUserMappingStatistics(
+        @Body request: SendUserMappingStatisticsRequest,
+        authentication: Authentication
+    ): HttpResponse<Any> {
+        logger.info("CLI user-mappings send-statistics-email requested by user: {} (dryRun={}, filterEmail={}, filterStatus={})",
+            authentication.name, request.dryRun, request.filterEmail, request.filterStatus)
+
+        return try {
+            val importSummary = request.importSummary?.let {
+                UserMappingStatisticsService.ImportSummary(
+                    source = it.source,
+                    totalProcessed = it.totalProcessed,
+                    created = it.created,
+                    createdPending = it.createdPending,
+                    skipped = it.skipped,
+                    errorCount = it.errorCount,
+                    dbMappingCount = it.dbMappingCount,
+                    fileMappingCount = it.fileMappingCount,
+                    newCount = it.newCount,
+                    unchangedCount = it.unchangedCount,
+                    removedCount = it.removedCount
+                )
+            }
+            val result = userMappingStatisticsService.sendStatisticsEmail(
+                filterEmail = request.filterEmail,
+                filterStatus = request.filterStatus,
+                dryRun = request.dryRun,
+                verbose = request.verbose,
+                invokedBy = authentication.name,
+                importSummary = importSummary
+            )
+            HttpResponse.ok(
+                UserMappingStatisticsResultDto(
+                    status = result.status.name,
+                    recipientCount = result.recipientCount,
+                    emailsSent = result.emailsSent,
+                    emailsFailed = result.emailsFailed,
+                    recipients = result.recipients,
+                    failedRecipients = result.failedRecipients,
+                    appliedFilters = result.appliedFilters,
+                    aggregates = AggregatesDto(
+                        totalUsers = result.aggregates.totalUsers,
+                        totalMappings = result.aggregates.totalMappings,
+                        activeMappings = result.aggregates.activeMappings,
+                        pendingMappings = result.aggregates.pendingMappings,
+                        domainMappings = result.aggregates.domainMappings,
+                        awsAccountMappings = result.aggregates.awsAccountMappings
+                    )
+                ) as Any
+            )
+        } catch (e: IllegalArgumentException) {
+            logger.warn("Invalid filter for user-mapping statistics: {}", e.message)
+            HttpResponse.badRequest(
+                mapOf(
+                    "error" to "Validation Error",
+                    "message" to (e.message ?: "Invalid filter parameter")
+                ) as Any
+            )
+        } catch (e: Exception) {
+            logger.error("Error sending user-mapping statistics email", e)
+            HttpResponse.serverError(
+                mapOf(
+                    "error" to "Internal Server Error",
+                    "message" to "Failed to send user-mapping statistics email"
+                ) as Any
+            )
+        }
+    }
+
+    // --- User Vulnerability Notification Endpoints ---
+
+    @Serdeable
+    data class SendUserVulnNotificationsRequest(
+        val dryRun: Boolean = false,
+        val verbose: Boolean = false,
+        val thresholdDays: Int = 30,
+        val notificationUser: String? = null,
+        val emailPrefix: String? = null,
+        val notAll: Boolean = false
+    )
+
+    @Serdeable
+    data class UserVulnNotificationResultDto(
+        val status: String,
+        val notificationScope: String,
+        val awsAccountsAffected: Int,
+        val usersNotified: Int,
+        val emailsSent: Int,
+        val emailsFailed: Int,
+        val recipients: List<String>,
+        val failedRecipients: List<String>,
+        val unmappedAccounts: List<String>,
+        val thresholdDays: Int,
+        val notificationUserExists: Boolean? = null,
+        val emailPrefix: String? = null,
+        val accountDetails: List<UserVulnerabilityNotificationService.AwsAccountNotificationDetail>
+    )
+
+    /**
+     * POST /api/cli/user-vulnerability-notifications/send
+     *
+     * Finds AWS accounts with overdue vulnerabilities, maps them to users via UserMapping,
+     * and sends each user one consolidated notification email.
+     */
+    @Post("/user-vulnerability-notifications/send")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendUserVulnerabilityNotifications(
+        @Body request: SendUserVulnNotificationsRequest,
+        authentication: Authentication
+    ): HttpResponse<UserVulnNotificationResultDto> {
+        logger.info("CLI user-vulnerability-notifications requested by user: {} (dryRun={}, thresholdDays={})",
+            authentication.name, request.dryRun, request.thresholdDays)
+
+        return try {
+            val result = userVulnerabilityNotificationService.sendUserVulnerabilityNotifications(
+                thresholdDays = request.thresholdDays,
+                dryRun = request.dryRun,
+                verbose = request.verbose,
+                notificationUser = request.notificationUser,
+                emailPrefix = request.emailPrefix,
+                notAll = request.notAll
+            )
+
+            HttpResponse.ok(UserVulnNotificationResultDto(
+                status = result.status.name,
+                notificationScope = result.notificationScope.name,
+                awsAccountsAffected = result.awsAccountsAffected,
+                usersNotified = result.usersNotified,
+                emailsSent = result.emailsSent,
+                emailsFailed = result.emailsFailed,
+                recipients = result.recipients,
+                failedRecipients = result.failedRecipients,
+                unmappedAccounts = result.unmappedAccounts,
+                thresholdDays = result.thresholdDays,
+                notificationUserExists = result.notificationUserExists,
+                emailPrefix = result.emailPrefix,
+                accountDetails = result.accountDetails
+            ))
+        } catch (e: Exception) {
+            logger.error("Error sending user vulnerability notifications", e)
+            HttpResponse.serverError()
+        }
+    }
+
+    @Serdeable
+    data class SendApplicationRegisterRemindersRequest(
+        val thresholdDays: Int = 365,
+        val dryRun: Boolean = false,
+        val verbose: Boolean = false
+    )
+
+    @Serdeable
+    data class ApplicationRegisterReminderResultDto(
+        val status: String,
+        val thresholdDays: Int,
+        val recipientCount: Int,
+        val entriesOverdue: Int,
+        val emailsSent: Int,
+        val emailsFailed: Int,
+        val recipients: List<String>,
+        val failedRecipients: List<String>
+    )
+
+    @Post("/application-register/reminders/send")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendApplicationRegisterReminders(
+        @Body request: SendApplicationRegisterRemindersRequest,
+        authentication: Authentication
+    ): HttpResponse<ApplicationRegisterReminderResultDto> {
+        logger.info("CLI application-register reminders requested by user: {} (dryRun={}, thresholdDays={})", authentication.name, request.dryRun, request.thresholdDays)
+        if (request.thresholdDays < 1) return HttpResponse.badRequest()
+
+        val result = applicationRegisterReminderService.sendReminderEmails(request.thresholdDays, request.dryRun, request.verbose)
+        return HttpResponse.ok(
+            ApplicationRegisterReminderResultDto(
+                status = result.status.name,
+                thresholdDays = result.thresholdDays,
+                recipientCount = result.recipientCount,
+                entriesOverdue = result.entriesOverdue,
+                emailsSent = result.emailsSent,
+                emailsFailed = result.emailsFailed,
+                recipients = result.recipients,
+                failedRecipients = result.failedRecipients
+            )
+        )
+    }
+
+    // --- New Account Notification Endpoint ---
+
+    @Serdeable
+    data class SendNewAccountNotificationsRequest(
+        val dryRun: Boolean = false,
+        val verbose: Boolean = false,
+        val hours: Int = 24,
+        val notificationText: String
+    )
+
+    @Serdeable
+    data class NewAccountNotificationResultDto(
+        val status: String,
+        val accountMappingsFound: Int,
+        val usersNotified: Int,
+        val emailsSent: Int,
+        val emailsFailed: Int,
+        val recipients: List<String>,
+        val failedRecipients: List<String>,
+        val hours: Int
+    )
+
+    /**
+     * POST /api/cli/new-account-notifications/send
+     *
+     * Finds UserMapping rows with a non-null aws_account_id created within the last
+     * [hours] hours, groups them by email address, and sends each affected user one
+     * consolidated email. The notification body text is supplied by the caller (read
+     * from a file by the CLI) so operators can customise the message per-deployment.
+     */
+    @Post("/new-account-notifications/send")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendNewAccountNotifications(
+        @Body request: SendNewAccountNotificationsRequest,
+        authentication: Authentication
+    ): HttpResponse<NewAccountNotificationResultDto> {
+        logger.info("CLI new-account-notifications requested by user: {} (dryRun={}, hours={})",
+            authentication.name, request.dryRun, request.hours)
+
+        if (request.hours < 1) {
+            logger.warn("Invalid hours value: {}", request.hours)
+            return HttpResponse.badRequest()
+        }
+        if (request.notificationText.isBlank()) {
+            logger.warn("Notification text is blank")
+            return HttpResponse.badRequest()
+        }
+
+        return try {
+            val result = newAccountNotificationService.sendNewAccountNotifications(
+                hours = request.hours,
+                dryRun = request.dryRun,
+                verbose = request.verbose,
+                notificationText = request.notificationText
+            )
+            HttpResponse.ok(NewAccountNotificationResultDto(
+                status = result.status.name,
+                accountMappingsFound = result.accountMappingsFound,
+                usersNotified = result.usersNotified,
+                emailsSent = result.emailsSent,
+                emailsFailed = result.emailsFailed,
+                recipients = result.recipients,
+                failedRecipients = result.failedRecipients,
+                hours = result.hours
+            ))
+        } catch (e: Exception) {
+            logger.error("Error sending new-account notifications", e)
+            HttpResponse.serverError()
+        }
+    }
+
+    // --- Vulnerability Exception Expiry Reminder Endpoint ---
+
+    @Serdeable
+    data class SendExceptionExpiryRemindersRequest(
+        val dryRun: Boolean = false,
+        val verbose: Boolean = false,
+        val days: Int = 7
+    )
+
+    @Serdeable
+    data class ExceptionExpiryReminderResultDto(
+        val status: String,
+        val days: Int,
+        val exceptionsExpiring: Int,
+        val ownersNotified: Int,
+        val emailsSent: Int,
+        val emailsFailed: Int,
+        val recipients: List<String>,
+        val failedRecipients: List<String>,
+        val unmappedOwners: List<String>,
+        val alreadyNotified: Int
+    )
+
+    /**
+     * POST /api/cli/vulnerability-exception-expiry-notifications/send
+     *
+     * Finds VulnerabilityException rows expiring exactly [days] days from today,
+     * resolves each exception's owner (createdBy username -> User.email), and sends
+     * each owner one consolidated email listing all of their expiring exceptions.
+     * A reminder is sent once per (exception, expirationDate) pair.
+     */
+    @Post("/vulnerability-exception-expiry-notifications/send")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendExceptionExpiryReminders(
+        @Body request: SendExceptionExpiryRemindersRequest,
+        authentication: Authentication
+    ): HttpResponse<ExceptionExpiryReminderResultDto> {
+        logger.info("CLI vulnerability-exception-expiry-notifications requested by user: {} (dryRun={}, days={})",
+            authentication.name, request.dryRun, request.days)
+
+        if (request.days < 1) {
+            logger.warn("Invalid days value: {}", request.days)
+            return HttpResponse.badRequest()
+        }
+
+        return try {
+            val result = vulnerabilityExceptionExpiryReminderService.sendExpiryReminders(
+                days = request.days,
+                dryRun = request.dryRun,
+                verbose = request.verbose
+            )
+            HttpResponse.ok(ExceptionExpiryReminderResultDto(
+                status = result.status.name,
+                days = result.days,
+                exceptionsExpiring = result.exceptionsExpiring,
+                ownersNotified = result.ownersNotified,
+                emailsSent = result.emailsSent,
+                emailsFailed = result.emailsFailed,
+                recipients = result.recipients,
+                failedRecipients = result.failedRecipients,
+                unmappedOwners = result.unmappedOwners,
+                alreadyNotified = result.alreadyNotified
+            ))
+        } catch (e: Exception) {
+            logger.error("Error sending vulnerability exception expiry reminders", e)
+            HttpResponse.serverError()
+        }
+    }
+
+    // --- GitHub Repo Alert Endpoints ---
+
+    @Serdeable
+    data class SendGithubRepoAlertsRequest(
+        val dryRun: Boolean = false,
+        val thresholdDays: Int = 30,
+        val force: Boolean = false,
+        val onlyEmail: String? = null
+    )
+
+    /**
+     * POST /api/cli/github-repo-alerts/send
+     *
+     * Alerts GitHub repo owners whose open high+critical Dependabot alert
+     * count has not decreased over the last thresholdDays days. Backing for
+     * CLI `alert-github-repo-owners` and MCP `send_github_repo_alerts`.
+     *
+     * `force` bypasses the non-decrease comparison and alerts every eligible
+     * owner with open high+critical alerts regardless of trend. `onlyEmail`
+     * restricts the run to repos owned by that address (case-insensitive).
+     */
+    @Post("/github-repo-alerts/send")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendGithubRepoAlerts(
+        @Body request: SendGithubRepoAlertsRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        logger.info("CLI github-repo-alerts requested by user: {} (dryRun={}, thresholdDays={}, force={}, onlyEmail={})",
+            authentication.name, request.dryRun, request.thresholdDays, request.force, request.onlyEmail)
+
+        if (request.thresholdDays < 1) {
+            return HttpResponse.badRequest(mapOf("error" to "thresholdDays must be >= 1"))
+        }
+        return try {
+            val result = githubRepoAlertService.sendGithubRepoAlerts(
+                dryRun = request.dryRun,
+                thresholdDays = request.thresholdDays,
+                force = request.force,
+                onlyEmail = request.onlyEmail
+            )
+            HttpResponse.ok(result)
+        } catch (e: Exception) {
+            logger.error("Error sending GitHub repo alerts", e)
+            HttpResponse.serverError(mapOf("error" to (e.message ?: "Alert run failed")))
+        }
+    }
+
+}

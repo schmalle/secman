@@ -1,0 +1,22 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import UserMappingManager from '../../components/UserMappingManager';
+---
+
+<Layout title="User Mappings - Admin">
+    <div class="container-fluid">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Home</a></li>
+                <li class="breadcrumb-item"><a href="/admin">Admin</a></li>
+                <li class="breadcrumb-item active" aria-current="page">User Mappings</li>
+            </ol>
+        </nav>
+
+        <UserMappingManager client:load />
+
+        <div class="mt-4">
+          <a href="/admin" class="btn btn-secondary">Back to Admin</a>
+        </div>
+    </div>
+</Layout>

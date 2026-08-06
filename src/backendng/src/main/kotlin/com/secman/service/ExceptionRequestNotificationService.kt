@@ -1,0 +1,970 @@
+package com.secman.service
+
+import com.secman.config.AppConfig
+import com.secman.domain.Asset
+import com.secman.domain.ExceptionKind
+import com.secman.domain.User
+import com.secman.domain.VulnerabilityException
+import com.secman.domain.VulnerabilityExceptionRequest
+import com.secman.repository.AssetRepository
+import com.secman.repository.UserRepository
+import jakarta.inject.Inject
+import jakarta.inject.Singleton
+import org.slf4j.LoggerFactory
+import java.time.format.DateTimeFormatter
+import java.util.concurrent.CompletableFuture
+
+/**
+ * Service for sending email notifications related to vulnerability exception requests.
+ *
+ * **Notification Types**:
+ * - New Request: Notify ADMIN/SECCHAMPION when user creates PENDING request
+ * - Approval: Notify requester when request approved
+ * - Rejection: Notify requester when request rejected (includes review comment)
+ * - Expiration Reminder: Notify requester 7 days before exception expires
+ *
+ * **Non-Blocking Design**:
+ * - All methods use @Async annotation for background email sending
+ * - Failures are logged but do not throw exceptions (email failures should not block workflow)
+ * - Returns CompletableFuture for testing and monitoring
+ *
+ * Feature: 031-vuln-exception-approval
+ * User Story 6: Email Notifications (P3)
+ * Phase 10: Email Notifications
+ * Reference: spec.md acceptance scenarios US6-1, US6-2, US6-3
+ */
+@Singleton
+open class ExceptionRequestNotificationService(
+    @Inject private val emailService: EmailService,
+    @Inject private val userRepository: UserRepository,
+    @Inject private val assetRepository: AssetRepository,
+    @Inject private val appConfig: AppConfig
+) {
+    private val logger = LoggerFactory.getLogger(ExceptionRequestNotificationService::class.java)
+
+    companion object {
+        private val DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        private const val DASHBOARD_PATH = "/exception-approvals"
+    }
+
+    private fun dashboardUrl(): String =
+        "${appConfig.backend.baseUrl.trimEnd('/')}$DASHBOARD_PATH"
+
+    private fun loadLogoInlineImage(): Map<String, Pair<ByteArray, String>> {
+        return try {
+            val logoBytes = javaClass.getResourceAsStream("/email-templates/SecManLogo.png")
+                ?.readAllBytes()
+            if (logoBytes != null) mapOf("secman-logo" to (logoBytes to "image/png")) else emptyMap()
+        } catch (e: Exception) {
+            logger.warn("Failed to load SecManLogo.png: {}", e.message)
+            emptyMap()
+        }
+    }
+
+    /**
+     * Resolve the CVE id for display, preferring the denormalized `cveId` column
+     * (set at creation time, e.g. for sweeping rule requests with no linked vulnerability,
+     * and survives CrowdStrike reimport cycles that null out the vulnerability FK) over the
+     * live `vulnerability` association, which may be null in either of those cases.
+     */
+    private fun resolveCveId(request: VulnerabilityExceptionRequest): String =
+        request.cveId ?: request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
+
+    /**
+     * Resolve the asset for display, preferring the live `vulnerability.asset` association
+     * and falling back to a lookup by the denormalized `assetId` column when the
+     * vulnerability link is absent (rule requests, or reimport-nulled FKs).
+     */
+    private fun resolveAsset(request: VulnerabilityExceptionRequest): Asset? =
+        request.vulnerability?.asset
+            ?: request.assetId?.let { assetRepository.findById(it).orElse(null) }
+
+    private fun resolveAssetName(request: VulnerabilityExceptionRequest): String =
+        resolveAsset(request)?.name ?: "Unknown Asset"
+
+    private fun resolveAssetIp(request: VulnerabilityExceptionRequest): String =
+        resolveAsset(request)?.ip ?: "N/A"
+
+    /**
+     * Resolve the requester's email through the repository rather than the
+     * `requestedByUser` association.
+     *
+     * The requester notifications are dispatched from an AFTER_COMMIT listener
+     * (ExceptionRequestNotificationListener), so the Hibernate session is already
+     * closed by the time we get here and the LAZY `requestedByUser` proxy throws
+     * LazyInitializationException instead of yielding an email. The denormalized
+     * `requestedByUsername` column survives detachment, so we look the user up by
+     * it — the same repository-based approach notifyAdminsOfNewRequest already uses.
+     *
+     * Returns null when the requester no longer exists (deleted user, audit-only
+     * request), which callers already treat as "nothing to send".
+     */
+    private fun resolveRequesterEmail(request: VulnerabilityExceptionRequest): String? =
+        userRepository.findByUsername(request.requestedByUsername).orElse(null)?.email
+
+    /**
+     * Describe WHAT is excepted for display, covering both single-CVE requests (delegates to
+     * resolveCveId) and rule-type requests (subject=PRODUCT/ALL_VULNS, or multi-CVE subjectValue)
+     * where there is no single CVE to show.
+     */
+    private fun describeSubject(request: VulnerabilityExceptionRequest): String {
+        // NO_EDR is stored as the filler subject ALL_VULNS, so without this branch every
+        // "no EDR possible" mail would read "All Vulnerabilities on <host>" — and a reviewer
+        // acting on the mail alone would believe they are waiving every finding on that box.
+        if (request.kind == ExceptionKind.NO_EDR) return "No EDR possible"
+
+        val singleCve = resolveCveId(request)
+        if (singleCve != "Unknown CVE") return singleCve
+
+        return when (request.subject) {
+            VulnerabilityException.Subject.CVE -> {
+                val cveCount = request.subjectValue?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.size ?: 0
+                if (cveCount > 0) "$cveCount CVEs (rule)" else "Unknown Subject"
+            }
+            VulnerabilityException.Subject.PRODUCT -> "Product: ${request.subjectValue ?: "Unknown"}"
+            VulnerabilityException.Subject.ALL_VULNS -> "All Vulnerabilities"
+        }
+    }
+
+    /**
+     * Describe WHERE the exception applies for display. Switches on `request.scope` first
+     * (mirroring frontend/src/services/exceptionRequestScopeFormatter.ts) so that rule-type
+     * requests (scope=GLOBAL/OS/AWS_ACCOUNT/IP) always show their true, broader applicability
+     * rather than the single asset the request happened to be raised from — a denormalized
+     * assetId is populated for finding-anchored requests regardless of scope, so resolving the
+     * asset name first would silently hide the actual scope.
+     */
+    private fun describeScope(request: VulnerabilityExceptionRequest): String {
+        return when (request.scope) {
+            VulnerabilityException.Scope.GLOBAL -> "All Assets (Global)"
+            VulnerabilityException.Scope.OS -> "OS: ${request.scopeValue ?: "Unknown"}"
+            VulnerabilityException.Scope.AWS_ACCOUNT -> "AWS Account: ${request.scopeValue ?: "Unknown"}"
+            VulnerabilityException.Scope.IP -> "IP: ${request.scopeValue ?: "Unknown"}"
+            VulnerabilityException.Scope.ASSET -> resolveAssetName(request)
+        }
+    }
+
+    /**
+     * Notify all ADMIN and SECCHAMPION users of a new exception request.
+     *
+     * Called after createRequest() when status is PENDING (not auto-approved).
+     *
+     * @param request The newly created exception request
+     * @return CompletableFuture indicating if at least one email was sent successfully
+     */
+    open fun notifyAdminsOfNewRequest(request: VulnerabilityExceptionRequest): CompletableFuture<Boolean> {
+        // Resolve all Hibernate-backed fields on the caller's (transactional) thread so
+        // the async lambda never touches LAZY proxies. Accessing proxies from another
+        // thread concurrently with the caller corrupts the Hibernate session and produces
+        // "Illegal pop() with non-matching JdbcValuesSourceProcessingState".
+        val requestId = request.id
+        val cveId = describeSubject(request)
+        val assetName = describeScope(request)
+        val subject = "New Exception Request: $cveId on $assetName"
+        val adminRecipients: List<AdminRecipient> = userRepository.findAll()
+            .filter { it.hasRole(User.Role.ADMIN) || it.hasRole(User.Role.SECCHAMPION) }
+            .map { user ->
+                AdminRecipient(
+                    email = user.email,
+                    username = user.username,
+                    htmlContent = generateNewRequestEmail(request, user.username),
+                    textContent = generateNewRequestTextEmail(request, user.username)
+                )
+            }
+        val inlineImages = loadLogoInlineImage()
+
+        return CompletableFuture.supplyAsync {
+            try {
+                logger.info("Sending new request notifications for requestId={}", requestId)
+
+                if (adminRecipients.isEmpty()) {
+                    logger.warn("No ADMIN or SECCHAMPION users found to notify about request {}", requestId)
+                    return@supplyAsync false
+                }
+
+                var successCount = 0
+                var failureCount = 0
+
+                for (recipient in adminRecipients) {
+                    try {
+                        val future = emailService.sendEmailWithInlineImages(
+                            to = recipient.email,
+                            subject = subject,
+                            textContent = recipient.textContent,
+                            htmlContent = recipient.htmlContent,
+                            inlineImages = inlineImages
+                        )
+                        val sent = future.get() // Block to ensure delivery attempt
+
+                        if (sent) {
+                            successCount++
+                            logger.debug("Sent new request notification to {}", recipient.email)
+                        } else {
+                            failureCount++
+                            logger.warn("Failed to send new request notification to {}", recipient.email)
+                        }
+                    } catch (e: Exception) {
+                        failureCount++
+                        logger.error("Error sending new request notification to {}: {}", recipient.email, e.message)
+                    }
+                }
+
+                logger.info("New request notifications sent: {} success, {} failures (requestId={})",
+                    successCount, failureCount, requestId)
+
+                return@supplyAsync successCount > 0
+
+            } catch (e: Exception) {
+                logger.error("Failed to send new request notifications for requestId={}", requestId, e)
+                return@supplyAsync false
+            }
+        }
+    }
+
+    private data class AdminRecipient(
+        val email: String,
+        val username: String,
+        val htmlContent: String,
+        val textContent: String
+    )
+
+    /**
+     * Notify requester of request approval.
+     *
+     * Called after approveRequest() completes successfully.
+     *
+     * @param request The approved exception request
+     * @return CompletableFuture indicating if email was sent successfully
+     */
+    open fun notifyRequesterOfApproval(request: VulnerabilityExceptionRequest): CompletableFuture<Boolean> {
+        // Resolve every entity-backed field before handing off to the async lambda;
+        // see notifyAdminsOfNewRequest for rationale. This runs from an AFTER_COMMIT
+        // listener, so the Hibernate session is already closed: read scalars off the
+        // detached entity and go through repositories, never through LAZY associations.
+        val requestId = request.id
+        val requesterEmail = resolveRequesterEmail(request)
+        val cveId = describeSubject(request)
+        val assetName = describeScope(request)
+        val htmlContent = if (!requesterEmail.isNullOrBlank()) generateApprovalEmail(request) else null
+
+        return CompletableFuture.supplyAsync {
+            try {
+                if (requesterEmail.isNullOrBlank() || htmlContent == null) {
+                    logger.warn("No requester email for approved request {}", requestId)
+                    return@supplyAsync false
+                }
+
+                val subject = "Exception Approved: $cveId on $assetName"
+                val future = emailService.sendHtmlEmail(requesterEmail, subject, htmlContent)
+                val sent = future.get()
+
+                if (sent) {
+                    logger.info("Sent approval notification to {} for requestId={}", requesterEmail, requestId)
+                } else {
+                    logger.warn("Failed to send approval notification to {} for requestId={}", requesterEmail, requestId)
+                }
+
+                return@supplyAsync sent
+
+            } catch (e: Exception) {
+                logger.error("Failed to send approval notification for requestId={}", requestId, e)
+                return@supplyAsync false
+            }
+        }
+    }
+
+    /**
+     * Notify requester of request rejection.
+     *
+     * Called after rejectRequest() completes successfully.
+     * Includes review comment explaining rejection reason.
+     *
+     * @param request The rejected exception request
+     * @return CompletableFuture indicating if email was sent successfully
+     */
+    open fun notifyRequesterOfRejection(request: VulnerabilityExceptionRequest): CompletableFuture<Boolean> {
+        // Resolve every entity-backed field before handing off to the async lambda;
+        // see notifyAdminsOfNewRequest for rationale. This runs from an AFTER_COMMIT
+        // listener, so the Hibernate session is already closed: read scalars off the
+        // detached entity and go through repositories, never through LAZY associations.
+        val requestId = request.id
+        val requesterEmail = resolveRequesterEmail(request)
+        val cveId = describeSubject(request)
+        val assetName = describeScope(request)
+        val htmlContent = if (!requesterEmail.isNullOrBlank()) generateRejectionEmail(request) else null
+
+        return CompletableFuture.supplyAsync {
+            try {
+                if (requesterEmail.isNullOrBlank() || htmlContent == null) {
+                    logger.warn("No requester email for rejected request {}", requestId)
+                    return@supplyAsync false
+                }
+
+                val subject = "Exception Rejected: $cveId on $assetName"
+                val future = emailService.sendHtmlEmail(requesterEmail, subject, htmlContent)
+                val sent = future.get()
+
+                if (sent) {
+                    logger.info("Sent rejection notification to {} for requestId={}", requesterEmail, requestId)
+                } else {
+                    logger.warn("Failed to send rejection notification to {} for requestId={}", requesterEmail, requestId)
+                }
+
+                return@supplyAsync sent
+
+            } catch (e: Exception) {
+                logger.error("Failed to send rejection notification for requestId={}", requestId, e)
+                return@supplyAsync false
+            }
+        }
+    }
+
+    /**
+     * Notify requester of upcoming exception expiration (7 days warning).
+     *
+     * Called by scheduled job for APPROVED requests expiring within 7 days.
+     *
+     * @param request The exception request expiring soon
+     * @return CompletableFuture indicating if email was sent successfully
+     */
+    open fun notifyRequesterOfExpiration(request: VulnerabilityExceptionRequest): CompletableFuture<Boolean> {
+        // Resolve every entity-backed field before handing off to the async lambda;
+        // see notifyAdminsOfNewRequest for rationale. Driven by a scheduled job, so the
+        // request may arrive detached: read scalars off the entity and go through
+        // repositories, never through LAZY associations.
+        val requestId = request.id
+        val requesterEmail = resolveRequesterEmail(request)
+        val cveId = describeSubject(request)
+        val assetName = describeScope(request)
+        val htmlContent = if (!requesterEmail.isNullOrBlank()) generateExpirationReminderEmail(request) else null
+
+        return CompletableFuture.supplyAsync {
+            try {
+                if (requesterEmail.isNullOrBlank() || htmlContent == null) {
+                    logger.warn("No requester email for expiring request {}", requestId)
+                    return@supplyAsync false
+                }
+
+                val subject = "Exception Expiring Soon: $cveId on $assetName"
+                val future = emailService.sendHtmlEmail(requesterEmail, subject, htmlContent)
+                val sent = future.get()
+
+                if (sent) {
+                    logger.info("Sent expiration reminder to {} for requestId={}", requesterEmail, requestId)
+                } else {
+                    logger.warn("Failed to send expiration reminder to {} for requestId={}", requesterEmail, requestId)
+                }
+
+                return@supplyAsync sent
+
+            } catch (e: Exception) {
+                logger.error("Failed to send expiration reminder for requestId={}", requestId, e)
+                return@supplyAsync false
+            }
+        }
+    }
+
+    /**
+     * Generate HTML email for new exception request (to ADMIN/SECCHAMPION).
+     *
+     * Template includes:
+     * - Vulnerability details (CVE, asset, severity)
+     * - Requester information
+     * - Request reason (truncated to 200 chars)
+     * - Link to approval dashboard
+     *
+     * @param request The exception request
+     * @param recipientName Name of the recipient (admin user)
+     * @return HTML email content
+     */
+    private fun generateNewRequestEmail(request: VulnerabilityExceptionRequest, recipientName: String): String {
+        val cveId = describeSubject(request)
+        val scopeDescription = describeScope(request)
+        val assetName = resolveAssetName(request)
+        val assetIp = resolveAssetIp(request)
+        val originatingAssetRow = if (request.scope != VulnerabilityException.Scope.ASSET && assetName != "Unknown Asset") {
+            """
+                                <tr>
+                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Originating Asset</td>
+                                    <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;">$assetName <span style="color:#64748b;">($assetIp)</span></td>
+                                </tr>"""
+        } else ""
+        val requesterName = request.requestedByUsername
+        val reasonSummary = if (request.reason.length > 200) {
+            request.reason.substring(0, 200) + "..."
+        } else {
+            request.reason
+        }
+        val submittedDate = request.createdAt?.format(DATE_FORMATTER) ?: "Unknown"
+        val expirationDate = request.expirationDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+
+        return """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>New Exception Request</title>
+</head>
+<body style="margin:0;padding:0;background-color:#eef2f7;font-family:'Segoe UI',Helvetica,Arial,sans-serif;color:#1f2933;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#eef2f7;padding:32px 12px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 14px rgba(15,23,42,0.08);max-width:600px;">
+                    <tr>
+                        <td style="background-color:#1a3a6c;background-image:linear-gradient(135deg,#0f2447 0%,#1a3a6c 45%,#b1273a 100%);padding:28px 32px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td valign="middle" style="width:72px;">
+                                        <img src="cid:secman-logo" alt="SecMan" width="60" height="60" style="display:block;border:0;background-color:#ffffff;border-radius:10px;padding:6px;">
+                                    </td>
+                                    <td valign="middle" style="padding-left:18px;">
+                                        <div style="color:#dbe5f5;font-size:12px;letter-spacing:1.4px;text-transform:uppercase;font-weight:600;">SecMan Risk Assessment</div>
+                                        <div style="color:#ffffff;font-size:22px;font-weight:600;margin-top:6px;line-height:1.25;">Exception Request Requires Review</div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="height:4px;line-height:4px;background-color:#dc3545;">&nbsp;</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:28px 32px 8px 32px;">
+                            <p style="margin:0 0 14px 0;font-size:15px;line-height:1.5;">Hello <strong>$recipientName</strong>,</p>
+                            <p style="margin:0 0 22px 0;font-size:15px;line-height:1.5;color:#475569;">A new vulnerability exception request has been submitted and is awaiting your review.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0 32px 8px 32px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border-spacing:0 6px;">
+                                <tr>
+                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;width:38%;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">CVE ID</td>
+                                    <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;font-family:'SF Mono','Consolas',monospace;">$cveId</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Scope</td>
+                                    <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;">${if (request.scope == VulnerabilityException.Scope.ASSET) "$scopeDescription <span style=\"color:#64748b;\">($assetIp)</span>" else scopeDescription}</td>
+                                </tr>$originatingAssetRow
+                                <tr>
+                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Requested By</td>
+                                    <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;">$requesterName</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Submitted</td>
+                                    <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;">$submittedDate</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Requested Expiration</td>
+                                    <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;">$expirationDate</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:18px 32px 4px 32px;">
+                            <div style="font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">Reason</div>
+                            <div style="background-color:#fff8e1;border-left:4px solid #f59e0b;padding:14px 16px;border-radius:0 6px 6px 0;font-size:14px;color:#1f2933;line-height:1.55;white-space:pre-wrap;">$reasonSummary</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:28px 32px 32px 32px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td style="background-color:#1a3a6c;background-image:linear-gradient(135deg,#1a3a6c 0%,#2c5282 100%);border-radius:6px;">
+                                        <a href="${dashboardUrl()}" style="display:inline-block;padding:14px 32px;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;letter-spacing:0.3px;">Review Request &rarr;</a>
+                                    </td>
+                                </tr>
+                            </table>
+                            <p style="margin:14px 0 0 0;font-size:12px;color:#94a3b8;">Or open: <a href="${dashboardUrl()}" style="color:#1a3a6c;text-decoration:underline;">${dashboardUrl()}</a></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="background-color:#f7f9fc;padding:18px 32px;text-align:center;border-top:1px solid #e2e8f0;">
+                            <p style="margin:0;font-size:12px;color:#64748b;">This is an automated notification from <strong style="color:#475569;">SecMan</strong>. Please do not reply to this email.</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+        """.trimIndent()
+    }
+
+    /**
+     * Generate plain-text alternative for the new-request email — required for
+     * multipart/alternative MIME so clients without HTML rendering still get the content.
+     */
+    private fun generateNewRequestTextEmail(request: VulnerabilityExceptionRequest, recipientName: String): String {
+        val cveId = describeSubject(request)
+        val scopeDescription = describeScope(request)
+        val assetName = resolveAssetName(request)
+        val assetIp = resolveAssetIp(request)
+        val scopeLine = if (request.scope == VulnerabilityException.Scope.ASSET) "$scopeDescription ($assetIp)" else scopeDescription
+        val originatingAssetLine = if (request.scope != VulnerabilityException.Scope.ASSET && assetName != "Unknown Asset") {
+            "\n            |  Originating Asset:    $assetName ($assetIp)"
+        } else ""
+        val requesterName = request.requestedByUsername
+        val reasonSummary = if (request.reason.length > 200) request.reason.substring(0, 200) + "..." else request.reason
+        val submittedDate = request.createdAt?.format(DATE_FORMATTER) ?: "Unknown"
+        val expirationDate = request.expirationDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+
+        return """
+            |SecMan — Exception Request Requires Review
+            |==========================================
+            |
+            |Hello $recipientName,
+            |
+            |A new vulnerability exception request has been submitted and is awaiting your review.
+            |
+            |  CVE ID:               $cveId
+            |  Scope:                $scopeLine$originatingAssetLine
+            |  Requested By:         $requesterName
+            |  Submitted:            $submittedDate
+            |  Requested Expiration: $expirationDate
+            |
+            |Reason:
+            |  $reasonSummary
+            |
+            |Review the request:
+            |  ${dashboardUrl()}
+            |
+            |--
+            |This is an automated notification from SecMan. Please do not reply.
+        """.trimMargin()
+    }
+
+    /**
+     * Generate HTML email for approved exception request (to requester).
+     *
+     * Template includes:
+     * - Vulnerability details
+     * - Reviewer information
+     * - Review comment (if provided)
+     * - Expiration date
+     * - Next steps
+     *
+     * @param request The approved exception request
+     * @return HTML email content
+     */
+    private fun generateApprovalEmail(request: VulnerabilityExceptionRequest): String {
+        val cveId = describeSubject(request)
+        val assetName = describeScope(request)
+        val reviewerName = request.reviewedByUsername ?: "Unknown Reviewer"
+        val reviewDate = request.reviewDate?.format(DATE_FORMATTER) ?: "Unknown"
+        val reviewComment = request.reviewComment ?: "(No comment provided)"
+        val expirationDate = request.expirationDate.format(DateTimeFormatter.ofPattern("MMMM d, yyyy"))
+
+        return """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #28a745; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+        .content { background-color: #f8f9fa; padding: 20px; border: 1px solid #dee2e6; }
+        .detail-row { margin-bottom: 15px; }
+        .label { font-weight: bold; color: #495057; }
+        .value { color: #212529; }
+        .success-icon { font-size: 48px; text-align: center; margin: 20px 0; }
+        .footer { margin-top: 20px; font-size: 12px; color: #6c757d; text-align: center; }
+        .warning { background-color: #fff3cd; border-left: 3px solid #ffc107; padding: 10px; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="success-icon">✓</div>
+            <h2>Exception Request Approved</h2>
+        </div>
+        <div class="content">
+            <p>Good news! Your vulnerability exception request has been approved.</p>
+
+            <div class="detail-row">
+                <span class="label">CVE ID:</span> <code>$cveId</code>
+            </div>
+            <div class="detail-row">
+                <span class="label">Asset:</span> <span class="value">$assetName</span>
+            </div>
+            <div class="detail-row">
+                <span class="label">Reviewed By:</span> <span class="value">$reviewerName</span>
+            </div>
+            <div class="detail-row">
+                <span class="label">Review Date:</span> <span class="value">$reviewDate</span>
+            </div>
+            <div class="detail-row">
+                <span class="label">Expiration Date:</span> <span class="value">$expirationDate</span>
+            </div>
+
+            <div class="detail-row">
+                <span class="label">Reviewer Comment:</span>
+                <p style="background-color: white; padding: 10px; border-left: 3px solid #28a745; margin-top: 5px;">
+                    $reviewComment
+                </p>
+            </div>
+
+            <div class="warning">
+                <strong>Important:</strong> This exception will expire on $expirationDate. You will receive a reminder 7 days before expiration. After expiration, this vulnerability will again be reported as active.
+            </div>
+
+            <p style="margin-top: 20px;"><strong>Next Steps:</strong></p>
+            <ul>
+                <li>The vulnerability will no longer appear in active vulnerability reports</li>
+                <li>Monitor for expiration and plan remediation or renewal</li>
+                <li>Maintain documentation of this approved exception</li>
+            </ul>
+        </div>
+        <div class="footer">
+            <p>This is an automated notification from SecMan. Please do not reply to this email.</p>
+        </div>
+    </div>
+</body>
+</html>
+        """.trimIndent()
+    }
+
+    /**
+     * Generate HTML email for rejected exception request (to requester).
+     *
+     * Template includes:
+     * - Vulnerability details
+     * - Reviewer information
+     * - Review comment (required, explains rejection reason)
+     * - Next steps (remediate or resubmit)
+     *
+     * @param request The rejected exception request
+     * @return HTML email content
+     */
+    private fun generateRejectionEmail(request: VulnerabilityExceptionRequest): String {
+        val cveId = describeSubject(request)
+        val assetName = describeScope(request)
+        val reviewerName = request.reviewedByUsername ?: "Unknown Reviewer"
+        val reviewDate = request.reviewDate?.format(DATE_FORMATTER) ?: "Unknown"
+        val reviewComment = request.reviewComment ?: "(No comment provided)"
+
+        return """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #dc3545; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+        .content { background-color: #f8f9fa; padding: 20px; border: 1px solid #dee2e6; }
+        .detail-row { margin-bottom: 15px; }
+        .label { font-weight: bold; color: #495057; }
+        .value { color: #212529; }
+        .footer { margin-top: 20px; font-size: 12px; color: #6c757d; text-align: center; }
+        .info { background-color: #d1ecf1; border-left: 3px solid #0c5460; padding: 10px; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Exception Request Rejected</h2>
+        </div>
+        <div class="content">
+            <p>Your vulnerability exception request has been reviewed and rejected.</p>
+
+            <div class="detail-row">
+                <span class="label">CVE ID:</span> <code>$cveId</code>
+            </div>
+            <div class="detail-row">
+                <span class="label">Asset:</span> <span class="value">$assetName</span>
+            </div>
+            <div class="detail-row">
+                <span class="label">Reviewed By:</span> <span class="value">$reviewerName</span>
+            </div>
+            <div class="detail-row">
+                <span class="label">Review Date:</span> <span class="value">$reviewDate</span>
+            </div>
+
+            <div class="detail-row">
+                <span class="label">Rejection Reason:</span>
+                <p style="background-color: white; padding: 10px; border-left: 3px solid #dc3545; margin-top: 5px;">
+                    $reviewComment
+                </p>
+            </div>
+
+            <div class="info">
+                <strong>Next Steps:</strong>
+                <ul>
+                    <li><strong>Remediate the vulnerability:</strong> Address the security issue according to standard remediation procedures</li>
+                    <li><strong>Resubmit with additional justification:</strong> If you believe this exception is warranted, you may submit a new request with more detailed reasoning</li>
+                    <li><strong>Contact the reviewer:</strong> Reach out to $reviewerName for clarification on the rejection</li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer">
+            <p>This is an automated notification from SecMan. Please do not reply to this email.</p>
+        </div>
+    </div>
+</body>
+</html>
+        """.trimIndent()
+    }
+
+    /**
+     * Notify all ADMIN and SECCHAMPION users that an exception has expired.
+     *
+     * Called by the expiration scheduler when an APPROVED request crosses its expiration date.
+     *
+     * @param request The now-expired exception request
+     * @return CompletableFuture indicating if at least one email was sent successfully
+     */
+    open fun notifyAdminsAndSecChampionsOfExpiration(request: VulnerabilityExceptionRequest): CompletableFuture<Boolean> {
+        val requestId = request.id
+        val cveId = describeSubject(request)
+        val assetName = describeScope(request)
+        val requesterName = request.requestedByUsername
+        val expirationDate = request.expirationDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+        val subject = "Exception Expired: $cveId on $assetName"
+        val recipients: List<AdminRecipient> = userRepository.findAll()
+            .filter { it.hasRole(User.Role.ADMIN) || it.hasRole(User.Role.SECCHAMPION) }
+            .map { user ->
+                AdminRecipient(
+                    email = user.email,
+                    username = user.username,
+                    htmlContent = generateExpirationNoticeEmail(cveId, assetName, requesterName, expirationDate, user.username),
+                    textContent = generateExpirationNoticeTextEmail(cveId, assetName, requesterName, expirationDate, user.username)
+                )
+            }
+        val inlineImages = loadLogoInlineImage()
+
+        return CompletableFuture.supplyAsync {
+            try {
+                logger.info("Sending expiration notices for requestId={}", requestId)
+
+                if (recipients.isEmpty()) {
+                    logger.warn("No ADMIN or SECCHAMPION users found to notify about expiration of request {}", requestId)
+                    return@supplyAsync false
+                }
+
+                var successCount = 0
+                var failureCount = 0
+
+                for (recipient in recipients) {
+                    try {
+                        val future = emailService.sendEmailWithInlineImages(
+                            to = recipient.email,
+                            subject = subject,
+                            textContent = recipient.textContent,
+                            htmlContent = recipient.htmlContent,
+                            inlineImages = inlineImages
+                        )
+                        val sent = future.get()
+                        if (sent) {
+                            successCount++
+                            logger.debug("Sent expiration notice to {}", recipient.email)
+                        } else {
+                            failureCount++
+                            logger.warn("Failed to send expiration notice to {}", recipient.email)
+                        }
+                    } catch (e: Exception) {
+                        failureCount++
+                        logger.error("Error sending expiration notice to {}: {}", recipient.email, e.message)
+                    }
+                }
+
+                logger.info("Expiration notices sent: {} success, {} failures (requestId={})",
+                    successCount, failureCount, requestId)
+
+                return@supplyAsync successCount > 0
+
+            } catch (e: Exception) {
+                logger.error("Failed to send expiration notices for requestId={}", requestId, e)
+                return@supplyAsync false
+            }
+        }
+    }
+
+    private fun generateExpirationNoticeEmail(
+        cveId: String, assetName: String, requesterName: String,
+        expirationDate: String, recipientName: String
+    ): String = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Exception Expired</title>
+</head>
+<body style="margin:0;padding:0;background-color:#eef2f7;font-family:'Segoe UI',Helvetica,Arial,sans-serif;color:#1f2933;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#eef2f7;padding:32px 12px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 14px rgba(15,23,42,0.08);max-width:600px;">
+                    <tr>
+                        <td style="background-color:#1a3a6c;background-image:linear-gradient(135deg,#0f2447 0%,#1a3a6c 45%,#b1273a 100%);padding:28px 32px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td valign="middle" style="width:72px;">
+                                        <img src="cid:secman-logo" alt="SecMan" width="60" height="60" style="display:block;border:0;background-color:#ffffff;border-radius:10px;padding:6px;">
+                                    </td>
+                                    <td valign="middle" style="padding-left:18px;">
+                                        <div style="color:#dbe5f5;font-size:12px;letter-spacing:1.4px;text-transform:uppercase;font-weight:600;">SecMan Risk Assessment</div>
+                                        <div style="color:#ffffff;font-size:22px;font-weight:600;margin-top:6px;line-height:1.25;">Vulnerability Exception Expired</div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="height:4px;line-height:4px;background-color:#dc3545;">&nbsp;</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:28px 32px 8px 32px;">
+                            <p style="margin:0 0 14px 0;font-size:15px;line-height:1.5;">Hello <strong>$recipientName</strong>,</p>
+                            <p style="margin:0 0 22px 0;font-size:15px;line-height:1.5;color:#475569;">A vulnerability exception has <strong style="color:#dc3545;">expired</strong>. The vulnerability is now active again and will appear in security reports.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0 32px 28px 32px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border-spacing:0 6px;">
+                                <tr>
+                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;width:38%;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">CVE ID</td>
+                                    <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;font-family:'SF Mono','Consolas',monospace;">$cveId</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Asset</td>
+                                    <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;">$assetName</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Originally Requested By</td>
+                                    <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;">$requesterName</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Expired On</td>
+                                    <td style="padding:12px 14px;background-color:#fff5f5;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#dc3545;font-size:14px;font-weight:600;">$expirationDate</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:4px 32px 32px 32px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td style="background-color:#1a3a6c;background-image:linear-gradient(135deg,#1a3a6c 0%,#2c5282 100%);border-radius:6px;">
+                                        <a href="${dashboardUrl()}" style="display:inline-block;padding:14px 32px;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;letter-spacing:0.3px;">View Exception Dashboard &rarr;</a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="background-color:#f7f9fc;padding:18px 32px;text-align:center;border-top:1px solid #e2e8f0;">
+                            <p style="margin:0;font-size:12px;color:#64748b;">This is an automated notification from <strong style="color:#475569;">SecMan</strong>. Please do not reply to this email.</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+    """.trimIndent()
+
+    private fun generateExpirationNoticeTextEmail(
+        cveId: String, assetName: String, requesterName: String,
+        expirationDate: String, recipientName: String
+    ): String = """
+        |SecMan — Vulnerability Exception Expired
+        |=========================================
+        |
+        |Hello $recipientName,
+        |
+        |A vulnerability exception has expired. The vulnerability is now active again.
+        |
+        |  CVE ID:                  $cveId
+        |  Asset:                   $assetName
+        |  Originally Requested By: $requesterName
+        |  Expired On:              $expirationDate
+        |
+        |View the exception dashboard:
+        |  ${dashboardUrl()}
+        |
+        |--
+        |This is an automated notification from SecMan. Please do not reply.
+    """.trimMargin()
+
+    /**
+     * Generate HTML email for expiration reminder (to requester).
+     *
+     * Template includes:
+     * - Vulnerability details
+     * - Expiration date (within 7 days)
+     * - Renewal instructions
+     *
+     * @param request The exception request expiring soon
+     * @return HTML email content
+     */
+    private fun generateExpirationReminderEmail(request: VulnerabilityExceptionRequest): String {
+        val cveId = describeSubject(request)
+        val assetName = describeScope(request)
+        val expirationDate = request.expirationDate.format(DateTimeFormatter.ofPattern("MMMM d, yyyy"))
+
+        return """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #ffc107; color: #212529; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+        .content { background-color: #f8f9fa; padding: 20px; border: 1px solid #dee2e6; }
+        .detail-row { margin-bottom: 15px; }
+        .label { font-weight: bold; color: #495057; }
+        .value { color: #212529; }
+        .warning-icon { font-size: 48px; text-align: center; margin: 20px 0; }
+        .footer { margin-top: 20px; font-size: 12px; color: #6c757d; text-align: center; }
+        .action { background-color: #fff3cd; border-left: 3px solid #ffc107; padding: 15px; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="warning-icon">⚠️</div>
+            <h2>Exception Expiring Soon</h2>
+        </div>
+        <div class="content">
+            <p>This is a reminder that your vulnerability exception will expire within 7 days.</p>
+
+            <div class="detail-row">
+                <span class="label">CVE ID:</span> <code>$cveId</code>
+            </div>
+            <div class="detail-row">
+                <span class="label">Asset:</span> <span class="value">$assetName</span>
+            </div>
+            <div class="detail-row">
+                <span class="label">Expiration Date:</span> <span class="value" style="color: #dc3545; font-weight: bold;">$expirationDate</span>
+            </div>
+
+            <div class="action">
+                <strong>Action Required:</strong>
+                <p>Please take one of the following actions before the expiration date:</p>
+                <ul>
+                    <li><strong>Remediate the vulnerability:</strong> If possible, apply patches or mitigations to resolve the security issue</li>
+                    <li><strong>Request renewal:</strong> If the exception is still needed, submit a new exception request with updated justification</li>
+                    <li><strong>Accept expiration:</strong> If no action is taken, this vulnerability will reappear in active vulnerability reports after $expirationDate</li>
+                </ul>
+            </div>
+
+            <p style="margin-top: 20px; font-size: 14px; color: #6c757d;">
+                <em>You are receiving this reminder 7 days before expiration to give you time to plan remediation or renewal.</em>
+            </p>
+        </div>
+        <div class="footer">
+            <p>This is an automated notification from SecMan. Please do not reply to this email.</p>
+        </div>
+    </div>
+</body>
+</html>
+        """.trimIndent()
+    }
+}

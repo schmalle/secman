@@ -1,0 +1,22 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import AwsAccountSharingManager from '../../components/AwsAccountSharingManager';
+---
+
+<Layout title="AWS Account Sharing - Admin">
+    <div class="container-fluid">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Home</a></li>
+                <li class="breadcrumb-item"><a href="/admin">Admin</a></li>
+                <li class="breadcrumb-item active" aria-current="page">AWS Account Sharing</li>
+            </ol>
+        </nav>
+
+        <AwsAccountSharingManager client:load />
+
+        <div class="mt-4">
+          <a href="/admin" class="btn btn-secondary">Back to Admin</a>
+        </div>
+    </div>
+</Layout>

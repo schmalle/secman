@@ -1,0 +1,822 @@
+package com.secman.repository
+
+import com.secman.domain.Asset
+import io.micronaut.data.annotation.Repository
+import io.micronaut.data.jpa.repository.JpaRepository
+import io.micronaut.data.model.Page
+import io.micronaut.data.model.Pageable
+import java.time.LocalDateTime
+import java.util.Optional
+
+@Repository
+interface AssetRepository : JpaRepository<Asset, Long> {
+
+    // Memory Optimization - Feature 073
+
+    /**
+     * Find asset by ID with workgroups eagerly loaded
+     * Used for detail/update operations when LAZY loading is enabled
+     *
+     * Feature: 073-memory-optimization
+     * Task: T006
+     *
+     * @param id The asset ID
+     * @return Optional containing the asset with workgroups loaded
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT a FROM Asset a
+        LEFT JOIN FETCH a.workgroups
+        WHERE a.id = :id
+    """)
+    fun findByIdWithWorkgroups(id: Long): Optional<Asset>
+
+    /**
+     * Bulk (asset_id, workgroup_id) pairs for a set of asset ids — the cartesian-safe
+     * alternative to `LEFT JOIN FETCH a.workgroups` when the driving query already
+     * returns many rows per asset (e.g. one row per vulnerability). Callers aggregate
+     * the two-column rows into a Map<assetId, List<workgroupId>> themselves; chunk
+     * the input by ~1000 ids to stay within a practical IN-clause size.
+     *
+     * Declared as JPQL, not a native query: a `nativeQuery = true` method returning
+     * `List<Array<Any>>` yields one-element rows, so reading `row[1]` threw
+     * ArrayIndexOutOfBoundsException. A JPQL multi-select projection returns a
+     * correctly-sized Object[] per row — the shape every other `List<Array<Any>>`
+     * method in this codebase relies on. `JOIN a.workgroups w` projects ids only;
+     * it is not a fetch join, so no collection is initialized.
+     *
+     * @param assetIds The asset ids to look up (caller-chunked)
+     * @return Rows of [assetId, workgroupId] (both Long)
+     */
+    @io.micronaut.data.annotation.Query(
+        "SELECT a.id, w.id FROM Asset a JOIN a.workgroups w WHERE a.id IN (:assetIds)"
+    )
+    fun findWorkgroupIdsByAssetIds(assetIds: List<Long>): List<Array<Any>>
+
+    /**
+     * Find the distinct emails of all users who are members of a workgroup that
+     * contains at least one asset belonging to the given cloud (AWS) account.
+     *
+     * Used by the vulnerability notification fan-out so that recipients always
+     * include the members of any workgroup that contains an EC2 asset in the
+     * affected account (access rule #2 — asset → workgroup → users).
+     *
+     * @param cloudAccountId The AWS account identifier
+     * @return Distinct lower/mixed-case member emails (normalize at the call site)
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT u.email
+        FROM Asset a
+        JOIN a.workgroups w
+        JOIN w.users u
+        WHERE a.cloudAccountId = :cloudAccountId
+    """)
+    fun findDistinctWorkgroupMemberEmailsByCloudAccountId(cloudAccountId: String): List<String>
+
+    /**
+     * Find the distinct AWS cloud account IDs of assets the given user owns directly —
+     * via workgroup membership, manual creation, scan upload, or the asset's `owner` field.
+     * Deliberately narrower than [findAccessibleAssets]: it excludes direct AWS/AD
+     * UserMapping and workgroup-assigned-account/domain access. It backs one part of
+     * the `--notall` restriction on the vulnerability-notification fan-out
+     * (`UserVulnerabilityNotificationService.getRestrictedAwsAccountIds`), which
+     * unions this ownership/workgroup-asset result with direct UserMapping,
+     * workgroup-assigned-account, and AWS account sharing at the call site to cover
+     * every AWS-account access path an ADMIN/SECCHAMPION `--notification-user` run
+     * can be restricted to.
+     *
+     * @param userId The user's ID (for workgroup, creator, uploader checks)
+     * @param username The user's username (for owner-based access)
+     * @return Distinct non-blank cloud account IDs
+     */
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT DISTINCT a.cloud_account_id FROM asset a
+            WHERE a.cloud_account_id IS NOT NULL AND a.cloud_account_id != ''
+              AND (
+                  a.id IN (
+                      SELECT aw.asset_id FROM asset_workgroups aw
+                      JOIN user_workgroups uw ON aw.workgroup_id = uw.workgroup_id
+                      WHERE uw.user_id = :userId
+                  )
+                  OR a.manual_creator_id = :userId
+                  OR a.scan_uploader_id = :userId
+                  OR a.owner = :username
+              )
+        """,
+        nativeQuery = true
+    )
+    fun findDistinctCloudAccountIdsByOwnershipOrWorkgroup(userId: Long, username: String): List<String>
+
+    /**
+     * Find all assets accessible to a user using unified access control query
+     * Combines all access criteria in a single database round trip:
+     * 1. Assets in user's workgroups
+     * 2. Assets manually created by user
+     * 3. Assets discovered via user's scan upload
+     * 4. Assets with cloudAccountId matching user's AWS mappings
+     * 5. Assets with adDomain matching user's domain mappings
+     * 6. Assets where owner matches the user's username
+     * 7. Assets with cloudAccountId matching an AWS account assigned to a workgroup the user belongs to (WorkgroupAwsAccount)
+     * 8. Assets with adDomain matching an AD domain assigned to a workgroup the user belongs to (WorkgroupAdDomain)
+     *
+     * Feature: 073-memory-optimization
+     * Task: T031
+     *
+     * @param userId The user's ID (for workgroup, creator, uploader checks)
+     * @param userEmail The user's email (for AWS account and domain mapping lookups)
+     * @param username The user's username (for owner-based access)
+     * @return List of distinct accessible assets, ordered by name
+     */
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT DISTINCT a.* FROM asset a
+            WHERE
+                a.id IN (
+                    SELECT aw.asset_id FROM asset_workgroups aw
+                    JOIN user_workgroups uw ON aw.workgroup_id = uw.workgroup_id
+                    WHERE uw.user_id = :userId
+                )
+                OR a.manual_creator_id = :userId
+                OR a.scan_uploader_id = :userId
+                OR a.cloud_account_id IN (
+                    SELECT um.aws_account_id FROM user_mapping um
+                    WHERE um.email = :userEmail AND um.aws_account_id IS NOT NULL
+                )
+                OR LOWER(a.ad_domain) IN (
+                    SELECT LOWER(um.domain) FROM user_mapping um
+                    WHERE um.email = :userEmail AND um.domain IS NOT NULL
+                )
+                OR a.cloud_account_id IN (
+                    SELECT DISTINCT um2.aws_account_id
+                    FROM aws_account_sharing acs
+                    JOIN users u_source ON u_source.id = acs.source_user_id
+                    JOIN user_mapping um2 ON um2.email = u_source.email AND um2.aws_account_id IS NOT NULL
+                    WHERE acs.target_user_id = :userId
+                      AND (
+                        NOT EXISTS (
+                            SELECT 1 FROM aws_account_sharing_account asa
+                            WHERE asa.sharing_id = acs.id
+                        )
+                        OR EXISTS (
+                            SELECT 1 FROM aws_account_sharing_account asa
+                            WHERE asa.sharing_id = acs.id
+                              AND asa.aws_account_id = um2.aws_account_id
+                        )
+                      )
+                )
+                OR a.cloud_account_id IN (
+                    SELECT waa.aws_account_id FROM workgroup_aws_account waa
+                    JOIN user_workgroups uw ON uw.workgroup_id = waa.workgroup_id
+                    WHERE uw.user_id = :userId
+                )
+                OR LOWER(a.ad_domain) COLLATE utf8mb4_general_ci IN (
+                    SELECT wad.ad_domain COLLATE utf8mb4_general_ci FROM workgroup_ad_domain wad
+                    JOIN user_workgroups uw ON uw.workgroup_id = wad.workgroup_id
+                    WHERE uw.user_id = :userId
+                )
+                OR a.owner = :username
+            ORDER BY a.name ASC
+        """,
+        nativeQuery = true
+    )
+    fun findAccessibleAssets(userId: Long, userEmail: String, username: String): List<Asset>
+
+    fun findByNameContainingIgnoreCase(name: String): List<Asset>
+
+    fun findByIdIn(ids: Collection<Long>): List<Asset>
+
+    fun findByType(type: String): List<Asset>
+
+    fun findByOwner(owner: String): List<Asset>
+
+    fun findByIp(ip: String): List<Asset>
+
+    // --- Scope -> asset resolution for materialized-exception recompute ---------------------------
+    // Mirror the scope semantics of ExceptionMatchSql.EXCEPTION_MATCH so a bounded recompute touches
+    // precisely the assets an exception's scope covers. Plain derived finders (returning entities);
+    // ExceptionMaterializationService maps to ids. Scope sets are small, so entity load is cheap.
+    // (findByIp already exists above and serves the IP scope.)
+
+    fun findByCloudAccountId(cloudAccountId: String): List<Asset>
+
+    // Case-insensitive substring on os_version — matches EXCEPTION_MATCH's OS clause
+    // LOCATE(LOWER(scope_value), LOWER(a.os_version)) > 0.
+    fun findByOsVersionContainingIgnoreCase(osVersion: String): List<Asset>
+
+    /**
+     * Find asset by exact name match
+     * Used for hostname lookup during vulnerability import
+     * Related to: Feature 003-i-want-to (Vulnerability Management System)
+     *
+     * @param name The asset name (hostname)
+     * @return Optional containing the asset if found
+     */
+    fun findByName(name: String): Optional<Asset>
+
+    /**
+     * Find all assets with the given exact name.
+     * Used by the exception import to resolve assetRef by name, potentially returning
+     * multiple matches (e.g., same hostname across environments) disambiguated by IP.
+     *
+     * @param name The asset name (hostname)
+     * @return List of all matching assets (empty if none)
+     */
+    fun findListByName(name: String): List<Asset>
+
+    /**
+     * Find asset by case-insensitive name match
+     * Prevents duplicate asset creation with different casing (e.g., "SERVER1" vs "server1")
+     * Related to: Feature 030 (CrowdStrike Asset Auto-Creation) - FR-006
+     *
+     * @param name The asset name (hostname, case-insensitive)
+     * @return The asset if found, null otherwise
+     */
+    fun findByNameIgnoreCase(name: String): Asset?
+
+    /**
+     * Find asset by cloud instance ID (case-insensitive)
+     * Used for database-first vulnerability lookup by AWS EC2 Instance ID
+     *
+     * @param cloudInstanceId The AWS EC2 Instance ID (e.g., "i-0068f94221fe120df")
+     * @return The asset if found, null otherwise
+     */
+    fun findByCloudInstanceIdIgnoreCase(cloudInstanceId: String): Asset?
+
+    fun findByCrowdStrikeLastImportedAtBefore(cutoff: LocalDateTime): List<Asset>
+
+    /**
+     * Record that CrowdStrike reported these assets as managed devices.
+     *
+     * Written from the reconcile-stale call's Stage-1 queried-host population, which — unlike
+     * `crowdStrikeLastImportedAt` — includes hosts that returned zero findings. That makes this
+     * the only sound "has an EDR agent" signal; see EdrCoverageKpiService.
+     *
+     * A bulk UPDATE rather than a load-mutate-save loop: a daily run's population is thousands
+     * of assets, and this bypasses the persistence context entirely (callers already clear it).
+     */
+    @io.micronaut.data.annotation.Query(
+        "UPDATE Asset a SET a.crowdStrikeAgentSeenAt = :seenAt WHERE a.id IN (:ids)"
+    )
+    fun stampCrowdStrikeAgentSeenAt(ids: Collection<Long>, seenAt: LocalDateTime): Long
+
+    /**
+     * Count assets that have ever been imported by CrowdStrike (timestamp not null).
+     * Used as the denominator for the stale-asset cleanup safety brake.
+     */
+    @io.micronaut.data.annotation.Query(
+        "SELECT COUNT(a) FROM Asset a WHERE a.crowdStrikeLastImportedAt IS NOT NULL"
+    )
+    fun countCrowdStrikeTracked(): Long
+
+    /**
+     * Feature 087 — rule B: legacy CrowdStrike-imported assets that pre-date
+     * the `crowdstrike_last_imported_at` column. Four-part fence:
+     *   - `owner = :ownerLiteral` (canonical "CrowdStrike Import" string)
+     *   - `crowdStrikeLastImportedAt IS NULL`
+     *   - no `manualCreator` (manually-created rows are protected)
+     *   - no `scanUploader` (scan-uploaded rows are protected)
+     *   - `COALESCE(lastSeen, updatedAt, createdAt) < cutoff` (any of the
+     *     three timestamps; falls through in that order)
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT a FROM Asset a
+        WHERE a.owner = :ownerLiteral
+          AND a.crowdStrikeLastImportedAt IS NULL
+          AND a.manualCreator IS NULL
+          AND a.scanUploader IS NULL
+          AND COALESCE(a.lastSeen, a.updatedAt, a.createdAt) < :cutoff
+    """)
+    fun findLegacyCrowdStrikeStale(ownerLiteral: String, cutoff: LocalDateTime): List<Asset>
+
+    /**
+     * Feature 087 — count of legacy CrowdStrike-origin assets (rule-B fence
+     * minus the cutoff filter). Widens the safety-brake denominator in
+     * CrowdStrikeCleanupAuditService when `include-legacy=true`.
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT COUNT(a) FROM Asset a
+        WHERE a.owner = :ownerLiteral
+          AND a.crowdStrikeLastImportedAt IS NULL
+          AND a.manualCreator IS NULL
+          AND a.scanUploader IS NULL
+    """)
+    fun countLegacyCrowdStrikeTotal(ownerLiteral: String): Long
+
+    /**
+     * Find AWS assets within a set of account IDs.
+     * Used by `asset-match-clear` to scope deletion candidates to the accounts
+     * actually covered by the snapshot — assets in other accounts are off-limits.
+     *
+     * "AWS asset" means `cloudInstanceId IS NOT NULL` (we match on the EC2
+     * instance ID; assets without one cannot participate in the match).
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT a FROM Asset a
+        WHERE a.cloudInstanceId IS NOT NULL
+          AND a.cloudInstanceId <> ''
+          AND a.cloudAccountId IN :accountIds
+    """)
+    fun findAwsAssetsInAccounts(accountIds: Collection<String>): List<Asset>
+
+    /**
+     * Find all AWS assets that can participate in EC2 instance matching.
+     * Used by strict/global asset-match-clear and uncovered-account diagnostics.
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT a FROM Asset a
+        WHERE a.cloudInstanceId IS NOT NULL
+          AND a.cloudInstanceId <> ''
+    """)
+    fun findAllAwsAssetsWithInstanceId(): List<Asset>
+
+    /**
+     * Denominator for the asset-match-clear safety brake.
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT COUNT(a) FROM Asset a
+        WHERE a.cloudInstanceId IS NOT NULL
+          AND a.cloudInstanceId <> ''
+          AND a.cloudAccountId IN :accountIds
+    """)
+    fun countAwsAssetsInAccounts(accountIds: Collection<String>): Long
+
+    /**
+     * Denominator for strict/global asset-match-clear safety brake.
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT COUNT(a) FROM Asset a
+        WHERE a.cloudInstanceId IS NOT NULL
+          AND a.cloudInstanceId <> ''
+    """)
+    fun countAllAwsAssetsWithInstanceId(): Long
+
+    /**
+     * EDR-coverage KPI: EC2 instances excluded from the denominator by an approved,
+     * still-active "No EDR possible" exception.
+     *
+     * `e.kind = 'NO_EDR'` is plain equality with no IS-NULL fallback — deliberately the
+     * opposite of ExceptionMatchSql.EXCEPTION_MATCH. There, tolerating NULL fails safe
+     * (a legacy row keeps suppressing); here it would fail dangerously, silently reading
+     * every legacy exception as an EDR exemption and deflating the fleet's denominator.
+     */
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT COUNT(*) FROM asset a
+            WHERE a.cloud_instance_id IS NOT NULL
+              AND a.cloud_instance_id <> ''
+              AND EXISTS (
+                  SELECT 1 FROM vulnerability_exception e
+                  WHERE e.kind = 'NO_EDR'
+                    AND e.scope = 'ASSET'
+                    AND e.asset_id = a.id
+                    AND (e.expiration_date IS NULL OR e.expiration_date > NOW())
+              )
+        """,
+        nativeQuery = true
+    )
+    fun countEc2AssetsExcludedByNoEdrException(): Long
+
+    /**
+     * EDR-coverage KPI numerator: EC2 instances CrowdStrike reported as managed devices
+     * recently, excluding those exempted by an active NO_EDR exception.
+     *
+     * Recency (rather than "ever seen") is what makes this measure CURRENT coverage: a box
+     * whose sensor stops reporting drops out of the numerator once its stamp ages past the
+     * window, instead of counting as protected forever.
+     */
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT COUNT(*) FROM asset a
+            WHERE a.cloud_instance_id IS NOT NULL
+              AND a.cloud_instance_id <> ''
+              AND a.crowdstrike_agent_seen_at IS NOT NULL
+              AND a.crowdstrike_agent_seen_at >= :freshCutoff
+              AND NOT EXISTS (
+                  SELECT 1 FROM vulnerability_exception e
+                  WHERE e.kind = 'NO_EDR'
+                    AND e.scope = 'ASSET'
+                    AND e.asset_id = a.id
+                    AND (e.expiration_date IS NULL OR e.expiration_date > NOW())
+              )
+        """,
+        nativeQuery = true
+    )
+    fun countEc2AssetsWithFreshCrowdStrikeAgent(freshCutoff: LocalDateTime): Long
+
+    /**
+     * Whether the agent-seen signal has ever been written.
+     *
+     * Distinguishes "0% coverage" from "no import has run since this feature was deployed" —
+     * without it, a fresh deployment would confidently report 0% until the next CrowdStrike
+     * import, which is a false alarm rather than a measurement.
+     */
+    @io.micronaut.data.annotation.Query(
+        "SELECT COUNT(a) FROM Asset a WHERE a.crowdStrikeAgentSeenAt IS NOT NULL"
+    )
+    fun countAssetsWithAnyCrowdStrikeAgentSighting(): Long
+
+    // MCP Tool Support - Feature 006: Asset inventory queries with pagination
+
+    /**
+     * Find assets by group membership (partial match in comma-separated groups field)
+     * Related to: Feature 006 (MCP Tools for Security Data)
+     */
+    fun findByGroupsContaining(group: String): List<Asset>
+
+    /**
+     * Find assets by IP address (partial match, case-insensitive)
+     * Related to: Feature 006 (MCP Tools for Security Data)
+     */
+    fun findByIpContainingIgnoreCase(ip: String): List<Asset>
+
+    /**
+     * Find all assets with pagination support
+     * Related to: Feature 006 (MCP Tools for Security Data)
+     */
+    override fun findAll(pageable: Pageable): Page<Asset>
+
+    /**
+     * Find assets by name with pagination support (partial match, case-insensitive)
+     * Related to: Feature 006 (MCP Tools for Security Data)
+     */
+    fun findByNameContainingIgnoreCase(name: String, pageable: Pageable): Page<Asset>
+
+    /**
+     * Find assets the caller may see, with pagination.
+     *
+     * Used by the MCP get_assets / get_all_assets_detail tools. Both previously read the whole
+     * asset table with findAll() and filtered in Kotlin, so cost grew with the table instead of
+     * the requested page — the same defect described on VulnerabilityRepository.findByAssetIdIn.
+     *
+     * @param ids The asset IDs the caller may see (must be non-empty; callers short-circuit
+     *            on an empty set before querying)
+     * @param pageable Pagination parameters; pass a name sort for deterministic paging
+     */
+    fun findByIdIn(ids: Collection<Long>, pageable: Pageable): Page<Asset>
+
+    /**
+     * Find assets the caller may see whose name contains the given fragment, with pagination.
+     *
+     * Replaces a Pageable.UNPAGED read of every name match followed by a Kotlin subList.
+     *
+     * @param ids The asset IDs the caller may see (must be non-empty)
+     * @param name Case-insensitive fragment matched against the asset name
+     * @param pageable Pagination parameters
+     */
+    fun findByIdInAndNameContainingIgnoreCase(
+        ids: Collection<Long>,
+        name: String,
+        pageable: Pageable
+    ): Page<Asset>
+
+    /**
+     * Find assets by id with their workgroups eagerly fetched.
+     *
+     * Reading `asset.workgroups` after the session closes throws
+     * "Cannot lazily initialize collection of role 'com.secman.domain.Asset.workgroups'", which
+     * made the MCP get_all_assets_detail tool fail for every caller. The fetch join populates
+     * the collection before detachment.
+     *
+     * Deliberately NOT paginated: callers pass an id set that is already one page. Combining a
+     * collection fetch join with a Pageable makes Hibernate apply the limit in memory after
+     * loading every matching row — reintroducing the unbounded read documented on
+     * VulnerabilityRepository.findByAssetIdIn.
+     *
+     * @param ids Asset IDs from an already-paginated result (at most one page)
+     */
+    @io.micronaut.data.annotation.Query("SELECT DISTINCT a FROM Asset a LEFT JOIN FETCH a.workgroups WHERE a.id IN (:ids)")
+    fun findAllWithWorkgroups(ids: Collection<Long>): List<Asset>
+
+    // Paged variants of the type / owner / ip / group filters used by the MCP get_assets and
+    // get_all_assets_detail tools. The List-returning versions above are unbounded by
+    // construction — findByType("SERVER") is effectively findAll() — and the tools sliced their
+    // results in Kotlin. Each filter needs two forms: one restricted to the caller's accessible
+    // ids, one unrestricted for ADMIN.
+
+    fun findByType(type: String, pageable: Pageable): Page<Asset>
+
+    fun findByIdInAndType(ids: Collection<Long>, type: String, pageable: Pageable): Page<Asset>
+
+    fun findByOwner(owner: String, pageable: Pageable): Page<Asset>
+
+    fun findByIdInAndOwner(ids: Collection<Long>, owner: String, pageable: Pageable): Page<Asset>
+
+    fun findByIpContainingIgnoreCase(ip: String, pageable: Pageable): Page<Asset>
+
+    fun findByIdInAndIpContainingIgnoreCase(
+        ids: Collection<Long>,
+        ip: String,
+        pageable: Pageable
+    ): Page<Asset>
+
+    /**
+     * `groups` is a comma-separated String column, so "contains" is a LIKE match rather than a
+     * collection membership test — same semantics as the unpaged findByGroupsContaining above.
+     */
+    fun findByGroupsContaining(group: String, pageable: Pageable): Page<Asset>
+
+    fun findByIdInAndGroupsContaining(
+        ids: Collection<Long>,
+        group: String,
+        pageable: Pageable
+    ): Page<Asset>
+
+    // Workgroup-Based Access Control - Feature 008
+
+    /**
+     * Find assets accessible to a specific user based on workgroup membership
+     * Returns assets that are either:
+     * 1. In workgroups the user belongs to
+     * 2. Created manually by the user
+     * 3. Discovered via scans uploaded by the user
+     *
+     * Related to: Feature 008 (Workgroup-Based Access Control) - FR-013, FR-017
+     *
+     * @param userId The user ID to filter by
+     * @return List of assets accessible to the user
+     */
+    fun findByWorkgroupsUsersIdOrManualCreatorIdOrScanUploaderIdOrderByNameAsc(
+        userId: Long,
+        manualCreatorId: Long,
+        scanUploaderId: Long
+    ): List<Asset>
+
+    /**
+     * Find assets in specific workgroups
+     * Used for admin workgroup management views
+     *
+     * Related to: Feature 008 (Workgroup-Based Access Control) - FR-009
+     *
+     * @param workgroupId The workgroup ID to filter by
+     * @return List of assets in the specified workgroup
+     */
+    fun findByWorkgroupsIdOrderByNameAsc(workgroupId: Long): List<Asset>
+
+    /**
+     * Find assets by cloud account IDs
+     * Used for Account Vulns view to filter assets by user's AWS account mappings
+     *
+     * Related to: Feature 018 (Account Vulns - AWS Account-Based Vulnerability Overview)
+     *
+     * @param cloudAccountIds List of AWS account IDs to filter by
+     * @return List of assets in the specified AWS accounts
+     */
+    fun findByCloudAccountIdIn(cloudAccountIds: List<String>): List<Asset>
+
+    /**
+     * Find assets that belong to any of the specified workgroups
+     * Used for WG Vulns feature (022-wg-vulns-handling)
+     * Feature 073: Uses LEFT JOIN FETCH to eagerly load workgroups with LAZY loading.
+     *
+     * This query joins the asset table with the asset_workgroups join table
+     * and filters by workgroup IDs. Returns distinct assets to avoid duplicates
+     * when an asset belongs to multiple specified workgroups.
+     *
+     * @param workgroupIds List of workgroup IDs to filter by
+     * @return List of distinct assets in the specified workgroups (empty list if none)
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT a FROM Asset a
+        LEFT JOIN FETCH a.workgroups
+        WHERE a.id IN (
+            SELECT DISTINCT a2.id FROM Asset a2
+            JOIN a2.workgroups w
+            WHERE w.id IN :workgroupIds
+        )
+        ORDER BY a.name ASC
+    """)
+    fun findByWorkgroupIdIn(workgroupIds: List<Long>): List<Asset>
+
+    /**
+     * Find distinct AD domains from all assets
+     * Used for filter dropdown population in Current Vulnerabilities view
+     *
+     * @return List of distinct AD domain names (non-null, non-empty), ordered alphabetically
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT a.adDomain
+        FROM Asset a
+        WHERE a.adDomain IS NOT NULL
+        AND a.adDomain != ''
+        ORDER BY a.adDomain
+    """)
+    fun findDistinctAdDomains(): List<String>
+
+    /**
+     * Find distinct AWS cloud account IDs from all assets
+     * Used for filter dropdown population in Current Vulnerabilities view
+     *
+     * @return List of distinct cloud account IDs (non-null, non-empty), ordered alphabetically
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT a.cloudAccountId
+        FROM Asset a
+        WHERE a.cloudAccountId IS NOT NULL
+        AND a.cloudAccountId != ''
+        ORDER BY a.cloudAccountId
+    """)
+    fun findDistinctCloudAccountIds(): List<String>
+
+    /**
+     * Find distinct OS versions from all assets
+     * Used to populate the operating-system exception scope input
+     *
+     * @return List of distinct OS version strings (non-null, non-empty), ordered alphabetically
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT a.osVersion
+        FROM Asset a
+        WHERE a.osVersion IS NOT NULL
+        AND a.osVersion != ''
+        ORDER BY a.osVersion
+    """)
+    fun findDistinctOsVersions(): List<String>
+
+    // Database Optimization - Feature: Database Structure Optimization
+
+    /**
+     * Find assets by AD domain (case-insensitive match)
+     * Optimized query for domain-based access control filtering
+     * Uses index: idx_asset_ad_domain
+     *
+     * Feature: Database Structure Optimization
+     *
+     * @param domains List of AD domain names (lowercase)
+     * @return List of assets matching any of the specified domains
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT a FROM Asset a
+        WHERE LOWER(a.adDomain) IN :domains
+        ORDER BY a.name ASC
+    """)
+    fun findByAdDomainInIgnoreCase(domains: List<String>): List<Asset>
+
+    /**
+     * Find assets by name or name starting with "name." (FQDN check)
+     * Used to detect duplicate assets (e.g. "server1" vs "server1.domain.com")
+     *
+     * Feature: 053-crowdstrike-import-cleanup
+     *
+     * @param name The short hostname
+     * @return List of potential duplicate assets
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT a FROM Asset a
+        WHERE LOWER(a.name) = LOWER(:name) 
+        OR LOWER(a.name) LIKE LOWER(CONCAT(:name, '.%'))
+    """)
+    fun findPotentialDuplicates(name: String): List<Asset>
+
+    // Feature 054: Products Overview - Asset queries by product
+
+    /**
+     * Find assets running a specific product with access control and pagination
+     * Returns distinct assets that have vulnerabilities with the specified product
+     *
+     * Feature: 054-products-overview
+     * Task: T006
+     *
+     * @param product The product name to search for (exact match on vulnerableProductVersions)
+     * @param accessibleAssetIds Set of asset IDs the user has access to
+     * @param pageable Pagination parameters
+     * @return Page of assets running the specified product
+     */
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT DISTINCT a FROM Asset a
+            JOIN Vulnerability v ON v.asset.id = a.id
+            WHERE v.vulnerableProductVersions = :product
+            AND a.id IN :accessibleAssetIds
+            ORDER BY a.name ASC
+        """,
+        countQuery = """
+            SELECT COUNT(DISTINCT a.id) FROM Asset a
+            JOIN Vulnerability v ON v.asset.id = a.id
+            WHERE v.vulnerableProductVersions = :product
+            AND a.id IN :accessibleAssetIds
+        """
+    )
+    fun findAssetsByProductWithAccessControl(
+        product: String,
+        accessibleAssetIds: Set<Long>,
+        pageable: Pageable
+    ): Page<Asset>
+
+    /**
+     * Find assets running a specific product for admin users (no access control) with pagination
+     * Returns distinct assets that have vulnerabilities with the specified product
+     *
+     * Feature: 054-products-overview
+     * Task: T006
+     *
+     * @param product The product name to search for (exact match on vulnerableProductVersions)
+     * @param pageable Pagination parameters
+     * @return Page of assets running the specified product
+     */
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT DISTINCT a FROM Asset a
+            JOIN Vulnerability v ON v.asset.id = a.id
+            WHERE v.vulnerableProductVersions = :product
+            ORDER BY a.name ASC
+        """,
+        countQuery = """
+            SELECT COUNT(DISTINCT a.id) FROM Asset a
+            JOIN Vulnerability v ON v.asset.id = a.id
+            WHERE v.vulnerableProductVersions = :product
+        """
+    )
+    fun findAssetsByProductForAll(
+        product: String,
+        pageable: Pageable
+    ): Page<Asset>
+
+    /**
+     * Find all assets running a specific product with access control (no pagination)
+     * Used for export functionality
+     *
+     * Feature: 054-products-overview
+     * Task: T025 (Export)
+     *
+     * @param product The product name to search for
+     * @param accessibleAssetIds Set of asset IDs the user has access to
+     * @return List of all assets running the specified product
+     */
+    // "NoLimit" is deliberate and bounded: SELECT DISTINCT on the ASSET side yields at most one row
+    // per asset (thousands), never one per vulnerability, however many vulnerability rows match.
+    // Both callers need the complete set — an Excel export and the broadcast recipient resolver —
+    // so pagination would change behaviour rather than just cost.
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT a FROM Asset a
+        JOIN Vulnerability v ON v.asset.id = a.id
+        WHERE v.vulnerableProductVersions = :product
+        AND a.id IN :accessibleAssetIds
+        ORDER BY a.name ASC
+    """)
+    fun findAssetsByProductWithAccessControlNoLimit(
+        product: String,
+        accessibleAssetIds: Set<Long>
+    ): List<Asset>
+
+    /**
+     * Find all assets running a specific product (admin view, no pagination)
+     * Used for export functionality
+     *
+     * Feature: 054-products-overview
+     * Task: T025 (Export)
+     *
+     * @param product The product name to search for
+     * @return List of all assets running the specified product
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT a FROM Asset a
+        JOIN Vulnerability v ON v.asset.id = a.id
+        WHERE v.vulnerableProductVersions = :product
+        ORDER BY a.name ASC
+    """)
+    fun findAssetsByProductForAllNoLimit(product: String): List<Asset>
+
+    // Network Zone filtering - Port Scan Addon
+
+    /**
+     * Find internet-facing assets (EXTERNAL or DMZ) that have an IP address.
+     * Used by the CLI port-scan command to determine scan targets.
+     *
+     * Intentionally has no LIMIT, and must not gain one: the consumer scans the returned hosts, so
+     * a truncated list would silently scan a partial attack surface — a correctness bug, not a
+     * performance win. Bounded in practice by the EXTERNAL/DMZ-with-IP subset of `asset`
+     * (hundreds), ADMIN-only, and not reached from any page render.
+     */
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT a.* FROM asset a
+            WHERE a.network_zone IN ('EXTERNAL', 'DMZ')
+            AND a.ip IS NOT NULL
+            AND a.ip != ''
+            ORDER BY a.name ASC
+        """,
+        nativeQuery = true
+    )
+    fun findInternetFacingWithIp(): List<Asset>
+
+    /**
+     * Nullify the manualCreator reference when a user is deleted.
+     * Preserves the asset record (and its access via other dimensions like
+     * workgroup/owner) without blocking user deletion via the
+     * assets.manual_creator_id → users.id FK.
+     */
+    @io.micronaut.data.annotation.Query(
+        "UPDATE Asset a SET a.manualCreator = NULL WHERE a.manualCreator.id = :userId"
+    )
+    fun nullifyManualCreatorForUser(userId: Long): Int
+
+    /**
+     * Nullify the scanUploader reference when a user is deleted.
+     * Preserves the asset record without blocking user deletion via the
+     * assets.scan_uploader_id → users.id FK.
+     */
+    @io.micronaut.data.annotation.Query(
+        "UPDATE Asset a SET a.scanUploader = NULL WHERE a.scanUploader.id = :userId"
+    )
+    fun nullifyScanUploaderForUser(userId: Long): Int
+}

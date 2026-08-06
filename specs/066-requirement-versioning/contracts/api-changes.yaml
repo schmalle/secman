@@ -1,0 +1,342 @@
+# OpenAPI 3.0 - API Changes for Requirement ID.Revision Versioning
+# Feature: 066-requirement-versioning
+# This documents the DELTA (changes) to existing API, not full spec
+
+openapi: 3.0.3
+info:
+  title: Secman API - Requirement Versioning Changes
+  version: 1.1.0
+  description: |
+    API changes for requirement ID.Revision versioning feature.
+    All changes are backward compatible - new fields added to existing responses.
+
+paths:
+  /api/requirements:
+    get:
+      summary: List requirements (MODIFIED)
+      description: |
+        **Changes**: Response now includes `internalId`, `revision`, and `idRevision` fields.
+      responses:
+        '200':
+          description: List of requirements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RequirementResponse'
+
+    post:
+      summary: Create requirement (MODIFIED)
+      description: |
+        **Changes**:
+        - System automatically assigns `internalId` on creation
+        - Initial `revision` is 1
+        - Response includes new versioning fields
+      responses:
+        '200':
+          description: Created requirement with assigned ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementResponse'
+
+  /api/requirements/{id}:
+    get:
+      summary: Get requirement by ID (UNCHANGED)
+      description: Response includes new versioning fields
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Requirement details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementResponse'
+
+    put:
+      summary: Update requirement (MODIFIED)
+      description: |
+        **Changes**:
+        - Content changes increment `revision`
+        - Relationship-only changes do NOT increment revision
+        - `internalId` remains unchanged
+      responses:
+        '200':
+          description: Updated requirement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementResponse'
+
+  /api/requirements/export/xlsx:
+    get:
+      summary: Export to Excel (MODIFIED)
+      description: |
+        **Changes**: First column is now "ID.Revision" with values like "REQ-001.3"
+      parameters:
+        - name: releaseId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: Export from release snapshot (uses frozen ID.Revision)
+      responses:
+        '200':
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  /api/requirements/export/docx:
+    get:
+      summary: Export to Word (MODIFIED)
+      description: |
+        **Changes**: Requirement headers now show ID.Revision prefix
+        Example: "REQ-001.3: The system shall..."
+      parameters:
+        - name: releaseId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: Export from release snapshot (uses frozen ID.Revision)
+      responses:
+        '200':
+          description: Word file download
+          content:
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+
+  /api/releases/compare:
+    get:
+      summary: Compare releases (MODIFIED)
+      description: |
+        **Changes**:
+        - Modified requirements now show old and new revision numbers
+        - Added/deleted requirements show their ID.Revision
+      parameters:
+        - name: fromReleaseId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: toReleaseId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Comparison result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonResult'
+
+components:
+  schemas:
+    RequirementResponse:
+      type: object
+      description: Requirement with versioning information
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Database ID (unchanged)
+        internalId:
+          type: string
+          description: Human-readable ID (NEW)
+          example: "REQ-001"
+        revision:
+          type: integer
+          description: Revision number (NEW)
+          example: 3
+        idRevision:
+          type: string
+          description: Combined ID.Revision (NEW)
+          example: "REQ-001.3"
+        shortreq:
+          type: string
+          description: Short requirement text
+        details:
+          type: string
+          nullable: true
+          description: Detailed description
+        language:
+          type: string
+          nullable: true
+        example:
+          type: string
+          nullable: true
+        motivation:
+          type: string
+          nullable: true
+        usecase:
+          type: string
+          nullable: true
+        norm:
+          type: string
+          nullable: true
+        chapter:
+          type: string
+          nullable: true
+        usecases:
+          type: array
+          items:
+            $ref: '#/components/schemas/UseCaseResponse'
+        norms:
+          type: array
+          items:
+            $ref: '#/components/schemas/NormResponse'
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - internalId
+        - revision
+        - idRevision
+        - shortreq
+
+    UseCaseResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+
+    NormResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        version:
+          type: string
+
+    ComparisonResult:
+      type: object
+      description: Release comparison result (MODIFIED)
+      properties:
+        fromRelease:
+          $ref: '#/components/schemas/ReleaseInfo'
+        toRelease:
+          $ref: '#/components/schemas/ReleaseInfo'
+        added:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementSnapshotSummary'
+        deleted:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementSnapshotSummary'
+        modified:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementDiff'
+        unchanged:
+          type: integer
+
+    ReleaseInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        version:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    RequirementSnapshotSummary:
+      type: object
+      description: Snapshot summary (MODIFIED - now includes ID.Revision)
+      properties:
+        id:
+          type: integer
+          format: int64
+        originalRequirementId:
+          type: integer
+          format: int64
+        internalId:
+          type: string
+          description: Internal ID from snapshot (NEW)
+          example: "REQ-001"
+        revision:
+          type: integer
+          description: Revision from snapshot (NEW)
+          example: 3
+        idRevision:
+          type: string
+          description: Combined ID.Revision (NEW)
+          example: "REQ-001.3"
+        shortreq:
+          type: string
+        details:
+          type: string
+          nullable: true
+
+    RequirementDiff:
+      type: object
+      description: Modified requirement diff (MODIFIED - shows revision change)
+      properties:
+        id:
+          type: integer
+          format: int64
+        internalId:
+          type: string
+          description: Internal requirement ID (NEW)
+          example: "REQ-001"
+        oldRevision:
+          type: integer
+          description: Revision in "from" release (NEW)
+          example: 2
+        newRevision:
+          type: integer
+          description: Revision in "to" release (NEW)
+          example: 5
+        shortreq:
+          type: string
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldChange'
+
+    FieldChange:
+      type: object
+      properties:
+        fieldName:
+          type: string
+        oldValue:
+          type: string
+          nullable: true
+        newValue:
+          type: string
+          nullable: true

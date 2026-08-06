@@ -1,0 +1,418 @@
+openapi: 3.0.3
+info:
+  title: CrowdStrike Vulnerability Save API
+  description: API contract for Feature 030 - CrowdStrike Asset Auto-Creation
+  version: 1.0.0
+  contact:
+    name: Secman Development Team
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local development server
+
+paths:
+  /crowdstrike/vulnerabilities/save:
+    post:
+      summary: Save CrowdStrike vulnerabilities to database
+      description: |
+        Saves vulnerabilities from CrowdStrike query to database with automatic asset creation/update.
+
+        **Feature 030 Behavior**:
+        - Creates asset if hostname doesn't exist (case-insensitive lookup)
+        - Updates asset IP if CrowdStrike provides different value
+        - Sets asset type to "Server"
+        - Assigns asset to current authenticated user as owner
+        - Records current user as manualCreator for audit trail
+        - Does NOT assign any workgroups
+        - Validates vulnerability data (CVE format, severity values, numeric fields)
+        - Skips invalid vulnerabilities and reports count
+        - Prevents exact duplicate vulnerabilities (asset + CVE + scan date)
+        - Maintains scan history (same CVE + different scan date = new record)
+        - Atomic transaction (all-or-nothing for asset + vulnerabilities)
+        - Role-based error messages (user-friendly for users, technical for admins)
+        - Comprehensive logging for audit trail
+
+      operationId: saveVulnerabilities
+      tags:
+        - CrowdStrike
+      security:
+        - bearerAuth: []
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrowdStrikeSaveRequest'
+            examples:
+              newAsset:
+                summary: Save vulnerabilities for new asset
+                value:
+                  hostname: "EC2AMAZ-6167U5R"
+                  vulnerabilities:
+                    - id: "cs-vuln-12345"
+                      hostname: "EC2AMAZ-6167U5R"
+                      ip: "10.0.1.50"
+                      cveId: "CVE-2024-1234"
+                      severity: "Critical"
+                      cvssScore: 9.8
+                      affectedProduct: "OpenSSL 1.1.1"
+                      daysOpen: "15 days"
+                      detectedAt: "2025-10-15T14:30:00"
+                      status: "open"
+                      hasException: false
+                    - id: "cs-vuln-12346"
+                      hostname: "EC2AMAZ-6167U5R"
+                      ip: "10.0.1.50"
+                      cveId: "CVE-2024-5678"
+                      severity: "High"
+                      cvssScore: 7.5
+                      affectedProduct: "Apache 2.4.50"
+                      daysOpen: "8 days"
+                      detectedAt: "2025-10-15T14:30:00"
+                      status: "open"
+                      hasException: false
+
+              existingAsset:
+                summary: Save vulnerabilities for existing asset
+                value:
+                  hostname: "SERVER1"
+                  vulnerabilities:
+                    - id: "cs-vuln-99999"
+                      hostname: "SERVER1"
+                      ip: "10.0.1.100"
+                      cveId: "CVE-2024-9999"
+                      severity: "Medium"
+                      cvssScore: 5.3
+                      affectedProduct: "nginx 1.20.1"
+                      daysOpen: "30 days"
+                      detectedAt: "2025-10-15T10:00:00"
+                      status: "open"
+                      hasException: false
+
+              withInvalidData:
+                summary: Save with some invalid vulnerabilities
+                value:
+                  hostname: "TEST-SERVER"
+                  vulnerabilities:
+                    - id: "cs-vuln-00001"
+                      hostname: "TEST-SERVER"
+                      ip: "10.0.1.200"
+                      cveId: "CVE-2024-1111"
+                      severity: "Critical"
+                      cvssScore: 9.1
+                      affectedProduct: "Test Product"
+                      daysOpen: "5 days"
+                      detectedAt: "2025-10-15T12:00:00"
+                      status: "open"
+                      hasException: false
+                    - id: "cs-vuln-00002"
+                      hostname: "TEST-SERVER"
+                      ip: "10.0.1.200"
+                      cveId: "INVALID-CVE"
+                      severity: "UnknownSeverity"
+                      cvssScore: null
+                      affectedProduct: "Test Product"
+                      daysOpen: "invalid"
+                      detectedAt: "2025-10-15T12:00:00"
+                      status: "open"
+                      hasException: false
+
+      responses:
+        '200':
+          description: Vulnerabilities saved successfully (partial or complete)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrowdStrikeSaveResponse'
+              examples:
+                completeSuccess:
+                  summary: All vulnerabilities saved, new asset created
+                  value:
+                    message: "Successfully saved 2 vulnerabilities for EC2AMAZ-6167U5R"
+                    vulnerabilitiesSaved: 2
+                    vulnerabilitiesSkipped: 0
+                    assetsCreated: 1
+                    errors: []
+
+                partialSuccess:
+                  summary: Some vulnerabilities skipped due to validation
+                  value:
+                    message: "Saved 1 vulnerability, skipped 1 invalid for TEST-SERVER"
+                    vulnerabilitiesSaved: 1
+                    vulnerabilitiesSkipped: 1
+                    assetsCreated: 1
+                    errors:
+                      - "Skipped invalid vulnerability: Invalid CVE ID format: INVALID-CVE"
+                      - "Skipped invalid vulnerability: Invalid severity: UnknownSeverity"
+
+                existingAssetUpdate:
+                  summary: Vulnerabilities saved, existing asset IP updated
+                  value:
+                    message: "Successfully saved 1 vulnerability for SERVER1"
+                    vulnerabilitiesSaved: 1
+                    vulnerabilitiesSkipped: 0
+                    assetsCreated: 0
+                    errors: []
+
+                withDuplicates:
+                  summary: Some vulnerabilities skipped as duplicates
+                  value:
+                    message: "Saved 2 vulnerabilities, skipped 1 duplicate for SERVER1"
+                    vulnerabilitiesSaved: 2
+                    vulnerabilitiesSkipped: 1
+                    assetsCreated: 0
+                    errors:
+                      - "Skipped duplicate: CVE-2024-1234 already exists for SERVER1 on 2025-10-15T14:30:00"
+
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingHostname:
+                  summary: Hostname is required
+                  value:
+                    status: 400
+                    error: "Bad Request"
+                    message: "Hostname is required"
+                    path: "/api/crowdstrike/vulnerabilities/save"
+                    timestamp: "2025-10-19T12:00:00Z"
+
+                emptyVulnerabilities:
+                  summary: No vulnerabilities to save
+                  value:
+                    status: 400
+                    error: "Bad Request"
+                    message: "No vulnerabilities provided to save"
+                    path: "/api/crowdstrike/vulnerabilities/save"
+                    timestamp: "2025-10-19T12:00:00Z"
+
+        '401':
+          description: Unauthorized - authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                noToken:
+                  summary: Missing JWT token
+                  value:
+                    status: 401
+                    error: "Unauthorized"
+                    message: "Authentication required"
+                    path: "/api/crowdstrike/vulnerabilities/save"
+                    timestamp: "2025-10-19T12:00:00Z"
+
+                expiredToken:
+                  summary: Expired JWT token
+                  value:
+                    status: 401
+                    error: "Unauthorized"
+                    message: "Token expired"
+                    path: "/api/crowdstrike/vulnerabilities/save"
+                    timestamp: "2025-10-19T12:00:00Z"
+
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                databaseError:
+                  summary: Database connection failure
+                  value:
+                    status: 500
+                    error: "Internal Server Error"
+                    message: "Failed to save vulnerabilities. Please try again or contact support."
+                    path: "/api/crowdstrike/vulnerabilities/save"
+                    timestamp: "2025-10-19T12:00:00Z"
+
+                databaseErrorAdmin:
+                  summary: Database error with technical details (ADMIN users only)
+                  value:
+                    status: 500
+                    error: "Internal Server Error"
+                    message: "Failed to save vulnerabilities: Database connection timeout after 30s"
+                    path: "/api/crowdstrike/vulnerabilities/save"
+                    timestamp: "2025-10-19T12:00:00Z"
+
+components:
+  schemas:
+    CrowdStrikeSaveRequest:
+      type: object
+      required:
+        - hostname
+        - vulnerabilities
+      properties:
+        hostname:
+          type: string
+          description: Hostname of the system queried in CrowdStrike
+          example: "EC2AMAZ-6167U5R"
+          minLength: 1
+        vulnerabilities:
+          type: array
+          description: List of vulnerabilities returned from CrowdStrike query
+          items:
+            $ref: '#/components/schemas/CrowdStrikeVulnerabilityDto'
+          minItems: 1
+
+    CrowdStrikeVulnerabilityDto:
+      type: object
+      required:
+        - id
+        - hostname
+        - severity
+        - detectedAt
+        - status
+      properties:
+        id:
+          type: string
+          description: CrowdStrike vulnerability identifier
+          example: "cs-vuln-12345"
+        hostname:
+          type: string
+          description: System hostname from CrowdStrike
+          example: "EC2AMAZ-6167U5R"
+        ip:
+          type: string
+          nullable: true
+          description: IP address from CrowdStrike scan (nullable)
+          example: "10.0.1.50"
+        cveId:
+          type: string
+          nullable: true
+          description: CVE identifier (validated format CVE-YYYY-NNNNN+)
+          example: "CVE-2024-1234"
+          pattern: '^CVE-\d{4}-\d{4,}$'
+        severity:
+          type: string
+          description: Severity level (validated against allowed values)
+          enum:
+            - Critical
+            - High
+            - Medium
+            - Low
+            - Informational
+          example: "Critical"
+        cvssScore:
+          type: number
+          format: double
+          nullable: true
+          description: CVSS score (0.0 - 10.0)
+          example: 9.8
+          minimum: 0.0
+          maximum: 10.0
+        affectedProduct:
+          type: string
+          nullable: true
+          description: Vulnerable product and version
+          example: "OpenSSL 1.1.1"
+        daysOpen:
+          type: string
+          nullable: true
+          description: Number of days vulnerability has been open
+          example: "15 days"
+        detectedAt:
+          type: string
+          format: date-time
+          description: Timestamp when vulnerability was detected
+          example: "2025-10-15T14:30:00"
+        status:
+          type: string
+          description: Vulnerability status
+          example: "open"
+        hasException:
+          type: boolean
+          description: Whether vulnerability has an active exception
+          example: false
+        exceptionReason:
+          type: string
+          nullable: true
+          description: Reason for exception if hasException is true
+          example: "Compensating controls in place"
+
+    CrowdStrikeSaveResponse:
+      type: object
+      required:
+        - message
+        - vulnerabilitiesSaved
+        - vulnerabilitiesSkipped
+        - assetsCreated
+        - errors
+      properties:
+        message:
+          type: string
+          description: Summary message of the save operation
+          example: "Successfully saved 2 vulnerabilities for EC2AMAZ-6167U5R"
+        vulnerabilitiesSaved:
+          type: integer
+          description: Number of vulnerabilities successfully saved
+          example: 2
+          minimum: 0
+        vulnerabilitiesSkipped:
+          type: integer
+          description: Number of vulnerabilities skipped (invalid or duplicate)
+          example: 0
+          minimum: 0
+        assetsCreated:
+          type: integer
+          description: Number of new assets created (0 or 1)
+          example: 1
+          minimum: 0
+          maximum: 1
+        errors:
+          type: array
+          description: List of error/warning messages for skipped vulnerabilities
+          items:
+            type: string
+          example:
+            - "Skipped invalid vulnerability: Invalid CVE ID format: INVALID-CVE"
+
+    ErrorResponse:
+      type: object
+      required:
+        - status
+        - error
+        - message
+        - path
+        - timestamp
+      properties:
+        status:
+          type: integer
+          description: HTTP status code
+          example: 400
+        error:
+          type: string
+          description: Error type
+          example: "Bad Request"
+        message:
+          type: string
+          description: Error message (role-based verbosity)
+          example: "Hostname is required"
+        path:
+          type: string
+          description: Request path that caused the error
+          example: "/api/crowdstrike/vulnerabilities/save"
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of the error
+          example: "2025-10-19T12:00:00Z"
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login endpoint
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: CrowdStrike
+    description: CrowdStrike Falcon API integration endpoints

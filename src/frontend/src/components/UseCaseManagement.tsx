@@ -1,0 +1,245 @@
+import React, { useState, useEffect } from 'react';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
+import { formatServerDate } from '../utils/dateUtils';
+
+interface UseCase {
+  id: number;
+  name: string;
+  systemProtected: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface UseCaseFormData {
+  name: string;
+}
+
+const UseCaseManagement: React.FC = () => {
+  const [useCases, setUseCases] = useState<UseCase[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null); // Keep error state for console logging or future use
+  const [isAddingUseCase, setIsAddingUseCase] = useState(false); // Replaces showModal
+  const [editingUseCase, setEditingUseCase] = useState<UseCase | null>(null);
+  const [formData, setFormData] = useState<UseCaseFormData>({
+    name: '',
+  });
+
+  useEffect(() => {
+    fetchUseCases();
+  }, []);
+
+  const fetchUseCases = async () => {
+    try {
+      setLoading(true);
+      const response = await authenticatedGet('/api/usecases');
+      if (response.ok) {
+        const data = await response.json();
+        setUseCases(data);
+        setError(null);
+      } else {
+        setError(`Failed to fetch use cases: ${response.status}`);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch use cases';
+      setError(errorMessage);
+      console.error('Error fetching use cases:', errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const submitData = {
+        name: formData.name,
+      };
+
+      const url = editingUseCase ? `/api/usecases/${editingUseCase.id}` : '/api/usecases';
+      const method = editingUseCase ? 'PUT' : 'POST';
+      
+      if (editingUseCase) {
+        await authenticatedPut(`/api/usecases/${editingUseCase.id}`, submitData);
+      } else {
+        await authenticatedPost('/api/usecases', submitData);
+      }
+
+      resetForm(); // Includes setIsAddingUseCase(false)
+      await fetchUseCases();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save use case';
+      setError(errorMessage);
+      console.error('Error saving use case:', errorMessage);
+    }
+  };
+
+  const handleEdit = (useCase: UseCase) => {
+    setEditingUseCase(useCase);
+    setFormData({
+      name: useCase.name,
+    });
+    setIsAddingUseCase(true);
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this use case?')) {
+      return;
+    }
+
+    try {
+      await authenticatedDelete(`/api/usecases/${id}`);
+
+      await fetchUseCases();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete use case';
+      setError(errorMessage);
+      console.error('Error deleting use case:', errorMessage);
+    }
+  };
+
+  const resetForm = () => {
+    setEditingUseCase(null);
+    setFormData({ name: '' });
+    setIsAddingUseCase(false);
+    setError(null);
+  };
+
+  if (loading) return <div className="text-center py-4">Loading use cases...</div>;
+  
+  if (error) {
+    return (
+      <div className="container-fluid p-4">
+        <div className="alert alert-danger" role="alert">
+          {error}
+        </div>
+      </div>
+    );
+  }
+  // Error display is removed from UI, errors are logged to console.
+
+  return (
+    <div className="container-fluid p-4">
+      <div className="row">
+        <div className="col-12">
+          <div className="d-flex justify-content-between align-items-center mb-4">
+            <h2>Use Case Management</h2>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                if (isAddingUseCase) {
+                  resetForm();
+                } else {
+                  setIsAddingUseCase(true);
+                }
+              }}
+            >
+              {isAddingUseCase ? 'Cancel' : 'Add New Use Case'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {isAddingUseCase && (
+        <div className="row mb-4">
+          <div className="col-12">
+            <div className="card">
+              <div className="card-body">
+                <h5 className="card-title">
+                  {editingUseCase ? 'Edit Use Case' : 'Add New Use Case'}
+                </h5>
+                <form onSubmit={handleSubmit}>
+                  <div className="mb-3">
+                    <label htmlFor="name" className="form-label">
+                      Name
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      id="name"
+                      className="form-control"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="d-flex justify-content-end">
+                    <button
+                      type="submit"
+                      className="btn btn-success me-2"
+                    >
+                      {editingUseCase ? 'Update' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetForm}
+                      className="btn btn-secondary"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="row">
+        <div className="col-12">
+          <div className="card">
+            <div className="card-body">
+              <h5 className="card-title">Existing Use Cases</h5>
+              <div className="table-responsive">
+                <table className="table table-striped table-hover">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Created At</th>
+                      <th>Updated At</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {useCases.map((useCase) => (
+                      <tr key={useCase.id}>
+                        <td>
+                          {useCase.name}
+                          {useCase.systemProtected && (
+                            <span className="badge bg-secondary ms-2">System</span>
+                          )}
+                        </td>
+                        <td>{formatServerDate(useCase.createdAt)}</td>
+                        <td>{formatServerDate(useCase.updatedAt)}</td>
+                        <td>
+                          {!useCase.systemProtected && (
+                            <>
+                              <button
+                                onClick={() => handleEdit(useCase)}
+                                className="btn btn-sm btn-warning me-2"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDelete(useCase.id)}
+                                className="btn btn-sm btn-danger"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default UseCaseManagement;

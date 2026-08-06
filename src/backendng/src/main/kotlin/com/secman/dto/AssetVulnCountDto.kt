@@ -1,0 +1,43 @@
+package com.secman.dto
+
+import io.micronaut.serde.annotation.Serdeable
+
+/**
+ * DTO representing a single asset with its vulnerability count.
+ *
+ * Used in Account Vulns view to display assets grouped by AWS account.
+ *
+ * @property id Asset ID (used for navigation to asset detail page)
+ * @property name Asset name (displayed in table, clickable link)
+ * @property type Asset type (e.g., SERVER, WORKSTATION)
+ * @property vulnerabilityCount Number of vulnerabilities for this asset (0 if none)
+ * @property criticalCount Number of CRITICAL severity vulnerabilities (nullable for backward compatibility)
+ * @property highCount Number of HIGH severity vulnerabilities (nullable for backward compatibility)
+ * @property mediumCount Number of MEDIUM severity vulnerabilities (nullable for backward compatibility)
+ * @property exceptedCount Number of vulnerabilities covered by active exceptions (nullable for backward compatibility)
+ * @property nonExceptedCount Number of vulnerabilities not covered by active exceptions (nullable for backward compatibility)
+ * @property nonExceptedOverdueCount Non-excepted vulnerabilities older than the threshold (nullable for backward compatibility)
+ * @property status Traffic-light "needs manual intervention" indicator (nullable for backward compatibility)
+ */
+@Serdeable
+data class AssetVulnCountDto(
+    val id: Long,
+    val name: String,
+    val type: String,
+    val vulnerabilityCount: Int,
+
+    // Severity breakdown (Feature 019 - nullable for backward compatibility)
+    val criticalCount: Int? = null,
+    val highCount: Int? = null,
+    val mediumCount: Int? = null,
+
+    // Exception breakdown (nullable for backward compatibility)
+    val exceptedCount: Int? = null,
+    val nonExceptedCount: Int? = null,
+
+    // Intervention status (nullable for backward compatibility). nonExceptedOverdueCount is
+    // exposed alongside the status so the UI can explain *why* an asset is RED rather than
+    // showing an unexplained coloured dot.
+    val nonExceptedOverdueCount: Int? = null,
+    val status: AssetInterventionStatus? = null
+)

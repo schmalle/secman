@@ -1,0 +1,825 @@
+/**
+ * ReleaseList Component
+ *
+ * Main list view for browsing releases with filtering, search, and pagination
+ *
+ * Features:
+ * - Status filter (ALL, PREPARATION, ALIGNMENT, ACTIVE, ARCHIVED)
+ * - Search by version or name
+ * - Pagination (20 items per page)
+ * - Empty state handling
+ * - Click to navigate to detail page
+ * - RBAC: Show create button for ADMIN/RELEASE_MANAGER only
+ *
+ * Related to: Feature 012-build-ui-for, User Story 1 (View and Browse Releases)
+ */
+
+import React, { useState, useEffect } from 'react';
+import { releaseService, type Release, type PaginatedResponse } from '../services/releaseService';
+import { hasRole, getUser } from '../utils/auth';
+import { canDeleteRelease } from '../utils/permissions';
+import ReleaseCreateModal from './ReleaseCreateModal';
+import ReleaseDeleteConfirm from './ReleaseDeleteConfirm';
+import Toast from './Toast';
+import { formatServerDate } from '../utils/dateUtils';
+
+const ReleaseList: React.FC = () => {
+    // State
+    const [releases, setReleases] = useState<Release[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    
+    // Filters
+    const [statusFilter, setStatusFilter] = useState<string>('ALL');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    
+    // Pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalItems, setTotalItems] = useState(0);
+    const pageSize = 20;
+
+    // Modal state
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [releaseToDelete, setReleaseToDelete] = useState<Release | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    // Set Active modal state
+    const [showActivateModal, setShowActivateModal] = useState(false);
+    const [releaseToActivate, setReleaseToActivate] = useState<Release | null>(null);
+    const [isActivating, setIsActivating] = useState(false);
+
+    // Delete-All (admin debug) modal state
+    const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+    const [isDeletingAll, setIsDeletingAll] = useState(false);
+
+    // Toast state
+    const [toast, setToast] = useState<{
+        show: boolean;
+        message: string;
+        type: 'success' | 'error' | 'warning' | 'info';
+    }>({
+        show: false,
+        message: '',
+        type: 'success',
+    });
+
+    // User/Role info
+    const user = typeof window !== 'undefined' ? getUser() : null;
+    const userRoles = user?.roles || [];
+    const canCreate = typeof window !== 'undefined' && (hasRole('ADMIN') || hasRole('REQADMIN'));
+    const isAdmin = typeof window !== 'undefined' && hasRole('ADMIN');
+
+    // Debounce search query (300ms)
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchQuery);
+            setCurrentPage(1); // Reset to page 1 when search changes
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    // Fetch releases
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            loadReleases();
+        }
+    }, [statusFilter, debouncedSearch, currentPage]);
+
+    async function loadReleases() {
+        try {
+            setLoading(true);
+            setError(null);
+
+            const result: PaginatedResponse<Release> = await releaseService.list(
+                statusFilter,
+                currentPage,
+                pageSize
+            );
+
+            setReleases(result.data);
+            setTotalPages(result.totalPages);
+            setTotalItems(result.totalItems);
+            setCurrentPage(result.currentPage);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to load releases');
+            setReleases([]);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    // Filter releases by search query (client-side if API doesn't support)
+    const filteredReleases = releases.filter((release) => {
+        if (!debouncedSearch) return true;
+        const query = debouncedSearch.toLowerCase();
+        return (
+            release.version.toLowerCase().includes(query) ||
+            release.name.toLowerCase().includes(query)
+        );
+    });
+
+    // Handle status filter change
+    function handleStatusChange(e: React.ChangeEvent<HTMLSelectElement>) {
+        setStatusFilter(e.target.value);
+        setCurrentPage(1);
+    }
+
+    // Handle search input
+    function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
+        setSearchQuery(e.target.value);
+    }
+
+    // Handle page change
+    function handlePageChange(page: number) {
+        setCurrentPage(page);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Handle create button click
+    function handleCreateClick() {
+        setShowCreateModal(true);
+    }
+
+    // Handle create success
+    function handleCreateSuccess() {
+        // Show success toast
+        setToast({
+            show: true,
+            message: 'Release created successfully! It has been added to the list with PREPARATION status.',
+            type: 'success',
+        });
+
+        // Reload releases
+        loadReleases();
+    }
+
+    // Handle modal close
+    function handleModalClose() {
+        setShowCreateModal(false);
+    }
+
+    // Handle toast close
+    function handleToastClose() {
+        setToast((prev) => ({ ...prev, show: false }));
+    }
+
+    // Handle delete button click
+    function handleDeleteClick(release: Release, e: React.MouseEvent) {
+        e.stopPropagation(); // Prevent row click navigation
+        setReleaseToDelete(release);
+        setShowDeleteModal(true);
+    }
+
+    // Handle delete confirmation
+    async function handleDeleteConfirm() {
+        if (!releaseToDelete) return;
+
+        setIsDeleting(true);
+        try {
+            await releaseService.delete(releaseToDelete.id);
+            
+            setToast({
+                show: true,
+                message: `Release v${releaseToDelete.version} deleted successfully`,
+                type: 'success',
+            });
+
+            // Close modal
+            setShowDeleteModal(false);
+            setReleaseToDelete(null);
+
+            // Reload releases
+            await loadReleases();
+        } catch (err) {
+            const errorMessage = err instanceof Error 
+                ? err.message 
+                : 'Failed to delete release. Please try again.';
+            
+            setToast({
+                show: true,
+                message: errorMessage,
+                type: 'error',
+            });
+
+            // Close modal on error too
+            setShowDeleteModal(false);
+            setReleaseToDelete(null);
+        } finally {
+            setIsDeleting(false);
+        }
+    }
+
+    // Handle delete modal close
+    function handleDeleteModalClose() {
+        if (!isDeleting) {
+            setShowDeleteModal(false);
+            setReleaseToDelete(null);
+        }
+    }
+
+    // Handle Set Active button click
+    function handleActivateClick(release: Release, e: React.MouseEvent) {
+        e.stopPropagation(); // Prevent row click navigation
+        setReleaseToActivate(release);
+        setShowActivateModal(true);
+    }
+
+    // Handle Set Active confirmation
+    async function handleActivateConfirm() {
+        if (!releaseToActivate) return;
+
+        setIsActivating(true);
+        try {
+            await releaseService.updateStatus(releaseToActivate.id, 'ACTIVE');
+
+            setToast({
+                show: true,
+                message: `Release v${releaseToActivate.version} is now active`,
+                type: 'success',
+            });
+
+            // Close modal
+            setShowActivateModal(false);
+            setReleaseToActivate(null);
+
+            // Reload releases
+            await loadReleases();
+        } catch (err) {
+            const errorMessage = err instanceof Error
+                ? err.message
+                : 'Failed to set release as active. Please try again.';
+
+            setToast({
+                show: true,
+                message: errorMessage,
+                type: 'error',
+            });
+
+            // Close modal on error too
+            setShowActivateModal(false);
+            setReleaseToActivate(null);
+        } finally {
+            setIsActivating(false);
+        }
+    }
+
+    // Handle Set Active modal close
+    function handleActivateModalClose() {
+        if (!isActivating) {
+            setShowActivateModal(false);
+            setReleaseToActivate(null);
+        }
+    }
+
+    // Handle "Delete All Releases" admin debug click
+    function handleDeleteAllClick() {
+        setShowDeleteAllModal(true);
+    }
+
+    function handleDeleteAllModalClose() {
+        if (!isDeletingAll) {
+            setShowDeleteAllModal(false);
+        }
+    }
+
+    async function handleDeleteAllConfirm() {
+        setIsDeletingAll(true);
+        try {
+            const count = await releaseService.deleteAll();
+            setToast({
+                show: true,
+                message: count === 0
+                    ? 'No releases to delete.'
+                    : `Deleted ${count} release${count === 1 ? '' : 's'}.`,
+                type: 'success',
+            });
+            setShowDeleteAllModal(false);
+            await loadReleases();
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to delete all releases.';
+            setToast({ show: true, message: errorMessage, type: 'error' });
+            setShowDeleteAllModal(false);
+        } finally {
+            setIsDeletingAll(false);
+        }
+    }
+
+    // Navigate to detail page
+    function handleReleaseClick(releaseId: number) {
+        window.location.href = `/releases/${releaseId}`;
+    }
+
+    // Get status badge class
+    function getStatusBadgeClass(status: string): string {
+        switch (status) {
+            case 'PREPARATION':
+                return 'bg-info text-dark';
+            case 'ALIGNMENT':
+                return 'bg-warning text-dark';
+            case 'ACTIVE':
+                return 'bg-success';
+            case 'ARCHIVED':
+                return 'bg-secondary';
+            default:
+                return 'bg-secondary';
+        }
+    }
+
+    // Format date
+    function formatDate(dateString: string | null): string {
+        if (!dateString) return 'N/A';
+        return formatServerDate(dateString);
+    }
+
+    // Render loading state
+    if (loading && releases.length === 0) {
+        return (
+            <div className="container mt-4">
+                <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
+                    <div className="spinner-border text-primary" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Render error state
+    if (error) {
+        return (
+            <div className="container mt-4">
+                <div className="alert alert-danger" role="alert">
+                    <strong>Error:</strong> {error}
+                    <button className="btn btn-sm btn-outline-danger ms-3" onClick={loadReleases}>
+                        Retry
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    // Render empty state
+    if (!loading && filteredReleases.length === 0 && !debouncedSearch) {
+        return (
+            <div className="container mt-4">
+                <div className="row mb-4">
+                    <div className="col">
+                        <h2>Releases</h2>
+                    </div>
+                    <div className="col-auto d-flex gap-2 align-items-start">
+                        <a href="/releases/compare" className="btn btn-sm btn-outline-primary">
+                            <i className="bi bi-arrow-left-right me-2"></i>
+                            Compare Releases
+                        </a>
+                        {canCreate && (
+                            <button className="btn btn-sm btn-primary" onClick={handleCreateClick}>
+                                <i className="bi bi-plus-circle me-2"></i>
+                                Create New Release
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                <div className="empty-state text-center py-5">
+                    <i className="bi bi-inbox" style={{ fontSize: '4rem', color: '#6c757d' }}></i>
+                    <h4 className="mt-3">No releases found</h4>
+                    <p className="text-muted">
+                        {canCreate
+                            ? 'Get started by creating your first release to snapshot requirements.'
+                            : 'No releases have been created yet. Contact an administrator.'}
+                    </p>
+                    {canCreate && (
+                        <button className="btn btn-primary mt-3" onClick={handleCreateClick}>
+                            Create First Release
+                        </button>
+                    )}
+                </div>
+
+                {/* Create Release Modal — must be rendered here too so the
+                    "Create First Release" / "Create New Release" buttons work
+                    from the empty state. */}
+                <ReleaseCreateModal
+                    isOpen={showCreateModal}
+                    onClose={handleModalClose}
+                    onSuccess={handleCreateSuccess}
+                />
+
+                {/* Toast Notifications */}
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    show={toast.show}
+                    onClose={handleToastClose}
+                />
+            </div>
+        );
+    }
+
+    return (
+        <div className="container mt-4">
+            {/* Header with Create Button */}
+            <div className="row mb-4">
+                <div className="col">
+                    <h2>Releases</h2>
+                    <p className="text-muted">
+                        Manage requirement version snapshots for compliance and audit purposes
+                    </p>
+                </div>
+                <div className="col-auto d-flex gap-2 align-items-start">
+                    <a href="/releases/compare" className="btn btn-sm btn-outline-primary">
+                        <i className="bi bi-arrow-left-right me-2"></i>
+                        Compare Releases
+                    </a>
+                    {canCreate && (
+                        <button className="btn btn-sm btn-primary" onClick={handleCreateClick}>
+                            <i className="bi bi-plus-circle me-2"></i>
+                            Create New Release
+                        </button>
+                    )}
+                    {isAdmin && totalItems > 0 && (
+                        <button
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={handleDeleteAllClick}
+                            title="Delete every release (admin debug). Refused while a risk assessment is running."
+                            data-testid="delete-all-releases"
+                        >
+                            <i className="bi bi-trash me-2"></i>
+                            Delete All Releases
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Filters and Search */}
+            <div className="row mb-3">
+                <div className="col-md-4">
+                    <label htmlFor="statusFilter" className="form-label">
+                        Status
+                    </label>
+                    <select
+                        id="statusFilter"
+                        className="form-select"
+                        value={statusFilter}
+                        onChange={handleStatusChange}
+                        data-testid="status-filter"
+                    >
+                        <option value="ALL">All Statuses</option>
+                        <option value="PREPARATION">Preparation</option>
+                        <option value="ALIGNMENT">Alignment</option>
+                        <option value="ACTIVE">Active</option>
+                        <option value="ARCHIVED">Archived</option>
+                    </select>
+                </div>
+                <div className="col-md-8">
+                    <label htmlFor="searchBox" className="form-label">
+                        Search
+                    </label>
+                    <input
+                        id="searchBox"
+                        type="search"
+                        className="form-control"
+                        placeholder="Search by version or name..."
+                        value={searchQuery}
+                        onChange={handleSearchChange}
+                    />
+                </div>
+            </div>
+
+            {/* Results count */}
+            {loading && (
+                <div className="text-center py-3">
+                    <div className="spinner-border spinner-border-sm text-primary" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            )}
+
+            {!loading && (
+                <p className="text-muted mb-3">
+                    Showing {filteredReleases.length} of {totalItems} releases
+                </p>
+            )}
+
+            {/* Releases Table */}
+            <div className="table-responsive">
+                <table className="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Version</th>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>Created By</th>
+                            <th>Created Date</th>
+                            <th>Requirements</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {filteredReleases.map((release) => (
+                            <tr
+                                key={release.id}
+                                onClick={() => handleReleaseClick(release.id)}
+                                style={{ cursor: 'pointer' }}
+                                data-testid={`release-card-${release.id}`}
+                            >
+                                <td>
+                                    <span data-testid="release-version">
+                                        {release.version}
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href={`/releases/${release.id}`} onClick={(e) => e.preventDefault()}>
+                                        {release.name}
+                                    </a>
+                                </td>
+                                <td>
+                                    <span 
+                                        className={`badge ${getStatusBadgeClass(release.status)}`}
+                                        aria-label={`Release status: ${release.status}`}
+                                    >
+                                        {release.status}
+                                    </span>
+                                </td>
+                                <td>{release.createdBy}</td>
+                                <td>{formatDate(release.createdAt)}</td>
+                                <td>
+                                    <span className="badge bg-info">{release.requirementCount}</span>
+                                </td>
+                                <td onClick={(e) => e.stopPropagation()}>
+                                    <div className="d-flex gap-1">
+                                        {(release.status === 'PREPARATION' || release.status === 'ALIGNMENT') && canCreate && (
+                                            <button
+                                                className="btn btn-sm btn-outline-info"
+                                                onClick={(e) => handleActivateClick(release, e)}
+                                                title="Set this release as active"
+                                                data-testid={`activate-release-${release.id}`}
+                                            >
+                                                <i className="bi bi-check-circle"></i>
+                                            </button>
+                                        )}
+                                        {canDeleteRelease(release, user, userRoles) && (
+                                            <button
+                                                className="btn btn-sm btn-outline-danger"
+                                                onClick={(e) => handleDeleteClick(release, e)}
+                                                title="Delete release"
+                                                data-testid={`delete-release-${release.id}`}
+                                            >
+                                                <i className="bi bi-trash"></i>
+                                            </button>
+                                        )}
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* No results message (after search) */}
+            {!loading && filteredReleases.length === 0 && debouncedSearch && (
+                <div className="text-center py-4">
+                    <p className="text-muted">No releases match your search criteria.</p>
+                </div>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <nav aria-label="Release pagination" className="mt-4">
+                    <ul className="pagination justify-content-center" data-testid="pagination">
+                        <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                            <button
+                                className="page-link"
+                                onClick={() => handlePageChange(currentPage - 1)}
+                                disabled={currentPage === 1}
+                                data-testid="prev-page"
+                            >
+                                Previous
+                            </button>
+                        </li>
+
+                        {[...Array(totalPages)].map((_, index) => {
+                            const page = index + 1;
+                            // Show first page, last page, current page, and pages around current
+                            if (
+                                page === 1 ||
+                                page === totalPages ||
+                                (page >= currentPage - 2 && page <= currentPage + 2)
+                            ) {
+                                return (
+                                    <li
+                                        key={page}
+                                        className={`page-item ${currentPage === page ? 'active' : ''}`}
+                                    >
+                                        <button
+                                            className="page-link"
+                                            onClick={() => handlePageChange(page)}
+                                            data-testid={`page-${page}`}
+                                        >
+                                            {page}
+                                        </button>
+                                    </li>
+                                );
+                            } else if (page === currentPage - 3 || page === currentPage + 3) {
+                                return (
+                                    <li key={page} className="page-item disabled">
+                                        <span className="page-link">...</span>
+                                    </li>
+                                );
+                            }
+                            return null;
+                        })}
+
+                        <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                            <button
+                                className="page-link"
+                                onClick={() => handlePageChange(currentPage + 1)}
+                                disabled={currentPage === totalPages}
+                                data-testid="next-page"
+                            >
+                                Next
+                            </button>
+                        </li>
+                    </ul>
+                </nav>
+            )}
+
+            {/* Create Release Modal */}
+            <ReleaseCreateModal
+                isOpen={showCreateModal}
+                onClose={handleModalClose}
+                onSuccess={handleCreateSuccess}
+            />
+
+            {/* Delete Release Modal */}
+            <ReleaseDeleteConfirm
+                release={releaseToDelete}
+                isOpen={showDeleteModal}
+                isDeleting={isDeleting}
+                onClose={handleDeleteModalClose}
+                onConfirm={handleDeleteConfirm}
+            />
+
+            {/* Set Active Release Modal */}
+            {showActivateModal && releaseToActivate && (
+                <>
+                    <div
+                        className="modal-backdrop fade show"
+                        onClick={isActivating ? undefined : handleActivateModalClose}
+                        style={{ zIndex: 1040 }}
+                    ></div>
+                    <div
+                        className="modal fade show d-block"
+                        tabIndex={-1}
+                        role="dialog"
+                        style={{ zIndex: 1050 }}
+                        aria-labelledby="activateModalLabel"
+                        aria-modal="true"
+                    >
+                        <div className="modal-dialog">
+                            <div className="modal-content">
+                                <div className="modal-header">
+                                    <h5 className="modal-title" id="activateModalLabel">
+                                        Set Release as Active
+                                    </h5>
+                                    <button
+                                        type="button"
+                                        className="btn-close"
+                                        aria-label="Close"
+                                        onClick={handleActivateModalClose}
+                                        disabled={isActivating}
+                                    ></button>
+                                </div>
+                                <div className="modal-body">
+                                    <p>
+                                        Are you sure you want to set{' '}
+                                        <strong>{releaseToActivate.version} - {releaseToActivate.name}</strong>{' '}
+                                        as the active release?
+                                    </p>
+                                    <p className="text-muted mb-0">
+                                        This will mark this release as the currently active version.
+                                    </p>
+                                </div>
+                                <div className="modal-footer">
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={handleActivateModalClose}
+                                        disabled={isActivating}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-info"
+                                        onClick={handleActivateConfirm}
+                                        disabled={isActivating}
+                                    >
+                                        {isActivating ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                                Setting Active...
+                                            </>
+                                        ) : (
+                                            'Confirm Set Active'
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* Delete All Releases Modal (admin debug) */}
+            {showDeleteAllModal && (
+                <>
+                    <div
+                        className="modal-backdrop fade show"
+                        onClick={isDeletingAll ? undefined : handleDeleteAllModalClose}
+                        style={{ zIndex: 1040 }}
+                    ></div>
+                    <div
+                        className="modal fade show d-block"
+                        tabIndex={-1}
+                        role="dialog"
+                        style={{ zIndex: 1050 }}
+                        aria-labelledby="deleteAllModalLabel"
+                        aria-modal="true"
+                    >
+                        <div className="modal-dialog">
+                            <div className="modal-content">
+                                <div className="modal-header bg-danger text-white">
+                                    <h5 className="modal-title" id="deleteAllModalLabel">
+                                        Delete ALL Releases?
+                                    </h5>
+                                    <button
+                                        type="button"
+                                        className="btn-close btn-close-white"
+                                        aria-label="Close"
+                                        onClick={handleDeleteAllModalClose}
+                                        disabled={isDeletingAll}
+                                    ></button>
+                                </div>
+                                <div className="modal-body">
+                                    <p className="mb-2">
+                                        This will permanently delete <strong>every release</strong>, including
+                                        ACTIVE ones, along with all requirement snapshots and alignment session
+                                        data.
+                                    </p>
+                                    <p className="mb-2">
+                                        The request will be refused if any risk assessment is currently running
+                                        (status <code>STARTED</code>). Otherwise, locked-release references on
+                                        non-running risk assessments will be detached automatically.
+                                    </p>
+                                    <p className="text-danger mb-0">
+                                        <strong>This action cannot be undone.</strong> Intended for debugging only.
+                                    </p>
+                                </div>
+                                <div className="modal-footer">
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={handleDeleteAllModalClose}
+                                        disabled={isDeletingAll}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-danger"
+                                        onClick={handleDeleteAllConfirm}
+                                        disabled={isDeletingAll}
+                                        data-testid="confirm-delete-all-releases"
+                                    >
+                                        {isDeletingAll ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                                Deleting...
+                                            </>
+                                        ) : (
+                                            'Delete All Releases'
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* Toast Notifications */}
+            <Toast
+                message={toast.message}
+                type={toast.type}
+                show={toast.show}
+                onClose={handleToastClose}
+            />
+        </div>
+    );
+};
+
+export default ReleaseList;

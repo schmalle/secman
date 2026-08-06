@@ -1,0 +1,55 @@
+package com.secman.repository
+
+import com.secman.domain.Scan
+import io.micronaut.data.annotation.Repository
+import io.micronaut.data.jpa.repository.JpaRepository
+import io.micronaut.data.model.Page
+import io.micronaut.data.model.Pageable
+import java.time.LocalDateTime
+
+/**
+ * Repository for Scan entity
+ *
+ * Provides CRUD operations and custom queries for scan management.
+ *
+ * Related to:
+ * - Feature: 002-implement-a-parsing (Nmap Scan Import)
+ * - Contract: GET /api/scans with pagination and filtering
+ */
+@Repository
+interface ScanRepository : JpaRepository<Scan, Long> {
+
+    /**
+     * Find all scans uploaded by a specific user
+     * Used for: User's scan history
+     * Returns: Paginated list ordered by scanDate DESC
+     */
+    fun findByUploadedByOrderByScanDateDesc(uploadedBy: String, pageable: Pageable): Page<Scan>
+
+    /**
+     * Find all scans with pagination
+     * Used for: Admin scan list view
+     * Returns: Paginated list ordered by scanDate DESC
+     */
+    fun findAllOrderByScanDateDesc(pageable: Pageable): Page<Scan>
+
+    // MCP Tool Support - Feature 006: Scan history queries with date filtering
+
+    /**
+     * Find scans within a date range
+     * Used for: MCP get_scans tool with date filtering
+     * Related to: Feature 006 (MCP Tools for Security Data)
+     */
+    fun findByScanDateBetween(start: LocalDateTime, end: LocalDateTime, pageable: Pageable): Page<Scan>
+
+    /**
+     * Find scans by scan type with pagination (alias for compatibility)
+     * Used for: MCP get_scans tool
+     * Related to: Feature 006 (MCP Tools for Security Data)
+     */
+    fun findByScanType(scanType: String, pageable: Pageable): Page<Scan>
+
+    // Workgroup-Based Access Control - Feature 008
+    // Note: Scan filtering requires service-level logic since uploadedBy is a username String,
+    // not a User FK. Methods moved to ScanFilteringService.
+}

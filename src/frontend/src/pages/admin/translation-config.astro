@@ -1,0 +1,12 @@
+---
+// src/pages/admin/translation-config.astro
+import Layout from '../../layouts/Layout.astro';
+import TranslationConfigManagement from '../../components/TranslationConfigManagement.tsx';
+---
+
+<Layout title="LLM Configuration - Secman Admin">
+    <TranslationConfigManagement client:load />
+    <div class="mt-4">
+      <a href="/admin" class="btn btn-secondary">Back to Admin</a>
+    </div>
+</Layout>

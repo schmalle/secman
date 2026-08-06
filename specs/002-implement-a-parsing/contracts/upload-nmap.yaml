@@ -1,0 +1,141 @@
+openapi: 3.0.3
+info:
+  title: Nmap Scan Upload API
+  version: 1.0.0
+  description: Upload and process nmap XML scan files
+
+paths:
+  /api/scan/upload-nmap:
+    post:
+      summary: Upload nmap XML file
+      description: |
+        Upload an nmap XML scan file for processing. The system will:
+        1. Validate XML structure
+        2. Parse hosts, IPs, and ports
+        3. Create/update assets
+        4. Store scan results
+        Returns a summary of the import operation.
+      operationId: uploadNmapScan
+      tags:
+        - Scans
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Nmap XML file (.xml extension)
+            encoding:
+              file:
+                contentType: application/xml, text/xml
+      responses:
+        '200':
+          description: Scan uploaded and processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scanId:
+                    type: integer
+                    format: int64
+                    example: 42
+                    description: ID of created scan record
+                  filename:
+                    type: string
+                    example: "network-scan-2025-10-03.xml"
+                  scanDate:
+                    type: string
+                    format: date-time
+                    example: "2025-10-03T08:33:50Z"
+                    description: When the scan was performed (from XML)
+                  hostsDiscovered:
+                    type: integer
+                    example: 15
+                    description: Number of hosts found in scan
+                  assetsCreated:
+                    type: integer
+                    example: 3
+                    description: Number of new assets created
+                  assetsUpdated:
+                    type: integer
+                    example: 12
+                    description: Number of existing assets updated
+                  totalPorts:
+                    type: integer
+                    example: 47
+                    description: Total open ports discovered
+                  duration:
+                    type: integer
+                    nullable: true
+                    example: 159
+                    description: Scan duration in seconds (from nmap)
+        '400':
+          description: Invalid file format or malformed XML
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidXML:
+                  value:
+                    error: "Invalid nmap XML structure"
+                    message: "Missing <nmaprun> root element"
+                notXML:
+                  value:
+                    error: "File is not valid XML"
+                    message: "XML parsing failed at line 42"
+                emptyFile:
+                  value:
+                    error: "Empty file uploaded"
+                    message: "File must contain scan data"
+        '401':
+          description: Unauthorized - authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: File too large (exceeds 50MB limit)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error during processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error type/category
+        message:
+          type: string
+          description: Detailed error message
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error context
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

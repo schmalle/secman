@@ -1,0 +1,116 @@
+src/adread/adread.env.local
+
+3rdparty/
+
+# Dependencies
+backendng/bin/
+node_modules/
+mcp/package-lock.json
+
+# Build outputs
+build/
+dist/
+out/
+.kotlin/
+
+# Gradle
+.gradle/
+**/build/
+*.jar
+*.class
+*.iml
+
+# Testing
+test-results/
+playwright-report/
+.e2e-logs/
+checkin-test-results/
+checkin-test-results.json
+*.log
+*.hprof
+
+# IDE
+.idea/
+.vscode/
+.specify/
+.codex/
+src/backendng/bin/
+src/cli/bin/
+src/shared/bin/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.pid
+*.bak
+
+# Python (helper tools)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+*.egg
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.cover
+.coverage
+htmlcov/
+
+# Project specific
+.worktrees/
+.claude/settings.local.json
+./codex/
+.serena/
+src/backendng/.kotlin/sessions/*
+src/backendng/.claude/settings.local.json
+src/backendng/.claude/settings.local.json
+src/.claude/settings.local.json
+src/helper/.env
+src/helper/venv/
+src/helper/.venv/
+.env
+.env.*
+!.env.example
+.e2e-logs/
+/.playwright-mcp
+docker/backend/app.jar
+/.clawpatch/features
+/.clawpatch/findings
+/.clawpatch/reports
+/.clawpatch/runs
+/docs/superpowers/
+/docs/superpowers/
+*.yml
+# GitHub Actions workflows must be tracked despite the blanket *.yml ignore above
+!.github/workflows/*.yml
+# Docker Compose file must be tracked despite the blanket *.yml ignore above
+!docker/docker-compose.yml
+.playwright-cli/ChatGPT-Atlas.dmg
+crowdstrike-vulnerability-match-report.json
+crowdstrike-vulnerability-match-report.md
+crowdstrike-vulnerability-match-report-cs-owner-30d.md
+crowdstrike-vulnerability-match-report-cs-owner-30d.json
+crowdstrike-vulnerability-match-report-cs-owner.json
+crowdstrike-vulnerability-match-report-cs-owner.md
+crowdstrike-vulnerability-match-report-cs-owner-30d-post-sync.md
+crowdstrike-vulnerability-match-report-cs-owner-30d-post-sync.json
+.claude/scheduled_tasks.lock
+/extensions/secman_ai_github/
+/extensions/secman_visual_check/
+/src/backendng/exports

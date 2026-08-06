@@ -1,0 +1,301 @@
+package com.secman.service
+
+import com.secman.domain.Release
+import com.secman.domain.RequirementSnapshot
+import com.secman.repository.AlignmentReviewerRepository
+import com.secman.repository.AlignmentSessionRepository
+import com.secman.repository.AlignmentSnapshotRepository
+import com.secman.repository.ReleaseRepository
+import com.secman.repository.RequirementRepository
+import com.secman.repository.RequirementReviewRepository
+import com.secman.repository.RequirementSnapshotRepository
+import com.secman.repository.RiskAssessmentRepository
+import com.secman.repository.UserRepository
+import io.micronaut.security.authentication.Authentication
+import jakarta.inject.Singleton
+import jakarta.transaction.Transactional
+import org.slf4j.LoggerFactory
+
+@Singleton
+open class ReleaseService(
+    private val releaseRepository: ReleaseRepository,
+    private val requirementRepository: RequirementRepository,
+    private val snapshotRepository: RequirementSnapshotRepository,
+    private val userRepository: UserRepository,
+    private val alignmentSessionRepository: AlignmentSessionRepository,
+    private val alignmentSnapshotRepository: AlignmentSnapshotRepository,
+    private val alignmentReviewerRepository: AlignmentReviewerRepository,
+    private val requirementReviewRepository: RequirementReviewRepository,
+    private val riskAssessmentRepository: RiskAssessmentRepository
+) {
+    private val logger = LoggerFactory.getLogger(ReleaseService::class.java)
+
+    companion object {
+        private val SEMANTIC_VERSION_REGEX = Regex("""^\d+\.\d+\.\d+$""")
+    }
+
+    /**
+     * Create a new release with requirement snapshots
+     *
+     * @param version Semantic version (MAJOR.MINOR.PATCH)
+     * @param name Human-readable release name
+     * @param description Optional detailed description
+     * @param authentication Current user authentication
+     * @return Created release with snapshots
+     * @throws IllegalArgumentException if version is invalid or already exists
+     */
+    fun createRelease(
+        version: String,
+        name: String,
+        description: String?,
+        authentication: Authentication
+    ): Release {
+        val username = authentication.name
+        val user = userRepository.findByUsername(username)
+            .orElseThrow { IllegalStateException("User not found: $username") }
+        return createReleaseForUser(version, name, description, user.id!!)
+    }
+
+    /**
+     * Create a new release with requirement snapshots (for MCP and programmatic usage)
+     *
+     * @param version Semantic version (MAJOR.MINOR.PATCH)
+     * @param name Human-readable release name
+     * @param description Optional detailed description
+     * @param userId ID of the user creating the release
+     * @return Created release with snapshots
+     * @throws IllegalArgumentException if version is invalid or already exists
+     * @throws NoSuchElementException if user not found
+     */
+    fun createReleaseForUser(
+        version: String,
+        name: String,
+        description: String?,
+        userId: Long
+    ): Release {
+        logger.info("Creating release version=$version name=$name")
+
+        // 1. Validate version format
+        if (!SEMANTIC_VERSION_REGEX.matches(version)) {
+            throw IllegalArgumentException(
+                "Version must follow semantic versioning format (MAJOR.MINOR.PATCH). Got: $version"
+            )
+        }
+
+        // 2. Check version uniqueness
+        if (releaseRepository.existsByVersion(version)) {
+            throw IllegalArgumentException("Release with version $version already exists")
+        }
+
+        // 3. Look up the user
+        val user = userRepository.findById(userId)
+            .orElseThrow { NoSuchElementException("User not found with ID: $userId") }
+        logger.debug("Creating release for user: ${user.username}")
+
+        // 4. Create Release entity
+        val release = Release(
+            version = version,
+            name = name,
+            description = description,
+            status = Release.ReleaseStatus.PREPARATION,
+            createdBy = user
+        )
+
+        // 5. Save release to get ID
+        val savedRelease = releaseRepository.save(release)
+        logger.debug("Release saved with ID=${savedRelease.id}")
+
+        // 6. Query all current requirements
+        val currentRequirements = requirementRepository.findCurrentRequirements()
+        logger.info("Found ${currentRequirements.size} current requirements to snapshot")
+
+        // 7. Create snapshots for each requirement
+        val snapshots = currentRequirements.map { requirement ->
+            RequirementSnapshot.fromRequirement(requirement, savedRelease)
+        }
+
+        // 8. Bulk save snapshots
+        snapshotRepository.saveAll(snapshots)
+        logger.info("Created ${snapshots.size} requirement snapshots for release ${savedRelease.id}")
+
+        return savedRelease
+    }
+
+    /**
+     * Delete a release and its snapshots
+     *
+     * @param releaseId ID of release to delete
+     * @param force when true, bypass the ACTIVE-release guard (used by bulk admin debug delete)
+     * @throws NoSuchElementException if release not found
+     * @throws IllegalStateException if release is ACTIVE and force=false
+     */
+    fun deleteRelease(releaseId: Long, force: Boolean = false) {
+        logger.info("Deleting release ID=$releaseId (force=$force)")
+
+        val release = releaseRepository.findById(releaseId)
+            .orElseThrow { NoSuchElementException("Release with ID $releaseId not found") }
+
+        // Prevent deletion of ACTIVE releases unless forced (admin debug bulk delete)
+        if (!force && release.status == Release.ReleaseStatus.ACTIVE) {
+            throw IllegalStateException("Cannot delete an ACTIVE release. Set another release as active first.")
+        }
+
+        // Delete alignment session data (respecting FK order: reviews → snapshots/reviewers → sessions)
+        val sessions = alignmentSessionRepository.findAllByRelease_Id(releaseId)
+        for (session in sessions) {
+            val sessionId = session.id!!
+            requirementReviewRepository.deleteBySession_Id(sessionId)
+            alignmentSnapshotRepository.deleteBySession_Id(sessionId)
+            alignmentReviewerRepository.deleteBySession_Id(sessionId)
+        }
+        if (sessions.isNotEmpty()) {
+            // Null out baseline_release_id references from other sessions pointing to this release
+            val baselineSessions = alignmentSessionRepository.findByBaselineRelease_Id(releaseId)
+            for (session in baselineSessions) {
+                session.baselineRelease = null
+                alignmentSessionRepository.update(session)
+            }
+            alignmentSessionRepository.deleteAll(sessions)
+            logger.info("Deleted ${sessions.size} alignment sessions for release ID=$releaseId")
+        }
+
+        // Explicitly delete requirement snapshots (FK doesn't have ON DELETE CASCADE)
+        snapshotRepository.deleteByReleaseId(releaseId)
+        logger.info("Deleted snapshots for release ID=$releaseId")
+
+        // Now delete the release
+        releaseRepository.delete(release)
+        logger.info("Deleted release ID=$releaseId")
+    }
+
+    /**
+     * Get release by ID
+     */
+    fun getReleaseById(releaseId: Long): Release {
+        return releaseRepository.findById(releaseId)
+            .orElseThrow { NoSuchElementException("Release with ID $releaseId not found") }
+    }
+
+    /**
+     * List all releases with optional status filter
+     */
+    fun listReleases(status: Release.ReleaseStatus? = null): List<Release> {
+        return if (status != null) {
+            releaseRepository.findByStatus(status)
+        } else {
+            releaseRepository.findAllOrderByCreatedAtDesc()
+        }
+    }
+
+    /**
+     * Update release status with workflow validation
+     * Enforces workflow: PREPARATION/ALIGNMENT → ACTIVE, ACTIVE → ARCHIVED (automatic)
+     *
+     * Note: Only one release can be ACTIVE at a time. When setting a release to ACTIVE,
+     * the previously ACTIVE release is automatically set to ARCHIVED.
+     *
+     * @param releaseId ID of release to update
+     * @param newStatus New status to transition to (only ACTIVE is allowed manually)
+     * @return Updated release
+     * @throws NoSuchElementException if release not found
+     * @throws IllegalStateException if transition is not allowed
+     */
+    fun updateReleaseStatus(releaseId: Long, newStatus: Release.ReleaseStatus): Release {
+        logger.info("Updating release $releaseId status to $newStatus")
+
+        val release = releaseRepository.findById(releaseId)
+            .orElseThrow { NoSuchElementException("Release with ID $releaseId not found") }
+
+        val currentStatus = release.status
+
+        // Validate status transition workflow
+        // PREPARATION → ACTIVE is allowed (direct activation, skipping alignment)
+        // ALIGNMENT → ACTIVE is allowed (after alignment completes)
+        // ACTIVE → ARCHIVED happens automatically when another release becomes ACTIVE
+        // ARCHIVED → any is not allowed (terminal state)
+        val validTransition = when (currentStatus) {
+            Release.ReleaseStatus.PREPARATION -> newStatus == Release.ReleaseStatus.ACTIVE
+            Release.ReleaseStatus.ALIGNMENT -> newStatus == Release.ReleaseStatus.ACTIVE
+            Release.ReleaseStatus.ACTIVE -> false // Cannot manually change ACTIVE status
+            Release.ReleaseStatus.ARCHIVED -> false // Terminal state, no transitions
+        }
+
+        if (!validTransition) {
+            throw IllegalStateException(
+                "Invalid status transition from $currentStatus to $newStatus. " +
+                "Only PREPARATION or ALIGNMENT releases can be set to ACTIVE."
+            )
+        }
+
+        // When setting to ACTIVE, move all other ACTIVE releases to ARCHIVED (only one can be active)
+        if (newStatus == Release.ReleaseStatus.ACTIVE) {
+            val currentlyActiveReleases = releaseRepository.findByStatus(Release.ReleaseStatus.ACTIVE)
+            for (activeRelease in currentlyActiveReleases) {
+                if (activeRelease.id != releaseId) {
+                    logger.info("Moving release ${activeRelease.id} (${activeRelease.version}) to ARCHIVED")
+                    activeRelease.status = Release.ReleaseStatus.ARCHIVED
+                    releaseRepository.update(activeRelease)
+                }
+            }
+        }
+
+        // Update status
+        release.status = newStatus
+        val updatedRelease = releaseRepository.update(release)
+        logger.info("Release $releaseId status updated to $newStatus")
+
+        return updatedRelease
+    }
+
+    /**
+     * Delete every release in the system. Admin-only debug helper.
+     *
+     * Refuses to run if any RiskAssessment has status="STARTED" (i.e. a risk
+     * assessment is currently running). Risk assessments in any other state
+     * are detached from their locked release before deletion so the FK
+     * release_id → release.id does not block the cascade.
+     *
+     * @return number of releases deleted
+     * @throws IllegalStateException if a risk assessment is currently running
+     */
+    @Transactional
+    open fun deleteAllReleases(): Int {
+        val running = riskAssessmentRepository.findByStatus("STARTED")
+        if (running.isNotEmpty()) {
+            throw IllegalStateException(
+                "Cannot delete releases: ${running.size} risk assessment(s) are currently running (status=STARTED). " +
+                "Wait for them to complete or change their status first."
+            )
+        }
+
+        val allReleases = releaseRepository.findAllOrderByCreatedAtDesc()
+        if (allReleases.isEmpty()) {
+            logger.info("deleteAllReleases: no releases to delete")
+            return 0
+        }
+
+        // Detach all risk assessments (none are running per the guard above) so
+        // the FK release_id → release.id does not block deletion.
+        val lockedAssessments = riskAssessmentRepository.findAll().filter { it.lockedRelease != null }
+        for (ra in lockedAssessments) {
+            ra.lockedRelease = null
+            riskAssessmentRepository.update(ra)
+        }
+        if (lockedAssessments.isNotEmpty()) {
+            logger.info("Detached ${lockedAssessments.size} risk assessment(s) from releases before bulk delete")
+        }
+
+        var deleted = 0
+        for (release in allReleases) {
+            try {
+                deleteRelease(release.id!!, force = true)
+                deleted++
+            } catch (e: Exception) {
+                logger.error("Failed to delete release ID=${release.id} (${release.version}) during bulk delete", e)
+                throw e
+            }
+        }
+        logger.warn("deleteAllReleases: deleted $deleted release(s) (admin debug action)")
+        return deleted
+    }
+}

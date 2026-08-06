@@ -1,0 +1,571 @@
+micronaut:
+  application:
+    name: secman-backend-ng
+  executors:
+    email:
+      type: scheduled
+      core-pool-size: 2
+      maximum-pool-size: 5
+    # Dedicated pool for outbound LLM translation calls (OpenRouter).
+    # Default @Async executor is single-threaded → exports of 100+ strings serialize.
+    # 8 threads balances throughput against upstream rate limits.
+    # NOTE: property is `number-of-threads` (maps to UserExecutorConfiguration.numberOfThreads).
+    # `n-threads` is silently ignored and falls back to defaults.
+    translation:
+      type: fixed
+      number-of-threads: 8
+    # Feature 088 — AI-Assisted Risk Assessment Answers.
+    # Dedicated pool for outbound LLM calls during AI pre-fill of risk-assessment
+    # responses. Sized to match `translation` (the same OpenRouter idiom).
+    ai:
+      type: fixed
+      number-of-threads: 8
+  server:
+    port: 8080
+    # Netty closes connections with no read/write activity after idle-timeout — including
+    # connections whose request is still being processed synchronously (nothing is written
+    # until the response starts). Long-running CLI endpoints such as
+    # /api/cli/user-vulnerability-notifications/send take minutes (heavy overdue-vuln
+    # queries + sequential email sending in one request), so the default 5m would reset
+    # the connection mid-request. Kept above the CLI client's 900s read-timeout so the
+    # client always times out first with a clean error instead of a connection reset.
+    idle-timeout: 16m
+    max-request-size: 100MB  # Increased from 20MB for large vulnerability batch imports
+    multipart:
+      max-file-size: 100MB   # Increased from 20MB for large file uploads
+      disk: true
+    cors:
+      enabled: true
+      configurations:
+        web:
+          allowed-origins:
+            - "http://localhost:4321"
+            - "http://localhost:3000"
+            - "https://secman.covestro.net"
+            - "http://secman.covestro.net"
+          allowed-methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          allowed-headers:
+            - Content-Type
+            - Authorization
+            - Accept
+            - Origin
+            - Csrf-Token
+          exposed-headers:
+            - Authorization
+          allow-credentials: true
+          max-age: 3600
+        # External API CORS configuration (Feature 086: Heatmap MCP and API Exposure)
+        # Allows external web applications to consume heatmap data via API key auth
+        external:
+          allowed-origins-regex:
+            - ".*"  # External consumers authenticated via API key, not cookies
+          allowed-methods:
+            - GET
+            - OPTIONS
+          allowed-headers:
+            - Content-Type
+            - Accept
+            - X-MCP-API-Key
+            - X-MCP-User-Email
+            - Origin
+          allow-credentials: false
+          max-age: 3600
+        # MCP Streamable HTTP Transport CORS configuration
+        # Allows direct connections from Claude Desktop and other MCP clients
+        mcp:
+          allowed-origins-regex:
+            - ".*"  # MCP clients can come from anywhere (non-browser)
+          allowed-methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          allowed-headers:
+            - Content-Type
+            - Accept
+            - Mcp-Session-Id
+            - X-MCP-API-Key
+            - X-MCP-User-Email
+            - Origin
+          exposed-headers:
+            - Mcp-Session-Id
+          allow-credentials: false
+          max-age: 3600
+  security:
+    authentication: bearer
+    token:
+      jwt:
+        signatures:
+          secret:
+            generator:
+              secret: ${JWT_SECRET:pleasechangethissecrectokeyproductionforsecurityreasonsmustbe256bits}
+              jws-algorithm: HS256
+            validation:
+              secret: ${JWT_SECRET:pleasechangethissecrectokeyproductionforsecurityreasonsmustbe256bits}
+              jws-algorithm: HS256
+        generator:
+          access-token:
+            expiration: 28800  # 8 hours - extended for workday coverage
+        claims-validators:
+          issuer: secman-backend-ng
+    oauth2:
+      enabled: true
+    intercept-url-map:
+      - pattern: /api/auth/login
+        access:
+          - isAnonymous()
+      - pattern: /api/auth/clear-session
+        access:
+          - isAnonymous()
+      - pattern: /api/identity-providers/enabled
+        access:
+          - isAnonymous()
+      - pattern: /oauth/**
+        access:
+          - isAnonymous()
+      - pattern: /health
+        access:
+          - isAnonymous()
+      # MCP Streamable HTTP Transport - authentication via X-MCP-API-Key header
+      - pattern: /mcp
+        access:
+          - isAnonymous()
+      - pattern: /mcp/**
+        access:
+          - isAnonymous()
+      # MCP REST endpoints under /api/mcp use X-MCP-API-Key (not JWT) for auth.
+      # Without these explicit rules, the /api/** catch-all forces JWT validation
+      # on every request — and a foreign-issued RS256 token (e.g. from a Postman
+      # OAuth helper) fails the HS256 secret verifier with "Unsupported JWS
+      # algorithm RS256", returning 401 before the controller-level
+      # @Secured(IS_ANONYMOUS) is ever consulted.
+      # Admin paths stay authenticated so @Secured("ADMIN") on McpAdminController
+      # still gates them.
+      - pattern: /api/mcp/admin/**
+        access:
+          - isAuthenticated()
+      - pattern: /api/mcp
+        access:
+          - isAnonymous()
+      - pattern: /api/mcp/**
+        access:
+          - isAnonymous()
+      - pattern: /api/auth/status
+        access:
+          - isAuthenticated()
+      - pattern: "/api/**"
+        http-method: OPTIONS
+        access:
+          - isAnonymous()
+      - pattern: "/api/**"
+        access:
+          - isAuthenticated()
+  # Cache configuration
+  # Feature: 041-falcon-instance-lookup
+  # Task: T034
+  # Feature: Database Structure Optimization - Extended caching
+  caches:
+    vulnerability_queries:
+      maximum-size: 1000
+      expire-after-write: 15m
+    # Database optimization caches (Feature: Database Structure Optimization)
+    asset_queries:
+      maximum-size: 500
+      expire-after-write: 10m
+    active_exceptions:
+      maximum-size: 100
+      expire-after-write: 5m
+    vulnerability_total_count:
+      maximum-size: 10
+      expire-after-write: 5m
+    # Cached count for admin not_excepted queries (no filters) - avoids expensive COUNT with NOT EXISTS
+    vulnerability_not_excepted_count:
+      maximum-size: 10
+      expire-after-write: 5m
+    workgroup_memberships:
+      maximum-size: 200
+      expire-after-write: 10m
+    # CVE description cache (Feature: 072-cve-link-lookup)
+    cve_descriptions:
+      maximum-size: 5000
+      expire-after-write: 24h
+    # MCP Access Control cache (Feature: 052-mcp-access-control)
+    mcp_accessible_assets:
+      maximum-size: 500
+      expire-after-write: 5m
+  # HTTP client services (OpenRouter AI)
+  http:
+    services:
+      openrouter-ai:
+        url: https://openrouter.ai/api/v1
+        read-timeout: 120s
+        connect-timeout: 10s
+
+secman:
+  debug: ${SECMAN_DEBUG:false}
+  auth:
+    # Controls the Secure flag on auth cookies (HTTPS-only transmission)
+    # Default: true (production-safe). Set SECMAN_AUTH_COOKIE_SECURE=false for local HTTP development.
+    cookie-secure: ${SECMAN_AUTH_COOKIE_SECURE:true}
+  encryption:
+    # Encryption password for sensitive data - MUST be overridden in production
+    password: ${SECMAN_ENCRYPTION_PASSWORD:SecManDefaultEncryptionPassword2024}
+    # Encryption salt - MUST be overridden in production
+    salt: ${SECMAN_ENCRYPTION_SALT:5c0744940b5c369b}
+  email:
+    # SMTP configuration is stored in the database (email_config table)
+    # and managed via ADMIN UI. The following settings apply to all email operations.
+
+    # SMTP server settings (override via environment or database)
+    smtp-host: ${SMTP_HOST:smtp.example.com}
+    smtp-port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:noreply@secman.example.com}
+    password: ${SMTP_PASSWORD:changeme}
+    from-address: ${SMTP_FROM_ADDRESS:noreply@secman.example.com}
+    from-name: ${SMTP_FROM_NAME:Security Management System}
+    enable-tls: ${SMTP_ENABLE_TLS:true}
+
+    # Email delivery configuration (Feature 035: Notification System)
+    retry:
+      max-retries: 3              # Number of retry attempts on failure
+      delay-between-retries-ms: 1000  # 1 second delay between retries
+    # Email performance settings
+    performance:
+      connection-timeout-ms: 10000  # 10 seconds
+      read-timeout-ms: 30000        # 30 seconds
+    # Notification settings
+    notifications:
+      batch-size: 50
+      async-processing: true
+  # MCP User Delegation Feature (Feature 050)
+  mcp:
+    delegation:
+      alert:
+        # Number of failed delegation attempts to trigger alert
+        threshold: ${MCP_DELEGATION_ALERT_THRESHOLD:10}
+        # Time window in minutes for threshold calculation
+        window-minutes: ${MCP_DELEGATION_ALERT_WINDOW:5}
+  # OAuth robustness configuration
+  oauth:
+    state-retry:
+      # Maximum retry attempts for finding OAuth state (handles DB commit race conditions)
+      max-attempts: ${OAUTH_STATE_RETRY_MAX_ATTEMPTS:5}
+      # Initial delay between retries in milliseconds
+      initial-delay-ms: ${OAUTH_STATE_RETRY_INITIAL_DELAY:100}
+      # Maximum delay between retries in milliseconds
+      max-delay-ms: ${OAUTH_STATE_RETRY_MAX_DELAY:500}
+      # Backoff multiplier for exponential backoff
+      backoff-multiplier: ${OAUTH_STATE_RETRY_BACKOFF_MULTIPLIER:1.5}
+    token-exchange:
+      # Maximum retry attempts for token exchange (handles 5xx errors and timeouts)
+      max-retries: ${OAUTH_TOKEN_EXCHANGE_MAX_RETRIES:2}
+      # Delay between retries in milliseconds
+      retry-delay-ms: ${OAUTH_TOKEN_EXCHANGE_RETRY_DELAY:500}
+  # Memory optimization feature flags (Feature 073)
+  # Enables stability-first rollback capability
+  memory:
+    # Enable LAZY loading for entity relationships
+    # When false, reverts to EAGER loading behavior for rollback
+    lazy-loading-enabled: ${MEMORY_LAZY_LOADING:true}
+    # Batch size for large data operations (duplicate cleanup, bulk deletions)
+    batch-size: ${MEMORY_BATCH_SIZE:1000}
+    # Enable streaming exports (write directly to Excel during fetch)
+    # When false, accumulates all records first (original behavior)
+    streaming-exports-enabled: ${MEMORY_STREAMING_EXPORTS:true}
+  # Vulnerability statistics cache (pre-computed JSON for "All Domains" admin views)
+  # When enabled, statistics are served from cache instead of live queries
+  # Cache is refreshed during materialized view refresh (after CLI import)
+  statistics-cache:
+    enabled: ${STATISTICS_CACHE_ENABLED:true}
+  # Materialized view refresh debounce (2026-07-21 incident: a long CrowdStrike CLI
+  # import (--save) triggers one refresh cycle per HTTP sub-batch POST — up to ~40+ for
+  # a large run. Each cycle chains full-table-scale reads (findOverdueVulnerabilitiesWithAssets,
+  # VulnerabilityStatisticsCacheService.refreshCache, AssetHeatmapService.recalculateHeatmap),
+  # each legitimately costing ~60-100s in production (see the leak-detection-threshold
+  # comment on the datasource block below). Without spacing, refresh N+1 started the
+  # instant refresh N finished, holding HikariCP connections back-to-back for the whole
+  # import and starving the CLI's own parallel import writes — the root cause of the
+  # CLI's sub-batch 504 timeouts. min-interval-seconds enforces a cooldown between one
+  # cycle completing and the next starting; only the LAST trigger received during the
+  # cooldown is coalesced and guaranteed to eventually run (see
+  # MaterializedViewRefreshService.pendingTriggerReason / sweepPendingRefreshTrigger).
+  # The manual admin "Refresh Now" endpoint always bypasses this cooldown.
+  #
+  # min-interval-seconds proved insufficient on its own (2026-07-30 OOM): it defers a trigger
+  # only while the cooldown is ACTIVE, so once it elapsed the next sub-batch immediately started
+  # a new full-table cycle — about once a minute for the import's whole duration, concurrently
+  # with the import's own writes. quiet-period-seconds fixes the shape: bulk writers now call
+  # requestDeferredRefresh(), which never starts a refresh inline, and sweepPendingRefreshTrigger
+  # waits until this many seconds have passed with NO further request. One import => one refresh.
+  # Raise it if imports get slower and still overlap a refresh; lower it to see fresher dashboards
+  # sooner after an import. The manual admin "Refresh Now" endpoint bypasses both gates.
+  materialized-view-refresh:
+    min-interval-seconds: ${MATERIALIZED_VIEW_REFRESH_MIN_INTERVAL_SECONDS:60}
+    quiet-period-seconds: ${MATERIALIZED_VIEW_REFRESH_QUIET_PERIOD_SECONDS:120}
+  vulnerability:
+    # Use patch publication date for calculating days open
+    # When true: days_open = scan_timestamp - patch_publication_date
+    # When false: days_open = current_time - detection_time (current behavior)
+    use-patch-publication-date: ${VULN_USE_PATCH_PUBLICATION_DATE:false}
+    # Filter to import only vulnerabilities with patch publication date set
+    # When true: vulnerabilities without patch_publication_date are skipped during import
+    # When false: all vulnerabilities are imported (current behavior)
+    require-patch-publication-date: ${VULN_REQUIRE_PATCH_PUBLICATION_DATE:false}
+  crowdstrike:
+    # Scheduled cleanup of assets that have not been re-imported by CrowdStrike
+    # for `stale-days` days. Opt-in: disabled by default so existing deployments
+    # keep current behavior until ops flips the flag.
+    cleanup:
+      enabled: ${CROWDSTRIKE_CLEANUP_ENABLED:false}
+      stale-days: ${CROWDSTRIKE_CLEANUP_STALE_DAYS:30}
+      # Safety brake: abort the run if more than this percent of CrowdStrike-tracked
+      # assets would be deleted in a single pass (protects against import outages).
+      # Setting to 100 disables the brake.
+      max-delete-percent: ${CROWDSTRIKE_CLEANUP_MAX_DELETE_PERCENT:10}
+      # Feature 087: opt-in to also delete legacy CrowdStrike-imported assets
+      # that pre-date the crowdstrike_last_imported_at column (rule B). When
+      # true, the four-part fence (owner='CrowdStrike Import' AND no import
+      # timestamp AND no manualCreator AND no scanUploader AND stale by
+      # COALESCE(lastSeen, updatedAt, createdAt)) selects these rows for
+      # deletion. Default off — flip to true once you've reviewed a dry-run.
+      include-legacy: ${CROWDSTRIKE_CLEANUP_INCLUDE_LEGACY:false}
+  http:
+    services:
+      translation:
+        url: https://openrouter.ai/api/v1
+      crowdstrike:
+        # Base URLs by region (credentials loaded from falcon_configs table)
+        base-urls:
+          us-1: https://api.crowdstrike.com
+          us-2: https://api.us-2.crowdstrike.com
+          eu-1: https://api.eu-1.crowdstrike.com
+          us-gov-1: https://api.laggar.gcw.crowdstrike.com
+          us-gov-2: https://api.laggar.gcw.crowdstrike.com
+        timeout:
+          query: 10s  # Query timeout (SC-001: < 10 seconds)
+          auth: 5s    # Authentication timeout
+        retry:
+          max-attempts: 3
+          initial-delay: 1000  # 1 second
+          max-delay: 4000      # 4 seconds (exponential backoff for 429)
+          backoff-multiplier: 2.0
+        token:
+          cache-duration: 1800  # 30 minutes (1800 seconds)
+    client:
+      read-timeout: 30s
+      connect-timeout: 10s
+      max-content-length: 104857600  # 100MB (aligns with max-request-size)
+      translation:
+        read-timeout: 120s  # Extended for AI operations (norm mapping batches)
+        connect-timeout: 10s
+        # Without an explicit pool block, Micronaut's Netty client serializes
+        # concurrent requests to the same host very conservatively (~2 in flight).
+        # Allow enough HTTP connections to saturate the 8-thread translation pool.
+        pool:
+          enabled: true
+          max-connections: 16
+          max-pending-acquires: 200
+          acquire-timeout: 30s
+      crowdstrike:
+        read-timeout: 60s   # Increased from 10s - large vulnerability sets can take longer
+        connect-timeout: 10s  # Increased from 5s for reliability
+        max-content-length: 52428800  # 50MB for large result sets
+  # Feature 088 — AI-Assisted Risk Assessment Answers.
+  # Default OFF; flip via env var when an OpenRouter key is provisioned.
+  ai:
+    risk-assessment:
+      enabled: ${AI_RISK_ASSESSMENT_ENABLED:false}
+      # OpenRouter model identifier. `:online` suffix enables OpenRouter's
+      # built-in web search; citations come back as message.annotations[].
+      model: ${AI_RISK_ASSESSMENT_MODEL:anthropic/claude-sonnet-4.6:online}
+      # Per-job hard cap. Pre-flight projects from token estimate; if mid-flight
+      # accumulation crosses cap, remaining requirements are aborted and the
+      # job is FAILED. Partial successes retained.
+      max-cost-per-job-usd: ${AI_RISK_ASSESSMENT_MAX_COST:5.0}
+      # Global concurrency cap across all assessments. Prevents thundering-herd
+      # spend if multiple SECCHAMPIONs kick off whole-assessment runs at once.
+      max-concurrent-jobs-global: ${AI_RISK_ASSESSMENT_MAX_JOBS:2}
+      per-request-timeout-seconds: 60
+      job-timeout-minutes: 30
+      confidence:
+        high-threshold: 0.75
+        medium-threshold: 0.50
+      # Token-usage estimate used for pre-flight cost projection. The real
+      # cost-cap check runs mid-flight against actual usage returned by
+      # OpenRouter; this is just a guardrail to reject obvious over-budget runs.
+      token-estimate:
+        input-per-requirement: 400
+        output-per-requirement: 200
+      # USD per 1k tokens — keep updated as OpenRouter pricing evolves.
+      # Used only for projection and audit, not for billing.
+      pricing-per-1k-tokens:
+        anthropic/claude-sonnet-4.6:online:
+          input: 0.003
+          output: 0.015
+  # OpenRouter API key. Resolved via `pass-cli` per CLAUDE.md tooling conventions.
+  openrouter:
+    api-key: ${OPENROUTER_API_KEY:}
+
+oauth:
+  http-client:
+    url: https://api.github.com
+
+datasources:
+  default:
+    url: ${DB_CONNECT:jdbc:mariadb://localhost:3306/secman}
+    driverClassName: org.mariadb.jdbc.Driver
+    username: ${DB_USERNAME:secman}
+    password: ${DB_PASSWORD:CHANGEME}
+    # Connection pool configuration (Feature: Database Structure Optimization)
+    # Raised from 20 -> 40 (2026-07): a CrowdStrike import (3 parallel @Transactional worker
+    # threads + 1 long-running post-import stats-refresh connection, see
+    # CrowdStrikeVulnerabilityImportService) combined with concurrent interactive-user traffic
+    # could fully saturate a 20-connection pool during business hours, which the health probe
+    # (HealthController.checkDatabase) was misreporting as DOWN. Single-instance deployment
+    # (docker-compose / ECS Fargate / systemd - no horizontal scaling), MariaDB default
+    # max_connections=151 (not overridden anywhere) -- 40 leaves ample headroom under that
+    # ceiling with room to raise further if needed.
+    maximum-pool-size: 40          # Maximum number of connections in the pool
+    minimum-idle: 5                # Minimum number of idle connections
+    connection-timeout: 30000      # 30 seconds - timeout for acquiring connection
+    idle-timeout: 1800000          # 30 minutes - extended to match session duration
+    max-lifetime: 7200000          # 2 hours - extended for long sessions
+    # The async statistics / materialized-view refresh (VulnerabilityStatisticsCacheService,
+    # triggered after a CrowdStrike import) runs full-table analytical aggregates over the
+    # ~644k-row `vulnerability` table — e.g. findMostVulnerableProductsForAll: GROUP BY product
+    # with COUNT(DISTINCT ...) plus a per-row correlated exception NOT EXISTS. At production
+    # volume a single such read legitimately holds one pooled connection for ~60-100s. At the
+    # former 60s threshold this tripped HikariCP's ProxyLeakTask with a false-positive
+    # "Apparent connection leak detected" WARN, even though the connection is returned as soon
+    # as the query completes (no leak). 180s stops the false positive while still catching
+    # genuinely leaked (never-returned) connections.
+    leak-detection-threshold: 180000 # 3 minutes - accommodates slow batch analytics reads
+    # Connection validation to prevent stale connections
+    connection-test-query: SELECT 1
+    validation-timeout: 5000       # 5 seconds - timeout for connection validation
+    # Connection-pool default isolation: READ COMMITTED.
+    #
+    # MariaDB/InnoDB defaults to REPEATABLE READ, which takes next-key (gap) locks
+    # on secondary-index inserts to prevent phantoms. Under concurrent CrowdStrike
+    # imports (3 CLI workers, ~647k rows across 1881 servers), those gap locks on
+    # shared leaf pages of idx_vulnerability_sort_order / idx_vulnerability_severity
+    # / idx_vulnerability_cve produce transient deadlocks (error 1213). The audit in
+    # the Phase 1 PR confirmed no code path depends on RR snapshot semantics:
+    #   - 50 @Transactional(readOnly = true) methods are single-purpose GETs with
+    #     no cross-statement snapshot invariant.
+    #   - All check-then-act write flows are protected by DB-level unique
+    #     constraints (User, Workgroup, IdentityProvider, Release, Requirement, …)
+    #     or by PESSIMISTIC_WRITE record locks (CrowdStrike import, cascade delete).
+    #   - PESSIMISTIC_WRITE and @Version optimistic locking are isolation-agnostic
+    #     in InnoDB.
+    # See `withDeadlockRetry` in CrowdStrikeVulnerabilityImportService.kt and
+    # docs/CROWDSTRIKE_IMPORT.md for the rationale and rollback path.
+    transaction-isolation: TRANSACTION_READ_COMMITTED
+    # MariaDB driver flags (CrowdStrike import perf: rewrites batch inserts into
+    # multi-VALUES statements; cache prepared statements; disable server-side
+    # prep so the rewrite kicks in). Passed to the driver via HikariCP's
+    # dataSourceProperties — applies regardless of how DB_CONNECT is supplied.
+    data-source-properties:
+      rewriteBatchedStatements: true
+      cachePrepStmts: true
+      prepStmtCacheSize: 250
+      prepStmtCacheSqlLimit: 2048
+      useServerPrepStmts: false
+      # Hard client-side ceiling on any single socket read (2026-07 robustness fix).
+      # Without it, a connection wedged on a dead/half-open TCP socket to MariaDB (network
+      # blip, DB restart, firewall idle-drop) stays checked out of the pool until max-lifetime
+      # (2h) — leak-detection only WARNs, it never reclaims. 300s reclaims a truly-hung
+      # connection while sitting safely ABOVE the slowest legitimate query: the daily
+      # full-table `excepted` recompute (~124s, ExceptionMaterializationService) and the
+      # post-import stats refresh (~60-100s, VulnerabilityStatisticsCacheService). Raise this
+      # ceiling if a legitimate query ever approaches it; do not lower it below ~130s.
+      # A server-side per-statement ceiling (MariaDB max_statement_time via sessionVariables,
+      # or a jakarta.persistence.query.timeout hint on the heavy read methods) is the
+      # follow-up for aborting a runaway-but-still-running query — deliberately left out here
+      # to avoid a global abort ceiling surprising a valid long analytical read.
+      socketTimeout: 300000
+
+flyway:
+  datasources:
+    default:
+      enabled: true
+      locations:
+        - classpath:db/migration
+      baseline-on-migrate: true
+      baseline-version: '185'
+      out-of-order: true
+      validate-on-migrate: false
+
+jpa:
+  default:
+    properties:
+      hibernate:
+        hbm2ddl:
+          auto: update
+        # Force @Enumerated(EnumType.STRING) to map to VARCHAR rather than
+        # MariaDB native ENUM. Hibernate 6.4+ on MariaDB defaults to NAMED_ENUM
+        # (native ENUM column), which causes MariaDB error 1265 ("Data
+        # truncated") whenever a Kotlin enum gains a value that isn't in the
+        # live column's enum() value list. The value 12 is java.sql.Types.VARCHAR
+        # — supplied as an integer because Hibernate 6.4's string-name
+        # resolution path can be unreliable on MariaDB. See V197 / V198 / V199
+        # widener migrations and the user_roles.role saga.
+        type:
+          preferred_enum_jdbc_type: 12
+        show_sql: false
+        format_sql: true
+        # Query optimization settings (Feature: Database Structure Optimization)
+        query:
+          plan_cache_max_size: 2048                    # Cache compiled query plans
+          plan_parameter_metadata_max_size: 128        # Cache query parameter metadata
+        jdbc:
+          batch_size: 100                              # Batch INSERT/UPDATE statements (CrowdStrike import: aligned with service-level chunks of 500 → 5 JDBC batches/chunk)
+          batch_versioned_data: true                   # Enable batching for versioned (optimistic-lock) entities too
+          fetch_size: 50                               # JDBC fetch size for result sets
+        order_inserts: true                            # Order INSERT statements for batching
+        order_updates: true                            # Order UPDATE statements for batching
+        id:
+          db_structure_naming_strategy: standard       # Silence HHH90006001 incubating warning
+        # Second-level cache (disabled by default, enable if needed)
+        cache:
+          use_second_level_cache: false
+          use_query_cache: false
+
+jackson:
+  serialization-inclusion: always
+  dateFormat: yyyy-MM-dd'T'HH:mm:ss.SSSZ
+  serialization:
+    writeDatesAsTimestamps: false
+
+# Default (production) levels. DEBUG for these two lives in application-dev.yml, which the
+# `dev` environment activates — scripts/startbackenddev.sh exports MICRONAUT_ENVIRONMENTS=dev.
+#
+# Shipping com.secman at DEBUG cost real allocation on the hot import path: every per-server
+# and per-batch debug line was formatted and allocated even though nobody read it, on the very
+# code path that ran out of heap on 2026-07-30. io.micronaut.security at DEBUG additionally
+# logs authentication internals, which is poor hygiene for a security product.
+logger:
+  levels:
+    com.secman: ${LOG_LEVEL_SECMAN:INFO}
+    io.micronaut.security: ${LOG_LEVEL_SECURITY:INFO}
+    io.micronaut.web.router: INFO
+
+app:
+  backend:
+    base-url: ${SECMAN_BACKEND_URL:https://secman.schmall.io}
+  frontend:
+    base-url: ${FRONTEND_URL:http://localhost:4321}
+
+# Management endpoints (Feature 073: Memory Optimization)
+endpoints:
+  health:
+    enabled: false
+  memory:
+    enabled: true
+    sensitive: true

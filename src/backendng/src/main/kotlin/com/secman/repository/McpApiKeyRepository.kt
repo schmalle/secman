@@ -1,0 +1,155 @@
+package com.secman.repository
+
+import com.secman.domain.McpApiKey
+import io.micronaut.data.annotation.Query
+import io.micronaut.data.annotation.Repository
+import io.micronaut.data.jpa.repository.JpaRepository
+import java.time.LocalDateTime
+import java.util.*
+
+/**
+ * Repository interface for McpApiKey entity operations.
+ *
+ * Provides data access methods for MCP API key management including
+ * authentication queries, expiration handling, and usage tracking.
+ */
+@Repository
+interface McpApiKeyRepository : JpaRepository<McpApiKey, Long> {
+
+    // ===== AUTHENTICATION QUERIES =====
+
+    /**
+     * Find an active API key by its key ID.
+     * Used for authentication during MCP requests.
+     */
+    @Query("SELECT ak FROM McpApiKey ak WHERE ak.keyId = :keyId AND ak.isActive = true")
+    fun findByKeyIdAndActive(keyId: String): Optional<McpApiKey>
+
+    /**
+     * Find all active API keys across all users.
+     * SECURITY: Used for efficient authentication lookup instead of loading all keys and filtering in memory.
+     * Performs database-level filtering for better performance and security.
+     */
+    @Query("SELECT ak FROM McpApiKey ak WHERE ak.isActive = true")
+    fun findAllActive(): List<McpApiKey>
+
+    // ===== USER MANAGEMENT QUERIES =====
+
+    /**
+     * Find all API keys belonging to a specific user.
+     * Used for user API key management interface.
+     */
+    @Query("SELECT ak FROM McpApiKey ak WHERE ak.userId = :userId ORDER BY ak.createdAt DESC")
+    fun findByUserId(userId: Long): List<McpApiKey>
+
+    /**
+     * Find active API keys for a specific user.
+     * Used for displaying user's currently usable keys.
+     */
+    @Query("SELECT ak FROM McpApiKey ak WHERE ak.userId = :userId AND ak.isActive = true ORDER BY ak.createdAt DESC")
+    fun findActiveByUserId(userId: Long): List<McpApiKey>
+
+    /**
+     * Check if a user has an active API key with the given name.
+     * Revoked (isActive=false) keys are ignored so their names can be reused.
+     */
+    @Query("SELECT COUNT(ak) > 0 FROM McpApiKey ak WHERE ak.userId = :userId AND ak.name = :name AND ak.isActive = true")
+    fun existsByUserIdAndName(userId: Long, name: String): Boolean
+
+    // ===== EXPIRATION AND CLEANUP QUERIES =====
+
+    /**
+     * Find all expired API keys.
+     * Used for automated cleanup of expired keys.
+     */
+    @Query("SELECT ak FROM McpApiKey ak WHERE ak.expiresAt IS NOT NULL AND ak.expiresAt <= :now")
+    fun findExpired(now: LocalDateTime): List<McpApiKey>
+
+    /**
+     * Deactivate expired API keys in bulk.
+     * Used for automated maintenance operations.
+     */
+    @Query("UPDATE McpApiKey ak SET ak.isActive = false WHERE ak.expiresAt IS NOT NULL AND ak.expiresAt <= :now")
+    fun deactivateExpired(now: LocalDateTime): Int
+
+    /**
+     * Deactivate an API key by its key ID.
+     * Used for secure API key revocation without entity lifecycle issues.
+     * Returns the number of rows affected (should be 1 for successful revocation).
+     */
+    @Query("UPDATE McpApiKey ak SET ak.isActive = false WHERE ak.keyId = :keyId AND ak.isActive = true")
+    fun deactivateByKeyId(keyId: String): Int
+
+    // ===== USAGE TRACKING QUERIES =====
+
+    /**
+     * Update the last used timestamp for an API key.
+     * Called after successful authentication/usage.
+     */
+    @Query("UPDATE McpApiKey ak SET ak.lastUsedAt = :lastUsedAt WHERE ak.id = :id")
+    fun updateLastUsedAt(id: Long, lastUsedAt: LocalDateTime): Int
+
+    @Query("UPDATE McpApiKey ak SET ak.keyHash = :keyHash WHERE ak.id = :id")
+    fun updateKeyHash(id: Long, keyHash: String): Int
+
+
+    // ===== SECURITY AND MONITORING QUERIES =====
+
+    /**
+     * Find recently created API keys.
+     * Used for monitoring new key creation activity.
+     */
+    @Query("SELECT ak FROM McpApiKey ak WHERE ak.createdAt >= :since ORDER BY ak.createdAt DESC")
+    fun findCreatedSince(since: LocalDateTime): List<McpApiKey>
+
+    // ===== STATISTICS AND REPORTING QUERIES =====
+
+    /**
+     * Get API key creation statistics by time period.
+     * Returns creation date and count for trend analysis.
+     */
+    @Query("""
+        SELECT DATE(ak.createdAt) as creationDate, COUNT(ak)
+        FROM McpApiKey ak
+        WHERE ak.createdAt >= :since
+        GROUP BY DATE(ak.createdAt)
+        ORDER BY creationDate DESC
+    """)
+    fun getCreationStatistics(since: LocalDateTime): List<Array<Any>>
+
+    /**
+     * Get permission distribution statistics.
+     * Returns permission type and count for analysis.
+     */
+    @Query("""
+        SELECT ak.permissions, COUNT(ak)
+        FROM McpApiKey ak
+        WHERE ak.isActive = true
+        GROUP BY ak.permissions
+        ORDER BY COUNT(ak) DESC
+    """)
+    fun getPermissionStatistics(): List<Array<Any>>
+
+    // ===== BATCH OPERATIONS =====
+
+    /**
+     * Delete inactive API keys older than specified date.
+     * Used for database cleanup of old, unused keys.
+     */
+    @Query("DELETE FROM McpApiKey ak WHERE ak.isActive = false AND ak.createdAt < :cutoffDate")
+    fun deleteInactiveOlderThan(cutoffDate: LocalDateTime): Int
+
+    // ===== CUSTOM FINDER METHODS =====
+
+    /**
+     * Find API keys by name pattern (case-insensitive).
+     * Used for administrative search functionality.
+     */
+    fun findByNameContainingIgnoreCase(namePattern: String): List<McpApiKey>
+
+    /**
+     * Find API keys created between specific dates.
+     * Used for audit and compliance reporting.
+     */
+    fun findByCreatedAtBetween(startDate: LocalDateTime, endDate: LocalDateTime): List<McpApiKey>
+}

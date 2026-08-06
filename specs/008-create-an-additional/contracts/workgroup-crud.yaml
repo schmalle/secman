@@ -1,0 +1,301 @@
+openapi: 3.0.3
+info:
+  title: Workgroup CRUD API
+  version: 1.0.0
+  description: |
+    Workgroup management endpoints (admin-only)
+    Feature: 008-create-an-additional (Workgroup-Based Access Control)
+
+paths:
+  /api/workgroups:
+    get:
+      summary: List all workgroups
+      operationId: listWorkgroups
+      tags: [Workgroups]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [ADMIN]
+      responses:
+        '200':
+          description: List of workgroups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkgroupResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: Create a new workgroup
+      operationId: createWorkgroup
+      tags: [Workgroups]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkgroupRequest'
+      responses:
+        '201':
+          description: Workgroup created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkgroupResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    examples:
+                      - "Name must be 1-100 characters and contain only letters, numbers, spaces, and hyphens"
+                      - "Workgroup name already exists (case-insensitive): DevOps"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/workgroups/{id}:
+    get:
+      summary: Get workgroup by ID
+      operationId: getWorkgroup
+      tags: [Workgroups]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [ADMIN]
+      responses:
+        '200':
+          description: Workgroup details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkgroupDetailResponse'
+        '404':
+          description: Workgroup not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Workgroup not found: 123"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    put:
+      summary: Update workgroup
+      operationId: updateWorkgroup
+      tags: [Workgroups]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWorkgroupRequest'
+      responses:
+        '200':
+          description: Workgroup updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkgroupResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '404':
+          description: Workgroup not found
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      summary: Delete workgroup
+      operationId: deleteWorkgroup
+      tags: [Workgroups]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [ADMIN]
+      responses:
+        '204':
+          description: Workgroup deleted successfully (all user/asset memberships cleared per FR-026)
+        '404':
+          description: Workgroup not found
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CreateWorkgroupRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: '^[a-zA-Z0-9 -]+$'
+          description: Workgroup name (alphanumeric, spaces, hyphens only)
+          example: "Engineering Team"
+        description:
+          type: string
+          maxLength: 512
+          nullable: true
+          description: Optional workgroup description
+          example: "All engineers and developers"
+
+    UpdateWorkgroupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: '^[a-zA-Z0-9 -]+$'
+          nullable: true
+        description:
+          type: string
+          maxLength: 512
+          nullable: true
+
+    WorkgroupResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        name:
+          type: string
+          example: "Engineering Team"
+        description:
+          type: string
+          nullable: true
+          example: "All engineers and developers"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-10-04T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-10-04T10:30:00Z"
+
+    WorkgroupDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/WorkgroupResponse'
+        - type: object
+          properties:
+            userCount:
+              type: integer
+              format: int32
+              description: Number of users in this workgroup
+              example: 15
+            assetCount:
+              type: integer
+              format: int32
+              description: Number of assets in this workgroup
+              example: 42
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Unauthorized"
+
+    Forbidden:
+      description: Requires ADMIN role
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Forbidden: Requires ADMIN role"

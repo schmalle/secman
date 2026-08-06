@@ -1,0 +1,31 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import AppSettingsAdmin from '../../components/AppSettingsAdmin.tsx';
+---
+
+<Layout title="Application Settings - Admin">
+  <div class="container-fluid p-4">
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h2>Application Settings</h2>
+            <p class="text-muted mb-0">
+              Configure application-wide settings such as the base URL for email links
+            </p>
+          </div>
+          <a href="/admin" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>
+            Back to Admin
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-lg-8 col-xl-6">
+        <AppSettingsAdmin client:load />
+      </div>
+    </div>
+  </div>
+</Layout>

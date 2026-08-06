@@ -1,0 +1,589 @@
+/**
+ * AlignmentDashboard Component
+ *
+ * Dashboard for Release Managers to view and manage alignment sessions.
+ * Shows reviewer progress, assessment summary, and allows finalization.
+ *
+ * Feature: 068-requirements-alignment-process
+ */
+
+import React, { useState, useEffect } from 'react';
+import { formatServerDate } from '../utils/dateUtils';
+import {
+    releaseService,
+    type Release,
+    type AlignmentStatus,
+    type AlignmentReviewer,
+    type AdminDecision,
+} from '../services/releaseService';
+import { hasRole } from '../utils/auth';
+
+interface AlignmentDashboardProps {
+    releaseId: number;
+}
+
+type TabType = 'overview' | 'reviewers' | 'feedback';
+
+export const AlignmentDashboard: React.FC<AlignmentDashboardProps> = ({ releaseId }) => {
+    const [release, setRelease] = useState<Release | null>(null);
+    const [alignmentStatus, setAlignmentStatus] = useState<AlignmentStatus | null>(null);
+    const [reviewers, setReviewers] = useState<AlignmentReviewer[]>([]);
+    const [feedback, setFeedback] = useState<any[]>([]);
+    const [activeTab, setActiveTab] = useState<TabType>('overview');
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+    const canManage = typeof window !== 'undefined' && hasRole(['ADMIN', 'RELEASE_MANAGER']);
+    const canDecide = typeof window !== 'undefined' && hasRole(['ADMIN', 'REQADMIN']);
+    const canExportReviews = typeof window !== 'undefined' && hasRole(['ADMIN', 'RELEASE_MANAGER', 'REQADMIN']);
+    const [decisionComments, setDecisionComments] = useState<Record<number, string>>({});
+    const [decisionLoading, setDecisionLoading] = useState<number | null>(null);
+
+    // Load data
+    useEffect(() => {
+        loadData();
+    }, [releaseId]);
+
+    const loadData = async () => {
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const [releaseData, statusData] = await Promise.all([
+                releaseService.getById(releaseId),
+                releaseService.getAlignmentStatus(releaseId),
+            ]);
+
+            setRelease(releaseData);
+            setAlignmentStatus(statusData);
+
+            // Load reviewers if we have a session
+            if (statusData.session.id) {
+                const reviewerData = await releaseService.getAlignmentReviewers(statusData.session.id);
+                setReviewers(reviewerData.reviewers);
+
+                const feedbackData = await releaseService.getAlignmentFeedback(statusData.session.id);
+                setFeedback(feedbackData.requirements || []);
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to load alignment data');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSendReminders = async () => {
+        if (!alignmentStatus?.session.id) return;
+
+        setActionLoading('remind');
+        try {
+            const result = await releaseService.sendAlignmentReminders(alignmentStatus.session.id);
+            alert(`Sent ${result.remindersSent} reminder(s)`);
+            loadData();
+        } catch (err) {
+            alert(err instanceof Error ? err.message : 'Failed to send reminders');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleFinalize = async (activate: boolean) => {
+        if (!alignmentStatus?.session.id) return;
+
+        const action = activate ? 'finalize and activate' : 'finalize';
+        if (!confirm(`Are you sure you want to ${action} this alignment?`)) return;
+
+        setActionLoading(activate ? 'activate' : 'finalize');
+        try {
+            await releaseService.finalizeAlignment(alignmentStatus.session.id, activate);
+            window.location.href = `/releases/${releaseId}`;
+        } catch (err) {
+            alert(err instanceof Error ? err.message : 'Failed to finalize');
+            setActionLoading(null);
+        }
+    };
+
+    const handleCancel = async () => {
+        if (!alignmentStatus?.session.id) return;
+
+        if (!confirm('Are you sure you want to cancel this alignment? The release will return to PREPARATION status.')) return;
+
+        setActionLoading('cancel');
+        try {
+            await releaseService.cancelAlignment(alignmentStatus.session.id);
+            window.location.href = `/releases/${releaseId}`;
+        } catch (err) {
+            alert(err instanceof Error ? err.message : 'Failed to cancel');
+            setActionLoading(null);
+        }
+    };
+
+    const handleExportReviews = async () => {
+        if (!alignmentStatus?.session.id) return;
+
+        setActionLoading('export');
+        try {
+            await releaseService.exportAlignmentReviews(alignmentStatus.session.id);
+        } catch (err) {
+            alert(err instanceof Error ? err.message : 'Failed to export reviews');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleDecision = async (reviewId: number, decision: 'ACCEPTED' | 'REJECTED') => {
+        if (!alignmentStatus?.session.id) return;
+
+        setDecisionLoading(reviewId);
+        try {
+            await releaseService.submitReviewDecision(
+                alignmentStatus.session.id,
+                reviewId,
+                decision,
+                decisionComments[reviewId] || undefined
+            );
+            setDecisionComments(prev => {
+                const next = { ...prev };
+                delete next[reviewId];
+                return next;
+            });
+            loadData();
+        } catch (err) {
+            alert(err instanceof Error ? err.message : 'Failed to submit decision');
+        } finally {
+            setDecisionLoading(null);
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="d-flex justify-content-center align-items-center py-5">
+                <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        );
+    }
+
+    if (error || !alignmentStatus) {
+        return (
+            <div className="alert alert-danger">
+                <i className="bi bi-exclamation-triangle me-2"></i>
+                {error || 'No active alignment session found'}
+            </div>
+        );
+    }
+
+    const { session, reviewers: reviewerStats, requirements, assessments } = alignmentStatus;
+    const isOpen = session.status === 'OPEN';
+
+    return (
+        <div className="alignment-dashboard">
+            {/* Header */}
+            <div className="d-flex justify-content-between align-items-start mb-4">
+                <div>
+                    <h2 className="mb-1">
+                        <i className="bi bi-clipboard-check me-2 text-primary"></i>
+                        Alignment Dashboard
+                    </h2>
+                    <p className="text-muted mb-0">
+                        {release?.name} v{release?.version}
+                    </p>
+                </div>
+                <div className="d-flex gap-2">
+                    {canExportReviews && (assessments.change > 0 || assessments.nogo > 0) && (
+                        <button
+                            className="btn btn-outline-primary"
+                            onClick={handleExportReviews}
+                            disabled={actionLoading !== null}
+                        >
+                            {actionLoading === 'export' ? (
+                                <span className="spinner-border spinner-border-sm me-1"></span>
+                            ) : (
+                                <i className="bi bi-download me-1"></i>
+                            )}
+                            Download Reviews
+                        </button>
+                    )}
+                    <a href={`/releases/${releaseId}`} className="btn btn-outline-secondary">
+                        <i className="bi bi-arrow-left me-1"></i>
+                        Back to Release
+                    </a>
+                </div>
+            </div>
+
+            {/* Status Banner */}
+            <div className={`alert ${isOpen ? 'alert-info' : 'alert-secondary'} mb-4`}>
+                <div className="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>
+                            <i className={`bi ${isOpen ? 'bi-hourglass-split' : 'bi-check-circle'} me-2`}></i>
+                            Status: {session.status}
+                        </strong>
+                        <span className="ms-3 text-muted">
+                            Started {formatServerDate(session.startedAt)}
+                            {session.completedAt && ` • Completed ${formatServerDate(session.completedAt)}`}
+                        </span>
+                    </div>
+                    {isOpen && canManage && (
+                        <div className="btn-group">
+                            <button
+                                className="btn btn-outline-warning btn-sm"
+                                onClick={handleSendReminders}
+                                disabled={actionLoading !== null}
+                            >
+                                {actionLoading === 'remind' ? (
+                                    <span className="spinner-border spinner-border-sm"></span>
+                                ) : (
+                                    <><i className="bi bi-bell me-1"></i>Send Reminders</>
+                                )}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="row g-3 mb-4">
+                <div className="col-md-3">
+                    <div className="card h-100">
+                        <div className="card-body text-center">
+                            <h3 className="mb-0 text-primary">{requirements.total}</h3>
+                            <small className="text-muted">Changed Requirements</small>
+                        </div>
+                    </div>
+                </div>
+                <div className="col-md-3">
+                    <div className="card h-100">
+                        <div className="card-body text-center">
+                            <h3 className="mb-0">
+                                {reviewerStats.completed}/{reviewerStats.total}
+                            </h3>
+                            <small className="text-muted">Reviewers Complete</small>
+                            <div className="progress mt-2" style={{ height: '4px' }}>
+                                <div
+                                    className="progress-bar bg-success"
+                                    style={{ width: `${reviewerStats.completionPercent}%` }}
+                                ></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div className="col-md-6">
+                    <div className="card h-100">
+                        <div className="card-body">
+                            <div className="d-flex justify-content-around text-center">
+                                <div>
+                                    <h4 className="mb-0 text-success">{assessments.ok}</h4>
+                                    <small className="text-muted">OK</small>
+                                </div>
+                                <div>
+                                    <h4 className="mb-0 text-warning">{assessments.change}</h4>
+                                    <small className="text-muted">Change</small>
+                                </div>
+                                <div>
+                                    <h4 className="mb-0 text-danger">{assessments.nogo}</h4>
+                                    <small className="text-muted">NOGO</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Tabs */}
+            <ul className="nav nav-tabs mb-3">
+                <li className="nav-item">
+                    <button
+                        className={`nav-link ${activeTab === 'overview' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('overview')}
+                    >
+                        Overview
+                    </button>
+                </li>
+                <li className="nav-item">
+                    <button
+                        className={`nav-link ${activeTab === 'reviewers' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('reviewers')}
+                    >
+                        Reviewers ({reviewers.length})
+                    </button>
+                </li>
+                <li className="nav-item">
+                    <button
+                        className={`nav-link ${activeTab === 'feedback' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('feedback')}
+                    >
+                        Feedback ({feedback.length})
+                    </button>
+                </li>
+            </ul>
+
+            {/* Tab Content */}
+            <div className="tab-content">
+                {activeTab === 'overview' && (
+                    <div className="card">
+                        <div className="card-body">
+                            <h5 className="card-title">Alignment Overview</h5>
+                            <dl className="row mb-0">
+                                <dt className="col-sm-3">Initiated By</dt>
+                                <dd className="col-sm-9">{session.initiatedBy}</dd>
+
+                                <dt className="col-sm-3">Baseline Release</dt>
+                                <dd className="col-sm-9">
+                                    {session.baselineReleaseId ? `Release #${session.baselineReleaseId}` : 'None (first release)'}
+                                </dd>
+
+                                <dt className="col-sm-3">Pending Reviewers</dt>
+                                <dd className="col-sm-9">{reviewerStats.pending}</dd>
+
+                                <dt className="col-sm-3">In Progress</dt>
+                                <dd className="col-sm-9">{reviewerStats.inProgress}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'reviewers' && (
+                    <div className="card">
+                        <div className="table-responsive">
+                            <table className="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Reviewer</th>
+                                        <th>Status</th>
+                                        <th>Progress</th>
+                                        <th>Assessments</th>
+                                        <th>Last Activity</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {reviewers.map((reviewer) => (
+                                        <tr key={reviewer.id}>
+                                            <td>
+                                                <strong>{reviewer.username}</strong>
+                                                <br />
+                                                <small className="text-muted">{reviewer.email}</small>
+                                            </td>
+                                            <td>
+                                                <span className={`badge bg-${
+                                                    reviewer.status === 'COMPLETED' ? 'success' :
+                                                    reviewer.status === 'IN_PROGRESS' ? 'primary' : 'secondary'
+                                                }`}>
+                                                    {reviewer.status}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div className="d-flex align-items-center gap-2">
+                                                    <div className="progress flex-grow-1" style={{ height: '6px', minWidth: '80px' }}>
+                                                        <div
+                                                            className="progress-bar"
+                                                            style={{ width: `${reviewer.completionPercent}%` }}
+                                                        ></div>
+                                                    </div>
+                                                    <small>{reviewer.reviewedCount}/{reviewer.totalCount}</small>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span className="text-success me-2">{reviewer.assessments.ok} OK</span>
+                                                <span className="text-warning me-2">{reviewer.assessments.change} Change</span>
+                                                <span className="text-danger">{reviewer.assessments.nogo} NOGO</span>
+                                            </td>
+                                            <td>
+                                                <small className="text-muted">
+                                                    {reviewer.completedAt
+                                                        ? `Completed ${formatServerDate(reviewer.completedAt)}`
+                                                        : reviewer.startedAt
+                                                        ? `Started ${formatServerDate(reviewer.startedAt)}`
+                                                        : 'Not started'}
+                                                </small>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'feedback' && (
+                    <div className="card">
+                        <div className="table-responsive">
+                            <table className="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Requirement</th>
+                                        <th>Change</th>
+                                        <th>Reviews</th>
+                                        <th>Assessments</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {feedback.map((item: any) => (
+                                        <React.Fragment key={item.snapshotId}>
+                                            <tr>
+                                                <td>
+                                                    <strong>{item.requirementId}</strong>
+                                                    <br />
+                                                    <small className="text-muted">{item.shortreq}</small>
+                                                </td>
+                                                <td>
+                                                    <span className={`badge bg-${
+                                                        item.changeType === 'ADDED' ? 'success' :
+                                                        item.changeType === 'DELETED' ? 'danger' : 'warning'
+                                                    }`}>
+                                                        {item.changeType}
+                                                    </span>
+                                                </td>
+                                                <td>{item.reviewCount}</td>
+                                                <td>
+                                                    <span className="text-success me-2">{item.assessments.ok} OK</span>
+                                                    <span className="text-warning me-2">{item.assessments.change} Change</span>
+                                                    <span className="text-danger">{item.assessments.nogo} NOGO</span>
+                                                </td>
+                                            </tr>
+                                            {item.reviews && item.reviews.length > 0 && (
+                                                <tr>
+                                                    <td colSpan={4} className="ps-4 pt-0 pb-3" style={{ borderTop: 'none' }}>
+                                                        {item.reviews.map((review: any) => (
+                                                            <div key={review.id} className="mb-2 p-2 border rounded">
+                                                                <div className="d-flex align-items-start gap-2 mb-1">
+                                                                    <span className={`badge bg-${
+                                                                        review.assessment === 'OK' ? 'success' :
+                                                                        review.assessment === 'CHANGE' ? 'warning' : 'danger'
+                                                                    } ${review.assessment === 'CHANGE' ? 'text-dark' : ''}`}>
+                                                                        {review.assessment}
+                                                                    </span>
+                                                                    <strong className="small">{review.reviewerName}</strong>
+                                                                    {review.comment && (
+                                                                        <span className="small text-muted">— {review.comment}</span>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Admin Decision Display */}
+                                                                {review.adminDecision && (
+                                                                    <div className="d-flex align-items-start gap-2 mt-1 ms-3">
+                                                                        <span className={`badge bg-${
+                                                                            review.adminDecision.decision === 'ACCEPTED' ? 'success' : 'danger'
+                                                                        }`}>
+                                                                            {review.adminDecision.decision}
+                                                                        </span>
+                                                                        <small className="text-muted">
+                                                                            by {review.adminDecision.decidedBy}
+                                                                        </small>
+                                                                        {review.adminDecision.comment && (
+                                                                            <small className="text-muted">— {review.adminDecision.comment}</small>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Admin Decision Controls */}
+                                                                {!review.adminDecision && canDecide && isOpen && (
+                                                                    <div className="mt-2 ms-3">
+                                                                        <div className="d-flex align-items-center gap-2">
+                                                                            <input
+                                                                                type="text"
+                                                                                className="form-control form-control-sm"
+                                                                                placeholder="Comment (optional)"
+                                                                                style={{ maxWidth: '300px' }}
+                                                                                value={decisionComments[review.id] || ''}
+                                                                                onChange={(e) => setDecisionComments(prev => ({
+                                                                                    ...prev,
+                                                                                    [review.id]: e.target.value
+                                                                                }))}
+                                                                                disabled={decisionLoading === review.id}
+                                                                            />
+                                                                            <button
+                                                                                className="btn btn-success btn-sm"
+                                                                                onClick={() => handleDecision(review.id, 'ACCEPTED')}
+                                                                                disabled={decisionLoading !== null}
+                                                                            >
+                                                                                {decisionLoading === review.id ? (
+                                                                                    <span className="spinner-border spinner-border-sm"></span>
+                                                                                ) : 'Accept'}
+                                                                            </button>
+                                                                            <button
+                                                                                className="btn btn-danger btn-sm"
+                                                                                onClick={() => handleDecision(review.id, 'REJECTED')}
+                                                                                disabled={decisionLoading !== null}
+                                                                            >
+                                                                                {decisionLoading === review.id ? (
+                                                                                    <span className="spinner-border spinner-border-sm"></span>
+                                                                                ) : 'Reject'}
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Action Buttons */}
+            {isOpen && canManage && (
+                <div className="card mt-4">
+                    <div className="card-body">
+                        <h5 className="card-title">Finalize Alignment</h5>
+                        {reviewerStats.pending > 0 && (
+                            <div className="alert alert-warning mb-3">
+                                <i className="bi bi-exclamation-triangle me-2"></i>
+                                {reviewerStats.pending} reviewer(s) have not completed their review.
+                                You can still finalize, but some feedback may be missing.
+                            </div>
+                        )}
+                        <div className="d-flex gap-2">
+                            <button
+                                className="btn btn-success"
+                                onClick={() => handleFinalize(true)}
+                                disabled={actionLoading !== null}
+                            >
+                                {actionLoading === 'activate' ? (
+                                    <span className="spinner-border spinner-border-sm me-2"></span>
+                                ) : (
+                                    <i className="bi bi-check-circle me-2"></i>
+                                )}
+                                Finalize & Activate Release
+                            </button>
+                            <button
+                                className="btn btn-outline-primary"
+                                onClick={() => handleFinalize(false)}
+                                disabled={actionLoading !== null}
+                            >
+                                {actionLoading === 'finalize' ? (
+                                    <span className="spinner-border spinner-border-sm me-2"></span>
+                                ) : (
+                                    <i className="bi bi-clipboard-check me-2"></i>
+                                )}
+                                Finalize (Keep as Draft)
+                            </button>
+                            <button
+                                className="btn btn-outline-danger ms-auto"
+                                onClick={handleCancel}
+                                disabled={actionLoading !== null}
+                            >
+                                {actionLoading === 'cancel' ? (
+                                    <span className="spinner-border spinner-border-sm me-2"></span>
+                                ) : (
+                                    <i className="bi bi-x-circle me-2"></i>
+                                )}
+                                Cancel Alignment
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default AlignmentDashboard;

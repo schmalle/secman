@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Action Requested: Outdated Assets</title>
+    <style>
+        body { font-family: Arial, sans-serif; color: #333; background-color: #f5f5f5; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 20px auto; background: #fff; padding: 20px; border-radius: 8px; }
+        .header { background-color: #FFA500; color: white; padding: 15px; border-radius: 4px; text-align: center; }
+        .severity-badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 5px; }
+        .critical { background-color: #dc3545; color: white; }
+        .high { background-color: #fd7e14; color: white; }
+        .medium { background-color: #ffc107; color: black; }
+        .low { background-color: #28a745; color: white; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; font-weight: bold; }
+        .cta-button { display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 15px 0; }
+        .info-box { background-color: #e7f3ff; padding: 15px; border-left: 4px solid #007bff; margin: 15px 0; }
+        .footer { color: #666; font-size: 12px; margin-top: 20px; border-top: 1px solid #ddd; padding-top: 15px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>⚠️ Action Requested: Outdated Assets Detected</h2>
+        </div>
+
+        <p>Hello <span th:text="${recipientName} ?: 'Asset Owner'">Asset Owner</span>,</p>
+
+        <p>
+            We have identified <strong th:text="${totalCount}">5</strong> asset(s) under your ownership that have
+            vulnerabilities exceeding the acceptable remediation timeframe. Please review and address these
+            vulnerabilities at your earliest convenience.
+        </p>
+
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin: 15px 0;">
+            <h3>Severity Breakdown</h3>
+            <p>
+                <span class="severity-badge critical" th:if="${criticalCount > 0}">
+                    <span th:text="${criticalCount}">2</span> Critical
+                </span>
+                <span class="severity-badge high" th:if="${highCount > 0}">
+                    <span th:text="${highCount}">3</span> High
+                </span>
+                <span class="severity-badge medium" th:if="${mediumCount > 0}">
+                    <span th:text="${mediumCount}">5</span> Medium
+                </span>
+                <span class="severity-badge low" th:if="${lowCount > 0}">
+                    <span th:text="${lowCount}">1</span> Low
+                </span>
+            </p>
+        </div>
+
+        <h3>Affected Assets</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Asset Name</th>
+                    <th>Type</th>
+                    <th>Vulnerabilities</th>
+                    <th>Oldest Vuln Age</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="asset : ${assets}">
+                    <td th:text="${asset.name}">web-server-01</td>
+                    <td th:text="${asset.type}">SERVER</td>
+                    <td th:text="${asset.vulnerabilityCount}">8</td>
+                    <td>
+                        <span th:text="${asset.oldestVulnDays}">45</span> days
+                        <span style="color: #666; font-size: 12px;" th:text="'(' + ${asset.oldestVulnId} + ')'">(CVE-2024-1234)</span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div style="text-align: center; margin: 25px 0;">
+            <a th:href="${dashboardUrl}" class="cta-button">View Assets in Dashboard →</a>
+        </div>
+
+        <div class="info-box">
+            <h4>Recommended Actions</h4>
+            <ol>
+                <li>Review the vulnerabilities for each asset in the dashboard</li>
+                <li>Prioritize remediation based on severity and exploitability</li>
+                <li>Apply patches or implement mitigations within 7 days</li>
+                <li>Document any exceptions if remediation is not feasible</li>
+            </ol>
+        </div>
+
+        <p style="color: #666; font-size: 14px;">
+            <strong>Note:</strong> If these assets remain outdated after 7 days, you will receive an escalated
+            reminder. Please address these vulnerabilities promptly to maintain compliance.
+        </p>
+
+        <div class="footer">
+            <p>
+                This is an automated notification from the Security Management System.<br>
+                If you have questions, please contact the security team.<br>
+                <em>Do not reply to this email.</em>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

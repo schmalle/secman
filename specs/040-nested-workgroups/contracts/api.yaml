@@ -1,0 +1,467 @@
+openapi: 3.0.3
+info:
+  title: Secman Nested Workgroups API
+  description: API endpoints for hierarchical workgroup management
+  version: 1.0.0
+  contact:
+    name: Secman Development Team
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local development server
+
+tags:
+  - name: workgroups
+    description: Workgroup hierarchy management operations
+
+paths:
+  /workgroups/{id}/children:
+    post:
+      tags:
+        - workgroups
+      summary: Create a child workgroup
+      description: Create a new workgroup as a child of the specified parent workgroup. Requires ADMIN role.
+      operationId: createChildWorkgroup
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: ID of the parent workgroup
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChildWorkgroupRequest'
+      responses:
+        '201':
+          description: Child workgroup created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkgroupResponse'
+        '400':
+          description: Validation error (invalid name, depth exceeded, sibling name conflict)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                depthExceeded:
+                  summary: Maximum depth exceeded
+                  value:
+                    error: "Cannot create child: parent is at maximum depth (5)"
+                    code: "DEPTH_LIMIT_EXCEEDED"
+                siblingConflict:
+                  summary: Sibling name conflict
+                  value:
+                    error: "A workgroup named 'Engineering' already exists under IT Department"
+                    code: "DUPLICATE_NAME"
+        '401':
+          description: Unauthorized - no valid JWT token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - user lacks ADMIN role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Parent workgroup not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags:
+        - workgroups
+      summary: Get direct children of a workgroup
+      description: Retrieve all direct children (one level down) of the specified workgroup.
+      operationId: getWorkgroupChildren
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: ID of the parent workgroup
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: List of child workgroups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkgroupResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Parent workgroup not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /workgroups/{id}/parent:
+    put:
+      tags:
+        - workgroups
+      summary: Move workgroup to different parent
+      description: Change the parent of a workgroup (move in hierarchy). Validates circular references, depth limits, and sibling name uniqueness. Requires ADMIN role.
+      operationId: moveWorkgroup
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: ID of the workgroup to move
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveWorkgroupRequest'
+      responses:
+        '200':
+          description: Workgroup moved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkgroupResponse'
+        '400':
+          description: Validation error (circular reference, depth exceeded, name conflict)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                circularReference:
+                  summary: Circular reference detected
+                  value:
+                    error: "Cannot set parent: would create circular reference"
+                    code: "CIRCULAR_REFERENCE"
+                depthExceeded:
+                  summary: Depth limit exceeded
+                  value:
+                    error: "Cannot move: resulting depth (6) exceeds maximum (5)"
+                    code: "DEPTH_LIMIT_EXCEEDED"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - user lacks ADMIN role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Workgroup or new parent not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict - optimistic lock version mismatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Workgroup was modified by another user. Please refresh and try again."
+                code: "OPTIMISTIC_LOCK_CONFLICT"
+
+  /workgroups/{id}:
+    delete:
+      tags:
+        - workgroups
+      summary: Delete workgroup
+      description: Delete a workgroup. If it has children, they are promoted to the grandparent level. Requires ADMIN role.
+      operationId: deleteWorkgroup
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: ID of the workgroup to delete
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Workgroup deleted successfully (children promoted if any)
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - user lacks ADMIN role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Workgroup not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /workgroups/{id}/ancestors:
+    get:
+      tags:
+        - workgroups
+      summary: Get ancestor path
+      description: Retrieve all ancestors from root to immediate parent for breadcrumb navigation.
+      operationId: getWorkgroupAncestors
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: ID of the workgroup
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: List of ancestors (root first, immediate parent last)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BreadcrumbItem'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Workgroup not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /workgroups/{id}/descendants:
+    get:
+      tags:
+        - workgroups
+      summary: Get all descendants
+      description: Retrieve the entire subtree rooted at this workgroup (all children, grandchildren, etc.).
+      operationId: getWorkgroupDescendants
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: ID of the root workgroup
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: List of all descendants (depth-first order)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkgroupResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Workgroup not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /workgroups/root:
+    get:
+      tags:
+        - workgroups
+      summary: Get all root-level workgroups
+      description: Retrieve workgroups that have no parent (top level of hierarchy).
+      operationId: getRootWorkgroups
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of root-level workgroups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkgroupResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CreateChildWorkgroupRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Name of the child workgroup (must be unique among siblings)
+          example: "Engineering"
+        description:
+          type: string
+          maxLength: 1000
+          nullable: true
+          description: Optional description of the workgroup
+          example: "Engineering department teams"
+
+    MoveWorkgroupRequest:
+      type: object
+      required:
+        - newParentId
+      properties:
+        newParentId:
+          type: integer
+          format: int64
+          nullable: true
+          description: ID of the new parent workgroup (null to move to root level)
+          example: 42
+
+    WorkgroupResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique identifier
+          example: 123
+        name:
+          type: string
+          description: Workgroup name
+          example: "Frontend Team"
+        description:
+          type: string
+          nullable: true
+          description: Workgroup description
+          example: "Web frontend development team"
+        parentId:
+          type: integer
+          format: int64
+          nullable: true
+          description: ID of parent workgroup (null if root-level)
+          example: 42
+        depth:
+          type: integer
+          description: Depth in hierarchy (1 = root level)
+          example: 3
+        childCount:
+          type: integer
+          description: Number of direct children
+          example: 5
+        hasChildren:
+          type: boolean
+          description: Whether this workgroup has any children (for lazy loading)
+          example: true
+        ancestors:
+          type: array
+          items:
+            $ref: '#/components/schemas/BreadcrumbItem'
+          description: Full path from root to immediate parent
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2025-11-02T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last modification timestamp
+          example: "2025-11-02T14:20:00Z"
+        version:
+          type: integer
+          format: int64
+          description: Version number for optimistic locking
+          example: 3
+
+    BreadcrumbItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Workgroup ID
+          example: 10
+        name:
+          type: string
+          description: Workgroup name
+          example: "IT Department"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - code
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: "Cannot create child: parent is at maximum depth (5)"
+        code:
+          type: string
+          description: Machine-readable error code
+          example: "DEPTH_LIMIT_EXCEEDED"
+        details:
+          type: object
+          nullable: true
+          description: Additional error context
+          additionalProperties: true
+
+security:
+  - bearerAuth: []

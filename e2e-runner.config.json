@@ -1,0 +1,24 @@
+{
+  "backend": {
+    "start": "pass-cli run --env-file=secman.env -- gradle :backendng:clean :backendng:run --no-daemon",
+    "healthUrl": "http://localhost:8080",
+    "healthTimeout": 120
+  },
+  "frontend": {
+    "start": "SECMAN_DOMAIN=http://localhost:8080 npm run dev",
+    "healthUrl": "http://localhost:4321",
+    "healthTimeout": 60,
+    "cwd": "./frontend"
+  },
+  "e2e": {
+    "script": "./scripts/e2e-test.sh",
+    "maxRetries": 5,
+    "retryDelay": 5,
+    "env": {
+      "BASE_URL": "http://localhost:4321",
+      "API_URL": "http://localhost:8080",
+      "SECMAN_BACKEND_URL": "http://localhost:4321",
+      "SECMAN_INSECURE": "false"
+    }
+  }
+}

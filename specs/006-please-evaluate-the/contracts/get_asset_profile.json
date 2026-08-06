@@ -1,0 +1,145 @@
+{
+  "tool": "get_asset_profile",
+  "description": "Retrieve comprehensive asset profile including scans, vulnerabilities, and products",
+  "operation": "READ",
+  "permissions": ["ASSETS_READ", "SCANS_READ", "VULNERABILITIES_READ"],
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "assetId": {
+        "type": "number",
+        "description": "Asset ID to retrieve profile for",
+        "minimum": 1
+      }
+    },
+    "required": ["assetId"]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "asset": {
+        "type": "object",
+        "description": "Asset basic information (same schema as get_assets)"
+      },
+      "latestScan": {
+        "type": "object",
+        "description": "Most recent scan result for this asset",
+        "properties": {
+          "id": {"type": "number"},
+          "scanId": {"type": "number"},
+          "ipAddress": {"type": "string"},
+          "hostname": {"type": "string"},
+          "discoveredAt": {"type": "string", "format": "date-time"},
+          "ports": {"type": "array", "items": {"type": "object"}}
+        }
+      },
+      "openPorts": {
+        "type": "array",
+        "description": "Currently open ports from latest scan",
+        "items": {
+          "type": "object",
+          "properties": {
+            "portNumber": {"type": "number"},
+            "protocol": {"type": "string"},
+            "service": {"type": "string"},
+            "version": {"type": "string"}
+          }
+        }
+      },
+      "currentVulnerabilities": {
+        "type": "array",
+        "description": "Active vulnerabilities for this asset",
+        "items": {
+          "type": "object",
+          "description": "Same schema as get_vulnerabilities"
+        }
+      },
+      "discoveredProducts": {
+        "type": "array",
+        "description": "Services and products discovered on this asset",
+        "items": {
+          "type": "object",
+          "description": "Same schema as search_products"
+        }
+      },
+      "statistics": {
+        "type": "object",
+        "properties": {
+          "totalScans": {"type": "number"},
+          "totalVulnerabilities": {"type": "number"},
+          "vulnerabilitiesBySeverity": {
+            "type": "object",
+            "properties": {
+              "Critical": {"type": "number"},
+              "High": {"type": "number"},
+              "Medium": {"type": "number"},
+              "Low": {"type": "number"},
+              "Informational": {"type": "number"}
+            }
+          },
+          "uniqueServices": {"type": "number"}
+        },
+        "required": ["totalScans", "totalVulnerabilities", "vulnerabilitiesBySeverity", "uniqueServices"]
+      }
+    },
+    "required": ["asset", "statistics"]
+  },
+  "examples": [
+    {
+      "request": {
+        "assetId": 1
+      },
+      "response": {
+        "asset": {
+          "id": 1,
+          "name": "web-server-01",
+          "type": "Server",
+          "ip": "192.168.1.10",
+          "owner": "Infrastructure Team"
+        },
+        "latestScan": {
+          "id": 500,
+          "scanId": 42,
+          "ipAddress": "192.168.1.10",
+          "hostname": "web-server-01.company.local",
+          "discoveredAt": "2025-10-04T10:30:00Z",
+          "ports": []
+        },
+        "openPorts": [
+          {"portNumber": 22, "protocol": "tcp", "service": "ssh", "version": "OpenSSH 8.0"},
+          {"portNumber": 443, "protocol": "tcp", "service": "https", "version": "nginx 1.18.0"}
+        ],
+        "currentVulnerabilities": [
+          {
+            "id": 101,
+            "vulnerabilityId": "CVE-2024-12345",
+            "cvssSeverity": "Critical"
+          }
+        ],
+        "discoveredProducts": [
+          {"service": "ssh", "version": "OpenSSH 8.0"},
+          {"service": "https", "version": "nginx 1.18.0"}
+        ],
+        "statistics": {
+          "totalScans": 15,
+          "totalVulnerabilities": 5,
+          "vulnerabilitiesBySeverity": {
+            "Critical": 1,
+            "High": 2,
+            "Medium": 2,
+            "Low": 0,
+            "Informational": 0
+          },
+          "uniqueServices": 2
+        }
+      }
+    }
+  ],
+  "errors": [
+    {
+      "code": "ASSET_NOT_FOUND",
+      "message": "Asset with ID {assetId} not found",
+      "condition": "assetId does not exist"
+    }
+  ]
+}

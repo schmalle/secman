@@ -1,0 +1,1074 @@
+import React, { useState, useEffect } from 'react';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete, getUser, hasVulnAccess } from '../utils/auth';
+import { isAdmin, isSecChampion } from '../utils/permissions';
+import PortHistory from './PortHistory';
+import VulnerabilityHistory from './VulnerabilityHistory';
+import { BulkDeleteConfirmModal } from './BulkDeleteConfirmModal';
+import NoEdrExceptionRequestModal from './NoEdrExceptionRequestModal';
+import { bulkDeleteAssets, type BulkDeleteResult } from '../services/assetService';
+import { exportVulnerabilitiesServerSide, cancelExportJob, type ExportJob } from '../services/vulnerabilityManagementService';
+
+interface WorkgroupSummary {
+  id: number;
+  name: string;
+}
+
+interface Workgroup {
+  id: number;
+  name: string;
+  description?: string;
+}
+
+interface OwnerCandidate {
+  value: string;
+  label: string;
+}
+
+interface Asset {
+  id?: number;
+  name: string;
+  type: string;
+  ip?: string;
+  uri?: string;
+  owner: string;
+  description?: string;
+  groups?: string;
+  cloudAccountId?: string;
+  cloudInstanceId?: string;
+  osVersion?: string;
+  adDomain?: string;
+  criticality?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NA' | null;
+  createdAt?: string;
+  updatedAt?: string;
+  workgroups?: WorkgroupSummary[];
+}
+
+const AssetManagement: React.FC = () => {
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [workgroups, setWorkgroups] = useState<Workgroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+  const [formData, setFormData] = useState<Asset & { workgroupIds?: number[] }>({
+    name: '',
+    type: '',
+    ip: '',
+    uri: '',
+    owner: '',
+    description: '',
+    criticality: undefined,
+    workgroupIds: []
+  });
+  const [showPortHistory, setShowPortHistory] = useState(false);
+  const [selectedAssetForPorts, setSelectedAssetForPorts] = useState<Asset | null>(null);
+  const [showVulnerabilities, setShowVulnerabilities] = useState(false);
+  const [selectedAssetForVulns, setSelectedAssetForVulns] = useState<Asset | null>(null);
+  // Only the id and name are needed, so the modal cannot accidentally depend on any other
+  // asset field and go stale if the list reloads while it is open.
+  const [noEdrModalAsset, setNoEdrModalAsset] = useState<{ id: number; name: string } | null>(null);
+  const [noEdrSuccess, setNoEdrSuccess] = useState<string | null>(null);
+
+  // Filter states
+  const [nameFilter, setNameFilter] = useState<string>('');
+  const [ipFilter, setIpFilter] = useState<string>('');
+  const [ownerFilter, setOwnerFilter] = useState<string>('');
+  const [adDomainFilter, setAdDomainFilter] = useState<string>('');
+  const [accountIdFilter, setAccountIdFilter] = useState<string>('');
+  const [workgroupFilter, setWorkgroupFilter] = useState<string>('');
+
+  // Bulk delete states (Feature 029 - User Story 1)
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
+  const [bulkDeleteSuccess, setBulkDeleteSuccess] = useState<string | null>(null);
+
+  // Export vulnerabilities state
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportProgress, setExportProgress] = useState<ExportJob | null>(null);
+  const [exportJobId, setExportJobId] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  // Owner candidates for select dropdown
+  const [ownerCandidates, setOwnerCandidates] = useState<OwnerCandidate[]>([]);
+  const canAssignOwner = isAdmin(getUser()?.roles) || isSecChampion(getUser()?.roles);
+
+  // Domain validation state (Feature 043 - User Story 2)
+  const [domainError, setDomainError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchAssets();
+    if (isAdmin(getUser()?.roles) || isSecChampion(getUser()?.roles)) {
+      fetchWorkgroups();
+    }
+    if (canAssignOwner) {
+      fetchOwnerCandidates();
+    }
+  }, []);
+
+  const fetchAssets = async () => {
+    try {
+      const response = await authenticatedGet('/api/assets');
+      if (response.ok) {
+        const data = await response.json();
+        setAssets(data);
+      } else {
+        setError(`Failed to fetch assets: ${response.status}`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchWorkgroups = async () => {
+    try {
+      const response = await authenticatedGet('/api/workgroups');
+      if (response.ok) {
+        const data: Workgroup[] = await response.json();
+        setWorkgroups(data);
+      } else if (response.status === 403) {
+        // User doesn't have ADMIN role - workgroups filter not available
+        console.info('Workgroups filter not available for non-admin users');
+        setWorkgroups([]);
+      } else {
+        console.error('Failed to fetch workgroups, status:', response.status);
+        setWorkgroups([]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch workgroups:', err);
+      setWorkgroups([]);
+    }
+  };
+
+  const fetchOwnerCandidates = async () => {
+    try {
+      const response = await authenticatedGet('/api/assets/owner-candidates');
+      if (response.ok) {
+        const data: OwnerCandidate[] = await response.json();
+        setOwnerCandidates(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch owner candidates:', err);
+    }
+  };
+
+  /**
+   * Validate Active Directory domain field
+   * Feature 043: User Story 2 - Manual Domain Editing
+   *
+   * Validation rules:
+   * - Pattern: alphanumeric, dots, and hyphens only
+   * - Cannot start or end with a dot
+   * - Max length 255 characters
+   * - Optional field (empty is valid)
+   */
+  const validateDomain = (value: string): boolean => {
+    if (!value || value.trim() === '') {
+      setDomainError(null);
+      return true; // Empty is valid (optional field)
+    }
+
+    const trimmedValue = value.trim();
+
+    // Check length
+    if (trimmedValue.length > 255) {
+      setDomainError('Domain cannot exceed 255 characters');
+      return false;
+    }
+
+    // Check pattern: only alphanumeric, dots, and hyphens
+    const regex = /^[a-zA-Z0-9.-]+$/;
+    if (!regex.test(trimmedValue)) {
+      setDomainError('Domain must contain only letters, numbers, dots, and hyphens');
+      return false;
+    }
+
+    // Cannot start with a dot
+    if (trimmedValue.startsWith('.')) {
+      setDomainError('Domain cannot start with a dot');
+      return false;
+    }
+
+    // Cannot end with a dot
+    if (trimmedValue.endsWith('.')) {
+      setDomainError('Domain cannot end with a dot');
+      return false;
+    }
+
+    // Cannot have consecutive dots
+    if (trimmedValue.includes('..')) {
+      setDomainError('Domain cannot contain consecutive dots');
+      return false;
+    }
+
+    // Valid
+    setDomainError(null);
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validate domain before submission (Feature 043)
+    if (formData.adDomain && !validateDomain(formData.adDomain)) {
+      return; // Validation error is already set in state
+    }
+
+    try {
+      if (editingAsset) {
+        await authenticatedPut(`/api/assets/${editingAsset.id}`, formData);
+      } else {
+        await authenticatedPost('/api/assets', formData);
+      }
+
+      await fetchAssets();
+      resetForm();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    }
+  };
+
+  const handleEdit = (asset: Asset) => {
+    console.log('Edit button clicked for asset:', asset.name, asset);
+    setEditingAsset(asset);
+    setFormData({
+      ...asset,
+      workgroupIds: asset.workgroups?.map(wg => wg.id) || []
+    });
+    setShowForm(true);
+
+    // Scroll to top to show the form
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 100);
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this asset? This will also delete all related vulnerabilities and exceptions.')) {
+      return;
+    }
+
+    try {
+      const response = await authenticatedDelete(`/api/assets/${id}`);
+
+      if (!response.ok) {
+        // Handle different error response formats
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+
+        // Check for new DeletionErrorDto format (cascade deletion errors)
+        if (errorData.errorType) {
+          const errorMessage = `${errorData.cause}\n\nSuggested action: ${errorData.suggestedAction}`;
+          throw new Error(errorMessage);
+        }
+
+        // Handle old ErrorResponse format
+        throw new Error(errorData.error || `Failed to delete asset: ${response.status}`);
+      }
+
+      // Handle success - can be either old format (message) or new format (CascadeDeletionResultDto)
+      const result = await response.json().catch(() => null);
+
+      if (result && result.deletedVulnerabilities !== undefined) {
+        // New cascade deletion result format
+        console.log(`Deleted asset ${result.assetId}: ${result.deletedVulnerabilities} vulnerabilities, ${result.deletedExceptions} exceptions, ${result.deletedRequests} requests`);
+      }
+
+      await fetchAssets();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred while deleting the asset');
+    }
+  };
+
+  /**
+   * Handle bulk delete of all assets
+   * Feature 029: User Story 1 - Bulk Delete Assets
+   */
+  const handleBulkDelete = async () => {
+    setIsDeletingBulk(true);
+    setError(null);
+    setBulkDeleteSuccess(null);
+
+    try {
+      const result: BulkDeleteResult = await bulkDeleteAssets();
+
+      // Show success message
+      setBulkDeleteSuccess(result.message);
+
+      // Close modal
+      setShowBulkDeleteModal(false);
+
+      // Refresh asset list
+      await fetchAssets();
+
+      // Clear success message after 5 seconds
+      setTimeout(() => setBulkDeleteSuccess(null), 5000);
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred during bulk delete');
+      setShowBulkDeleteModal(false);
+    } finally {
+      setIsDeletingBulk(false);
+    }
+  };
+
+  /**
+   * Handle export of all vulnerabilities to Excel
+   * Feature: Vulnerability Export Performance Optimization - Background Job Pattern
+   *
+   * Uses background job pattern with progress tracking:
+   * - Starts export job asynchronously
+   * - Polls for progress (updates UI every 2 seconds)
+   * - Downloads file when complete
+   * - Supports cancellation
+   */
+  const handleExportVulnerabilities = async () => {
+    try {
+      setExportLoading(true);
+      setExportProgress(null);
+      setError(null);
+
+      // Use server-side export with progress tracking
+      await exportVulnerabilitiesServerSide((job) => {
+        setExportProgress(job);
+        setExportJobId(job.jobId);
+      });
+
+      // Show brief success message
+      setBulkDeleteSuccess('Export completed successfully!');
+      setTimeout(() => setBulkDeleteSuccess(null), 5000);
+
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Failed to export vulnerabilities');
+      setTimeout(() => setExportError(null), 10000);
+    } finally {
+      setExportLoading(false);
+      setExportProgress(null);
+      setExportJobId(null);
+    }
+  };
+
+  /**
+   * Handle cancellation of running export
+   */
+  const handleCancelExport = async () => {
+    if (!exportJobId) return;
+
+    try {
+      await cancelExportJob(exportJobId);
+      setExportLoading(false);
+      setExportProgress(null);
+      setExportJobId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel export');
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      type: '',
+      ip: '',
+      uri: '',
+      owner: '',
+      description: '',
+      adDomain: '',
+      criticality: undefined,
+      workgroupIds: []
+    });
+    setEditingAsset(null);
+    setShowForm(false);
+    setDomainError(null); // Clear domain validation error (Feature 043)
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleCriticalityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    setFormData(prev => ({
+      ...prev,
+      criticality: value === '' ? undefined : (value as 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NA')
+    }));
+  };
+
+  const handleWorkgroupChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const workgroupId = parseInt(e.target.value);
+    const { checked } = e.target;
+    setFormData(prev => {
+      const newWorkgroupIds = checked
+        ? [...(prev.workgroupIds || []), workgroupId]
+        : (prev.workgroupIds || []).filter(id => id !== workgroupId);
+      return { ...prev, workgroupIds: newWorkgroupIds };
+    });
+  };
+
+  const handleShowPorts = (asset: Asset) => {
+    setSelectedAssetForPorts(asset);
+    setShowPortHistory(true);
+  };
+
+  const handleClosePortHistory = () => {
+    setShowPortHistory(false);
+    setSelectedAssetForPorts(null);
+  };
+
+  const handleShowVulnerabilities = (asset: Asset) => {
+    setSelectedAssetForVulns(asset);
+    setShowVulnerabilities(true);
+  };
+
+  const handleCloseVulnerabilities = () => {
+    setShowVulnerabilities(false);
+    setSelectedAssetForVulns(null);
+  };
+
+  // Filter assets based on current filter values
+  const getFilteredAssets = () => {
+    return assets.filter(asset => {
+      // Text filters use partial matching
+      const nameMatch = !nameFilter || asset.name.toLowerCase().includes(nameFilter.toLowerCase());
+      const ipMatch = !ipFilter || (asset.ip && asset.ip.toLowerCase().includes(ipFilter.toLowerCase()));
+      const accountIdMatch = !accountIdFilter || (asset.cloudAccountId && asset.cloudAccountId.toLowerCase().includes(accountIdFilter.toLowerCase()));
+      // Dropdown filters use exact matching
+      const ownerMatch = !ownerFilter || asset.owner === ownerFilter;
+      const adDomainMatch = !adDomainFilter || asset.adDomain === adDomainFilter;
+      const workgroupMatch = !workgroupFilter || (
+        asset.workgroups && asset.workgroups.some(wg => wg.name === workgroupFilter)
+      );
+
+      return nameMatch && ipMatch && accountIdMatch && ownerMatch && adDomainMatch && workgroupMatch;
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="d-flex justify-content-center">
+        <div className="spinner-border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container-fluid p-4">
+        <div className="alert alert-danger" role="alert">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container-fluid p-4">
+      <div className="row">
+        <div className="col-12">
+          <div className="d-flex justify-content-between align-items-center mb-4">
+            <h2>Asset Management</h2>
+            <div className="btn-group" role="group">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  if (showForm) {
+                    resetForm();
+                  } else {
+                    setShowForm(true);
+                  }
+                }}
+              >
+                {showForm ? 'Cancel' : 'Add New Asset'}
+              </button>
+              {/* Export Vulnerabilities Button (ADMIN, VULN, SECCHAMPION roles) */}
+              {hasVulnAccess() && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-success"
+                    onClick={handleExportVulnerabilities}
+                    disabled={exportLoading}
+                    title="Export all vulnerabilities to Excel"
+                  >
+                    {exportLoading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        {exportProgress
+                          ? `${exportProgress.progressPercent}%`
+                          : 'Starting...'}
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-download me-2"></i>
+                        Export Vulns
+                      </>
+                    )}
+                  </button>
+                  {exportLoading && (
+                    <button
+                      type="button"
+                      className="btn btn-outline-danger"
+                      onClick={handleCancelExport}
+                      title="Cancel export"
+                    >
+                      <i className="bi bi-x-circle"></i>
+                    </button>
+                  )}
+                </>
+              )}
+              {/* Feature 029: Bulk Delete Button (ADMIN only, hidden when no assets) */}
+              {isAdmin(getUser()?.roles) && getFilteredAssets().length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => setShowBulkDeleteModal(true)}
+                  disabled={isDeletingBulk}
+                >
+                  <i className="bi bi-trash3-fill me-2"></i>
+                  Delete All Assets
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+      {exportError && (
+        <div className="row mb-3">
+          <div className="col-12">
+            <div className="alert alert-warning alert-dismissible fade show" role="alert">
+              <i className="bi bi-exclamation-triangle-fill me-2"></i>
+              {exportError}
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setExportError(null)}
+                aria-label="Close"
+              ></button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showForm && (
+        <div className="row mb-4">
+          <div className="col-12">
+            <div className="card">
+              <div className="card-body">
+                <h5 className="card-title">{editingAsset ? 'Edit Asset' : 'Add New Asset'}</h5>
+                <form onSubmit={handleSubmit}>
+                  <div className="mb-3">
+                    <label htmlFor="name" className="form-label">Name *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      id="name"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      required
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="type" className="form-label">Type *</label>
+                    <select
+                      className="form-control"
+                      id="type"
+                      name="type"
+                      value={formData.type}
+                      onChange={handleInputChange}
+                      required
+                    >
+                      <option value="">Select Type</option>
+                      <option value="Server">Server</option>
+                      <option value="Workstation">Workstation</option>
+                      <option value="Network Device">Network Device</option>
+                      <option value="Mobile Device">Mobile Device</option>
+                      <option value="IoT Device">IoT Device</option>
+                      <option value="Database">Database</option>
+                      <option value="Application">Application</option>
+                      <option value="SaaS">SaaS</option>
+                      <option value="URI">URI</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="ip" className="form-label">IP Address</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      id="ip"
+                      name="ip"
+                      value={formData.ip}
+                      onChange={handleInputChange}
+                      placeholder="e.g., 192.168.1.100"
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="uri" className="form-label">URI</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      id="uri"
+                      name="uri"
+                      value={formData.uri || ''}
+                      onChange={handleInputChange}
+                      placeholder="e.g., https://app.example.com or urn:asset:example"
+                      maxLength={2048}
+                    />
+                    <small className="form-text text-muted">
+                      Optional endpoint or application URI; supported schemes: http, https, and urn.
+                    </small>
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="owner" className="form-label">Owner *</label>
+                    {canAssignOwner && ownerCandidates.length > 0 ? (
+                      <select
+                        className="form-select"
+                        id="owner"
+                        name="owner"
+                        value={formData.owner}
+                        onChange={handleInputChange}
+                        required
+                      >
+                        <option value="">Select Owner</option>
+                        {/* Show current value if not in candidates list (legacy data) */}
+                        {formData.owner && !ownerCandidates.some(c => c.value === formData.owner) && (
+                          <option value={formData.owner} disabled>{formData.owner} (not in system)</option>
+                        )}
+                        {ownerCandidates.map(candidate => (
+                          <option key={candidate.value} value={candidate.value}>{candidate.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        className="form-control"
+                        id="owner"
+                        name="owner"
+                        value={formData.owner}
+                        onChange={handleInputChange}
+                        placeholder="Person or team responsible"
+                        required
+                      />
+                    )}
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="adDomain" className="form-label">
+                      AD Domain <span className="text-muted">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      className={`form-control ${domainError ? 'is-invalid' : ''}`}
+                      id="adDomain"
+                      name="adDomain"
+                      value={formData.adDomain || ''}
+                      onChange={(e) => {
+                        handleInputChange(e);
+                        validateDomain(e.target.value);
+                      }}
+                      placeholder="e.g., CONTOSO, corp.example.com"
+                      maxLength={255}
+                    />
+                    {domainError && (
+                      <div className="invalid-feedback">{domainError}</div>
+                    )}
+                    <small className="form-text text-muted">
+                      Active Directory domain (alphanumeric, dots, and hyphens only)
+                    </small>
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="description" className="form-label">Description</label>
+                    <textarea
+                      className="form-control"
+                      id="description"
+                      name="description"
+                      value={formData.description}
+                      onChange={handleInputChange}
+                      placeholder="Description of the asset"
+                      rows={3}
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="criticality" className="form-label">Criticality</label>
+                    <select
+                      className="form-select"
+                      id="criticality"
+                      name="criticality"
+                      value={formData.criticality || ''}
+                      onChange={handleCriticalityChange}
+                    >
+                      <option value="">Inherit from workgroup</option>
+                      <option value="CRITICAL">🔴 CRITICAL</option>
+                      <option value="HIGH">🟠 HIGH</option>
+                      <option value="MEDIUM">🔵 MEDIUM</option>
+                      <option value="LOW">⚪ LOW</option>
+                      <option value="NA">➖ N/A</option>
+                    </select>
+                    <small className="text-muted">
+                      Leave as "Inherit from workgroup" to use the highest criticality from assigned workgroups (excluding N/A). Default is MEDIUM if no workgroups assigned or all are N/A.
+                    </small>
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">Workgroups</label>
+                    <div>
+                      {workgroups.length > 0 ? (
+                        workgroups.map(workgroup => (
+                          <div className="form-check" key={workgroup.id}>
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              id={`workgroup-${workgroup.id}`}
+                              value={workgroup.id}
+                              checked={(formData.workgroupIds || []).includes(workgroup.id)}
+                              onChange={handleWorkgroupChange}
+                            />
+                            <label className="form-check-label" htmlFor={`workgroup-${workgroup.id}`}>
+                              {workgroup.name}
+                            </label>
+                          </div>
+                        ))
+                      ) : (
+                        <small className="text-muted">No workgroups available</small>
+                      )}
+                    </div>
+                  </div>
+                  <div className="d-flex justify-content-end">
+                    <button type="submit" className="btn btn-success me-2">
+                      {editingAsset ? 'Update' : 'Save'}
+                    </button>
+                    <button type="button" onClick={resetForm} className="btn btn-secondary">
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="row mb-4">
+        <div className="col-12">
+          <div className="card">
+            <div className="card-body">
+              <h6 className="card-title">Filters</h6>
+              <div className="row">
+                <div className="col-md-3">
+                  <label htmlFor="nameFilter" className="form-label">Name</label>
+                  <input
+                    type="text"
+                    id="nameFilter"
+                    className="form-control"
+                    placeholder="Filter by name..."
+                    value={nameFilter}
+                    onChange={(e) => setNameFilter(e.target.value)}
+                  />
+                </div>
+                <div className="col-md-3">
+                  <label htmlFor="ipFilter" className="form-label">IP Address</label>
+                  <input
+                    type="text"
+                    id="ipFilter"
+                    className="form-control"
+                    placeholder="Filter by IP..."
+                    value={ipFilter}
+                    onChange={(e) => setIpFilter(e.target.value)}
+                  />
+                </div>
+                <div className="col-md-3">
+                  <label htmlFor="ownerFilter" className="form-label">Owner</label>
+                  <select
+                    id="ownerFilter"
+                    className="form-select"
+                    value={ownerFilter}
+                    onChange={(e) => setOwnerFilter(e.target.value)}
+                  >
+                    <option value="">All Owners</option>
+                    {[...new Set(assets.map(a => a.owner).filter(Boolean))].sort().map(owner => (
+                      <option key={owner} value={owner}>{owner}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-md-3">
+                  <label htmlFor="adDomainFilter" className="form-label">AD Domain</label>
+                  <select
+                    id="adDomainFilter"
+                    className="form-select"
+                    value={adDomainFilter}
+                    onChange={(e) => setAdDomainFilter(e.target.value)}
+                  >
+                    <option value="">All Domains</option>
+                    {[...new Set(assets.map(a => a.adDomain).filter(Boolean))].sort().map(domain => (
+                      <option key={domain} value={domain}>{domain}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="row mt-2">
+                <div className="col-md-3">
+                  <label htmlFor="workgroupFilter" className="form-label">Workgroups</label>
+                  <select
+                    id="workgroupFilter"
+                    className="form-select"
+                    value={workgroupFilter}
+                    onChange={(e) => setWorkgroupFilter(e.target.value)}
+                  >
+                    <option value="">All Workgroups</option>
+                    {workgroups.length > 0 ? (
+                      workgroups.map(wg => (
+                        <option key={wg.id} value={wg.name}>{wg.name}</option>
+                      ))
+                    ) : (
+                      [...new Set(assets.flatMap(a => a.workgroups?.map(w => w.name) || []))].sort().map(name => (
+                        <option key={name} value={name}>{name}</option>
+                      ))
+                    )}
+                  </select>
+                </div>
+                <div className="col-md-3">
+                  <label htmlFor="accountIdFilter" className="form-label">Account ID</label>
+                  <input
+                    type="text"
+                    id="accountIdFilter"
+                    className="form-control"
+                    placeholder="Filter by Account ID..."
+                    value={accountIdFilter}
+                    onChange={(e) => setAccountIdFilter(e.target.value)}
+                  />
+                </div>
+              </div>
+              {(nameFilter || ipFilter || accountIdFilter || ownerFilter || adDomainFilter || workgroupFilter) && (
+                <div className="mt-2">
+                  <button
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => {
+                      setNameFilter('');
+                      setIpFilter('');
+                      setAccountIdFilter('');
+                      setOwnerFilter('');
+                      setAdDomainFilter('');
+                      setWorkgroupFilter('');
+                    }}
+                  >
+                    Clear All Filters
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="row">
+        <div className="col-12">
+          <div className="card">
+            <div className="card-body">
+              <h5 className="card-title">Assets ({getFilteredAssets().length})</h5>
+              {getFilteredAssets().length === 0 ? (
+                <p className="text-muted">
+                  {assets.length === 0
+                    ? 'No assets found. Click "Add New Asset" to create one.'
+                    : 'No assets match the current filters.'}
+                </p>
+              ) : (
+                <div className="table-responsive">
+                  <table className="table table-striped table-hover">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>IP Address</th>
+                        <th>URI</th>
+                        <th>Instance ID</th>
+                        <th>Account ID</th>
+                        <th>AD Domain</th>
+                        <th>OS</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {getFilteredAssets().map((asset) => (
+                        <tr key={asset.id}>
+                          <td>{asset.name}</td>
+                          <td>{asset.ip || '-'}</td>
+                          <td>
+                            {asset.uri ? (
+                              asset.uri.toLowerCase().startsWith('http://') || asset.uri.toLowerCase().startsWith('https://') ? (
+                                <a href={asset.uri} target="_blank" rel="noreferrer">
+                                  {asset.uri}
+                                </a>
+                              ) : (
+                                asset.uri
+                              )
+                            ) : (
+                              '-'
+                            )}
+                          </td>
+                          <td>{asset.cloudInstanceId || '-'}</td>
+                          <td>{asset.cloudAccountId || '-'}</td>
+                          <td>
+                            {asset.adDomain ? (
+                              <span className="badge bg-secondary" title="Active Directory Domain">
+                                <i className="bi bi-building me-1"></i>{asset.adDomain}
+                              </span>
+                            ) : (
+                              <span className="text-muted">-</span>
+                            )}
+                          </td>
+                          <td>{asset.osVersion || '-'}</td>
+                          <td>
+                            <div className="btn-group" role="group">
+                              <button
+                                type="button"
+                                onClick={() => handleEdit(asset)}
+                                className="btn btn-sm btn-outline-primary"
+                                title="Edit asset"
+                              >
+                                <i className="bi bi-pencil"></i> Edit
+                              </button>
+                              {asset.ip && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleShowPorts(asset)}
+                                  className="btn btn-sm btn-outline-info"
+                                  title="Show port history"
+                                >
+                                  <i className="bi bi-diagram-3"></i> Ports
+                                </button>
+                              )}
+                              <a
+                                href={`/vulnerabilities/system?hostname=${encodeURIComponent(asset.name)}`}
+                                className="btn btn-sm btn-outline-danger"
+                                title="Show vulnerabilities in CrowdStrike"
+                              >
+                                <i className="bi bi-shield-exclamation"></i> Vulns
+                              </a>
+                              {/* Only shown for EC2 instances: cloudInstanceId is exactly the
+                                  population the EDR-coverage KPI measures, so an exemption is
+                                  meaningless for anything else. */}
+                              {asset.cloudInstanceId && asset.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => setNoEdrModalAsset({ id: asset.id!, name: asset.name })}
+                                  className="btn btn-sm btn-outline-secondary"
+                                  title="Request a 'No EDR possible' exception for this system"
+                                  data-testid={`no-edr-request-${asset.id}`}
+                                >
+                                  <i className="bi bi-shield-slash"></i> No EDR
+                                </button>
+                              )}
+                              {/* Delete button only visible to ADMIN users (Feature 033) */}
+                              {isAdmin(getUser()?.roles) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(asset.id!)}
+                                  className="btn btn-sm btn-outline-danger"
+                                  title="Delete asset with all related data (cascade deletion)"
+                                >
+                                  <i className="bi bi-trash"></i> Delete
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Back to Home button */}
+      <div className="row mt-4">
+        <div className="col-12">
+          <a href="/" className="btn btn-secondary">Back to Home</a>
+        </div>
+      </div>
+
+      {/* Port History Modal */}
+      {showPortHistory && selectedAssetForPorts && selectedAssetForPorts.id && (
+        <PortHistory
+          assetId={selectedAssetForPorts.id}
+          assetName={selectedAssetForPorts.name}
+          onClose={handleClosePortHistory}
+        />
+      )}
+
+      {/* Vulnerability History Modal */}
+      {showVulnerabilities && selectedAssetForVulns && selectedAssetForVulns.id && (
+        <VulnerabilityHistory
+          assetId={selectedAssetForVulns.id}
+          assetName={selectedAssetForVulns.name}
+          onClose={handleCloseVulnerabilities}
+        />
+      )}
+
+      {/* Bulk Delete Success Message (Feature 029) */}
+      {bulkDeleteSuccess && (
+        <div className="position-fixed top-0 start-50 translate-middle-x mt-3" style={{ zIndex: 9999 }}>
+          <div className="alert alert-success alert-dismissible fade show" role="alert">
+            <i className="bi bi-check-circle-fill me-2"></i>
+            {bulkDeleteSuccess}
+            <button
+              type="button"
+              className="btn-close"
+              onClick={() => setBulkDeleteSuccess(null)}
+              aria-label="Close"
+            ></button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal (Feature 029) */}
+      <BulkDeleteConfirmModal
+        isOpen={showBulkDeleteModal}
+        onClose={() => setShowBulkDeleteModal(false)}
+        onConfirm={handleBulkDelete}
+        isDeleting={isDeletingBulk}
+        assetCount={getFilteredAssets().length}
+      />
+
+      {/* "No EDR possible" exception request (EDR-coverage KPI) */}
+      {noEdrSuccess && (
+        <div className="position-fixed top-0 start-50 translate-middle-x mt-3" style={{ zIndex: 9999 }}>
+          <div className="alert alert-success alert-dismissible fade show" role="alert" data-testid="no-edr-request-success">
+            <i className="bi bi-check-circle-fill me-2"></i>
+            {noEdrSuccess}
+            <button
+              type="button"
+              className="btn-close"
+              onClick={() => setNoEdrSuccess(null)}
+              aria-label="Close"
+            ></button>
+          </div>
+        </div>
+      )}
+
+      {noEdrModalAsset && (
+        <NoEdrExceptionRequestModal
+          isOpen={true}
+          assetId={noEdrModalAsset.id}
+          assetName={noEdrModalAsset.name}
+          onClose={() => setNoEdrModalAsset(null)}
+          onSuccess={() => {
+            // Deliberately does not say "approved": ADMIN/SECCHAMPION requests auto-approve
+            // but everyone else's land in the approval queue, and the response shape that
+            // distinguishes them is not surfaced here.
+            setNoEdrSuccess(`"No EDR possible" request submitted for ${noEdrModalAsset.name}.`);
+            setNoEdrModalAsset(null);
+          }}
+        />
+      )}
+
+    </div>
+  );
+};
+
+export default AssetManagement;

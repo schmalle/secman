@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "projectId": "prj_git-github-com-schmalle-secman-g_72b3204840",
+  "name": "secman",
+  "rootPath": "/Users/flake/sources/misc/secman",
+  "git": {
+    "remoteUrl": "git@github.com:schmalle/secman.git",
+    "defaultBranch": "main",
+    "currentBranch": "main",
+    "headSha": "66c5d7555942a0b008a260052dcf67391db40121"
+  },
+  "detected": {
+    "languages": [
+      "javascript",
+      "python",
+      "kotlin"
+    ],
+    "frameworks": [],
+    "packageManagers": [
+      "npm",
+      "gradle",
+      "python"
+    ],
+    "commands": {
+      "typecheck": null,
+      "lint": null,
+      "format": null,
+      "test": null
+    }
+  },
+  "createdAt": "2026-05-17T19:14:26.701Z",
+  "updatedAt": "2026-05-17T19:14:26.701Z"
+}

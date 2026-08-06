@@ -1,0 +1,197 @@
+openapi: 3.0.3
+info:
+  title: CrowdStrike Import API - Domain Enhancement
+  version: 1.1.0
+  description: |
+    Enhanced CrowdStrike vulnerability import endpoints with Active Directory domain capture and statistics.
+
+    **Feature**: 043-crowdstrike-domain-import
+    **Changes**: Added domain statistics fields to import response DTOs
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local development server
+
+paths:
+  /crowdstrike/vulnerabilities/save:
+    post:
+      summary: Import CrowdStrike vulnerabilities with domain capture
+      description: |
+        Imports vulnerabilities from CrowdStrike Falcon API. Extracts and stores Active Directory
+        domain information for each asset. Returns import statistics including unique domain count
+        and discovered domain list.
+
+        **Enhancement (Feature 043)**: Now captures `machine_domain` from host_info and provides
+        domain discovery statistics in response.
+
+      tags:
+        - CrowdStrike Import
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrowdStrikeImportRequest'
+            example:
+              hostname: web-server-01
+              domainFilter: null
+              batchSize: 100
+
+      responses:
+        '200':
+          description: Import completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResultDto'
+              example:
+                totalAssets: 150
+                totalVulnerabilities: 2300
+                importedCount: 145
+                skippedCount: 5
+                errors: []
+                uniqueDomainCount: 5
+                discoveredDomains:
+                  - CONTOSO
+                  - CORP
+                  - FABRIKAM
+                  - FINANCE
+                  - SALES
+
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Validation failed"
+                message: "Invalid hostname format"
+
+        '401':
+          description: Unauthorized - JWT token missing or invalid
+
+        '403':
+          description: Forbidden - user lacks ADMIN or VULN role
+
+        '500':
+          description: Internal server error - CrowdStrike API failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "CrowdStrike API Error"
+                message: "Failed to authenticate with Falcon API"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CrowdStrikeImportRequest:
+      type: object
+      properties:
+        hostname:
+          type: string
+          description: Target hostname to query vulnerabilities for
+          example: web-server-01
+          nullable: true
+        domainFilter:
+          type: string
+          description: Filter by Active Directory domain
+          example: contoso.com
+          nullable: true
+        batchSize:
+          type: integer
+          description: Number of vulnerabilities to process per batch
+          minimum: 1
+          maximum: 1000
+          default: 100
+
+    ImportResultDto:
+      type: object
+      required:
+        - totalAssets
+        - totalVulnerabilities
+        - importedCount
+        - skippedCount
+        - errors
+        - uniqueDomainCount
+        - discoveredDomains
+      properties:
+        totalAssets:
+          type: integer
+          description: Total number of assets processed during import
+          example: 150
+          minimum: 0
+        totalVulnerabilities:
+          type: integer
+          description: Total number of vulnerabilities imported
+          example: 2300
+          minimum: 0
+        importedCount:
+          type: integer
+          description: Number of vulnerabilities successfully imported
+          example: 145
+          minimum: 0
+        skippedCount:
+          type: integer
+          description: Number of vulnerabilities skipped (duplicates)
+          example: 5
+          minimum: 0
+        errors:
+          type: array
+          description: List of error messages encountered during import
+          items:
+            type: string
+          example:
+            - "Failed to parse row 42: invalid CVE format"
+        uniqueDomainCount:
+          type: integer
+          description: |
+            **NEW (Feature 043)**: Number of unique Active Directory domains discovered during import.
+            Always equals discoveredDomains.length
+          example: 5
+          minimum: 0
+        discoveredDomains:
+          type: array
+          description: |
+            **NEW (Feature 043)**: List of unique Active Directory domain names discovered during import.
+            Domains are normalized to uppercase and sorted alphabetically.
+          items:
+            type: string
+            pattern: '^[A-Z0-9.-]+$'
+          example:
+            - CONTOSO
+            - CORP
+            - FABRIKAM
+            - FINANCE
+            - SALES
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error type/category
+          example: "Validation failed"
+        message:
+          type: string
+          description: Detailed error message
+          example: "Domain must contain only letters, numbers, dots, and hyphens"
+        violations:
+          type: array
+          description: List of validation violations (if applicable)
+          items:
+            type: string
+          example:
+            - "adDomain: Domain cannot start with a dot (value: .contoso)"

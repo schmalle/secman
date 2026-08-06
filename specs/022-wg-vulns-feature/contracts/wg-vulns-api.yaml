@@ -1,0 +1,384 @@
+openapi: 3.0.3
+info:
+  title: WG Vulns API
+  description: |
+    API for Workgroup-Based Vulnerability View feature.
+    Provides vulnerability summaries grouped by workgroups for authenticated non-admin users.
+  version: 1.0.0
+  contact:
+    name: SecMan Development Team
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.secman.example.com
+    description: Production server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/wg-vulns:
+    get:
+      summary: Get workgroup vulnerabilities summary
+      description: |
+        Retrieves vulnerability overview grouped by user's workgroups.
+        
+        **Access Control:**
+        - Requires authentication (JWT token)
+        - Non-admin users only (admin users receive 403 error)
+        - User must be a member of at least one workgroup (otherwise 404)
+        
+        **Behavior:**
+        - Returns all workgroups the user is a member of
+        - Includes assets from those workgroups with vulnerability counts
+        - Sorts workgroups alphabetically by name
+        - Sorts assets within each workgroup by vulnerability count (descending)
+        - Includes severity breakdown (Critical, High, Medium) at all levels
+        
+      operationId: getWorkgroupVulns
+      tags:
+        - WG Vulns
+      responses:
+        '200':
+          description: Successfully retrieved workgroup vulnerabilities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkgroupVulnsSummary'
+              examples:
+                singleWorkgroup:
+                  summary: User with single workgroup
+                  value:
+                    workgroupGroups:
+                      - workgroupId: 1
+                        workgroupName: "Security Team"
+                        workgroupDescription: "Team responsible for security infrastructure"
+                        assets:
+                          - id: 101
+                            name: "web-server-01"
+                            type: "SERVER"
+                            vulnerabilityCount: 45
+                            criticalCount: 5
+                            highCount: 15
+                            mediumCount: 25
+                          - id: 102
+                            name: "db-server-01"
+                            type: "DATABASE"
+                            vulnerabilityCount: 30
+                            criticalCount: 2
+                            highCount: 10
+                            mediumCount: 18
+                        totalAssets: 2
+                        totalVulnerabilities: 75
+                        totalCritical: 7
+                        totalHigh: 25
+                        totalMedium: 43
+                    totalAssets: 2
+                    totalVulnerabilities: 75
+                    globalCritical: 7
+                    globalHigh: 25
+                    globalMedium: 43
+                
+                multipleWorkgroups:
+                  summary: User with multiple workgroups
+                  value:
+                    workgroupGroups:
+                      - workgroupId: 1
+                        workgroupName: "Dev Team"
+                        workgroupDescription: "Development team workgroup"
+                        assets:
+                          - id: 101
+                            name: "dev-server-01"
+                            type: "SERVER"
+                            vulnerabilityCount: 20
+                            criticalCount: 1
+                            highCount: 5
+                            mediumCount: 14
+                        totalAssets: 1
+                        totalVulnerabilities: 20
+                        totalCritical: 1
+                        totalHigh: 5
+                        totalMedium: 14
+                      - workgroupId: 2
+                        workgroupName: "Security Team"
+                        workgroupDescription: null
+                        assets:
+                          - id: 102
+                            name: "sec-server-01"
+                            type: "SERVER"
+                            vulnerabilityCount: 50
+                            criticalCount: 10
+                            highCount: 20
+                            mediumCount: 20
+                        totalAssets: 1
+                        totalVulnerabilities: 50
+                        totalCritical: 10
+                        totalHigh: 20
+                        totalMedium: 20
+                    totalAssets: 2
+                    totalVulnerabilities: 70
+                    globalCritical: 11
+                    globalHigh: 25
+                    globalMedium: 34
+                
+                emptyWorkgroup:
+                  summary: Workgroup with no assets
+                  value:
+                    workgroupGroups:
+                      - workgroupId: 1
+                        workgroupName: "Empty Workgroup"
+                        workgroupDescription: "This workgroup has no assets assigned"
+                        assets: []
+                        totalAssets: 0
+                        totalVulnerabilities: 0
+                        totalCritical: 0
+                        totalHigh: 0
+                        totalMedium: 0
+                    totalAssets: 0
+                    totalVulnerabilities: 0
+                    globalCritical: 0
+                    globalHigh: 0
+                    globalMedium: 0
+        
+        '401':
+          description: Unauthorized - Missing or invalid authentication token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: "Unauthorized"
+                status: 401
+        
+        '403':
+          description: Forbidden - Admin users should use System Vulns view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminRedirectError'
+              example:
+                message: "Please use System Vulns view"
+                redirectUrl: "/vulnerabilities/system"
+                status: 403
+        
+        '404':
+          description: Not Found - User has no workgroup memberships
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: "You are not a member of any workgroups. Please contact your administrator."
+                status: 404
+        
+        '500':
+          description: Internal Server Error - Unexpected error occurred
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: "Internal server error"
+                status: 500
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from login endpoint
+
+  schemas:
+    WorkgroupVulnsSummary:
+      type: object
+      required:
+        - workgroupGroups
+        - totalAssets
+        - totalVulnerabilities
+      properties:
+        workgroupGroups:
+          type: array
+          description: List of workgroup groups with their assets (sorted alphabetically by workgroup name)
+          items:
+            $ref: '#/components/schemas/WorkgroupGroup'
+        totalAssets:
+          type: integer
+          minimum: 0
+          description: Total number of unique assets across all workgroups
+          example: 25
+        totalVulnerabilities:
+          type: integer
+          minimum: 0
+          description: Total number of vulnerabilities across all assets
+          example: 450
+        globalCritical:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Total CRITICAL severity vulnerabilities across all workgroups
+          example: 50
+        globalHigh:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Total HIGH severity vulnerabilities across all workgroups
+          example: 150
+        globalMedium:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Total MEDIUM severity vulnerabilities across all workgroups
+          example: 250
+
+    WorkgroupGroup:
+      type: object
+      required:
+        - workgroupId
+        - workgroupName
+        - assets
+        - totalAssets
+        - totalVulnerabilities
+      properties:
+        workgroupId:
+          type: integer
+          format: int64
+          description: Unique workgroup identifier
+          example: 1
+        workgroupName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Workgroup name
+          example: "Security Team"
+        workgroupDescription:
+          type: string
+          maxLength: 512
+          nullable: true
+          description: Optional workgroup description
+          example: "Team responsible for security infrastructure"
+        assets:
+          type: array
+          description: List of assets in this workgroup (sorted by vulnerability count descending)
+          items:
+            $ref: '#/components/schemas/AssetVulnCount'
+        totalAssets:
+          type: integer
+          minimum: 0
+          description: Number of assets in this workgroup
+          example: 10
+        totalVulnerabilities:
+          type: integer
+          minimum: 0
+          description: Total vulnerabilities for all assets in this workgroup
+          example: 150
+        totalCritical:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Aggregated CRITICAL severity vulnerabilities for this workgroup
+          example: 15
+        totalHigh:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Aggregated HIGH severity vulnerabilities for this workgroup
+          example: 50
+        totalMedium:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Aggregated MEDIUM severity vulnerabilities for this workgroup
+          example: 85
+
+    AssetVulnCount:
+      type: object
+      required:
+        - id
+        - name
+        - type
+        - vulnerabilityCount
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique asset identifier
+          example: 123
+        name:
+          type: string
+          description: Asset name
+          example: "web-server-01"
+        type:
+          type: string
+          description: Asset type
+          example: "SERVER"
+          enum:
+            - SERVER
+            - WORKSTATION
+            - DATABASE
+            - NETWORK_DEVICE
+            - CONTAINER
+            - CLOUD_RESOURCE
+        vulnerabilityCount:
+          type: integer
+          minimum: 0
+          description: Total number of vulnerabilities for this asset
+          example: 45
+        criticalCount:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Number of CRITICAL severity vulnerabilities
+          example: 5
+        highCount:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Number of HIGH severity vulnerabilities
+          example: 15
+        mediumCount:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Number of MEDIUM severity vulnerabilities
+          example: 25
+
+    ErrorResponse:
+      type: object
+      required:
+        - message
+        - status
+      properties:
+        message:
+          type: string
+          description: Human-readable error message
+          example: "You are not a member of any workgroups. Please contact your administrator."
+        status:
+          type: integer
+          description: HTTP status code
+          example: 404
+
+    AdminRedirectError:
+      type: object
+      required:
+        - message
+        - redirectUrl
+        - status
+      properties:
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Please use System Vulns view"
+        redirectUrl:
+          type: string
+          description: Suggested redirect URL for the user
+          example: "/vulnerabilities/system"
+        status:
+          type: integer
+          description: HTTP status code
+          example: 403
+
+tags:
+  - name: WG Vulns
+    description: Workgroup-based vulnerability management endpoints

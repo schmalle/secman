@@ -1,0 +1,157 @@
+openapi: 3.0.3
+info:
+  title: Asset Bulk Delete API
+  description: API endpoint for bulk deletion of all assets (ADMIN only)
+  version: 1.0.0
+  contact:
+    name: Secman API Team
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://secman.example.com
+    description: Production server
+
+paths:
+  /api/assets/bulk:
+    delete:
+      summary: Delete all assets
+      description: |
+        Permanently deletes all assets from the system along with their associated
+        vulnerabilities and scan results. This operation requires ADMIN role and
+        cannot be undone.
+
+        **Performance**: Expected to complete in <30 seconds for 10,000+ assets.
+
+        **Transaction Safety**: All deletions occur within a single database transaction.
+        If any part of the operation fails, all changes are rolled back.
+
+        **Cascade Behavior**:
+        - Deletes all Asset records
+        - Deletes all associated Vulnerability records
+        - Deletes all associated ScanResult records
+        - Removes all asset-workgroup associations
+      operationId: bulkDeleteAssets
+      tags:
+        - Assets
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully deleted all assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkDeleteResult'
+              examples:
+                success:
+                  summary: Successful bulk delete
+                  value:
+                    deletedAssets: 4403
+                    deletedVulnerabilities: 12450
+                    deletedScanResults: 8806
+                    message: "Successfully deleted 4403 assets, 12450 vulnerabilities, and 8806 scan results"
+        '401':
+          description: Unauthorized - Missing or invalid authentication token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                unauthorized:
+                  value:
+                    error: "Unauthorized"
+                    message: "Authentication required"
+        '403':
+          description: Forbidden - User does not have ADMIN role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                forbidden:
+                  value:
+                    error: "Insufficient permissions. ADMIN role required."
+                    code: "FORBIDDEN"
+        '409':
+          description: Conflict - Another bulk delete operation is already in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                conflict:
+                  value:
+                    error: "Bulk asset deletion already in progress"
+                    code: "OPERATION_IN_PROGRESS"
+        '500':
+          description: Internal server error - Transaction failed and was rolled back
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                rollback:
+                  value:
+                    error: "Bulk delete failed. No assets were deleted."
+                    code: "DATABASE_ERROR"
+                    details: "Transaction timeout after 60 seconds"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login
+
+  schemas:
+    BulkDeleteResult:
+      type: object
+      required:
+        - deletedAssets
+        - deletedVulnerabilities
+        - deletedScanResults
+        - message
+      properties:
+        deletedAssets:
+          type: integer
+          format: int32
+          description: Number of assets deleted
+          example: 4403
+        deletedVulnerabilities:
+          type: integer
+          format: int32
+          description: Number of vulnerabilities deleted (cascade)
+          example: 12450
+        deletedScanResults:
+          type: integer
+          format: int32
+          description: Number of scan results deleted (cascade)
+          example: 8806
+        message:
+          type: string
+          description: Human-readable success message
+          example: "Successfully deleted 4403 assets, 12450 vulnerabilities, and 8806 scan results"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "Bulk asset deletion already in progress"
+        code:
+          type: string
+          description: Error code for programmatic handling
+          enum:
+            - FORBIDDEN
+            - OPERATION_IN_PROGRESS
+            - DATABASE_ERROR
+          example: "OPERATION_IN_PROGRESS"
+        details:
+          type: string
+          description: Additional error details (optional)
+          example: "Transaction timeout after 60 seconds"

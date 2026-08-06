@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run build:*)",
+      "Bash(pkill:*)",
+      "Bash(timeout 10s npm run dev)",
+      "Bash(find:*)",
+      "Bash(sed:*)",
+      "Bash(grep:*)",
+      "Bash(npm outdated)",
+      "Bash(npm update)",
+      "Bash(git commit:*)",
+      "Bash(./gradlew:*)",
+      "Bash(gradle build)",
+      "Bash(gradle build:*)",
+      "Bash(gradle:*)",
+      "Bash(timeout 30 gradle run:*)",
+      "Bash(gtimeout:*)",
+      "Bash(cat:*)",
+      "Bash(./scripts/test-api-compatibility.sh:*)",
+      "Bash(/Users/flake/sources/misc/secman/scripts/validate-migration-completion.sh)",
+      "WebFetch(domain:localhost)",
+      "Bash(open http://localhost:4322/login)",
+      "Read(//Users/flake/sources/misc/secman/**)",
+      "Bash(timeout 10s gradle run)",
+      "Bash(java:*)",
+      "Bash(xargs:*)",
+      "Bash(for file in backendng/src/main/kotlin/com/secman/domain/{Demand.kt,RiskAssessment.kt,Release.kt,DemandClassification.kt})",
+      "Bash(done)"
+    ],
+    "deny": []
+  }
+}

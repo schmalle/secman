@@ -1,0 +1,227 @@
+openapi: 3.0.3
+info:
+  title: Scan Management API
+  version: 1.0.0
+  description: View and manage network scan history (Admin only)
+
+paths:
+  /api/scans:
+    get:
+      summary: List all scans
+      description: |
+        Retrieve a paginated list of all network scans.
+        **ADMIN ONLY** - Returns 403 for non-admin users.
+        Results sorted by scan_date descending (newest first).
+      operationId: listScans
+      tags:
+        - Scans
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number (0-indexed)
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          description: Items per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: scanType
+          in: query
+          description: Filter by scan type
+          required: false
+          schema:
+            type: string
+            enum: [nmap, masscan]
+      responses:
+        '200':
+          description: List of scans retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scans:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScanSummary'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          description: Unauthorized - authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - ADMIN role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Insufficient permissions"
+                message: "Only administrators can view scan history"
+
+  /api/scans/{id}:
+    get:
+      summary: Get scan details
+      description: |
+        Retrieve detailed information about a specific scan including host list.
+        **ADMIN ONLY** - Returns 403 for non-admin users.
+      operationId: getScanById
+      tags:
+        - Scans
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Scan ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Scan details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScanDetail'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - ADMIN role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Scan not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    ScanSummary:
+      type: object
+      description: High-level scan metadata for list view
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 42
+        scanType:
+          type: string
+          enum: [nmap, masscan]
+          example: "nmap"
+        filename:
+          type: string
+          example: "network-scan-2025-10-03.xml"
+        scanDate:
+          type: string
+          format: date-time
+          example: "2025-10-03T08:33:50Z"
+        uploadedBy:
+          type: string
+          example: "adminuser"
+        hostCount:
+          type: integer
+          example: 15
+        duration:
+          type: integer
+          nullable: true
+          example: 159
+          description: Scan duration in seconds
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-10-03T09:15:22Z"
+          description: Upload timestamp
+
+    ScanDetail:
+      type: object
+      description: Detailed scan information including discovered hosts
+      allOf:
+        - $ref: '#/components/schemas/ScanSummary'
+        - type: object
+          properties:
+            hosts:
+              type: array
+              items:
+                $ref: '#/components/schemas/HostSummary'
+
+    HostSummary:
+      type: object
+      description: Summary of a discovered host in scan
+      properties:
+        ipAddress:
+          type: string
+          example: "193.99.144.85"
+        hostname:
+          type: string
+          nullable: true
+          example: "www.heise.de"
+        assetId:
+          type: integer
+          format: int64
+          example: 123
+          description: Linked asset ID
+        assetName:
+          type: string
+          example: "www.heise.de"
+        openPortCount:
+          type: integer
+          example: 3
+          description: Number of open ports discovered
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 20
+        totalElements:
+          type: integer
+          example: 42
+        totalPages:
+          type: integer
+          example: 3
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

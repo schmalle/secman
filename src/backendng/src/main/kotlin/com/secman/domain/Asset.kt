@@ -1,0 +1,420 @@
+package com.secman.domain
+
+import com.fasterxml.jackson.annotation.JsonIgnore
+import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.BatchSize
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
+import jakarta.persistence.*
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
+import java.time.LocalDateTime
+
+@Entity
+@Table(
+    name = "asset",
+    indexes = [
+        Index(name = "idx_asset_ip_numeric", columnList = "ip_numeric"),
+        // Query optimization indexes (Feature: Database Structure Optimization)
+        Index(name = "idx_asset_name", columnList = "name"),                      // Asset lookups, filters, sorting
+        Index(name = "idx_asset_cloud_account", columnList = "cloud_account_id"), // AWS account-based access control
+        Index(name = "idx_asset_ad_domain", columnList = "ad_domain"),            // AD domain filtering
+        Index(name = "idx_asset_type", columnList = "type"),                      // Asset type grouping/filtering
+        Index(name = "idx_asset_owner", columnList = "owner"),                    // Owner-based filtering
+        Index(name = "idx_asset_last_seen", columnList = "last_seen"),            // Outdated asset queries
+        Index(name = "idx_asset_manual_creator", columnList = "manual_creator_id"), // Access control by creator
+        Index(name = "idx_asset_scan_uploader", columnList = "scan_uploader_id"),   // Access control by uploader
+        Index(name = "idx_asset_network_zone", columnList = "network_zone"),        // Network zone filtering (port-scan addon)
+        Index(name = "idx_asset_crowdstrike_agent_seen_at", columnList = "crowdstrike_agent_seen_at") // EDR-coverage KPI
+    ]
+)
+@Serdeable
+// PERFORMANCE: When Asset is loaded as a lazy ManyToOne target (e.g.
+// Vulnerability.asset), Hibernate batches up to N proxy initializations into a
+// single IN-list select instead of issuing one round-trip per row. Sized to
+// match the typical vulnerability page (50). Class-level placement is required:
+// Hibernate 6's AttributeBinderType rejects @BatchSize on @ManyToOne fields.
+@BatchSize(size = 50)
+data class Asset(
+    @Id
+    // IDENTITY, not the AUTO default: this table's id column is AUTO_INCREMENT, but on
+    // MariaDB Hibernate maps AUTO to a native sequence (<table>_seq) that starts at 1 and
+    // knows nothing about rows the database numbered. On any long-lived schema that hands
+    // out ids already taken -> "Duplicate entry 'n' for key 'PRIMARY'".
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    var id: Long? = null,
+
+    @Column(nullable = false)
+    @NotBlank
+    @Size(max = 255)
+    var name: String,
+
+    @Column(nullable = false)
+    @NotBlank
+    var type: String,
+
+    @Column
+    var ip: String? = null,
+
+    /**
+     * Canonical URI for assets that are identified by an addressable endpoint
+     * rather than only a hostname or IP address. Examples include web apps,
+     * SaaS tenants, APIs, and URNs.
+     */
+    @Column(name = "uri", length = 2048)
+    @Size(max = 2048)
+    var uri: String? = null,
+
+    /**
+     * Numeric representation of IP address for efficient range queries
+     * Feature: 020-i-want-to (IP Address Mapping)
+     * Computed from ip field in @PrePersist and @PreUpdate
+     * Example: "192.168.1.100" -> 3232235876
+     */
+    @Column(name = "ip_numeric", nullable = true)
+    var ipNumeric: Long? = null,
+
+    @Column(nullable = false)
+    @NotBlank
+    @Size(max = 255)
+    var owner: String,
+
+    @Column(length = 1024)
+    var description: String? = null,
+
+    @Column(name = "created_at", updatable = false)
+    var createdAt: LocalDateTime? = null,
+
+    @Column(name = "updated_at")
+    var updatedAt: LocalDateTime? = null,
+
+    /**
+     * Timestamp when asset was last seen in a scan
+     * Updated when new ScanResult is created for this asset
+     * Related to: Feature 002-implement-a-parsing (Nmap Scan Import)
+     */
+    @Column(name = "last_seen")
+    var lastSeen: LocalDateTime? = null,
+
+    /**
+     * Timestamp when this asset last appeared in a CrowdStrike import.
+     * Separate from lastSeen, which is also updated by scan imports and other
+     * asset ingestion paths.
+     */
+    @Column(name = "crowdstrike_last_imported_at")
+    var crowdStrikeLastImportedAt: LocalDateTime? = null,
+
+    /**
+     * Timestamp when CrowdStrike last reported this asset as a managed device — i.e. when
+     * it appeared in an import's Stage-1 queried-host population.
+     *
+     * Distinct from [crowdStrikeLastImportedAt], which means "had a finding imported" and
+     * drives the CrowdStrike stale-asset deletion rules. That column is a poor EDR-presence
+     * signal because the daily import filters `--severity CRITICAL,HIGH` and drops empty
+     * batches, so a fully-patched host with a healthy sensor never sets it. This column is
+     * stamped for every queried device regardless of findings, and is the numerator source
+     * for `EdrCoverageKpiService`.
+     */
+    @Column(name = "crowdstrike_agent_seen_at")
+    var crowdStrikeAgentSeenAt: LocalDateTime? = null,
+
+    /**
+     * Comma-separated group names this asset belongs to
+     * Example: "SVR-MS-DMZ,Production"
+     * Related to: Feature 003-i-want-to (Vulnerability Management System)
+     */
+    @Column(name = "groups", length = 512)
+    var groups: String? = null,
+
+    /**
+     * Cloud service account ID
+     * Related to: Feature 003-i-want-to (Vulnerability Management System)
+     */
+    @Column(name = "cloud_account_id", length = 255)
+    var cloudAccountId: String? = null,
+
+    /**
+     * Cloud service instance ID
+     * Related to: Feature 003-i-want-to (Vulnerability Management System)
+     */
+    @Column(name = "cloud_instance_id", length = 255)
+    var cloudInstanceId: String? = null,
+
+    /**
+     * Active Directory domain this asset belongs to
+     * Example: "MS.HOME"
+     * Related to: Feature 003-i-want-to (Vulnerability Management System)
+     */
+    @Column(name = "ad_domain", length = 255)
+    var adDomain: String? = null,
+
+    /**
+     * Operating system version
+     * Example: "Windows Server 2030", "Ubuntu 22.04"
+     * Related to: Feature 003-i-want-to (Vulnerability Management System)
+     */
+    @Column(name = "os_version", length = 255)
+    var osVersion: String? = null,
+
+    /**
+     * Explicit criticality override for this asset
+     * Feature 039: Asset and Workgroup Criticality Classification
+     * - nullable: null means inherit from workgroups
+     * - non-null: explicit override takes precedence over workgroup criticality
+     * - See effectiveCriticality for computed value
+     */
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "criticality", nullable = true, length = 20)
+    var criticality: Criticality? = null,
+
+    /**
+     * Network zone classification for this asset
+     * Determines internet-facing exposure level for port scanning
+     * nullable: null treated as UNKNOWN for existing assets
+     */
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "network_zone", nullable = true, length = 20)
+    var networkZone: NetworkZone? = null,
+
+    /**
+     * Cached count of open ports from the latest scan
+     * Updated by ScanImportService after each scan import
+     * Avoids expensive joins for list views and filtering
+     */
+    @Column(name = "open_port_count", nullable = true)
+    var openPortCount: Int? = null,
+
+    /**
+     * Type of the last scan performed (e.g., "nmap", "masscan")
+     * Updated by ScanImportService after each scan import
+     */
+    @Column(name = "last_scan_type", nullable = true, length = 50)
+    var lastScanType: String? = null,
+
+    /**
+     * Timestamp of the last completed scan
+     * Updated by ScanImportService after each scan import
+     */
+    @Column(name = "last_scan_date", nullable = true)
+    var lastScanDate: LocalDateTime? = null,
+
+    /**
+     * Many-to-many relationship with Workgroup
+     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
+     * Feature: 073-memory-optimization (LAZY loading)
+     * Assets can belong to 0..n workgroups
+     *
+     * LAZY fetch: Workgroups loaded on-demand to reduce memory for list operations.
+     * Use AssetRepository.findByIdWithWorkgroups() when workgroups are needed.
+     * Feature flag MEMORY_LAZY_LOADING controls service-level behavior.
+     *
+     * @JsonIgnore prevents LazyInitializationException during JSON serialization.
+     * Workgroups should be accessed via service layer, not directly from API responses.
+     */
+    @JsonIgnore
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "asset_workgroups",
+        joinColumns = [JoinColumn(name = "asset_id")],
+        inverseJoinColumns = [JoinColumn(name = "workgroup_id")]
+    )
+    var workgroups: MutableSet<Workgroup> = mutableSetOf(),
+
+    /**
+     * Dual ownership tracking - manual creator
+     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
+     * User who manually created this asset via UI
+     * Nullable: allows user deletion (FR-027)
+     * LAZY fetch: not needed for list operations
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "manual_creator_id", nullable = true)
+    @JsonIgnore
+    var manualCreator: User? = null,
+
+    /**
+     * Dual ownership tracking - scan uploader
+     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
+     * User who uploaded scan that discovered this asset
+     * Nullable: allows user deletion (FR-027)
+     * LAZY fetch: not needed for list operations
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "scan_uploader_id", nullable = true)
+    @JsonIgnore
+    var scanUploader: User? = null,
+
+    /**
+     * Bidirectional relationship to ScanResult
+     * One asset can have multiple scan results over time (scan history)
+     * Foreign key is in scan_result table (asset_id)
+     * Related to: Feature 002-implement-a-parsing, Decision 4 (point-in-time snapshots)
+     *
+     * Note: @JsonIgnore prevents lazy loading errors during JSON serialization.
+     * Scan results should be loaded explicitly via port history endpoint.
+     */
+    @JsonIgnore
+    @OneToMany(mappedBy = "asset", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var scanResults: MutableList<ScanResult> = mutableListOf(),
+
+    /**
+     * Bidirectional relationship to Vulnerability
+     * One asset can have multiple vulnerabilities discovered across different scans
+     * Foreign key is in vulnerability table (asset_id)
+     * Related to: Feature 003-i-want-to (Vulnerability Management System)
+     *
+     * Note: @JsonIgnore prevents lazy loading errors during JSON serialization.
+     * Vulnerabilities should be loaded explicitly via asset vulnerabilities endpoint.
+     */
+    @JsonIgnore
+    @OneToMany(mappedBy = "asset", fetch = FetchType.LAZY)
+    var vulnerabilities: MutableList<Vulnerability> = mutableListOf(),
+
+    /**
+     * Flexible key-value tags for arbitrary asset classification
+     * Examples: environment=production, role=web-server, team=platform
+     */
+    @JsonIgnore
+    @OneToMany(mappedBy = "asset", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var tags: MutableList<AssetTag> = mutableListOf()
+) {
+    /**
+     * Computed effective criticality for this asset
+     * Feature 039: Asset and Workgroup Criticality Classification
+     *
+     * Calculation logic:
+     * 1. If asset has explicit criticality override -> return it
+     * 2. If asset belongs to 1+ workgroups -> return highest workgroup criticality (excluding N/A)
+     * 3. If all workgroups are N/A or asset has no workgroups -> default to MEDIUM
+     *
+     * Not persisted to database, computed on-demand
+     *
+     * @JsonIgnore: Prevents serialization from triggering LAZY workgroups load.
+     * Feature 073: Call this method only when workgroups are already loaded
+     * (e.g., via findByIdWithWorkgroups() or Hibernate.initialize()).
+     */
+    @JsonIgnore
+    fun getEffectiveCriticality(): Criticality {
+        return criticality ?: workgroups
+            .filter { it.criticality != Criticality.NA }  // Filter out N/A workgroups
+            .maxByOrNull { it.criticality }?.criticality ?: Criticality.MEDIUM
+    }
+
+    /**
+     * Check if this asset's IP address is a public (non-private) IP.
+     * Returns false for RFC1918 (10.x, 172.16-31.x, 192.168.x),
+     * RFC6598 (100.64-127.x), loopback (127.x), and link-local (169.254.x).
+     */
+    @JsonIgnore
+    fun isPublicIp(): Boolean {
+        val ipAddr = ip ?: return false
+        val parts = ipAddr.split('.')
+        if (parts.size != 4) return false
+        val octets = parts.mapNotNull { it.toIntOrNull() }
+        if (octets.size != 4) return false
+        val (a, b) = octets
+        return when {
+            a == 10 -> false                                    // 10.0.0.0/8
+            a == 172 && b in 16..31 -> false                    // 172.16.0.0/12
+            a == 192 && b == 168 -> false                       // 192.168.0.0/16
+            a == 100 && b in 64..127 -> false                   // 100.64.0.0/10 (CGN)
+            a == 127 -> false                                   // 127.0.0.0/8 (loopback)
+            a == 169 && b == 254 -> false                       // 169.254.0.0/16 (link-local)
+            else -> true
+        }
+    }
+
+    /**
+     * Check if this asset is classified as internet-facing (EXTERNAL or DMZ zone)
+     */
+    @JsonIgnore
+    fun isInternetFacing(): Boolean {
+        return networkZone == NetworkZone.EXTERNAL || networkZone == NetworkZone.DMZ
+    }
+
+    @PrePersist
+    fun onCreate() {
+        val now = LocalDateTime.now()
+        createdAt = now
+        updatedAt = now
+        computeIpNumeric()
+        normalizeDomain()
+    }
+
+    @PreUpdate
+    fun onUpdate() {
+        updatedAt = LocalDateTime.now()
+        computeIpNumeric()
+        normalizeDomain()
+    }
+
+    /**
+     * Normalize Active Directory domain to lowercase
+     * Feature: 043-crowdstrike-domain-import
+     * Ensures consistent storage and case-insensitive comparison
+     */
+    private fun normalizeDomain() {
+        adDomain = adDomain?.trim()?.lowercase()
+    }
+
+    /**
+     * Compute numeric representation of IP address
+     * Feature: 020-i-want-to (IP Address Mapping)
+     * Converts IPv4 address string to Long for efficient range queries
+     */
+    private fun computeIpNumeric() {
+        ipNumeric = if (ip != null) {
+            try {
+                ipToNumeric(ip!!)
+            } catch (e: Exception) {
+                null // Invalid IP format, skip numeric conversion
+            }
+        } else {
+            null
+        }
+    }
+
+    /**
+     * Convert IPv4 address string to numeric representation
+     * Example: "192.168.1.100" -> 3232235876
+     */
+    private fun ipToNumeric(ipAddress: String): Long {
+        val parts = ipAddress.split('.')
+        if (parts.size != 4) return 0L
+
+        var result = 0L
+        for (part in parts) {
+            val octet = part.toIntOrNull() ?: return 0L
+            if (octet < 0 || octet > 255) return 0L
+            result = (result shl 8) or octet.toLong()
+        }
+        return result
+    }
+
+    /**
+     * Add a scan result to this asset
+     * Maintains bidirectional relationship and updates lastSeen
+     */
+    fun addScanResult(result: ScanResult) {
+        scanResults.add(result)
+        result.asset = this
+        lastSeen = result.discoveredAt
+        updatedAt = LocalDateTime.now()
+    }
+
+    override fun toString(): String {
+        return "Asset(id=$id, name='$name', type='$type', owner='$owner', ip='$ip', uri='$uri')"
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is Asset) return false
+        return id != null && id == other.id
+    }
+
+    override fun hashCode(): Int {
+        return id?.hashCode() ?: 0
+    }
+}

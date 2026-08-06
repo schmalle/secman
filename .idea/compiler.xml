@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile name="Gradle Imported" enabled="true">
+        <outputRelativeToContentRoot value="true" />
+        <option name="micronaut.processing.annotations" value="com.secman.*" />
+        <option name="micronaut.processing.group" value="com.secman" />
+        <option name="micronaut.processing.incremental" value="true" />
+        <option name="micronaut.processing.module" value="backendng" />
+        <processorPath useClasspath="false">
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.data/micronaut-data-processor/5.0.6/89b7ce8e73b40dc4645738fdc459475d9e7973e/micronaut-data-processor-5.0.6.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.security/micronaut-security-annotations/5.0.0/f4fe8a84b10c356b1f8d642954d63d40344ed7e0/micronaut-security-annotations-5.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.serde/micronaut-serde-processor/3.0.0/d9bce67dbdf636a4dc248868a08fb04a6a3b0d59/micronaut-serde-processor-3.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.validation/micronaut-validation-processor/5.0.0/9b6fd4225f37459b2878062b1b19818d745ff656/micronaut-validation-processor-5.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.data/micronaut-data-model/5.0.6/b893235237bbd215a2e7b7141f037d657dcfcf87/micronaut-data-model-5.0.6.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.sourcegen/micronaut-sourcegen-generator-java/2.0.0/f3c1019177c70f1840a2b833ec2fe4422e8d02f/micronaut-sourcegen-generator-java-2.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.sourcegen/micronaut-sourcegen-generator/2.0.0/cf4562fdadbcbc4b76ca0bb2d2e631e2ea72450b/micronaut-sourcegen-generator-2.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-inject-java/5.0.7/2b7a0f28bcf60b8bca282868a95c56b8954cb4e5/micronaut-inject-java-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-core-processor/5.0.7/9e1e699257df90a5c865b953421fe3c2514b2d47/micronaut-core-processor-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.sourcegen/micronaut-sourcegen-bytecode-writer/2.0.0/63598f0bd4e56039b1650951eec5244101ca1221/micronaut-sourcegen-bytecode-writer-2.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.sourcegen/micronaut-sourcegen-model/2.0.0/eca7ce0145d19bdc4d63e8593a34d97d3340d9da/micronaut-sourcegen-model-2.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.serde/micronaut-serde-api/3.0.0/a85714e1a9158042590eea1c2a69f1408a923620/micronaut-serde-api-3.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.validation/micronaut-validation/5.0.0/61c191502dba600aae82698fdc88f521d962bfac/micronaut-validation-5.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.sourcegen/micronaut-sourcegen-annotations/2.0.0/4fd4814930fb3ff1ca4d90915c3ebac8996a714b/micronaut-sourcegen-annotations-2.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.reactor/micronaut-reactor/4.0.0/967fbab6b4fd76eab10bebe87f02959a1ce3a91f/micronaut-reactor-4.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-graal/5.0.7/9f2d9e5adb30ad9aaa3ff76f8958be0feecebdce/micronaut-graal-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-json-core/5.0.7/3d19db7f728e1f02f42f1aabeb405081f610b672/micronaut-json-core-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-http/5.0.7/305371b25e264741e736838507f7649a0ebbf32c/micronaut-http-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-context-propagation/5.0.7/2b4053d7be7012db2de171a78ec98a88db900a8/micronaut-context-propagation-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-context/5.0.7/5456cb5941ee2cc8369b33c9cd8eb550ca550788/micronaut-context-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-aop/5.0.7/8de8363e1086a0a7b3b3226ddf4afa1d8e50aa3/micronaut-aop-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-inject/5.0.7/4831f4c89562f69b9bcba50067012549f74495da/micronaut-inject-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/jakarta.annotation/jakarta.annotation-api/2.1.1/48b9bda22b091b1f48b13af03fe36db3be6e1ae3/jakarta.annotation-api-2.1.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.github.javaparser/javaparser-symbol-solver-core/3.28.0/a6c3efac08096fb99618c3e53431ba025d381d3c/javaparser-symbol-solver-core-3.28.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-core-reactive/5.0.7/2b5168664171217d4a2f0c0cb6368909e67030dc/micronaut-core-reactive-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-core/5.0.7/2b941d7dc9cb535e8903d701598f276d7f3157d0/micronaut-core-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.projectreactor/reactor-core/3.8.5/e3afac59d35d67364b64389e2ed7cd274829df71/reactor-core-3.8.5.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.jspecify/jspecify/1.0.0/7425a601c1c7ec76645a78d22b8c6a627edee507/jspecify-1.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.reactivestreams/reactive-streams/1.0.4/3864a1320d97d7b045f729a326e1e077661f31b7/reactive-streams-1.0.4.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.slf4j/slf4j-api/2.0.18/78a9e7a37cd6360e0b818e86341b24123d28d4df/slf4j-api-2.0.18.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-commons/9.9.1/ab35de4c537184a09339069f1a3b3aacf2289149/asm-commons-9.9.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-util/9.9.1/e51f5b0ae0b0c1960687ae970a2a3434d39d8abb/asm-util-9.9.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-analysis/9.9.1/1ab8d9316ef7a67240087919a708246c37ed1660/asm-analysis-9.9.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-tree/9.9.1/b6b1b3366296163b4b1f540731aad0a2baa484d8/asm-tree-9.9.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm/9.9.1/2ceea6ab43bcae1979b2a6d85fc0ca429877e5ab/asm-9.9.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/jakarta.persistence/jakarta.persistence-api/3.2.0/bb75a113f3fa191c2c7ee7b206d8e674251b3129/jakarta.persistence-api-3.2.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/jakarta.validation/jakarta.validation-api/3.1.1/ec8622148afc5564235d17af80ea80288d0e7f92/jakarta.validation-api-3.1.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.antlr/antlr4/4.13.2/a2bc0d399506a7297568baee188b481727d45d3b/antlr4-4.13.2.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.antlr/antlr4-runtime/4.13.2/fc3db6d844df652a3d5db31c87fa12757f13691d/antlr4-runtime-4.13.2.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.antlr/ST4/4.3.4/bf68d049dd4e6e104055a79ac3bf9e6307d29258/ST4-4.3.4.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.antlr/antlr-runtime/3.5.3/9011fb189c5ed6d99e5f3322514848d1ec1e1416/antlr-runtime-3.5.3.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.abego.treelayout/org.abego.treelayout.core/1.0.3/457216e8e6578099ae63667bb1e4439235892028/org.abego.treelayout.core-1.0.3.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.ibm.icu/icu4j/72.1/bc9057df4b5efddf7f6d1880bf7f3399f4ce5633/icu4j-72.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/jakarta.inject/jakarta.inject-api/2.0.1/4c28afe1991a941d7702fe1362c365f0a8641d1e/jakarta.inject-api-2.0.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.github.javaparser/javaparser-core/3.28.0/59829d055a8327d017e83316fc01b182335da9d6/javaparser-core-3.28.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.checkerframework/checker-qual/3.53.0/af1105964a03d7ed8aaf8ea2cb6ec0da7ec6c7a6/checker-qual-3.53.0.jar" />
+        </processorPath>
+        <module name="secman.backendng.test" />
+        <module name="secman.backendng.main" />
+      </profile>
+      <profile name="Gradle Imported" enabled="true">
+        <outputRelativeToContentRoot value="true" />
+        <option name="micronaut.processing.annotations" value="com.secman.cli.*" />
+        <option name="micronaut.processing.group" value="com.secman.cli" />
+        <option name="micronaut.processing.incremental" value="true" />
+        <option name="micronaut.processing.module" value="cli" />
+        <processorPath useClasspath="false">
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.serde/micronaut-serde-processor/3.0.0/d9bce67dbdf636a4dc248868a08fb04a6a3b0d59/micronaut-serde-processor-3.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.sourcegen/micronaut-sourcegen-generator-java/2.0.0/f3c1019177c70f1840a2b833ec2fe4422e8d02f/micronaut-sourcegen-generator-java-2.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.sourcegen/micronaut-sourcegen-generator/2.0.0/cf4562fdadbcbc4b76ca0bb2d2e631e2ea72450b/micronaut-sourcegen-generator-2.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-inject-java/5.0.7/2b7a0f28bcf60b8bca282868a95c56b8954cb4e5/micronaut-inject-java-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-core-processor/5.0.7/9e1e699257df90a5c865b953421fe3c2514b2d47/micronaut-core-processor-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.sourcegen/micronaut-sourcegen-bytecode-writer/2.0.0/63598f0bd4e56039b1650951eec5244101ca1221/micronaut-sourcegen-bytecode-writer-2.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.sourcegen/micronaut-sourcegen-model/2.0.0/eca7ce0145d19bdc4d63e8593a34d97d3340d9da/micronaut-sourcegen-model-2.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.serde/micronaut-serde-api/3.0.0/a85714e1a9158042590eea1c2a69f1408a923620/micronaut-serde-api-3.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.sourcegen/micronaut-sourcegen-annotations/2.0.0/4fd4814930fb3ff1ca4d90915c3ebac8996a714b/micronaut-sourcegen-annotations-2.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-graal/5.0.7/9f2d9e5adb30ad9aaa3ff76f8958be0feecebdce/micronaut-graal-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-json-core/5.0.7/3d19db7f728e1f02f42f1aabeb405081f610b672/micronaut-json-core-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-http/5.0.7/305371b25e264741e736838507f7649a0ebbf32c/micronaut-http-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-context-propagation/5.0.7/2b4053d7be7012db2de171a78ec98a88db900a8/micronaut-context-propagation-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-context/5.0.7/5456cb5941ee2cc8369b33c9cd8eb550ca550788/micronaut-context-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-aop/5.0.7/8de8363e1086a0a7b3b3226ddf4afa1d8e50aa3/micronaut-aop-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-inject/5.0.7/4831f4c89562f69b9bcba50067012549f74495da/micronaut-inject-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/jakarta.annotation/jakarta.annotation-api/2.1.1/48b9bda22b091b1f48b13af03fe36db3be6e1ae3/jakarta.annotation-api-2.1.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.github.javaparser/javaparser-symbol-solver-core/3.28.0/a6c3efac08096fb99618c3e53431ba025d381d3c/javaparser-symbol-solver-core-3.28.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-core-reactive/5.0.7/2b5168664171217d4a2f0c0cb6368909e67030dc/micronaut-core-reactive-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-core/5.0.7/2b941d7dc9cb535e8903d701598f276d7f3157d0/micronaut-core-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.projectreactor/reactor-core/3.8.5/e3afac59d35d67364b64389e2ed7cd274829df71/reactor-core-3.8.5.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.jspecify/jspecify/1.0.0/7425a601c1c7ec76645a78d22b8c6a627edee507/jspecify-1.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.reactivestreams/reactive-streams/1.0.4/3864a1320d97d7b045f729a326e1e077661f31b7/reactive-streams-1.0.4.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.slf4j/slf4j-api/2.0.18/78a9e7a37cd6360e0b818e86341b24123d28d4df/slf4j-api-2.0.18.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-commons/9.9.1/ab35de4c537184a09339069f1a3b3aacf2289149/asm-commons-9.9.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-util/9.9.1/e51f5b0ae0b0c1960687ae970a2a3434d39d8abb/asm-util-9.9.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-analysis/9.9.1/1ab8d9316ef7a67240087919a708246c37ed1660/asm-analysis-9.9.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-tree/9.9.1/b6b1b3366296163b4b1f540731aad0a2baa484d8/asm-tree-9.9.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm/9.9.1/2ceea6ab43bcae1979b2a6d85fc0ca429877e5ab/asm-9.9.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/jakarta.inject/jakarta.inject-api/2.0.1/4c28afe1991a941d7702fe1362c365f0a8641d1e/jakarta.inject-api-2.0.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.github.javaparser/javaparser-core/3.28.0/59829d055a8327d017e83316fc01b182335da9d6/javaparser-core-3.28.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.checkerframework/checker-qual/3.53.0/af1105964a03d7ed8aaf8ea2cb6ec0da7ec6c7a6/checker-qual-3.53.0.jar" />
+        </processorPath>
+        <module name="secman.cli.test" />
+        <module name="secman.cli.main" />
+      </profile>
+      <profile name="Gradle Imported" enabled="true">
+        <outputRelativeToContentRoot value="true" />
+        <option name="micronaut.processing.annotations" value="com.secman.crowdstrike.*" />
+        <option name="micronaut.processing.group" value="com.secman.crowdstrike" />
+        <option name="micronaut.processing.incremental" value="true" />
+        <option name="micronaut.processing.module" value="shared" />
+        <processorPath useClasspath="false">
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.serde/micronaut-serde-processor/3.0.0/d9bce67dbdf636a4dc248868a08fb04a6a3b0d59/micronaut-serde-processor-3.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.validation/micronaut-validation-processor/5.0.0/9b6fd4225f37459b2878062b1b19818d745ff656/micronaut-validation-processor-5.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.sourcegen/micronaut-sourcegen-generator-java/2.0.0/f3c1019177c70f1840a2b833ec2fe4422e8d02f/micronaut-sourcegen-generator-java-2.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.sourcegen/micronaut-sourcegen-generator/2.0.0/cf4562fdadbcbc4b76ca0bb2d2e631e2ea72450b/micronaut-sourcegen-generator-2.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-inject-java/5.0.7/2b7a0f28bcf60b8bca282868a95c56b8954cb4e5/micronaut-inject-java-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-core-processor/5.0.7/9e1e699257df90a5c865b953421fe3c2514b2d47/micronaut-core-processor-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.sourcegen/micronaut-sourcegen-bytecode-writer/2.0.0/63598f0bd4e56039b1650951eec5244101ca1221/micronaut-sourcegen-bytecode-writer-2.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.sourcegen/micronaut-sourcegen-model/2.0.0/eca7ce0145d19bdc4d63e8593a34d97d3340d9da/micronaut-sourcegen-model-2.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.serde/micronaut-serde-api/3.0.0/a85714e1a9158042590eea1c2a69f1408a923620/micronaut-serde-api-3.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.validation/micronaut-validation/5.0.0/61c191502dba600aae82698fdc88f521d962bfac/micronaut-validation-5.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.sourcegen/micronaut-sourcegen-annotations/2.0.0/4fd4814930fb3ff1ca4d90915c3ebac8996a714b/micronaut-sourcegen-annotations-2.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut.reactor/micronaut-reactor/4.0.0/967fbab6b4fd76eab10bebe87f02959a1ce3a91f/micronaut-reactor-4.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-graal/5.0.7/9f2d9e5adb30ad9aaa3ff76f8958be0feecebdce/micronaut-graal-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-json-core/5.0.7/3d19db7f728e1f02f42f1aabeb405081f610b672/micronaut-json-core-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-http/5.0.7/305371b25e264741e736838507f7649a0ebbf32c/micronaut-http-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-context-propagation/5.0.7/2b4053d7be7012db2de171a78ec98a88db900a8/micronaut-context-propagation-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-context/5.0.7/5456cb5941ee2cc8369b33c9cd8eb550ca550788/micronaut-context-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-aop/5.0.7/8de8363e1086a0a7b3b3226ddf4afa1d8e50aa3/micronaut-aop-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-inject/5.0.7/4831f4c89562f69b9bcba50067012549f74495da/micronaut-inject-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/jakarta.annotation/jakarta.annotation-api/2.1.1/48b9bda22b091b1f48b13af03fe36db3be6e1ae3/jakarta.annotation-api-2.1.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.github.javaparser/javaparser-symbol-solver-core/3.28.0/a6c3efac08096fb99618c3e53431ba025d381d3c/javaparser-symbol-solver-core-3.28.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-core-reactive/5.0.7/2b5168664171217d4a2f0c0cb6368909e67030dc/micronaut-core-reactive-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.micronaut/micronaut-core/5.0.7/2b941d7dc9cb535e8903d701598f276d7f3157d0/micronaut-core-5.0.7.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.projectreactor/reactor-core/3.8.5/e3afac59d35d67364b64389e2ed7cd274829df71/reactor-core-3.8.5.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.jspecify/jspecify/1.0.0/7425a601c1c7ec76645a78d22b8c6a627edee507/jspecify-1.0.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.reactivestreams/reactive-streams/1.0.4/3864a1320d97d7b045f729a326e1e077661f31b7/reactive-streams-1.0.4.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.slf4j/slf4j-api/2.0.18/78a9e7a37cd6360e0b818e86341b24123d28d4df/slf4j-api-2.0.18.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-commons/9.9.1/ab35de4c537184a09339069f1a3b3aacf2289149/asm-commons-9.9.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-util/9.9.1/e51f5b0ae0b0c1960687ae970a2a3434d39d8abb/asm-util-9.9.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-analysis/9.9.1/1ab8d9316ef7a67240087919a708246c37ed1660/asm-analysis-9.9.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-tree/9.9.1/b6b1b3366296163b4b1f540731aad0a2baa484d8/asm-tree-9.9.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm/9.9.1/2ceea6ab43bcae1979b2a6d85fc0ca429877e5ab/asm-9.9.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/jakarta.validation/jakarta.validation-api/3.1.1/ec8622148afc5564235d17af80ea80288d0e7f92/jakarta.validation-api-3.1.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/jakarta.inject/jakarta.inject-api/2.0.1/4c28afe1991a941d7702fe1362c365f0a8641d1e/jakarta.inject-api-2.0.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.github.javaparser/javaparser-core/3.28.0/59829d055a8327d017e83316fc01b182335da9d6/javaparser-core-3.28.0.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.checkerframework/checker-qual/3.53.0/af1105964a03d7ed8aaf8ea2cb6ec0da7ec6c7a6/checker-qual-3.53.0.jar" />
+        </processorPath>
+        <module name="secman.shared.test" />
+        <module name="secman.shared.main" />
+      </profile>
+    </annotationProcessing>
+  </component>
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="secman-backend-ng" options="-parameters -Amicronaut.processing.incremental=true -Amicronaut.processing.annotations=com.secman.* -Amicronaut.processing.group=com.secman -Amicronaut.processing.module=secman-backend-ng" />
+      <module name="secman-backend-ng.main" options="-parameters -Amicronaut.processing.incremental=true -Amicronaut.processing.annotations=com.secman.* -Amicronaut.processing.group=com.secman -Amicronaut.processing.module=secman-backend-ng" />
+      <module name="secman-backend-ng.test" options="-parameters -Amicronaut.processing.incremental=true -Amicronaut.processing.annotations=com.secman.* -Amicronaut.processing.group=com.secman -Amicronaut.processing.module=secman-backend-ng" />
+      <module name="secman.backendng" options="-parameters -Amicronaut.processing.incremental=true -Amicronaut.processing.annotations=com.secman.* -Amicronaut.processing.group=com.secman -Amicronaut.processing.module=backendng" />
+      <module name="secman.backendng.main" options="-parameters -Amicronaut.processing.incremental=true -Amicronaut.processing.annotations=com.secman.* -Amicronaut.processing.group=com.secman -Amicronaut.processing.module=backendng" />
+      <module name="secman.backendng.test" options="-parameters -Amicronaut.processing.incremental=true -Amicronaut.processing.annotations=com.secman.* -Amicronaut.processing.group=com.secman -Amicronaut.processing.module=backendng" />
+      <module name="secman.cli" options="-parameters -Amicronaut.processing.incremental=true -Amicronaut.processing.annotations=com.secman.cli.* -Amicronaut.processing.group=com.secman.cli -Amicronaut.processing.module=cli" />
+      <module name="secman.cli.main" options="-parameters -Amicronaut.processing.incremental=true -Amicronaut.processing.annotations=com.secman.cli.* -Amicronaut.processing.group=com.secman.cli -Amicronaut.processing.module=cli" />
+      <module name="secman.cli.test" options="-parameters -Amicronaut.processing.incremental=true -Amicronaut.processing.annotations=com.secman.cli.* -Amicronaut.processing.group=com.secman.cli -Amicronaut.processing.module=cli" />
+      <module name="secman.shared" options="-parameters -Amicronaut.processing.incremental=true -Amicronaut.processing.annotations=com.secman.crowdstrike.* -Amicronaut.processing.group=com.secman.crowdstrike -Amicronaut.processing.module=shared" />
+      <module name="secman.shared.main" options="-parameters -Amicronaut.processing.incremental=true -Amicronaut.processing.annotations=com.secman.crowdstrike.* -Amicronaut.processing.group=com.secman.crowdstrike -Amicronaut.processing.module=shared" />
+      <module name="secman.shared.test" options="-parameters -Amicronaut.processing.incremental=true -Amicronaut.processing.annotations=com.secman.crowdstrike.* -Amicronaut.processing.group=com.secman.crowdstrike -Amicronaut.processing.module=shared" />
+    </option>
+  </component>
+</project>

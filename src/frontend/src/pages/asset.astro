@@ -1,0 +1,19 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Asset Management">
+    <div id="asset-root"></div>
+</Layout>
+
+<script>
+    import('../components/AssetManagement.tsx').then(module => {
+        const AssetManagement = module.default;
+        import('react').then(React => {
+            import('react-dom/client').then(ReactDOM => {
+                const root = ReactDOM.createRoot(document.getElementById('asset-root'));
+                root.render(React.createElement(AssetManagement));
+            });
+        });
+    });
+</script>

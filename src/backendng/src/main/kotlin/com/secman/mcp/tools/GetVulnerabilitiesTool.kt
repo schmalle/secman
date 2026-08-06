@@ -1,0 +1,235 @@
+package com.secman.mcp.tools
+
+import com.secman.domain.Asset
+import com.secman.domain.McpOperation
+import com.secman.domain.Vulnerability
+import com.secman.dto.mcp.McpExecutionContext
+import com.secman.repository.AssetRepository
+import com.secman.repository.VulnerabilityRepository
+import com.secman.service.VulnerabilityExceptionService
+import io.micronaut.data.model.Pageable
+import jakarta.inject.Inject
+import jakarta.inject.Singleton
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
+/**
+ * MCP tool for retrieving vulnerability data with filtering and pagination.
+ * Feature 006: MCP Tools for Asset Inventory, Scans, Vulnerabilities, and Products
+ * Feature 052: MCP Access Control - Filters results based on delegated user's accessible assets
+ */
+@Singleton
+open class GetVulnerabilitiesTool(
+    @Inject private val vulnerabilityRepository: VulnerabilityRepository,
+    @Inject private val vulnerabilityExceptionService: VulnerabilityExceptionService,
+    @Inject private val assetRepository: AssetRepository
+) : McpTool {
+
+    override val name = "get_vulnerabilities"
+    override val description = "Retrieve vulnerability data with optional filtering and pagination"
+    override val operation = McpOperation.READ
+
+    override val inputSchema = mapOf(
+        "type" to "object",
+        "properties" to mapOf(
+            "page" to mapOf(
+                "type" to "number",
+                "description" to "Page number (0-indexed)",
+                "minimum" to 0,
+                "default" to 0
+            ),
+            "pageSize" to mapOf(
+                "type" to "number",
+                "description" to "Number of items per page (max 500)",
+                "minimum" to 1,
+                "maximum" to 500,
+                "default" to 100
+            ),
+            "cveId" to mapOf(
+                "type" to "string",
+                "description" to "Filter by CVE ID (partial match, case-insensitive)"
+            ),
+            "severity" to mapOf(
+                "type" to "array",
+                "description" to "Filter by CVSS severity levels",
+                "items" to mapOf("type" to "string"),
+                "enum" to listOf("Critical", "High", "Medium", "Low", "Info")
+            ),
+            "assetId" to mapOf(
+                "type" to "number",
+                "description" to "Filter by asset ID"
+            ),
+            "startDate" to mapOf(
+                "type" to "string",
+                "description" to "Filter vulnerabilities scanned after this date (ISO-8601)",
+                "format" to "date-time"
+            ),
+            "endDate" to mapOf(
+                "type" to "string",
+                "description" to "Filter vulnerabilities scanned before this date (ISO-8601)",
+                "format" to "date-time"
+            ),
+            "includeExcepted" to mapOf(
+                "type" to "boolean",
+                "description" to "Include vulnerabilities that are covered by active exceptions (default: false). Set to true to see all vulnerabilities including excepted ones.",
+                "default" to false
+            )
+        )
+    )
+
+    override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
+        val page = (arguments["page"] as? Number)?.toInt() ?: 0
+        val pageSize = (arguments["pageSize"] as? Number)?.toInt() ?: 100
+        val cveIdFilter = arguments["cveId"] as? String
+        val severityFilter = arguments["severity"] as? List<*>
+        val assetIdFilter = (arguments["assetId"] as? Number)?.toLong()
+        val startDateStr = arguments["startDate"] as? String
+        val endDateStr = arguments["endDate"] as? String
+        val includeExcepted = arguments["includeExcepted"] as? Boolean ?: false
+
+        // Validate parameters
+        if (pageSize < 1 || pageSize > 500) {
+            return McpToolResult.error("INVALID_PAGE_SIZE", "Page size must be between 1 and 500")
+        }
+        if (page < 0) {
+            return McpToolResult.error("INVALID_PAGE", "Page number must be 0 or greater")
+        }
+
+        try {
+            val pageable = Pageable.from(page, pageSize)
+
+            // Parse dates if provided
+            val startDate = startDateStr?.let { LocalDateTime.parse(it, DateTimeFormatter.ISO_DATE_TIME) }
+            val endDate = endDateStr?.let { LocalDateTime.parse(it, DateTimeFormatter.ISO_DATE_TIME) }
+
+            // Get accessible asset IDs for access control filtering (Feature: 052-mcp-access-control)
+            val accessibleIds = context.getFilterableAssetIds()
+
+            // If delegation is active and user has no accessible assets, return empty result
+            if (accessibleIds != null && accessibleIds.isEmpty()) {
+                return McpToolResult.success(mapOf(
+                    "vulnerabilities" to emptyList<Map<String, Any?>>(),
+                    "total" to 0,
+                    "page" to page,
+                    "pageSize" to pageSize,
+                    "totalPages" to 0
+                ))
+            }
+
+            // If filtering by specific asset, check access first
+            if (assetIdFilter != null && !context.canAccessAsset(assetIdFilter)) {
+                return McpToolResult.error("ASSET_NOT_FOUND", "Asset with ID $assetIdFilter not found")
+            }
+
+            // Query based on filters (priority order), applying access control where needed
+            val resultPage = when {
+                // Every branch below applies the access filter AND the paging in SQL. They used to
+                // read all matching rows with Pageable.UNPAGED — which emits no LIMIT — and slice
+                // the result in Kotlin, so cost grew with the table rather than the page size.
+                // Unlike the no-filter branch, those reads were unbounded for admins too.
+
+                // CVE ID search with access control
+                cveIdFilter != null -> {
+                    if (accessibleIds != null) {
+                        vulnerabilityRepository.findByAssetIdInAndVulnerabilityIdContainingIgnoreCase(
+                            accessibleIds, cveIdFilter, pageable
+                        )
+                    } else {
+                        vulnerabilityRepository.findByVulnerabilityIdContainingIgnoreCase(cveIdFilter, pageable)
+                    }
+                }
+
+                // Asset-specific vulnerabilities (already access-checked above)
+                assetIdFilter != null -> vulnerabilityRepository.findByAssetId(assetIdFilter, pageable)
+
+                // Date range filter with access control
+                startDate != null && endDate != null -> {
+                    if (accessibleIds != null) {
+                        vulnerabilityRepository.findByAssetIdInAndScanTimestampBetween(
+                            accessibleIds, startDate, endDate, pageable
+                        )
+                    } else {
+                        vulnerabilityRepository.findByScanTimestampBetween(startDate, endDate, pageable)
+                    }
+                }
+
+                // Severity filter with access control
+                severityFilter != null && severityFilter.isNotEmpty() -> {
+                    val severities = severityFilter.mapNotNull { it as? String }
+                    if (accessibleIds != null) {
+                        vulnerabilityRepository.findByAssetIdInAndCvssSeverityIn(accessibleIds, severities, pageable)
+                    } else {
+                        vulnerabilityRepository.findByCvssSeverityIn(severities, pageable)
+                    }
+                }
+
+                // No filters - get all with access control.
+                // The access filter and the paging both run in SQL. Reading the table with
+                // findAll() and filtering in Kotlin loaded every vulnerability row into heap
+                // (1.1M entities against a 1 GB heap = OutOfMemoryError), and the cost grew
+                // with the table rather than with the page size actually requested.
+                else -> {
+                    if (accessibleIds != null) {
+                        vulnerabilityRepository.findByAssetIdIn(accessibleIds, pageable)
+                    } else {
+                        vulnerabilityRepository.findAll(pageable)
+                    }
+                }
+            }
+
+            // Eagerly hydrate the assets referenced by this page so we never touch
+            // a Hibernate proxy outside of an active session. Proxy.id is safe to read
+            // (stored on the proxy itself), but any other field would trigger lazy
+            // initialization and fail with "no session".
+            val assetIds = resultPage.content.mapNotNull { it.asset.id }.toSet()
+            val assetsById: Map<Long, Asset> = if (assetIds.isEmpty()) {
+                emptyMap()
+            } else {
+                assetRepository.findByIdIn(assetIds).associateBy { it.id!! }
+            }
+
+            // Filter out excepted vulnerabilities unless explicitly included
+            val filteredContent: List<Vulnerability> = if (!includeExcepted) {
+                val activeExceptions = vulnerabilityExceptionService.getActiveExceptions()
+                resultPage.content.filter { vuln ->
+                    val asset = assetsById[vuln.asset.id] ?: return@filter false
+                    activeExceptions.none { ex -> ex.matches(vuln, asset) }
+                }
+            } else {
+                resultPage.content
+            }
+
+            // Map vulnerabilities to response format using hydrated assets
+            val vulnerabilities = filteredContent.map { vuln ->
+                val asset = assetsById[vuln.asset.id]
+                mapOf(
+                    "id" to vuln.id,
+                    "assetId" to vuln.asset.id,
+                    "assetName" to asset?.name,
+                    "vulnerabilityId" to vuln.vulnerabilityId,
+                    "cvssSeverity" to vuln.cvssSeverity,
+                    "vulnerableProductVersions" to vuln.vulnerableProductVersions,
+                    "daysOpen" to vuln.daysOpen,
+                    "scanTimestamp" to vuln.scanTimestamp.toString(),
+                    "createdAt" to vuln.createdAt?.toString()
+                )
+            }
+
+            val response = mapOf(
+                "vulnerabilities" to vulnerabilities,
+                "total" to if (!includeExcepted) vulnerabilities.size.toLong() else resultPage.totalSize,
+                "page" to page,
+                "pageSize" to pageSize,
+                "totalPages" to resultPage.totalPages,
+                "exceptedFiltered" to !includeExcepted
+            )
+
+            return McpToolResult.success(response)
+
+        } catch (e: java.time.format.DateTimeParseException) {
+            return McpToolResult.error("INVALID_DATE_FORMAT", "Date must be in ISO-8601 format: ${e.message}")
+        } catch (e: Exception) {
+            return McpToolResult.error("EXECUTION_ERROR", "Failed to retrieve vulnerabilities: ${e.message}")
+        }
+    }
+}

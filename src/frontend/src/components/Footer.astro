@@ -1,0 +1,16 @@
+---
+import { execSync } from 'child_process';
+
+let lastCommitDate = '2025-06-08'; // fallback
+try {
+  lastCommitDate = execSync('git log -1 --format="%cd" --date=short', { encoding: 'utf8' }).trim();
+} catch (error) {
+  console.warn('Could not get git commit date:', error);
+}
+---
+
+<footer class="footer fixed-bottom bg-light py-2 border-top">
+  <div class="container text-center">
+    <span class="text-muted">&copy; 2017–2025 SecMan v1.0.0 | Last updated: {lastCommitDate}</span>
+  </div>
+</footer>

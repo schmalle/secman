@@ -1,0 +1,27 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ConfigBundleManager from '../../components/ConfigBundleManager';
+---
+
+<Layout title="Configuration Bundle Management">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <h1 class="mb-4">Configuration Bundle Management</h1>
+        <p class="text-muted mb-4">
+          Export and import system configuration including users, identity providers, CrowdStrike settings, and MCP API keys.
+        </p>
+
+        <ConfigBundleManager client:load />
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  h1 {
+    color: var(--bs-dark);
+    font-size: 1.75rem;
+    font-weight: 600;
+  }
+</style>

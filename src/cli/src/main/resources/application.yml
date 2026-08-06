@@ -1,0 +1,35 @@
+micronaut:
+  application:
+    name: secman-cli
+  http:
+    client:
+      # Long read timeout: several CLI commands hit synchronous long-running backend
+      # endpoints. send-notification-users alone needs ~2 min for the overdue-account
+      # queries on production data (measured: dry-run --verbose completed at ~113s and
+      # the old 120s timeout fired first), and a real run additionally sends all emails
+      # inside the same request. HTTP errors (4xx/5xx) still fail fast — this only
+      # governs how long we wait for a backend that is genuinely still working.
+      read-timeout: 900s       # 15 minutes (was 120s, originally default 10s)
+      connect-timeout: 30s     # 30 seconds connection timeout
+      max-content-length: 536870912  # 512MB - headroom for large --verbose responses (e.g. send-notification-users)
+      ssl:
+        insecure-trust-all-certificates: ${secman.ssl.insecure:false}
+      pool:
+        enabled: true
+        max-connections: 20    # Allow up to 20 concurrent connections
+
+secman:
+  backend:
+    base-url: ${SECMAN_BACKEND_URL:http://localhost:8080}
+  crowdstrike:
+    batch-size: ${SECMAN_CROWDSTRIKE_BATCH_SIZE:25}
+    # Raised default 4 -> 10. Falcon Spotlight rate-limit (~6000 req/min/token)
+    # leaves headroom; the inner client caps at 12 (CrowdStrikeApiClientImpl.kt).
+    max-parallel-batches: ${SECMAN_CROWDSTRIKE_MAX_PARALLEL_BATCHES:10}
+    max-vulnerabilities-per-batch: ${SECMAN_MAX_VULNS_PER_BATCH:5000}
+
+# Logging configuration
+logger:
+  levels:
+    com.secman.cli: INFO
+    io.micronaut.http.client: WARN

@@ -1,0 +1,20 @@
+---
+/**
+ * Public Alignment Results Page
+ *
+ * Public page for viewing alignment results via token link from finalization email.
+ * Does not require authentication - token serves as auth.
+ */
+import PublicLayout from '../../../layouts/PublicLayout.astro';
+import AlignmentResultsPage from '../../../components/AlignmentResultsPage.tsx';
+
+const { token } = Astro.params;
+
+if (!token) {
+    return Astro.redirect('/login?error=invalid_token');
+}
+---
+
+<PublicLayout title="Alignment Results - Secman">
+    <AlignmentResultsPage token={token} client:load />
+</PublicLayout>

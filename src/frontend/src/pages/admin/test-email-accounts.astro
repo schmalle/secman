@@ -1,0 +1,11 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import TestEmailAccountManagement from '../../components/TestEmailAccountManagement';
+---
+
+<Layout title="Test Email Accounts">
+  <TestEmailAccountManagement client:load />
+  <div class="mt-4">
+    <a href="/admin" class="btn btn-secondary">Back to Admin</a>
+  </div>
+</Layout>

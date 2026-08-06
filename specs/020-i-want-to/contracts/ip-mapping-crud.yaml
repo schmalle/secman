@@ -1,0 +1,364 @@
+openapi: 3.0.3
+info:
+  title: IP Mapping CRUD API
+  description: Manage IP address mappings (Create, Read, Update, Delete)
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+  - url: https://api.secman.example.com
+
+paths:
+  /api/user-mappings:
+    get:
+      summary: List all user mappings (AWS accounts AND IP addresses)
+      description: |
+        Returns all user mappings including both AWS account mappings and IP address mappings.
+        Supports pagination, search, and filtering.
+      operationId: listUserMappings
+      tags:
+        - User Mappings
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number (0-indexed)
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          description: Page size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: email
+          in: query
+          description: Filter by email address (partial match)
+          schema:
+            type: string
+        - name: domain
+          in: query
+          description: Filter by domain (exact match)
+          schema:
+            type: string
+        - name: mappingType
+          in: query
+          description: Filter by mapping type
+          schema:
+            type: string
+            enum: [AWS, IP, ALL]
+            default: ALL
+      responses:
+        '200':
+          description: List of user mappings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserMappingDto'
+                  totalElements:
+                    type: integer
+                    example: 100
+                  totalPages:
+                    type: integer
+                    example: 5
+                  page:
+                    type: integer
+                    example: 0
+                  size:
+                    type: integer
+                    example: 20
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (non-admin)
+
+    post:
+      summary: Create a new user mapping (AWS account OR IP address)
+      description: |
+        Create a new mapping between email and AWS account or IP address.
+        At least one of awsAccountId or ipAddress must be provided.
+      operationId: createUserMapping
+      tags:
+        - User Mappings
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserMappingRequest'
+            examples:
+              ipMapping:
+                summary: Create IP mapping
+                value:
+                  email: "user@example.com"
+                  ipAddress: "192.168.1.0/24"
+                  domain: "example.com"
+              awsMapping:
+                summary: Create AWS account mapping
+                value:
+                  email: "user@example.com"
+                  awsAccountId: "123456789012"
+                  domain: "aws.example.com"
+              combinedMapping:
+                summary: Create combined AWS + IP mapping
+                value:
+                  email: "user@example.com"
+                  awsAccountId: "123456789012"
+                  ipAddress: "192.168.1.0/24"
+                  domain: "example.com"
+      responses:
+        '201':
+          description: Mapping created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserMappingDto'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                noMapping:
+                  summary: Neither AWS nor IP provided
+                  value:
+                    error: "Validation Error"
+                    message: "Must provide either awsAccountId or ipAddress (or both)"
+                    timestamp: "2025-10-15T10:00:00Z"
+                invalidIp:
+                  summary: Invalid IP format
+                  value:
+                    error: "Validation Error"
+                    message: "Invalid IP format: must be IPv4 address (e.g., 192.168.1.100)"
+                    timestamp: "2025-10-15T10:00:00Z"
+                duplicate:
+                  summary: Duplicate mapping
+                  value:
+                    error: "Conflict"
+                    message: "Mapping already exists for this email, AWS account, domain, and IP address"
+                    timestamp: "2025-10-15T10:00:00Z"
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (non-admin)
+
+  /api/user-mappings/{id}:
+    get:
+      summary: Get user mapping by ID
+      operationId: getUserMapping
+      tags:
+        - User Mappings
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: User mapping details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserMappingDto'
+        '404':
+          description: Mapping not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+    put:
+      summary: Update user mapping
+      description: Update email, AWS account, IP address, or domain for an existing mapping
+      operationId: updateUserMapping
+      tags:
+        - User Mappings
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserMappingRequest'
+      responses:
+        '200':
+          description: Mapping updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserMappingDto'
+        '400':
+          description: Validation error
+        '404':
+          description: Mapping not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+    delete:
+      summary: Delete user mapping
+      description: Remove a user mapping. Affects user's access to assets.
+      operationId: deleteUserMapping
+      tags:
+        - User Mappings
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Mapping deleted successfully
+        '404':
+          description: Mapping not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    UserMappingDto:
+      type: object
+      required:
+        - id
+        - email
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        awsAccountId:
+          type: string
+          nullable: true
+          pattern: '^\d{12}$'
+          example: "123456789012"
+        domain:
+          type: string
+          nullable: true
+          example: "example.com"
+        ipAddress:
+          type: string
+          nullable: true
+          pattern: '^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2}|-(\d{1,3}\.){3}\d{1,3})?$'
+          description: IPv4 address, CIDR range, or dash range
+          example: "192.168.1.0/24"
+        ipRangeType:
+          type: string
+          nullable: true
+          enum: [SINGLE, CIDR, DASH_RANGE]
+          description: Type of IP range (auto-computed)
+          example: "CIDR"
+        ipCount:
+          type: integer
+          format: int64
+          nullable: true
+          description: Number of IPs in range (for display purposes)
+          example: 256
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-10-15T10:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-10-15T10:00:00Z"
+
+    CreateUserMappingRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        awsAccountId:
+          type: string
+          nullable: true
+          pattern: '^\d{12}$'
+          example: "123456789012"
+        domain:
+          type: string
+          nullable: true
+          example: "example.com"
+        ipAddress:
+          type: string
+          nullable: true
+          pattern: '^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2}|-(\d{1,3}\.){3}\d{1,3})?$'
+          example: "192.168.1.0/24"
+
+    UpdateUserMappingRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+        awsAccountId:
+          type: string
+          nullable: true
+          pattern: '^\d{12}$'
+        domain:
+          type: string
+          nullable: true
+        ipAddress:
+          type: string
+          nullable: true
+          pattern: '^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2}|-(\d{1,3}\.){3}\d{1,3})?$'
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+        - timestamp
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time

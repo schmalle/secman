@@ -1,0 +1,11 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ReleaseManagement from '../../components/ReleaseManagement.tsx';
+---
+
+<Layout title="Release Management - Secman">
+    <ReleaseManagement client:load />
+    <div class="mt-4">
+      <a href="/admin" class="btn btn-secondary">Back to Admin</a>
+    </div>
+</Layout>

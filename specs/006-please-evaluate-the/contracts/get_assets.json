@@ -1,0 +1,121 @@
+{
+  "tool": "get_assets",
+  "description": "Retrieve asset inventory with filtering and pagination",
+  "operation": "READ",
+  "permissions": ["ASSETS_READ"],
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "page": {
+        "type": "number",
+        "description": "Page number (0-indexed)",
+        "minimum": 0,
+        "default": 0
+      },
+      "pageSize": {
+        "type": "number",
+        "description": "Number of items per page (max 500)",
+        "minimum": 1,
+        "maximum": 500,
+        "default": 100
+      },
+      "name": {
+        "type": "string",
+        "description": "Filter by asset name (partial match, case-insensitive)",
+        "maxLength": 255
+      },
+      "type": {
+        "type": "string",
+        "description": "Filter by exact asset type"
+      },
+      "ip": {
+        "type": "string",
+        "description": "Filter by IP address (partial match, case-insensitive)",
+        "maxLength": 45
+      },
+      "owner": {
+        "type": "string",
+        "description": "Filter by owner (exact match)"
+      },
+      "group": {
+        "type": "string",
+        "description": "Filter by group membership (exact match)"
+      }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "assets": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "number"},
+            "name": {"type": "string"},
+            "type": {"type": "string"},
+            "ip": {"type": "string"},
+            "owner": {"type": "string"},
+            "description": {"type": "string"},
+            "groups": {"type": "array", "items": {"type": "string"}},
+            "cloudAccountId": {"type": "string"},
+            "cloudInstanceId": {"type": "string"},
+            "adDomain": {"type": "string"},
+            "osVersion": {"type": "string"},
+            "lastSeen": {"type": "string", "format": "date-time"},
+            "createdAt": {"type": "string", "format": "date-time"},
+            "updatedAt": {"type": "string", "format": "date-time"}
+          },
+          "required": ["id", "name", "type", "owner", "createdAt", "updatedAt"]
+        }
+      },
+      "total": {"type": "number"},
+      "page": {"type": "number"},
+      "pageSize": {"type": "number"},
+      "totalPages": {"type": "number"}
+    },
+    "required": ["assets", "total", "page", "pageSize", "totalPages"]
+  },
+  "examples": [
+    {
+      "request": {
+        "page": 0,
+        "pageSize": 10,
+        "type": "Server"
+      },
+      "response": {
+        "assets": [
+          {
+            "id": 1,
+            "name": "web-server-01",
+            "type": "Server",
+            "ip": "192.168.1.10",
+            "owner": "Infrastructure Team",
+            "description": "Production web server",
+            "groups": ["Production", "DMZ"],
+            "osVersion": "Ubuntu 22.04",
+            "lastSeen": "2025-10-04T10:30:00Z",
+            "createdAt": "2025-01-01T00:00:00Z",
+            "updatedAt": "2025-10-04T10:30:00Z"
+          }
+        ],
+        "total": 1,
+        "page": 0,
+        "pageSize": 10,
+        "totalPages": 1
+      }
+    }
+  ],
+  "errors": [
+    {
+      "code": "INVALID_PAGE_SIZE",
+      "message": "Page size must be between 1 and 500",
+      "condition": "pageSize < 1 or pageSize > 500"
+    },
+    {
+      "code": "TOTAL_RESULTS_EXCEEDED",
+      "message": "Query would return more than 50,000 results. Please add more filters.",
+      "condition": "total results > 50,000"
+    }
+  ]
+}

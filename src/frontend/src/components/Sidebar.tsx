@@ -1,0 +1,746 @@
+import React, { useState, useEffect } from 'react';
+import { hasVulnAccess } from '../utils/auth';
+import {
+    canAccessNormManagement,
+    canAccessStandardManagement,
+    canAccessUseCaseManagement,
+    canAccessReleases,
+    canAccessCompareReleases,
+    hasRiskAccess,
+    hasReqAccess,
+    hasClassificationAccess
+} from '../utils/permissions';
+import { connectToBadgeUpdates } from '../services/exceptionBadgeService';
+
+const Sidebar = () => {
+    const [assetsExpanded, setAssetsExpanded] = useState(false);
+    const [ioMenuOpen, setIoMenuOpen] = useState(false);
+    const [requirementsExpanded, setRequirementsExpanded] = useState(false);
+    const [riskManagementExpanded, setRiskManagementExpanded] = useState(false);
+    const [vulnMenuOpen, setVulnMenuOpen] = useState(false);
+    const [exportMenuOpen, setExportMenuOpen] = useState(false);
+    const [adminMenuOpen, setAdminMenuOpen] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [hasVuln, setHasVuln] = useState(false);
+    const [hasRisk, setHasRisk] = useState(false);
+    const [hasReq, setHasReq] = useState(false);
+    const [hasClassification, setHasClassification] = useState(false);
+    const [userRoles, setUserRoles] = useState<string[]>([]);
+    const [workgroupCount, setWorkgroupCount] = useState<number>(0);
+    const [awsAccountCount, setAwsAccountCount] = useState<number>(0);
+    const [domainCount, setDomainCount] = useState<number>(0);
+    const [pendingExceptionCount, setPendingExceptionCount] = useState<number>(0);
+
+    const toggleAssets = () => {
+        setAssetsExpanded(!assetsExpanded);
+        // Collapse all other sections
+        setRequirementsExpanded(false);
+        setRiskManagementExpanded(false);
+        setVulnMenuOpen(false);
+        setAdminMenuOpen(false);
+        setIoMenuOpen(false);
+    };
+
+    const toggleRequirements = () => {
+        setRequirementsExpanded(!requirementsExpanded);
+        // Collapse all other sections
+        setAssetsExpanded(false);
+        setRiskManagementExpanded(false);
+        setVulnMenuOpen(false);
+        setAdminMenuOpen(false);
+        setIoMenuOpen(false);
+    };
+
+    const toggleRiskManagement = () => {
+        setRiskManagementExpanded(!riskManagementExpanded);
+        // Collapse all other sections
+        setAssetsExpanded(false);
+        setRequirementsExpanded(false);
+        setVulnMenuOpen(false);
+        setAdminMenuOpen(false);
+        setIoMenuOpen(false);
+    };
+
+    const toggleVulnManagement = () => {
+        setVulnMenuOpen(!vulnMenuOpen);
+        // Collapse all other sections
+        setAssetsExpanded(false);
+        setRequirementsExpanded(false);
+        setRiskManagementExpanded(false);
+        setAdminMenuOpen(false);
+        setIoMenuOpen(false);
+    };
+
+    const toggleAdminMenu = () => {
+        setAdminMenuOpen(!adminMenuOpen);
+        // Collapse all other sections
+        setAssetsExpanded(false);
+        setRequirementsExpanded(false);
+        setRiskManagementExpanded(false);
+        setVulnMenuOpen(false);
+        setIoMenuOpen(false);
+    };
+
+    const toggleIoMenu = () => {
+        setIoMenuOpen(!ioMenuOpen);
+        // Collapse all other sections
+        setAssetsExpanded(false);
+        setRequirementsExpanded(false);
+        setRiskManagementExpanded(false);
+        setVulnMenuOpen(false);
+        setAdminMenuOpen(false);
+    };
+
+    // Check if user has admin role and access permissions
+    // Feature: 025-role-based-access-control
+    useEffect(() => {
+        function checkRoles() {
+            const user = (window as any).currentUser;
+            const roles = user?.roles || [];
+            const hasAdmin = roles.includes('ADMIN');
+            setIsAdmin(hasAdmin);
+            setHasVuln(hasVulnAccess());
+            setHasRisk(hasRiskAccess(roles));
+            setHasReq(hasReqAccess(roles));
+            setHasClassification(hasClassificationAccess(roles));
+            setUserRoles(roles);
+            setWorkgroupCount(user?.workgroupCount || 0);
+            setAwsAccountCount(user?.awsAccountCount || 0);
+            setDomainCount(user?.domainCount || 0);
+        }
+
+        // Check on mount
+        checkRoles();
+
+        // Listen for user data updates
+        window.addEventListener('userLoaded', checkRoles);
+
+        // Cleanup listener on unmount
+        return () => window.removeEventListener('userLoaded', checkRoles);
+    }, []);
+
+    // Connect to real-time SSE updates for exception approval badge
+    // Feature: 031-vuln-exception-approval, Phase 6: Real-Time Badge Updates
+    useEffect(() => {
+        // Only connect if user has ADMIN or SECCHAMPION role (can approve exceptions)
+        const canApprove = userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION');
+        if (!canApprove) {
+            // Reset count if user doesn't have permission
+            setPendingExceptionCount(0);
+            return;
+        }
+
+        // Connect to SSE endpoint for real-time count updates
+        const disconnect = connectToBadgeUpdates((count) => {
+            setPendingExceptionCount(count);
+        });
+
+        // Cleanup on unmount or when roles change
+        return () => {
+            disconnect();
+        };
+    }, [userRoles.join(',')]); // Re-connect only when actual role membership changes
+
+    return (
+        <nav id="sidebar" className="bg-light border-end">
+            <div className="sidebar-header p-3">
+                <h3> </h3>
+            </div>
+
+            <ul className="list-unstyled components p-2">
+                {/* ASSETS Section */}
+                <li>
+                    <div
+                        onClick={toggleAssets}
+                        className="sidebar-section-header-clickable d-flex align-items-center cursor-pointer"
+                        style={{ cursor: 'pointer' }}
+                    >
+                        <i className="bi bi-server me-2"></i>
+                        ASSETS
+                        <i className={`bi ${assetsExpanded ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                    </div>
+                    {assetsExpanded && (
+                        <ul className="list-unstyled ps-4">
+                            <li>
+                                <a href="/assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                    <i className="bi bi-server me-2"></i> Asset Register
+                                </a>
+                            </li>
+                            <li>
+                                <a href="/applications" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                    <i className="bi bi-window-stack me-2"></i> Application Register
+                                </a>
+                            </li>
+                        </ul>
+                    )}
+                </li>
+
+
+                {/* REQUIREMENTS Section - ADMIN, REQ, or SECCHAMPION only (Feature: 025-role-based-access-control) */}
+                {hasReq && (
+                    <li>
+                        <div
+                            onClick={toggleRequirements}
+                            className="sidebar-section-header-clickable d-flex align-items-center cursor-pointer"
+                            style={{ cursor: 'pointer' }}
+                        >
+                            <i className="bi bi-card-checklist me-2"></i>
+                            REQUIREMENTS
+                            <i className={`bi ${requirementsExpanded ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                        </div>
+                        {requirementsExpanded && (
+                            <ul className="list-unstyled ps-4">
+                                <li>
+                                    <a href="/requirements" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-card-checklist me-2"></i> Requirements Overview
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/requirements/download" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-download me-2"></i> Requirement download
+                                    </a>
+                                </li>
+                                {canAccessNormManagement(userRoles) && (
+                                    <li>
+                                        <a href="/norms" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-bookmark-star me-2"></i> Norm Management
+                                        </a>
+                                    </li>
+                                )}
+                                {canAccessStandardManagement(userRoles) && (
+                                    <li>
+                                        <a href="/standards" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-list-check me-2"></i> Standard Management
+                                        </a>
+                                    </li>
+                                )}
+                                {canAccessUseCaseManagement(userRoles) && (
+                                    <li>
+                                        <a href="/usecases" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-diagram-3 me-2"></i> UseCase Management
+                                        </a>
+                                    </li>
+                                )}
+                                {/* Feature 067: Releases navigation below Requirements */}
+                                {canAccessReleases(userRoles) && (
+                                    <li>
+                                        <a href="/releases" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-tag me-2"></i> Releases
+                                        </a>
+                                    </li>
+                                )}
+                            </ul>
+                        )}
+                    </li>
+                )}
+
+                {/* RISK MANAGEMENT Section - ADMIN, RISK, or SECCHAMPION only (Feature: 025-role-based-access-control) */}
+                {hasRisk && (
+                    <li>
+                        <div
+                            onClick={toggleRiskManagement}
+                            className="sidebar-section-header-clickable d-flex align-items-center cursor-pointer"
+                            style={{ cursor: 'pointer' }}
+                        >
+                            <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                            RISK MANAGEMENT
+                            <i className={`bi ${riskManagementExpanded ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                        </div>
+                        {riskManagementExpanded && (
+                            <ul className="list-unstyled ps-4">
+                                <li>
+                                    <a href="/risks" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-exclamation-triangle-fill me-2"></i> Risk Management Overview
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/riskassessment" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-clipboard-data me-2"></i> Risk Assessment
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/reports" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-bar-chart-fill me-2"></i> Reports
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/demands" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-clipboard-plus me-2"></i> Demand Management
+                                    </a>
+                                </li>
+                                {hasClassification && (
+                                    <li>
+                                        <a href="/public-classification" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-funnel me-2"></i> Demand Classification
+                                        </a>
+                                    </li>
+                                )}
+                            </ul>
+                        )}
+                    </li>
+                )}
+
+                {/* VULNERABILITY MANAGEMENT Section - ADMIN or VULN role (Feature: 004-i-want-to) */}
+                {hasVuln && (
+                    <li>
+                        <div
+                            onClick={toggleVulnManagement}
+                            className="sidebar-section-header-clickable d-flex align-items-center cursor-pointer"
+                            style={{ cursor: 'pointer' }}
+                        >
+                            <i className="bi bi-shield-exclamation me-2"></i>
+                            VULNERABILITY MANAGEMENT
+                            <i className={`bi ${vulnMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                        </div>
+                        {vulnMenuOpen && (
+                            <ul className="list-unstyled ps-4">
+                                {/* Overview - ADMIN, SECCHAMPION, or VULN */}
+                                {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION') || userRoles.includes('VULN')) && (
+                                    <li>
+                                        <a href="/vulnerabilities/current" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-list-ul me-2"></i> Overview
+                                        </a>
+                                    </li>
+                                )}
+                                {!isAdmin && (userRoles.includes('SECCHAMPION') || domainCount > 0) && (
+                                    <li>
+                                        <a href="/vulnerabilities/domain" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-globe me-2"></i> Domain vulns
+                                        </a>
+                                    </li>
+                                )}
+                                {(isAdmin || userRoles.includes('SECCHAMPION')) && (
+                                    <li>
+                                        <a href="/vulnerabilities/system" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-hdd me-2"></i> System vulns
+                                        </a>
+                                    </li>
+                                )}
+                                {!isAdmin && (userRoles.includes('SECCHAMPION') || awsAccountCount > 0) && (
+                                    <li>
+                                        <a href="/account-vulns" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                            title="View vulnerabilities for your AWS accounts">
+                                            <i className="bi bi-cloud me-2"></i> Account vulns
+                                        </a>
+                                    </li>
+                                )}
+                                {!isAdmin && (userRoles.includes('SECCHAMPION') || workgroupCount > 0) && (
+                                    <li>
+                                        <a href="/wg-vulns" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                            title="View vulnerabilities for your workgroups">
+                                            <i className="bi bi-people-fill me-2"></i> WG vulns
+                                        </a>
+                                    </li>
+                                )}
+                                <li>
+                                    <a href="/outdated-assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-hourglass-split me-2"></i> Outdated Assets
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/vulnerability-statistics" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-bar-chart-line me-2"></i> Lense
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/vulnerability-heatmap" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-grid-3x3-gap-fill me-2"></i> Heatmap
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/products" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-box-seam me-2"></i> Vulnerable products
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/installed-products" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-boxes me-2"></i> Installed products
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/vulnerabilities/exceptions" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-x-circle me-2"></i> Exceptions
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/my-exception-requests" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-clipboard-check me-2"></i> My Exception Requests
+                                    </a>
+                                </li>
+                                {/* AWS Sharing:
+                                    - ADMIN / VULN / SECCHAMPION → /admin/aws-account-sharing (full view, all rules)
+                                    - Other users with AWS accounts → /aws-account-sharing (self-service) */}
+                                {(isAdmin || userRoles.includes('VULN') || userRoles.includes('SECCHAMPION')) ? (
+                                    <li>
+                                        <a href="/admin/aws-account-sharing" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                            title="View and manage AWS account sharing rules across all users">
+                                            <i className="bi bi-share-fill me-2"></i> AWS Sharing
+                                        </a>
+                                    </li>
+                                ) : awsAccountCount > 0 ? (
+                                    <li>
+                                        <a href="/aws-account-sharing" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                            title="Manage sharing of your AWS accounts with other users">
+                                            <i className="bi bi-share-fill me-2"></i> AWS Sharing
+                                        </a>
+                                    </li>
+                                ) : null}
+                                {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION')) && (
+                                    <li>
+                                        <a href="/exception-approvals" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-shield-check me-2"></i> Approve Exceptions
+                                            {pendingExceptionCount > 0 && (
+                                                <span className="badge bg-danger ms-auto" title={`${pendingExceptionCount} pending approval${pendingExceptionCount > 1 ? 's' : ''}`}>
+                                                    {pendingExceptionCount}
+                                                </span>
+                                            )}
+                                        </a>
+                                    </li>
+                                )}
+                                {/* GitHub repos - ADMIN, VULN, or SECCHAMPION (mirrors GET /api/github/repositories) */}
+                                {(userRoles.includes('ADMIN') || userRoles.includes('VULN') || userRoles.includes('SECCHAMPION')) && (
+                                    <li>
+                                        <a href="/github-repos" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                            title="GitHub repositories with their open high/critical Dependabot alerts">
+                                            <i className="bi bi-github me-2"></i> GitHub
+                                        </a>
+                                    </li>
+                                )}
+                                {/* Longest-open findings by account - ADMIN only (mirrors GET /api/admin/account-finding-age/top) */}
+                                {userRoles.includes('ADMIN') && (
+                                    <li>
+                                        <a href="/account-finding-age" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                            title="AWS accounts ranked by the age of their oldest still-open finding">
+                                            <i className="bi bi-hourglass-bottom me-2"></i> Account Aging
+                                        </a>
+                                    </li>
+                                )}
+                            </ul>
+                        )}
+                    </li>
+                )}
+
+                {/* Self-service Workgroups link for non-admins. Admins reach it via the ADMIN
+                    section below; this entry lets a regular user create their own workgroup
+                    and edit/delete the workgroups they are a member of. */}
+                {!isAdmin && (
+                    <li>
+                        <a href="/workgroups" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                            title="Create a workgroup or manage workgroups you are a member of">
+                            <i className="bi bi-diagram-2 me-2"></i> Workgroups
+                            {workgroupCount > 0 && (
+                                <span className="badge bg-secondary ms-auto">{workgroupCount}</span>
+                            )}
+                        </a>
+                    </li>
+                )}
+
+                {/* I/O Section for non-admin SECCHAMPIONs. Admins reach Import/Export via
+                    the I/O subsection of the ADMIN menu below. */}
+                {!isAdmin && userRoles.includes('SECCHAMPION') && (
+                    <li>
+                        <div
+                            onClick={toggleIoMenu}
+                            className="sidebar-section-header-clickable d-flex align-items-center cursor-pointer"
+                            style={{ cursor: 'pointer' }}
+                        >
+                            <i className="bi bi-arrow-down-up me-2"></i>
+                            I/O
+                            <i className={`bi ${ioMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                        </div>
+                        {ioMenuOpen && (
+                            <ul className="list-unstyled ps-4">
+                                <li>
+                                    <a href="/import" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-cloud-upload me-2"></i> Import
+                                    </a>
+                                </li>
+                                <li>
+                                    <div
+                                        onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                                        className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
+                                        style={{ cursor: 'pointer' }}
+                                    >
+                                        <i className="bi bi-download me-2"></i>
+                                        Export
+                                        <i className={`bi ${exportMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                                    </div>
+                                    {exportMenuOpen && (
+                                        <ul className="list-unstyled ps-4">
+                                            <li>
+                                                <a href="/export" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                                    <i className="bi bi-file-earmark-excel me-2"></i> Requirements
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <a href="/export?type=assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                                    <i className="bi bi-hdd-rack me-2"></i> Assets
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    )}
+                                </li>
+                            </ul>
+                        )}
+                    </li>
+                )}
+
+                {/* ADMIN Section - expandable menu (only visible to admin users) */}
+                {isAdmin && (
+                    <li>
+                        <div
+                            onClick={toggleAdminMenu}
+                            className="sidebar-section-header-clickable d-flex align-items-center cursor-pointer"
+                            style={{ cursor: 'pointer' }}
+                        >
+                            <i className="bi bi-speedometer2 me-2"></i>
+                            ADMIN
+                            <i className={`bi ${adminMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                        </div>
+                        {adminMenuOpen && (
+                            <ul className="list-unstyled ps-4">
+                                {/* Dashboard Overview */}
+                                <li>
+                                    <a href="/admin" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-speedometer me-2"></i> Dashboard
+                                    </a>
+                                </li>
+
+                                {/* Users & Access Management */}
+                                <li className="admin-subsection-header">Users & Access</li>
+                                <li>
+                                    <a href="/admin/user-management" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-people-fill me-2"></i> User Management
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/workgroups" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-diagram-2 me-2"></i> Workgroups
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/user-mappings" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-diagram-3-fill me-2"></i> User Mappings
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/identity-providers" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-shield-lock me-2"></i> Identity Providers
+                                    </a>
+                                </li>
+
+                                {/* System Configuration */}
+                                <li className="admin-subsection-header">System Configuration</li>
+                                <li>
+                                    <a href="/admin/email-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-envelope-gear me-2"></i> Email Settings
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/vulnerability-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-shield-exclamation me-2"></i> Vulnerability Settings
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/notification-settings" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-bell-fill me-2"></i> Notification Settings
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/falcon-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-shield-lock me-2"></i> CrowdStrike Falcon
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/github-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-github me-2"></i> GitHub App
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/translation-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-translate me-2"></i> LLM Config
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/mcp-api-keys" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-key-fill me-2"></i> MCP API Keys
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/classification-rules" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-funnel-fill me-2"></i> Classification Rules
+                                    </a>
+                                </li>
+
+                                {/* Content & Data Management */}
+                                <li className="admin-subsection-header">Content & Data</li>
+                                <li>
+                                    <a href="/admin/requirements" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-list-task me-2"></i> Requirements Mgmt
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/scans" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-radar me-2"></i> Scans
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/add-system" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-plus-circle me-2"></i> Add System
+                                    </a>
+                                </li>
+
+                                {/* I/O (import/export/config bundle) */}
+                                <li className="admin-subsection-header">I/O</li>
+                                <li>
+                                    <a href="/import" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-cloud-upload me-2"></i> Import
+                                    </a>
+                                </li>
+                                <li>
+                                    <div
+                                        onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                                        className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
+                                        style={{ cursor: 'pointer' }}
+                                    >
+                                        <i className="bi bi-download me-2"></i>
+                                        Export
+                                        <i className={`bi ${exportMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                                    </div>
+                                    {exportMenuOpen && (
+                                        <ul className="list-unstyled ps-4">
+                                            <li>
+                                                <a href="/export" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                                    <i className="bi bi-file-earmark-excel me-2"></i> Requirements
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <a href="/export?type=assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                                    <i className="bi bi-hdd-rack me-2"></i> Assets
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    )}
+                                </li>
+                                <li>
+                                    <a href="/admin/config-bundle" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-box-arrow-in-down me-2"></i> Configuration Bundle
+                                    </a>
+                                </li>
+
+                                {/* Monitoring */}
+                                <li className="admin-subsection-header">Monitoring</li>
+                                <li>
+                                    <a href="/notification-preferences" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-bell me-2"></i> Notifications
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/notification-logs" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-envelope-paper me-2"></i> Notification Logs
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/ec2-compliance" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-shield-check me-2"></i> EC2 Compliance
+                                    </a>
+                                </li>
+                            </ul>
+                        )}
+                    </li>
+                )}
+
+                {/* About at the bottom */}
+                <li>
+                    <a href="/about" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                        <i className="bi bi-info-circle me-2"></i> About
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    );
+};
+
+export default Sidebar;
+
+// Scandinavian Design System styling
+const styles = `
+#sidebar {
+    min-width: 250px;
+    max-width: 250px;
+    min-height: 100vh;
+    transition: all 0.3s;
+    background-color: var(--scand-bg-sidebar);
+    border-right-color: var(--scand-border);
+}
+
+#sidebar.active {
+    margin-left: -250px;
+}
+
+.hover-bg-secondary:hover {
+    background-color: var(--scand-sidebar-hover-bg);
+}
+
+/* Consistent font size for all top-level sidebar items */
+#sidebar .components > li > a {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--scand-text-secondary);
+}
+
+.sidebar-section-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--scand-text-secondary);
+    padding: 12px 8px 6px 8px;
+    margin-top: 8px;
+    letter-spacing: 0.5px;
+    background-color: var(--scand-sidebar-section-bg);
+    border-left: 3px solid var(--scand-sidebar-section-border);
+}
+
+.sidebar-section-header:first-child {
+    margin-top: 0;
+}
+
+.sidebar-section-header-clickable {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--scand-text-secondary);
+    padding: 12px 8px 8px 8px;
+    margin-top: 8px;
+    letter-spacing: 0.5px;
+    background-color: var(--scand-sidebar-section-bg);
+    border-left: 3px solid var(--scand-sidebar-section-border);
+    transition: all var(--scand-transition-normal);
+}
+
+.sidebar-section-header-clickable:hover {
+    background-color: var(--scand-sidebar-hover-bg);
+    color: var(--scand-text-primary);
+}
+
+.admin-subsection-header {
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    color: var(--scand-text-secondary);
+    padding: 8px 8px 4px 8px;
+    margin-top: 12px;
+    letter-spacing: 0.3px;
+    border-bottom: 1px solid var(--scand-border);
+}
+`;
+
+// Inject styles into the head
+if (typeof window !== 'undefined') {
+    const styleSheet = document.createElement("style");
+    styleSheet.type = "text/css";
+    styleSheet.innerText = styles;
+    document.head.appendChild(styleSheet);
+}

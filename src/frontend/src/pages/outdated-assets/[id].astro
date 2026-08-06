@@ -1,0 +1,34 @@
+---
+/**
+ * Outdated Asset Detail Page
+ *
+ * Displays details for a single outdated asset with its vulnerabilities
+ * Access: ADMIN and VULN roles only
+ *
+ * Feature: 034-outdated-assets
+ * Task: T039-T045
+ * User Story: US2 - View Asset Details (P1)
+ * Spec reference: spec.md
+ */
+
+import Layout from '../../layouts/Layout.astro';
+import OutdatedAssetDetail from '../../components/OutdatedAssetDetail';
+
+const { id } = Astro.params;
+const assetId = parseInt(id || '0', 10);
+
+// This page requires authentication - handled by Layout component
+---
+
+<Layout title="Asset Details | SecMan">
+  <main>
+    <OutdatedAssetDetail client:load assetId={assetId} />
+  </main>
+</Layout>
+
+<style>
+  main {
+    min-height: 100vh;
+    padding-bottom: 2rem;
+  }
+</style>

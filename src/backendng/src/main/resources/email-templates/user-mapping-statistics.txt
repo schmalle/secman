@@ -1,0 +1,24 @@
+SECMAN USER MAPPING STATISTICS REPORT
+=====================================
+
+Hello,
+
+USER MAPPING STATISTICS REPORT
+------------------------------
+Generated on: ${executionDate}
+
+${appliedFiltersText}
+AGGREGATE STATISTICS
+--------------------
+Total Users:          ${totalUsers}
+Total Mappings:       ${totalMappings}
+  - Active:           ${activeMappings}
+  - Pending:          ${pendingMappings}
+  - Domain mappings:  ${domainMappings}
+  - AWS account maps: ${awsAccountMappings}
+
+${importSummaryText}
+---
+This is an automated report from the SecMan user mapping CLI.
+It was triggered by an administrator running `manage-user-mappings --send-email`.
+Please do not reply to this email.

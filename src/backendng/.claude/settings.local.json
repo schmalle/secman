@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gradle build)",
+      "Bash(./gradlew:*)",
+      "Bash(gradle:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "Bash(java:*)",
+      "Bash(env)",
+      "Read(//Users/flake/.sdkman/candidates/java/21.0.8-tem/**)",
+      "Bash(./.specify/scripts/bash/create-new-feature.sh:*)",
+      "Bash(git checkout:*)",
+      "Bash(git branch:*)",
+      "Bash(./.specify/scripts/bash/check-prerequisites.sh:*)",
+      "Bash(./.specify/scripts/bash/setup-plan.sh:*)",
+      "Bash(git fetch:*)",
+      "Bash(grep:*)",
+      "Bash(./.specify/scripts/bash/update-agent-context.sh:*)",
+      "Bash(DEBUG=1 ./tests/mcp-e2e-workgroup-test.sh:*)",
+      "Bash(pass-cli read:*)",
+      "Bash(./tests/mcp-e2e-workgroup-test.sh:*)"
+    ],
+    "deny": []
+  }
+}

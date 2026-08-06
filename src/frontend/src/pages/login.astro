@@ -1,0 +1,11 @@
+---
+// src/pages/login.astro
+import Login from '../components/Login.tsx';
+import BaseLayout from '../layouts/BaseLayout.astro'; // Assuming a base layout without sidebar/auth checks
+---
+
+<BaseLayout title="Login - Secman">
+  <div class="container-fluid d-flex justify-content-center align-items-center vh-100">
+      <Login client:load />
+  </div>
+</BaseLayout>

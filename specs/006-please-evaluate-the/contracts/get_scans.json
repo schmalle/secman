@@ -1,0 +1,97 @@
+{
+  "tool": "get_scans",
+  "description": "Retrieve scan history with filtering and pagination",
+  "operation": "READ",
+  "permissions": ["SCANS_READ"],
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "page": {
+        "type": "number",
+        "description": "Page number (0-indexed)",
+        "minimum": 0,
+        "default": 0
+      },
+      "pageSize": {
+        "type": "number",
+        "description": "Number of items per page (max 500)",
+        "minimum": 1,
+        "maximum": 500,
+        "default": 100
+      },
+      "scanType": {
+        "type": "string",
+        "description": "Filter by scan type",
+        "enum": ["nmap", "masscan"]
+      },
+      "uploadedBy": {
+        "type": "string",
+        "description": "Filter by uploader username"
+      },
+      "startDate": {
+        "type": "string",
+        "description": "Filter scans after this date (ISO-8601)",
+        "format": "date-time"
+      },
+      "endDate": {
+        "type": "string",
+        "description": "Filter scans before this date (ISO-8601)",
+        "format": "date-time"
+      }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "scans": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "number"},
+            "scanType": {"type": "string"},
+            "filename": {"type": "string"},
+            "scanDate": {"type": "string", "format": "date-time"},
+            "uploadedBy": {"type": "string"},
+            "hostCount": {"type": "number"},
+            "duration": {"type": "number"},
+            "createdAt": {"type": "string", "format": "date-time"}
+          },
+          "required": ["id", "scanType", "filename", "scanDate", "uploadedBy", "hostCount", "createdAt"]
+        }
+      },
+      "total": {"type": "number"},
+      "page": {"type": "number"},
+      "pageSize": {"type": "number"},
+      "totalPages": {"type": "number"}
+    },
+    "required": ["scans", "total", "page", "pageSize", "totalPages"]
+  },
+  "examples": [
+    {
+      "request": {
+        "scanType": "nmap",
+        "page": 0,
+        "pageSize": 10
+      },
+      "response": {
+        "scans": [
+          {
+            "id": 42,
+            "scanType": "nmap",
+            "filename": "network-scan-2025-10-04.xml",
+            "scanDate": "2025-10-04T08:00:00Z",
+            "uploadedBy": "security-team",
+            "hostCount": 127,
+            "duration": 1823,
+            "createdAt": "2025-10-04T09:15:00Z"
+          }
+        ],
+        "total": 1,
+        "page": 0,
+        "pageSize": 10,
+        "totalPages": 1
+      }
+    }
+  ]
+}

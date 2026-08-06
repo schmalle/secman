@@ -1,0 +1,272 @@
+openapi: 3.0.3
+info:
+  title: CrowdStrike Vulnerability Query API
+  description: |
+    API for querying CrowdStrike Falcon for system vulnerabilities in real-time.
+
+    Feature: 015-we-have-currently (CrowdStrike System Vulnerability Lookup)
+
+    This endpoint queries the CrowdStrike Spotlight API for vulnerabilities affecting
+    a specific system, filtered by hostname, status (OPEN), and date range (last 40 days).
+  version: 1.0.0
+  contact:
+    name: Secman API Team
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local development
+  - url: https://secman.example.com/api
+    description: Production
+
+tags:
+  - name: CrowdStrike
+    description: CrowdStrike Falcon API integration
+
+paths:
+  /crowdstrike/vulnerabilities:
+    get:
+      tags:
+        - CrowdStrike
+      summary: Query vulnerabilities for a system
+      description: |
+        Queries CrowdStrike Falcon Spotlight API for vulnerabilities affecting the specified system.
+
+        - Filters: hostname, status=OPEN, last 40 days
+        - Checks against VulnerabilityException table for exception status
+        - Returns up to 1000 vulnerabilities (warns if more exist)
+
+        **Permissions**: Requires ADMIN or VULN role
+      operationId: queryVulnerabilities
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: hostname
+          in: query
+          description: System hostname to query (case-sensitive as it appears in CrowdStrike)
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+            example: web-server-01
+      responses:
+        '200':
+          description: Successfully retrieved vulnerabilities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrowdStrikeQueryResponse'
+              examples:
+                withVulnerabilities:
+                  summary: System with vulnerabilities
+                  value:
+                    hostname: web-server-01
+                    vulnerabilities:
+                      - id: "cs-vuln-12345"
+                        hostname: web-server-01
+                        ip: "192.168.1.100"
+                        cveId: "CVE-2021-44228"
+                        severity: "Critical"
+                        cvssScore: 10.0
+                        affectedProduct: "Apache Log4j 2.14.1"
+                        daysOpen: "15 days"
+                        detectedAt: "2025-09-26T10:30:00Z"
+                        status: "open"
+                        hasException: false
+                        exceptionReason: null
+                      - id: "cs-vuln-12346"
+                        hostname: web-server-01
+                        ip: "192.168.1.100"
+                        cveId: "CVE-2021-45046"
+                        severity: "High"
+                        cvssScore: 9.0
+                        affectedProduct: "Apache Log4j 2.15.0"
+                        daysOpen: "10 days"
+                        detectedAt: "2025-10-01T14:20:00Z"
+                        status: "open"
+                        hasException: true
+                        exceptionReason: "Vendor patch scheduled for 2025-10-15"
+                    totalCount: 2
+                    queriedAt: "2025-10-11T12:00:00Z"
+                noVulnerabilities:
+                  summary: System with no vulnerabilities
+                  value:
+                    hostname: secure-server-01
+                    vulnerabilities: []
+                    totalCount: 0
+                    queriedAt: "2025-10-11T12:00:00Z"
+        '400':
+          description: Invalid request (missing or invalid hostname)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Invalid hostname format"
+        '401':
+          description: Unauthorized (missing or invalid JWT token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Authentication required"
+        '403':
+          description: Forbidden (user lacks ADMIN or VULN role)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Insufficient permissions. ADMIN or VULN role required."
+        '404':
+          description: System not found in CrowdStrike
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "System 'unknown-host' not found in CrowdStrike"
+        '429':
+          description: CrowdStrike API rate limit exceeded
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+                example: 30
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "CrowdStrike API rate limit exceeded. Please try again in 30 seconds."
+        '500':
+          description: Internal server error (CrowdStrike API error, network issue, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Unable to reach CrowdStrike API. Please try again later."
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token from /api/auth/login endpoint
+
+  schemas:
+    CrowdStrikeQueryResponse:
+      type: object
+      required:
+        - hostname
+        - vulnerabilities
+        - totalCount
+        - queriedAt
+      properties:
+        hostname:
+          type: string
+          description: Echoed hostname from request
+          example: web-server-01
+        vulnerabilities:
+          type: array
+          description: List of vulnerabilities found (empty if none)
+          items:
+            $ref: '#/components/schemas/CrowdStrikeVulnerabilityDto'
+        totalCount:
+          type: integer
+          description: Total count from CrowdStrike (may exceed list size if limited to 1000)
+          example: 2
+        queriedAt:
+          type: string
+          format: date-time
+          description: Timestamp when query was executed (ISO 8601)
+          example: "2025-10-11T12:00:00Z"
+
+    CrowdStrikeVulnerabilityDto:
+      type: object
+      required:
+        - id
+        - hostname
+        - severity
+        - detectedAt
+        - status
+        - hasException
+      properties:
+        id:
+          type: string
+          description: Unique vulnerability ID from CrowdStrike
+          example: "cs-vuln-12345"
+        hostname:
+          type: string
+          description: System hostname
+          example: web-server-01
+        ip:
+          type: string
+          description: System IP address
+          nullable: true
+          example: "192.168.1.100"
+        cveId:
+          type: string
+          description: CVE identifier
+          nullable: true
+          example: "CVE-2021-44228"
+        severity:
+          type: string
+          description: CVSS severity level
+          enum:
+            - Critical
+            - High
+            - Medium
+            - Low
+            - Informational
+          example: Critical
+        cvssScore:
+          type: number
+          format: double
+          description: Numeric CVSS score (0.0-10.0)
+          nullable: true
+          minimum: 0.0
+          maximum: 10.0
+          example: 10.0
+        affectedProduct:
+          type: string
+          description: Vulnerable product and version
+          nullable: true
+          example: "Apache Log4j 2.14.1"
+        daysOpen:
+          type: string
+          description: Days since detection (calculated)
+          nullable: true
+          example: "15 days"
+        detectedAt:
+          type: string
+          format: date-time
+          description: Detection timestamp (ISO 8601)
+          example: "2025-09-26T10:30:00Z"
+        status:
+          type: string
+          description: Vulnerability status (always "open" for this query)
+          example: open
+        hasException:
+          type: boolean
+          description: Whether this vulnerability matches an active exception
+          example: false
+        exceptionReason:
+          type: string
+          description: Reason for exception if hasException is true
+          nullable: true
+          example: "Vendor patch scheduled for 2025-10-15"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: "System 'unknown-host' not found in CrowdStrike"

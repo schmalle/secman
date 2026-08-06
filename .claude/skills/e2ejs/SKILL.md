@@ -1,0 +1,361 @@
+---
+name: e2ejs
+description: >
+  JavaScript error scanner that visits all application pages and fixes errors.
+  Starts local backend and frontend dev servers, then scans them via the shared
+  URL https://secman.covestro.net (port 443), which resolves to 127.0.0.1 on
+  this host. Runs the scanner twice per iteration — once as admin
+  (SECMAN_ADMIN_NAME / SECMAN_ADMIN_PASS) and once as a normal user
+  (SECMAN_USER_NAME / SECMAN_USER_PASS) — and iteratively fixes every page
+  error in either role, restarting the backend after each fix. All
+  credentials and the host URL come from Proton Pass. Use this skill when the
+  user says "run js error scanner", "scan pages for errors", "e2ejs", "check
+  all pages", "fix js errors", or similar.
+context: fork
+---
+# E2E JavaScript Error Scanner — Iterative Fix Loop (Dual-Role)
+
+You are an orchestration agent that brings up the full-stack development
+environment on loopback, scans every application page **via the shared URL
+`https://secman.covestro.net` (port 443)** as **two different users in
+sequence — admin first, then a normal user**, and **iteratively fixes every
+failure** until all pages are clean for both roles or you've exhausted the
+retry budget.
+
+> **Read `../_shared/stack-lifecycle.md` in full before touching the stack.** It
+> defines the cold-start sequence, port-bind liveness, credentials, logging and
+> the 5-iteration budget this skill assumes. Note this skill's one deviation:
+> functional checks go through `https://secman.covestro.net`, not `SECMAN_HOST`
+> directly — see below.
+
+## Dual-Role Run
+
+Each call to `tests/js-error-scanner-pp.sh` performs two scanner passes back-to-back:
+
+1. **Admin pass** — logs in with `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS`
+   (vault: `pass://Test/SECMAN/SECMAN_ADMIN_NAME` and `…/SECMAN_ADMIN_PASS`).
+2. **Normal-user pass** — logs in with `SECMAN_USER_USER` / `SECMAN_USER_PASS`
+   (vault field name for the username is `SECMAN_USER_NAME`:
+   `pass://Test/SECMAN/SECMAN_USER_NAME` and `…/SECMAN_USER_PASS`).
+   If that login fails because the account does not exist on this instance, run
+   `./scripts/test/provision-test-user.sh` — it creates the account and is
+   idempotent (exits 0 when it already exists). A missing account and a wrong
+   password both surface as a login failure, so check existence before
+   suspecting vault drift.
+
+Both passes hit the **same** host URL pulled from
+`pass://Test/SECMAN/SECMAN_HOST` (must be HTTPS — `https://secman.covestro.net`).
+
+The wrapper resolves all four credentials + host + TLS flag in a **single**
+`pass-cli run` so the user is prompted at most once per scanner invocation.
+
+The wrapper aggregates exit codes:
+- `0` if **both** passes are clean.
+- `1` if either pass had page-level errors.
+- `2` if either pass had a fatal error (host unreachable / login failed).
+
+Per-run output is labelled `[admin]` and `[user]` so you can attribute errors
+to the role that hit them. **Many errors will only show up under one role**
+(e.g. RBAC 403s on admin pages when scanned as the normal user, or
+ADMIN-only endpoints failing for the user) — that is the *point* of running
+both: each role exercises a different code path.
+
+## Target Host — Fixed
+
+All scanner traffic targets `https://secman.covestro.net` (HTTPS, port 443)
+for **both production and development**. On developer machines this hostname
+is mapped to `127.0.0.1` via `/etc/hosts`, so the URL is served by the local
+stack (some combination of a local TLS-terminating reverse proxy in front of
+the Astro dev server on `:4321` and the Micronaut backend on `:8080`, or the
+frontend configured to listen on `:443` directly).
+
+Rules:
+
+- The scanner URL is **always** `https://secman.covestro.net`. Do not target
+  `http://localhost:4321`, `http://localhost:8080`, or any other variant.
+- Always export `SECMAN_BACKEND_URL=https://secman.covestro.net` before
+  invoking the scanner. The wrapper enforces this host as policy and exits 2 on
+  a non-compliant value (`tests/js-error-scanner-pp.sh:8-12`); its old local
+  auto-detection branch is disabled for policy compliance (`:15`).
+- Do **NOT** set `SECMAN_INSECURE=true`. The shared hostname must present a
+  valid certificate end-to-end — if TLS verification fails, fix the cert /
+  proxy setup rather than disabling verification.
+- Local services **are** started (they serve the traffic behind the shared
+  URL), but they must **never** be addressed directly by the scanner.
+
+## High-Level Loop
+
+```
+0. Kill any running backend/frontend (./scripts/stopbackenddev.sh +
+   ./scripts/stopfrontenddev.sh) — always, even if ports look free.
+   Leave whatever owns :443 alone (user's reverse proxy).
+1. Start backend   (./scripts/startbackenddev.sh outside the sandbox)
+2. Start frontend  (./scripts/startfrontenddev.sh outside the sandbox)
+3. Wait for both to be healthy (via shared URL, not localhost)
+4. Export SECMAN_BACKEND_URL=https://secman.covestro.net
+5. Run JS error scanner (./tests/js-error-scanner-pp.sh)
+6. IF all clean → done, report success
+7. IF exit code 2 → fatal error (host unreachable / login failed), stop and report
+8. IF exit code 1 (page errors) →
+   a. Parse the structured error output
+   b. Classify each error (backend vs frontend)
+   c. Fix backend errors first, then frontend errors
+   d. Restart backend (kill → restart ./scripts/startbackenddev.sh)
+   e. Wait for backend health check via https://secman.covestro.net
+   f. Go to step 5
+9. After 5 iterations without progress → stop and report remaining failures
+```
+
+## Detailed Instructions
+
+### Phase 1 — Environment Setup
+
+**Starting services:**
+
+**Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
+and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
+permissions (e.g. Bash tool `dangerouslyDisableSandbox: true`). Both scripts
+source secrets via `pass-cli`, which a sandboxed shell cannot reach — do not
+start either dev server inside the filesystem sandbox.
+
+1. **Verify hostname mapping** — confirm `secman.covestro.net` resolves to
+   `127.0.0.1`:
+   ```bash
+   getent hosts secman.covestro.net || dscacheutil -q host -a name secman.covestro.net
+   ```
+   If it does not resolve to loopback, stop and ask the user to add the
+   `/etc/hosts` entry. Do not fall back to `localhost`.
+
+2. **Kill any running services (mandatory, unconditional)** — never reuse an
+   already-running backend or frontend; a running instance may predate the
+   current working tree. Always run both stop scripts, even if ports 8080/4321
+   look free (they are safe no-ops when nothing is running; never call `kill`
+   or `lsof | xargs kill` inline):
+   ```bash
+   ./scripts/stopbackenddev.sh
+   ./scripts/stopfrontenddev.sh
+   ```
+   Wait ~3 seconds, then verify `lsof -iTCP:8080 -sTCP:LISTEN -n -P` and
+   `lsof -iTCP:4321 -sTCP:LISTEN -n -P` both print nothing. Port 443 is
+   different: it may legitimately be held by the local reverse proxy the user
+   runs — leave it alone unless it is your own leftover.
+
+3. **Start backend** in background:
+   ```bash
+   nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
+   ```
+   This start command must be executed outside the sandbox.
+   Record the PID. The backend uses `pass-cli run -- gradle :backendng:clean :backendng:run`
+   internally with Proton Pass secret injection.
+
+4. **Start frontend** in background:
+   ```bash
+   nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
+   ```
+   This start command must be executed outside the sandbox.
+   Record the PID. The frontend uses `pass-cli run -- npm run dev` internally.
+
+5. **Wait for health checks via the shared URL** — not localhost. The
+   scanner will use this URL, so that is what must be reachable:
+   - Backend health: `https://secman.covestro.net/` — poll every 5s,
+     timeout 120s. Any 2xx/3xx/401 response means the proxy + backend are up.
+   - Frontend health: also via `https://secman.covestro.net/` — poll every
+     3s, timeout 60s. The Astro root page (HTML or 302 to `/login`) counts
+     as healthy.
+
+   If the shared URL never becomes reachable, check the reverse proxy
+   configuration and logs — do not work around it by pointing at localhost.
+
+6. **Create log directory** `.e2e-logs/` if it doesn't exist.
+
+### Phase 2 — Run Scanner
+
+Execute the JS error scanner with the shared URL pinned:
+```bash
+SECMAN_BACKEND_URL=https://secman.covestro.net \
+  ./tests/js-error-scanner-pp.sh 2>&1 | tee .e2e-logs/scan-run-<N>.log
+```
+Where N is the iteration number (starting at 1).
+
+The wrapper enforces `https://secman.covestro.net` (or a `pass://` URI) and
+exits early on a host/TLS policy violation, so a misconfigured target fails
+loudly rather than silently scanning the wrong origin.
+
+**Important environment variables** — `SECMAN_ADMIN_NAME`,
+`SECMAN_ADMIN_PASS`, `SECMAN_USER_USER` (vault field `SECMAN_USER_NAME`),
+`SECMAN_USER_PASS`, `SECMAN_BACKEND_URL` (= `SECMAN_HOST`), and
+`SECMAN_INSECURE` are all resolved by `js-error-scanner-pp.sh` itself via
+Proton Pass in a single `pass-cli run`. Do NOT set them manually unless you
+are deliberately bypassing Proton Pass for a one-off debug run.
+
+**Exit code interpretation:**
+- `0` — All pages clean, no errors found. Done!
+- `1` — Page-level errors found (HTTP errors, JS exceptions, console errors). Enter fix loop.
+- `2` — Fatal error: cannot reach `secman.covestro.net` or login failed. Do NOT retry. Stop and report.
+
+### Phase 2.5 — Error Classification
+
+The scanner outputs structured error lines in this format:
+```
+  /page-path
+    [HTTP 500] GET https://secman.covestro.net/api/endpoint — Internal Server Error
+    [UNCAUGHT EXCEPTION] Cannot read properties of undefined (reading 'map')
+    [CONSOLE ERROR] Failed to fetch
+    [TIMEOUT] Page did not reach networkidle within 30s
+    [SESSION EXPIRED] Redirected back to /login
+```
+
+Classify each error:
+
+| Output pattern                                             | Category     | Action                                                                               |
+| ---------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------ |
+| `[HTTP 5xx]` (500, 502, 503)                               | **backend**  | Fix the backend controller/service that serves this endpoint                         |
+| `[HTTP 403]` (admin run only)                              | **backend**  | Check RBAC — missing `@Secured` annotation or role mismatch                         |
+| `[HTTP 403]` on `/admin/*` page (user run only)            | **expected** | Normal user is correctly denied access to ADMIN-only pages — verify the page itself renders a sensible "forbidden" UI rather than crashing, but the 403 is **not** a bug. If the page crashes (`[UNCAUGHT EXCEPTION]` or blank shell), THAT is the bug to fix |
+| `[HTTP 404]` on `/api/*`                                   | **backend**  | Missing endpoint — add controller method or fix route                               |
+| `[UNCAUGHT EXCEPTION]` with React/JS stack                 | **frontend** | Fix the component (hydration, props, data shape)                                     |
+| `[CONSOLE ERROR]` with "hydration"                         | **frontend** | SSR/client mismatch in Astro/React component                                         |
+| `[CONSOLE ERROR]` with "Failed to fetch" or "NetworkError" | **backend**  | Endpoint unreachable or CORS issue (or proxy misrouting — check the local proxy)     |
+| `[CONSOLE ERROR]` with `.map is not a function` or similar | **frontend** | API response shape mismatch — fix component to handle actual response shape          |
+| `[TIMEOUT]`                                                | **infra**    | Page hangs — check for infinite loops or missing API responses                      |
+| `[SESSION EXPIRED]`                                        | **infra**    | Session/JWT expired mid-scan — not a code bug, skip                                 |
+
+**Priority**: Fix **backend errors first** in each iteration, because they often cause
+downstream frontend errors. Then fix frontend errors.
+
+### Phase 3 — Fix Loop
+
+For each failure, fix in priority order: **backend errors first**, then frontend.
+
+#### 3a. Backend Fixes (HTTP 5xx, 403, 404)
+
+1. **Extract the failing endpoint** from the `[HTTP ...]` line
+   (e.g., `GET /api/releases`). The host will be `secman.covestro.net` —
+   strip it to get the path.
+2. **Check backend logs** in `.e2e-logs/backend.log` — search for the exception
+   stack trace near the timestamp of the error. Common patterns:
+   - `ClassCastException` → Hibernate native query result type mismatch
+   - `NullPointerException` → missing entity or uninitialized field
+   - `AccessDeniedException` / 403 → `@Secured` annotation too restrictive or missing role
+   - `HttpStatusException(404)` → endpoint not registered, typo in `@Controller` path
+3. **Locate the controller** — use `Grep` to find `@Controller` + `@Get`/`@Post`
+   matching the failing path. Controllers are in
+   `src/backendng/src/main/kotlin/com/secman/controller/`.
+4. **Trace into the service layer** — the controller calls a service class
+   (`*Service.kt`), which calls a repository. The bug is usually in the
+   service or its query.
+5. **Fix** with a minimal edit. Common fixes:
+   - Cast native query results correctly
+   - Add null-safety (`?.` or `?: emptyList()`)
+   - Adjust `@Secured` roles to match what the logged-in user has
+   - Add missing endpoint methods
+6. **Backend ALWAYS needs restart** after Kotlin/Java changes.
+
+#### 3b. Frontend Fixes (JS errors, hydration, console errors)
+
+1. **Map the URL path to the Astro page** in `src/frontend/src/pages/`.
+2. **Trace into React components** in `src/frontend/src/components/`.
+3. **Fix** the component — common patterns:
+   - API returns `{data: [...]}` but component expects raw array → unwrap
+   - Hydration mismatch → ensure SSR and client render the same initial HTML
+   - Missing null check on API response data
+
+#### 3c. Restart Backend After Every Fix
+
+After applying fixes (whether backend or frontend):
+
+1. **Stop the backend** via the canonical script (handles graceful + force kill,
+   port 8080):
+   ```bash
+   ./scripts/stopbackenddev.sh
+   ```
+   Never call `kill` or `lsof | xargs kill` inline — always go through the script.
+2. **Restart backend** (outside the sandbox):
+   ```bash
+   nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
+   ```
+3. **Wait for backend health check via the shared URL** —
+   poll `https://secman.covestro.net/` until it responds (120s timeout).
+   Do not poll `http://localhost:8080` directly; the scanner will not use it.
+4. Frontend hot-reloads via Vite through the proxy — no restart needed,
+   but wait 3 seconds for changes to propagate.
+5. **After any frontend file edit**, before re-running the scanner, verify the
+   build is clean: `cd src/frontend && npm ci && npm run build` must exit 0.
+   Vite's hot-reload only proves the page didn't crash at runtime — it does
+   not catch TypeScript errors, missing imports, or broken Astro/React
+   components the way a full build does.
+
+#### 3d. Re-run and Verify
+
+Re-run the scanner (same invocation as Phase 2, with
+`SECMAN_BACKEND_URL=https://secman.covestro.net` exported) and check if the
+error count decreased.
+
+#### 3e. Guard Rails
+
+- Track which errors you've already attempted to fix. If the **same error persists
+  after two attempts**, flag it for the user and move on.
+- After **5 total iterations** without all pages being clean, stop and present a summary.
+- If exit code is 2 (fatal), do NOT retry — stop immediately.
+
+### Phase 4 — Teardown & Report
+
+- Stop backend and frontend via `./scripts/stopbackenddev.sh` and
+  `./scripts/stopfrontenddev.sh` (never raw `kill`).
+- Leave any user-managed local reverse proxy alone.
+- Print a summary table with **per-role** columns (each iteration runs both roles):
+
+```
+| Iter | Role  | Pages | Clean | Errors | Timeout | Expired | Fix Applied                  |
+|------|-------|-------|-------|--------|---------|---------|------------------------------|
+| 1    | admin | 58    | 54    | 4      | 0       | 0       | backend: AssetController.kt  |
+| 1    | user  | 58    | 53    | 5      | 0       | 0       | (errors carried into iter 2) |
+| 2    | admin | 58    | 58    | 0      | 0       | 0       | —                            |
+| 2    | user  | 58    | 56    | 2      | 0       | 0       | frontend: VulnTable.tsx      |
+| 3    | admin | 58    | 58    | 0      | 0       | 0       | —                            |
+| 3    | user  | 58    | 58    | 0      | 0       | 0       | — (all clean)                |
+```
+
+**The `Expired` column is not optional.** The scanner flips its exit code to 1
+when `expiredPages` is non-empty, exactly as it does for errors and timeouts
+(`tests/js-error-scanner.mjs:214`). A session that expires mid-scan means the
+pages after that point were never genuinely verified — so a run with a non-zero
+Expired count is a **partial scan**, not a clean one, even though the individual
+`[SESSION EXPIRED]` lines are correctly classified as infra rather than code
+bugs. Re-run those pages with a fresh session before reporting the role clean,
+and if you cannot, say which pages went unverified.
+
+- If there are still failures, list each one with the file and line where you
+  believe the root cause is, and what you tried.
+
+## Important Notes
+
+- **Scanner URL is fixed**: `https://secman.covestro.net` (port 443). No
+  `http://`, no `localhost`, no alternate ports. Both production and
+  development share this URL; on dev machines it resolves to `127.0.0.1`.
+- **Never commit or push** — only edit files locally.
+- **Secrets are handled by the dev scripts** — `scripts/startbackenddev.sh`
+  and `scripts/startfrontenddev.sh` use `pass-cli run` to inject Proton Pass
+  secrets. Do not set secrets manually.
+- **Fresh services always**: killing any running backend/frontend via the stop
+  scripts and starting both fresh is an unconditional part of Phase 1 — never
+  attach the scan to services you did not start in this invocation. Do not
+  kill whatever owns :443 unless you are sure it is your own leftover — it is
+  likely the user's reverse proxy.
+- **TLS**: do not set `SECMAN_INSECURE=true`. The shared hostname must present
+  a valid certificate. If TLS verification fails, fix the cert/proxy rather
+  than disabling verification.
+- **Log files** go to `.e2e-logs/` — this directory is gitignored.
+- **Scanner pages list** is *discovered*, not hardcoded: `tests/js-error-scanner.mjs`
+  walks `src/frontend/src/pages/` and adds `STATIC_PAGES`. A new page is picked
+  up automatically. If the scanner reports a page error, the fix is usually in
+  the application code, not the scanner.
+- **Product-related pages must be covered**: verify the discovered route list
+  includes `/products`, `/installed-products`, and product drilldown surfaces
+  such as `/vulnerability-statistics` and asset detail routes linked from
+  product tables when test data makes dynamic routes available. Route discovery
+  finds files, not dynamic instances — a `[id].astro` route only gets exercised
+  if data exists to link to it.
+- Backend controllers: `src/backendng/src/main/kotlin/com/secman/controller/`
+- Frontend pages: `src/frontend/src/pages/`
+- Frontend components: `src/frontend/src/components/`

@@ -1,0 +1,405 @@
+openapi: 3.0.3
+info:
+  title: Secman User Mapping Management API
+  description: |
+    API for managing user-to-cloud-provider and user-to-domain mappings within the user edit interface.
+    Allows administrators to view, create, update, and delete access control mappings.
+  version: 1.0.0
+  contact:
+    name: Secman Development Team
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+  - url: http://localhost:4321/api
+    description: Frontend proxy (development)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: User Mappings
+    description: Operations for managing user access mappings
+
+paths:
+  /users/{userId}/mappings:
+    get:
+      tags:
+        - User Mappings
+      summary: List all mappings for a user
+      description: |
+        Retrieves all access mappings associated with the specified user.
+        Returns mappings for both AWS accounts and organizational domains.
+        Requires ADMIN role.
+      operationId: getUserMappings
+      parameters:
+        - $ref: '#/components/parameters/UserIdParam'
+      responses:
+        '200':
+          description: Successfully retrieved user mappings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserMappingResponse'
+              examples:
+                multipleResourceMappings:
+                  summary: User with AWS and domain mappings
+                  value:
+                    - id: 1
+                      email: "user@example.com"
+                      awsAccountId: "123456789012"
+                      domain: null
+                      createdAt: "2025-01-15T10:30:00Z"
+                      updatedAt: "2025-01-15T10:30:00Z"
+                    - id: 2
+                      email: "user@example.com"
+                      awsAccountId: null
+                      domain: "corp.example.com"
+                      createdAt: "2025-01-16T14:20:00Z"
+                      updatedAt: "2025-01-16T14:20:00Z"
+                emptyMappings:
+                  summary: User with no mappings
+                  value: []
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/UserNotFoundError'
+
+    post:
+      tags:
+        - User Mappings
+      summary: Create a new mapping for a user
+      description: |
+        Creates a new access mapping for the specified user. At least one of
+        `awsAccountId` or `domain` must be provided. Validates format and checks
+        for duplicate mappings. Requires ADMIN role.
+      operationId: createUserMapping
+      parameters:
+        - $ref: '#/components/parameters/UserIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserMappingRequest'
+            examples:
+              awsAccountMapping:
+                summary: Map user to AWS account
+                value:
+                  awsAccountId: "123456789012"
+                  domain: null
+              domainMapping:
+                summary: Map user to organizational domain
+                value:
+                  awsAccountId: null
+                  domain: "engineering.example.com"
+              bothMapping:
+                summary: Map user to both AWS and domain
+                value:
+                  awsAccountId: "987654321098"
+                  domain: "devops.example.com"
+      responses:
+        '201':
+          description: Mapping successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserMappingResponse'
+              example:
+                id: 5
+                email: "admin@example.com"
+                awsAccountId: "123456789012"
+                domain: null
+                createdAt: "2025-01-20T09:15:00Z"
+                updatedAt: "2025-01-20T09:15:00Z"
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/UserNotFoundError'
+        '409':
+          $ref: '#/components/responses/DuplicateMappingError'
+
+  /users/{userId}/mappings/{mappingId}:
+    put:
+      tags:
+        - User Mappings
+      summary: Update an existing mapping
+      description: |
+        Updates an existing mapping's AWS account ID and/or domain. At least one
+        field must be provided. Validates format and checks for duplicates.
+        Email cannot be changed. Requires ADMIN role.
+      operationId: updateUserMapping
+      parameters:
+        - $ref: '#/components/parameters/UserIdParam'
+        - $ref: '#/components/parameters/MappingIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserMappingRequest'
+            examples:
+              updateAwsAccount:
+                summary: Change AWS account ID
+                value:
+                  awsAccountId: "111111111111"
+                  domain: null
+              updateDomain:
+                summary: Change domain
+                value:
+                  awsAccountId: null
+                  domain: "new-domain.example.com"
+              updateBoth:
+                summary: Change both fields
+                value:
+                  awsAccountId: "222222222222"
+                  domain: "updated.example.com"
+      responses:
+        '200':
+          description: Mapping successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserMappingResponse'
+              example:
+                id: 5
+                email: "admin@example.com"
+                awsAccountId: "111111111111"
+                domain: null
+                createdAt: "2025-01-20T09:15:00Z"
+                updatedAt: "2025-01-20T11:45:00Z"
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/MappingNotFoundError'
+        '409':
+          $ref: '#/components/responses/DuplicateMappingError'
+
+    delete:
+      tags:
+        - User Mappings
+      summary: Delete a mapping
+      description: |
+        Permanently removes a mapping from the database. This is a hard delete
+        operation with no soft delete. Requires ADMIN role.
+      operationId: deleteUserMapping
+      parameters:
+        - $ref: '#/components/parameters/UserIdParam'
+        - $ref: '#/components/parameters/MappingIdParam'
+      responses:
+        '204':
+          description: Mapping successfully deleted (no content)
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/MappingNotFoundError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from login endpoint
+
+  parameters:
+    UserIdParam:
+      name: userId
+      in: path
+      required: true
+      description: The unique identifier of the user
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 42
+
+    MappingIdParam:
+      name: mappingId
+      in: path
+      required: true
+      description: The unique identifier of the mapping
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 15
+
+  schemas:
+    UserMappingResponse:
+      type: object
+      description: |
+        Represents an access control mapping linking a user's email to a cloud
+        provider account or organizational domain.
+      required:
+        - id
+        - email
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique identifier for the mapping
+          example: 123
+        email:
+          type: string
+          format: email
+          description: User's email address (normalized to lowercase)
+          example: "user@example.com"
+        awsAccountId:
+          type: string
+          nullable: true
+          pattern: '^\d{12}$'
+          description: AWS account ID (exactly 12 digits)
+          example: "123456789012"
+        domain:
+          type: string
+          nullable: true
+          pattern: '^[a-z0-9.-]+$'
+          description: Organizational domain (lowercase letters, numbers, dots, hyphens)
+          example: "engineering.example.com"
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the mapping was created (ISO 8601)
+          example: "2025-01-15T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp of the last update (ISO 8601)
+          example: "2025-01-15T10:30:00Z"
+
+    CreateUserMappingRequest:
+      type: object
+      description: |
+        Request payload for creating a new user mapping. At least one of
+        `awsAccountId` or `domain` must be provided. Email is derived from
+        the user being edited (userId path parameter).
+      properties:
+        awsAccountId:
+          type: string
+          nullable: true
+          pattern: '^\d{12}$'
+          description: AWS account ID (exactly 12 digits)
+          example: "123456789012"
+        domain:
+          type: string
+          nullable: true
+          pattern: '^[a-z0-9.-]+$'
+          description: Organizational domain (lowercase letters, numbers, dots, hyphens)
+          example: "engineering.example.com"
+      minProperties: 1
+      additionalProperties: false
+
+    UpdateUserMappingRequest:
+      type: object
+      description: |
+        Request payload for updating an existing mapping. At least one of
+        `awsAccountId` or `domain` must be provided. Email cannot be changed.
+      properties:
+        awsAccountId:
+          type: string
+          nullable: true
+          pattern: '^\d{12}$'
+          description: AWS account ID (exactly 12 digits)
+          example: "987654321098"
+        domain:
+          type: string
+          nullable: true
+          pattern: '^[a-z0-9.-]+$'
+          description: Organizational domain (lowercase letters, numbers, dots, hyphens)
+          example: "updated.example.com"
+      minProperties: 1
+      additionalProperties: false
+
+    ErrorResponse:
+      type: object
+      description: Standard error response format
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: "At least one of Domain or AWS Account ID must be provided"
+
+  responses:
+    UnauthorizedError:
+      description: Authentication token is missing or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Unauthorized"
+
+    ForbiddenError:
+      description: User does not have ADMIN role
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Access denied"
+
+    UserNotFoundError:
+      description: Specified user does not exist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "User not found"
+
+    MappingNotFoundError:
+      description: Specified mapping does not exist or does not belong to the user
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Mapping not found"
+
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missingFields:
+              summary: No fields provided
+              value:
+                error: "At least one of Domain or AWS Account ID must be provided"
+            invalidAwsId:
+              summary: Invalid AWS Account ID format
+              value:
+                error: "Invalid AWS Account ID format"
+            invalidDomain:
+              summary: Invalid domain format
+              value:
+                error: "Invalid domain format"
+
+    DuplicateMappingError:
+      description: Mapping with the same email, AWS account, and domain already exists
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "This mapping already exists"

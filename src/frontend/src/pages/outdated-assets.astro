@@ -1,0 +1,31 @@
+---
+/**
+ * Outdated Assets Page
+ *
+ * Displays list of assets with overdue vulnerabilities
+ * Access: ADMIN and VULN roles only
+ *
+ * Feature: 034-outdated-assets
+ * Task: T026
+ * User Story: US1 - View Outdated Assets (P1)
+ * Spec reference: spec.md
+ */
+
+import Layout from '../layouts/Layout.astro';
+import OutdatedAssetsList from '../components/OutdatedAssetsList';
+
+// This page requires authentication - handled by Layout component
+---
+
+<Layout title="Outdated Assets | SecMan">
+  <main>
+    <OutdatedAssetsList client:load />
+  </main>
+</Layout>
+
+<style>
+  main {
+    min-height: 100vh;
+    padding-bottom: 2rem;
+  }
+</style>

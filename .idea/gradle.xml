@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="GradleMigrationSettings" migrationVersion="1" />
+  <component name="GradleSettings">
+    <option name="linkedExternalProjectsSettings">
+      <GradleProjectSettings>
+        <option name="externalProjectPath" value="$PROJECT_DIR$" />
+        <option name="gradleJvm" value="#JAVA_HOME" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/src/backendng" />
+            <option value="$PROJECT_DIR$/src/cli" />
+            <option value="$PROJECT_DIR$/src/shared" />
+          </set>
+        </option>
+        <option name="myGradleHome" value="$USER_HOME$/.sdkman/candidates/gradle/current" />
+      </GradleProjectSettings>
+      <GradleProjectSettings>
+        <option name="externalProjectPath" value="$PROJECT_DIR$/src/backendng" />
+        <option name="gradleJvm" value="temurin-25 (3)" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/src/backendng" />
+            <option value="$PROJECT_DIR$/src/cli" />
+            <option value="$PROJECT_DIR$/src/shared" />
+          </set>
+        </option>
+        <option name="myGradleHome" value="$USER_HOME$/.sdkman/candidates/gradle/current" />
+      </GradleProjectSettings>
+    </option>
+  </component>
+</project>

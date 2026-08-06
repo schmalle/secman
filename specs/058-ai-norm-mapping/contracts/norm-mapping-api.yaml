@@ -1,0 +1,268 @@
+openapi: 3.0.3
+info:
+  title: Norm Mapping API
+  description: AI-powered security standard mapping for requirements
+  version: 1.0.0
+
+paths:
+  /api/norm-mapping/suggest:
+    post:
+      summary: Get AI suggestions for norm mappings
+      description: |
+        Analyzes requirements without existing norm mappings and returns AI-generated
+        suggestions for ISO 27001 and IEC 62443 control mappings.
+        Uses Claude Opus 4.5 via OpenRouter API.
+      operationId: suggestNormMappings
+      tags:
+        - Norm Mapping
+      security:
+        - bearerAuth: []
+      requestBody:
+        description: Optional filter for specific requirements
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NormMappingSuggestionRequest'
+      responses:
+        '200':
+          description: Suggestions generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NormMappingSuggestionResponse'
+        '400':
+          description: No unmapped requirements found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - valid JWT required
+        '403':
+          description: Forbidden - requires ADMIN, REQ, or SECCHAMPION role
+        '503':
+          description: AI service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/norm-mapping/apply:
+    post:
+      summary: Apply selected norm mappings
+      description: |
+        Saves the selected AI-suggested norm mappings to requirements.
+        Creates new norm entries if they don't exist in the database.
+      operationId: applyNormMappings
+      tags:
+        - Norm Mapping
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyMappingsRequest'
+      responses:
+        '200':
+          description: Mappings applied successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyMappingsResponse'
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - requires ADMIN, REQ, or SECCHAMPION role
+        '404':
+          description: Requirement not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/norm-mapping/unmapped-count:
+    get:
+      summary: Get count of unmapped requirements
+      description: Returns the number of requirements without any norm mappings
+      operationId: getUnmappedCount
+      tags:
+        - Norm Mapping
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Count retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    example: 65
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    NormMappingSuggestionRequest:
+      type: object
+      properties:
+        requirementIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: Optional list of requirement IDs to analyze. If null, analyzes all unmapped.
+          nullable: true
+
+    NormMappingSuggestionResponse:
+      type: object
+      required:
+        - suggestions
+        - totalRequirementsAnalyzed
+        - totalSuggestionsGenerated
+      properties:
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementSuggestions'
+        totalRequirementsAnalyzed:
+          type: integer
+          example: 65
+        totalSuggestionsGenerated:
+          type: integer
+          example: 120
+
+    RequirementSuggestions:
+      type: object
+      required:
+        - requirementId
+        - requirementTitle
+        - suggestions
+      properties:
+        requirementId:
+          type: integer
+          format: int64
+          example: 42
+        requirementTitle:
+          type: string
+          example: "All assets must be registered in inventory"
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/NormSuggestion'
+
+    NormSuggestion:
+      type: object
+      required:
+        - standard
+        - control
+        - controlName
+        - confidence
+        - reasoning
+      properties:
+        standard:
+          type: string
+          example: "ISO 27001:2022"
+        control:
+          type: string
+          example: "A.8.1.1"
+        controlName:
+          type: string
+          example: "Inventory of assets"
+        confidence:
+          type: integer
+          minimum: 1
+          maximum: 5
+          example: 4
+        reasoning:
+          type: string
+          example: "Requirement directly addresses asset registration which maps to asset inventory control"
+        normId:
+          type: integer
+          format: int64
+          nullable: true
+          description: ID if norm exists in database, null if will be created on apply
+
+    ApplyMappingsRequest:
+      type: object
+      required:
+        - mappings
+      properties:
+        mappings:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/NormToApply'
+          example:
+            "42":
+              - normId: 15
+              - standard: "IEC 62443-3-3"
+                control: "SR 1.1"
+                version: "2013"
+
+    NormToApply:
+      type: object
+      properties:
+        normId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Existing norm ID (mutually exclusive with standard/control)
+        standard:
+          type: string
+          nullable: true
+          description: Standard name for new norm creation
+        control:
+          type: string
+          nullable: true
+          description: Control reference for new norm creation
+        version:
+          type: string
+          nullable: true
+          description: Version for new norm creation
+
+    ApplyMappingsResponse:
+      type: object
+      required:
+        - updatedRequirements
+        - newNormsCreated
+        - existingNormsLinked
+      properties:
+        updatedRequirements:
+          type: integer
+          example: 12
+        newNormsCreated:
+          type: integer
+          example: 8
+        existingNormsLinked:
+          type: integer
+          example: 15
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: "AI service temporarily unavailable"
+        details:
+          type: string
+          nullable: true
+          example: "OpenRouter API returned 503"

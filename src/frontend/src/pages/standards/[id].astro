@@ -1,0 +1,9 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ViewStandard from '../../components/ViewStandard';
+
+const { id } = Astro.params;
+---
+<Layout title="View Standard">
+    <ViewStandard standardId={id} client:load />
+</Layout>

@@ -1,0 +1,2 @@
+Email Address,AWS Account ID,Domain
+user1@example.com,123456789012,example.com

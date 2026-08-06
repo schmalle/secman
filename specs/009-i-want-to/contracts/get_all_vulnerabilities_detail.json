@@ -1,0 +1,109 @@
+{
+  "name": "get_all_vulnerabilities_detail",
+  "description": "Retrieve all vulnerability records with complete details including CVE IDs, CVSS severity, affected products, days open, scan timestamps, and exception status. Supports filtering by severity, asset, date range, and exception status.",
+  "operation": "READ",
+  "permission": "VULNERABILITIES_READ",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "page": {
+        "type": "number",
+        "description": "Page number (0-indexed)",
+        "minimum": 0,
+        "default": 0
+      },
+      "pageSize": {
+        "type": "number",
+        "description": "Number of items per page (max 1000)",
+        "minimum": 1,
+        "maximum": 1000,
+        "default": 100
+      },
+      "filters": {
+        "type": "object",
+        "description": "Optional filters to narrow results",
+        "properties": {
+          "assetId": {
+            "type": "number",
+            "description": "Filter by specific asset ID (must have access)"
+          },
+          "cveId": {
+            "type": "string",
+            "description": "Filter by CVE ID (exact match)",
+            "pattern": "^CVE-\\d{4}-\\d+$"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+            "description": "Filter by CVSS severity level"
+          },
+          "minDaysOpen": {
+            "type": "number",
+            "description": "Filter by minimum days open",
+            "minimum": 0
+          },
+          "maxDaysOpen": {
+            "type": "number",
+            "description": "Filter by maximum days open",
+            "minimum": 0
+          },
+          "scannedAfter": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Filter by scan timestamp (after this date)"
+          },
+          "scannedBefore": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Filter by scan timestamp (before this date)"
+          },
+          "exceptionStatus": {
+            "type": "string",
+            "enum": ["all", "excepted_only", "not_excepted"],
+            "default": "not_excepted",
+            "description": "Filter by exception status"
+          }
+        }
+      }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "required": ["vulnerabilities", "total", "page", "pageSize", "totalPages"],
+    "properties": {
+      "vulnerabilities": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["id", "assetId", "assetName", "vulnerabilityId", "cvssSeverity", "daysOpen", "scanTimestamp", "isExcepted", "createdAt"],
+          "properties": {
+            "id": {"type": "number"},
+            "assetId": {"type": "number"},
+            "assetName": {"type": "string"},
+            "vulnerabilityId": {"type": "string", "description": "CVE ID"},
+            "cvssSeverity": {"type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"]},
+            "vulnerableProductVersions": {"type": ["string", "null"]},
+            "daysOpen": {"type": "number"},
+            "scanTimestamp": {"type": "string", "format": "date-time"},
+            "isExcepted": {"type": "boolean"},
+            "exceptionReason": {"type": ["string", "null"]},
+            "createdAt": {"type": "string", "format": "date-time"}
+          }
+        }
+      },
+      "total": {"type": "number", "description": "Total number of matching vulnerabilities"},
+      "page": {"type": "number"},
+      "pageSize": {"type": "number"},
+      "totalPages": {"type": "number"}
+    }
+  },
+  "errorCodes": [
+    "INVALID_API_KEY",
+    "INSUFFICIENT_PERMISSIONS",
+    "RATE_LIMIT_EXCEEDED",
+    "INVALID_PAGINATION",
+    "TOTAL_RESULTS_EXCEEDED",
+    "ASSET_NOT_FOUND",
+    "QUERY_TIMEOUT"
+  ]
+}

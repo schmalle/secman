@@ -1,0 +1,1401 @@
+package com.secman.cli
+
+import com.secman.cli.commands.AddRequirementCommand
+import com.secman.cli.commands.AddVulnerabilityCommand
+import com.secman.cli.commands.AlertGithubRepoOwnersCommand
+import com.secman.cli.commands.AssetMatchClearCommand
+import com.secman.cli.commands.ConfigCommand
+import com.secman.cli.commands.CrowdStrikeLastImportCommand
+import com.secman.cli.commands.DeduplicateVulnerabilitiesCommand
+import com.secman.cli.commands.DeleteAssetNotSeenCommand
+import com.secman.cli.commands.DeleteAllRequirementsCommand
+import com.secman.cli.commands.ExportRequirementsCommand
+import com.secman.cli.commands.ImportGithubReposCommand
+import com.secman.cli.commands.InstalledProductsCommand
+import com.secman.cli.commands.ManageGithubOwnerMappingsCommand
+import com.secman.cli.commands.ManageUserMappingsCommand
+import com.secman.cli.commands.ManageWorkgroupsCommand
+import com.secman.cli.commands.MonitorCommand
+import com.secman.cli.commands.PortScanCommand
+import com.secman.cli.commands.QueryCommand
+import com.secman.cli.commands.SendAccountFindingAgeReportCommand
+import com.secman.cli.commands.SendAdminSummaryCommand
+import com.secman.cli.commands.SendNotificationsCommand
+import com.secman.cli.commands.SendNotificationUsersCommand
+import com.secman.cli.commands.NotifyNewAccountsCommand
+import com.secman.cli.commands.SendPatchNotificationsCommand
+import com.secman.cli.commands.SendApplicationRegisterRemindersCommand
+import com.secman.cli.commands.SendExceptionExpiryRemindersCommand
+import com.secman.cli.commands.ServersCommand
+import io.micronaut.configuration.picocli.PicocliRunner
+import io.micronaut.context.ApplicationContext
+import org.slf4j.LoggerFactory
+
+/**
+ * Main entry point for secman CLI application
+ *
+ * Usage (future with Picocli):
+ *   secman query [options]
+ *   secman config [options]
+ *   secman monitor [options]
+ *   secman help
+ *
+ */
+class SecmanCli {
+    private val log = LoggerFactory.getLogger(SecmanCli::class.java)
+
+    private fun createCliContext(): ApplicationContext {
+        return ApplicationContext.builder().environments("cli").start()
+    }
+
+    fun execute(args: Array<String>): Int {
+        return when {
+            args.isEmpty() || args[0] == "--help" || args[0] == "-h" -> showHelp()
+            args[0] == "help" -> {
+                when {
+                    args.size > 2 && args[1] == "query" && args[2] == "servers" -> showCommandHelp("query-servers")
+                    args.size > 2 && args[1] == "manage-user-mappings" && args[2] == "s3" -> showCommandHelp("manage-user-mappings-s3")
+                    args.size > 1 -> showCommandHelp(args[1])
+                    else -> showHelp()
+                }
+            }
+            args[0] == "query" && args.size > 1 && args[1] == "--help" -> showCommandHelp("query")
+            args[0] == "query" && args.size > 1 && args[1] == "servers" && args.any { it == "--help" || it == "-h" } -> showCommandHelp("query-servers")
+            args[0] == "installed-products" && args.any { it == "--help" || it == "-h" } -> showCommandHelp("installed-products")
+            args[0] == "installed-products" -> {
+                val command = InstalledProductsCommand()
+                var i = 1
+                while (i < args.size) {
+                    when {
+                        args[i] == "--device-type" && i + 1 < args.size -> {
+                            command.deviceType = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--limit" && i + 1 < args.size -> {
+                            command.limit = args[i + 1].toIntOrNull() ?: 1000
+                            i++
+                        }
+                        args[i] == "--client-id" && i + 1 < args.size -> {
+                            command.clientId = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--client-secret" && i + 1 < args.size -> {
+                            command.clientSecret = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--backend-url" && i + 1 < args.size -> {
+                            command.backendUrl = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--dry-run" -> command.dryRun = true
+                        args[i] == "--verbose" -> command.verbose = true
+                    }
+                    i++
+                }
+                command.execute()
+            }
+            args[0] == "query" && args.size > 1 && args[1] == "servers" -> {
+                val serversCommand = ServersCommand()
+                // Parse remaining args into properties
+                var i = 2
+                while (i < args.size) {
+                    when {
+                        args[i] == "--hostnames" && i + 1 < args.size -> {
+                            serversCommand.hostnames = args[i + 1].split(",").map { it.trim() }
+                            i++
+                        }
+                        args[i] == "--device-type" -> {
+                            // Check if next arg exists and is not another flag
+                            if (i + 1 < args.size && !args[i + 1].startsWith("--")) {
+                                serversCommand.deviceType = args[i + 1]
+                                i++
+                            } else {
+                                // No value provided, default to SERVER
+                                serversCommand.deviceType = "SERVER"
+                                System.out.println("Info: No device type specified, defaulting to SERVER")
+                            }
+                        }
+                        args[i] == "--severity" && i + 1 < args.size -> {
+                            serversCommand.severity = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--min-days-open" && i + 1 < args.size -> {
+                            serversCommand.minDaysOpen = args[i + 1].toIntOrNull() ?: 30
+                            i++
+                        }
+                        args[i] == "--last-seen-days" && i + 1 < args.size -> {
+                            serversCommand.lastSeenDays = args[i + 1].toIntOrNull() ?: 0
+                            i++
+                        }
+                        args[i] == "--limit" && i + 1 < args.size -> {
+                            serversCommand.limit = args[i + 1].toIntOrNull() ?: 800
+                            i++
+                        }
+                        args[i] == "--client-id" && i + 1 < args.size -> {
+                            serversCommand.clientId = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--client-secret" && i + 1 < args.size -> {
+                            serversCommand.clientSecret = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--overdue-threshold" && i + 1 < args.size -> {
+                            serversCommand.overdueThreshold = args[i + 1].toIntOrNull() ?: 30
+                            i++
+                        }
+                        args[i] == "--backend-url" && i + 1 < args.size -> {
+                            serversCommand.backendUrl = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--save" -> serversCommand.save = true
+                        args[i] == "--dry-run" -> serversCommand.dryRun = true
+                        args[i] == "--verbose" -> serversCommand.verbose = true
+                    }
+                    i++
+                }
+                serversCommand.execute()
+            }
+            args[0] == "query" && args.any { it == "--help" || it == "-h" } -> showCommandHelp("query")
+            args[0] == "query" -> {
+                val queryCommand = QueryCommand()
+                // Parse remaining args into properties
+                var i = 1
+                while (i < args.size) {
+                    when {
+                        args[i] == "--hostname" && i + 1 < args.size -> {
+                            queryCommand.hostname = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--severity" && i + 1 < args.size -> {
+                            queryCommand.severity = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--product" && i + 1 < args.size -> {
+                            queryCommand.product = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--limit" && i + 1 < args.size -> {
+                            queryCommand.limit = args[i + 1].toIntOrNull() ?: 100
+                            i++
+                        }
+                        args[i] == "--format" && i + 1 < args.size -> {
+                            queryCommand.format = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--output" && i + 1 < args.size -> {
+                            queryCommand.outputFile = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--client-id" && i + 1 < args.size -> {
+                            queryCommand.clientId = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--client-secret" && i + 1 < args.size -> {
+                            queryCommand.clientSecret = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--save" -> queryCommand.save = true
+                        args[i] == "--verbose" -> queryCommand.verbose = true
+                    }
+                    i++
+                }
+                queryCommand.execute()
+            }
+            args[0] == "config" && args.any { it == "--help" || it == "-h" } -> showCommandHelp("config")
+            args[0] == "config" -> {
+                val configCommand = ConfigCommand()
+                // Parse remaining args into properties
+                for (i in 1 until args.size) {
+                    when {
+                        args[i] == "--client-id" && i + 1 < args.size -> configCommand.clientId = args[i + 1]
+                        args[i] == "--client-secret" && i + 1 < args.size -> configCommand.clientSecret = args[i + 1]
+                        args[i] == "--base-url" && i + 1 < args.size -> configCommand.baseUrl = args[i + 1]
+                        args[i] == "--show" -> configCommand.show = true
+                        args[i] == "--format" && i + 1 < args.size -> configCommand.format = args[i + 1]
+                    }
+                }
+                configCommand.execute()
+            }
+            args[0] == "monitor" && args.any { it == "--help" || it == "-h" } -> showCommandHelp("monitor")
+            args[0] == "monitor" -> {
+                val monitorCommand = MonitorCommand()
+                // Parse remaining args into properties
+                var i = 1
+                while (i < args.size) {
+                    when {
+                        args[i] == "--interval" && i + 1 < args.size -> {
+                            monitorCommand.intervalMinutes = args[i + 1].toIntOrNull() ?: 5
+                            i++
+                        }
+                        args[i] == "--hostnames" && i + 1 < args.size -> {
+                            monitorCommand.hostnames = args[i + 1].split(",").map { it.trim() }
+                            i++
+                        }
+                        args[i] == "--backend-url" && i + 1 < args.size -> {
+                            monitorCommand.backendUrl = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--config" && i + 1 < args.size -> {
+                            monitorCommand.configPath = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--dry-run" -> monitorCommand.dryRun = true
+                        args[i] == "--verbose" -> monitorCommand.verbose = true
+                        args[i] == "--no-storage" -> monitorCommand.noStorage = true
+                    }
+                    i++
+                }
+                monitorCommand.execute()
+            }
+            args[0] == "manage-user-mappings" -> {
+                // Use Picocli with Micronaut DI for user mapping commands
+                // Drop the first argument (command name) before passing to PicocliRunner
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(ManageUserMappingsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "send-notifications" -> {
+                // Use Picocli with Micronaut DI for notification command
+                // Drop the first argument (command name) before passing to PicocliRunner
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(SendNotificationsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "manage-workgroups" -> {
+                // Use Picocli with Micronaut DI for workgroup commands
+                // Drop the first argument (command name) before passing to PicocliRunner
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(ManageWorkgroupsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "add-vulnerability" -> {
+                // Use Picocli with Micronaut DI for add-vulnerability command
+                // Feature: 052-cli-add-vulnerability
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(AddVulnerabilityCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "export-requirements" -> {
+                // Use Picocli with Micronaut DI for export-requirements command
+                // Feature: 057-cli-mcp-requirements
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(ExportRequirementsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "add-requirement" -> {
+                // Use Picocli with Micronaut DI for add-requirement command
+                // Feature: 057-cli-mcp-requirements
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(AddRequirementCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "delete-all-requirements" -> {
+                // Use Picocli with Micronaut DI for delete-all-requirements command
+                // Feature: 057-cli-mcp-requirements
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(DeleteAllRequirementsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "send-admin-summary" -> {
+                // Use Picocli with Micronaut DI for send-admin-summary command
+                // Feature: 070-admin-summary-email
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(SendAdminSummaryCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "send-account-finding-age-report" -> {
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(SendAccountFindingAgeReportCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "send-application-register-reminders" -> {
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(SendApplicationRegisterRemindersCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "send-notification-users" -> {
+                // Use Picocli with Micronaut DI for send-notification-users command
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(SendNotificationUsersCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "send-patch-notifications" -> {
+                // Notify users about missing patches, filtered by the first character of their email
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(SendPatchNotificationsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "notify-new-accounts" -> {
+                // Notify users about new AWS account mappings created within the last N hours
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(NotifyNewAccountsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "send-exception-expiry-reminders" -> {
+                // Notify vulnerability exception owners about exceptions expiring soon
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(SendExceptionExpiryRemindersCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "deduplicate-vulnerabilities" -> {
+                // Remove duplicate vulnerability records from the database
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(DeduplicateVulnerabilitiesCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "delete-asset-not-seen" -> {
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(DeleteAssetNotSeenCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "asset-match-clear" -> {
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(AssetMatchClearCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "port-scan" -> {
+                // Port-scan internet-facing assets using nmap
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(PortScanCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "crowdstrike-last-import" -> {
+                // Show timestamp and metadata of the most recent CrowdStrike import
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(CrowdStrikeLastImportCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "import-github-repos" -> {
+                // Import GitHub repositories via the configured GitHub App (backend-side)
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(ImportGithubReposCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "manage-github-owner-mappings" -> {
+                // Manage GitHub owner (org/user login) to default email mappings
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(ManageGithubOwnerMappingsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "alert-github-repo-owners" -> {
+                // Alert repo owners whose high/critical vuln count has not decreased in N days
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(AlertGithubRepoOwnersCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            else -> {
+                System.err.println("ERROR: Unknown command: '${args[0]}'")
+
+                // Suggest parent command for known subcommands used at the wrong level
+                val subcommandHints = mapOf(
+                    "list-bucket" to "manage-user-mappings",
+                    "import-s3" to "manage-user-mappings",
+                    "add-domain" to "manage-user-mappings",
+                    "add-aws" to "manage-user-mappings",
+                    "assign-assets" to "manage-workgroups",
+                    "remove-assets" to "manage-workgroups",
+                    "servers" to "query"
+                )
+                val parentCommand = subcommandHints[args[0]]
+                if (parentCommand != null) {
+                    System.err.println()
+                    System.err.println("Did you mean: secman $parentCommand ${args.joinToString(" ")}")
+                    System.err.println()
+                }
+
+                showHelp()
+                1
+            }
+        }
+    }
+
+    private fun showHelp(): Int {
+        println("""
+            secman - Security Requirement and Risk Assessment Management CLI
+
+            Usage: secman <command> [options]
+                   secman help <command>       Show detailed help for a command
+
+            Commands:
+              CrowdStrike:
+                query                  Query CrowdStrike vulnerabilities for a single host
+                query servers          Batch query and import server vulnerabilities
+                installed-products     Import CrowdStrike Discover software inventory for known systems
+                monitor                Continuously monitor for HIGH/CRITICAL vulnerabilities
+                config                 Configure CrowdStrike API credentials
+                crowdstrike-last-import  Show timestamp of the most recent CrowdStrike import
+
+              Notifications:
+                send-notifications     Send email notifications for outdated assets
+                send-admin-summary     Send system statistics summary email to ADMIN users
+                send-account-finding-age-report  Email accounts with the longest-open findings to ADMIN users
+                send-notification-users  Send vulnerability notifications to users by AWS account
+                send-patch-notifications  Notify users about missing patches, filtered by email first character
+                send-application-register-reminders  Send reminders for stale application register quality checks
+                notify-new-accounts    Notify users about new AWS account mappings created in the last N hours
+                send-exception-expiry-reminders  Notify vulnerability exception owners about exceptions expiring soon
+
+              User & Access Management:
+                manage-user-mappings   Manage user mappings for domains and AWS accounts
+                manage-workgroups      Manage workgroup asset assignments (list, assign, remove)
+
+              GitHub:
+                import-github-repos    Import GitHub repositories via the configured GitHub App (ADMIN)
+                alert-github-repo-owners  Alert repo owners whose high/critical vuln count has not decreased (ADMIN)
+                manage-github-owner-mappings  Manage GitHub owner (org/user login) to default email mappings
+
+              Scanning:
+                port-scan              Port-scan internet-facing assets using nmap
+
+              Vulnerabilities:
+                add-vulnerability      Add or update a vulnerability for an asset
+                deduplicate-vulnerabilities  Remove duplicate vulnerability records (ADMIN)
+                delete-asset-not-seen  Delete CrowdStrike assets not imported for N days (ADMIN)
+                asset-match-clear      Delete AWS assets missing from an S3 resource snapshot (ADMIN)
+
+              Requirements:
+                export-requirements    Export all requirements to Excel or Word
+                add-requirement        Add a new security requirement
+                delete-all-requirements  Delete ALL requirements (ADMIN)
+
+              General:
+                help                   Show this help message
+                help <command>         Show detailed help for a specific command
+
+            Run 'secman help <command>' for detailed options and examples.
+            For more information, visit: https://github.com/schmalle/secman
+        """.trimIndent())
+        return 0
+    }
+
+    private fun showCommandHelp(command: String): Int {
+        // Resolve aliases for common variations
+        val resolvedCommand = commandAliases[command] ?: command
+        val helpText = commandHelpTexts[resolvedCommand]
+        if (helpText == null) {
+            System.err.println("ERROR: Unknown command: '$command'")
+            System.err.println()
+            System.err.println("Available commands:")
+            commandHelpTexts.keys.sorted().forEach { cmd ->
+                System.err.println("  $cmd")
+            }
+            System.err.println()
+            System.err.println("Run 'secman help' for an overview.")
+            return 1
+        }
+        println(helpText)
+        return 0
+    }
+
+    companion object {
+        private val commandAliases = mapOf(
+            "servers" to "query-servers",
+            "notifications" to "send-notifications",
+            "admin-summary" to "send-admin-summary",
+            "user-mappings" to "manage-user-mappings",
+            "workgroups" to "manage-workgroups",
+            "env" to "environment",
+            "vars" to "environment",
+            "s3" to "manage-user-mappings-s3",
+        )
+
+        private val commandHelpTexts = mapOf(
+            "query" to """
+                secman query - Query CrowdStrike vulnerabilities for a single host
+
+                Usage: secman query [options]
+
+                Options:
+                  --hostname <hostname>    Hostname to query vulnerabilities for (required)
+                  --severity <levels>      Filter by severity (comma-separated: CRITICAL,HIGH,MEDIUM,LOW)
+                  --product <name>         Filter by product name
+                  --limit <num>            Maximum results to return (default: 100)
+                  --format <json|csv>      Output format (default: json)
+                  --output <file>          Output file path
+                  --client-id <id>         CrowdStrike API client ID (overrides config file)
+                  --client-secret <secret> CrowdStrike API client secret (overrides config file)
+                  --save                   Save asset and vulnerabilities to database (direct access)
+                  --verbose                Enable verbose logging
+
+                Examples:
+                  secman query --hostname server01
+                  secman query --hostname server01 --severity CRITICAL --verbose
+                  secman query --hostname server01 --severity HIGH,CRITICAL --save
+                  secman query --hostname server01 --format csv --output vulns.csv
+                  secman query --hostname server01 --limit 50 --format json --output results.json
+
+                See also: secman help query-servers
+            """.trimIndent(),
+
+            "installed-products" to """
+                secman installed-products - Import CrowdStrike Discover software inventory
+
+                Usage: secman installed-products [options]
+
+                Purpose:
+                  Queries CrowdStrike Discover applications and imports installed
+                  product/application rows for assets that already exist in SecMan.
+                  Missing hosts are skipped and counted as unknown systems; this
+                  command does not create assets.
+
+                Options:
+                  --device-type <type>     CrowdStrike host filter: SERVER, WORKSTATION, or ALL (default: SERVER)
+                  --dry-run                Query CrowdStrike only; print batch/summary counts without backend auth or writes
+                  --limit <num>            CrowdStrike page size, coerced to 1..1000 (default: 1000)
+                  --backend-url <url>      Backend API URL (overrides SECMAN_BACKEND_URL/SECMAN_HOST; SECMAN_HOST may be bare host)
+                  --client-id <id>         CrowdStrike API client ID (overrides env/config when paired with --client-secret)
+                  --client-secret <secret> CrowdStrike API client secret (overrides env/config when paired with --client-id)
+                  --verbose                Show detailed backend import errors
+
+                Import behavior:
+                  - Requires SECMAN_ADMIN_NAME and SECMAN_ADMIN_PASS unless --dry-run is used.
+                  - Backend role must be ADMIN or VULN for POST /api/installed-products/import.
+                  - Asset matching uses case-insensitive hostname, then short hostname for FQDNs.
+                  - Product upsert uses CrowdStrike external ID scoped to the asset, or asset/name/vendor/version.
+
+                Examples:
+                  secman installed-products --device-type SERVER --dry-run
+                  secman installed-products --device-type SERVER --backend-url https://secman.example.com
+                  secman installed-products --device-type ALL --limit 500 --verbose
+            """.trimIndent(),
+            "query-servers" to """
+                secman query servers - Batch query and import server vulnerabilities
+
+                Usage: secman query servers [options]
+
+                Options:
+                  --hostnames <list>       Comma-separated list of hostnames (default: all devices)
+                  --device-type <type>     Device type: SERVER, WORKSTATION, or ALL (default: SERVER)
+                  --severity <levels>      Severity filter (default: HIGH,CRITICAL)
+                  --min-days-open <num>    Minimum days open filter (default: 30)
+                  --last-seen-days <num>   Only include devices seen within N days (default: 0 = all)
+                  --limit <num>            Page size for pagination (default: 800)
+                  --client-id <id>         CrowdStrike API client ID (overrides config file)
+                  --client-secret <secret> CrowdStrike API client secret (overrides config file)
+                  --overdue-threshold <num> Days threshold for overdue vulnerability report (default: 30)
+                  --backend-url <url>      Backend API URL (default: SECMAN_BACKEND_URL env var, or http://localhost:8080)
+                  --save                   Save to database via backend API
+                  --dry-run                Query but don't import
+                  --verbose                Enable verbose logging
+
+                Examples:
+                  secman query servers --save
+                  secman query servers --backend-url https://secman.example.com --save
+                  secman query servers --hostnames server01,server02 --save --verbose
+                  secman query servers --severity CRITICAL --min-days-open 60 --dry-run
+                  secman query servers --device-type WORKSTATION --severity CRITICAL,HIGH --save
+                  secman query servers --device-type ALL --dry-run --verbose
+                  secman query servers --save --overdue-threshold 60
+
+                See also: secman help query
+            """.trimIndent(),
+
+            "monitor" to """
+                secman monitor - Continuously monitor for HIGH/CRITICAL vulnerabilities
+
+                Usage: secman monitor [options]
+
+                Options:
+                  --interval <minutes>     Polling interval in minutes (default: 5)
+                  --hostnames <list>       Comma-separated list of hostnames to monitor
+                  --backend-url <url>      Backend API URL (default: http://localhost:8080)
+                  --config <path>          Configuration file path
+                  --dry-run                Query but don't store results
+                  --no-storage             Disable automatic storage
+                  --verbose                Enable verbose logging
+
+                Examples:
+                  secman monitor --interval 10 --hostnames server01,server02,server03
+                  secman monitor --dry-run --verbose
+            """.trimIndent(),
+
+            "config" to """
+                secman config - Configure CrowdStrike API credentials
+
+                Usage: secman config [options]
+
+                Options:
+                  --client-id <id>         CrowdStrike API client ID (required for save)
+                  --client-secret <secret> CrowdStrike API client secret (required for save)
+                  --base-url <url>         CrowdStrike API base URL (default: https://api.crowdstrike.com)
+                  --show                   Show current CrowdStrike configuration
+                  --format <yaml|conf>     Configuration file format (default: yaml)
+
+                Examples:
+                  secman config --client-id <id> --client-secret <secret>
+                  secman config --show
+            """.trimIndent(),
+
+            "send-notifications" to """
+                secman send-notifications - Send email notifications for outdated assets
+
+                Usage: secman send-notifications [options]
+
+                Options:
+                  --dry-run                Report planned notifications without sending emails
+                  --verbose, -v            Detailed logging (show per-asset processing)
+                  --outdated-only          Process only outdated asset reminders (skip new vulnerability notifications)
+
+                Examples:
+                  secman send-notifications
+                  secman send-notifications --dry-run --verbose
+                  secman send-notifications --outdated-only
+            """.trimIndent(),
+
+            "send-admin-summary" to """
+                secman send-admin-summary - Send system statistics summary email to ADMIN users
+
+                Usage: secman send-admin-summary [options]
+
+                Options:
+                  --dry-run                Preview planned recipients without sending emails
+                  --verbose, -v            Detailed logging (show per-recipient status)
+
+                Examples:
+                  secman send-admin-summary
+                  secman send-admin-summary --dry-run
+                  secman send-admin-summary --verbose
+                  secman send-admin-summary --dry-run --verbose
+            """.trimIndent(),
+            "send-account-finding-age-report" to """
+                secman send-account-finding-age-report - Email the accounts with the longest-open findings to ADMIN users
+
+                Usage: secman send-account-finding-age-report [options]
+
+                Options:
+                  --limit <n>     Number of accounts to report (1-50, default: 10)
+                  --dry-run       Preview planned recipients without sending emails
+                  --verbose, -v   Detailed logging (per-recipient status)
+
+                Examples:
+                  secman send-account-finding-age-report
+                  secman send-account-finding-age-report --limit 20
+                  secman send-account-finding-age-report --dry-run
+                """.trimIndent(),
+
+            "send-notification-users" to """
+                secman send-notification-users - Send vulnerability notification emails to users with affected AWS accounts
+
+                Usage: secman send-notification-users [options]
+
+                Options:
+                  --dry-run                Preview planned notifications without sending emails
+                  --verbose, -v            Detailed logging (show per-recipient status)
+                  --days <number>          Vulnerability age threshold in days (default: 30)
+                  --notification-user <email>  Only notify this specific user email (skip all others)
+                  --notall                 With --notification-user for an ADMIN/SECCHAMPION: restrict to AWS
+                                           accounts backing assets the user owns (manual creator, scan uploader,
+                                           or owner), belongs to via workgroup, or has via AWS account sharing —
+                                           instead of the full global view those roles get by default
+
+                Description:
+                  Identifies AWS accounts with systems having vulnerabilities open longer than
+                  the specified threshold. Maps accounts to users via UserMapping and sends each
+                  user one consolidated email listing all their affected AWS accounts.
+
+                Examples:
+                  secman send-notification-users
+                  secman send-notification-users --dry-run
+                  secman send-notification-users --days 60 --verbose
+                  secman send-notification-users --dry-run --days 14
+                  secman send-notification-users --notification-user admin@example.com --notall
+            """.trimIndent(),
+
+            "send-patch-notifications" to """
+                secman send-patch-notifications - Notify users about missing patches by email first character
+
+                Usage: secman send-patch-notifications <emailPrefix> [options]
+
+                Arguments:
+                  <emailPrefix>            First character of the email address to notify (e.g. 'a'). REQUIRED.
+
+                Options:
+                  --days <number>          Missing-patch (vulnerability) age threshold in days (default: 30)
+                  --dry-run                Preview planned notifications without sending emails
+                  --verbose, -v            Detailed logging (show per-recipient status)
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --backend-url <url>      Backend API URL (or SECMAN_HOST / SECMAN_BACKEND_URL env var)
+
+                Description:
+                  Finds AWS accounts with systems having vulnerabilities (missing patches) open
+                  longer than the threshold, maps them to users via UserMapping, then keeps only
+                  recipients whose login email starts with <emailPrefix> before sending each one a
+                  consolidated email. The prefix lets you notify users in alphabetical batches.
+
+                Examples:
+                  secman send-patch-notifications a --dry-run
+                  secman send-patch-notifications a
+                  secman send-patch-notifications m --days 60 --verbose
+                  secman send-patch-notifications s --days 14 --dry-run
+            """.trimIndent(),
+
+            "import-github-repos" to """
+                secman import-github-repos - Import GitHub repositories via the configured GitHub App
+
+                Usage: secman import-github-repos [options]
+
+                Options:
+                  --verbose, -v            Detailed logging (list per-repo errors and disabled repos)
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --backend-url <url>      Backend API URL (or SECMAN_HOST / SECMAN_BACKEND_URL env var)
+
+                Description:
+                  Triggers the backend to import every repository accessible to the GitHub App
+                  configured under Admin -> GitHub App. For each repository the backend fetches
+                  the open Dependabot alerts, stores the high/critical counts on the repository
+                  record and writes one finding snapshot per run. Those snapshots are the
+                  history that alert-github-repo-owners compares against.
+
+                  The GitHub credentials live in the backend (encrypted); this command needs
+                  only secman ADMIN credentials. Requires an active GitHub App configuration.
+                  Re-runs upsert by the stable GitHub repository id (rename-safe).
+
+                Exit codes:
+                  0  import completed without errors
+                  1  import failed or completed with per-repo errors
+
+                Examples:
+                  secman import-github-repos
+                  secman import-github-repos --verbose
+            """.trimIndent(),
+
+            "alert-github-repo-owners" to """
+                secman alert-github-repo-owners - Alert repo owners about non-decreasing vulnerabilities
+
+                Usage: secman alert-github-repo-owners [options]
+
+                Options:
+                  --days <number>          Comparison window in days (default: 30)
+                  --dry-run                Preview planned alerts without sending emails
+                  --verbose, -v            Detailed logging (show per-recipient status)
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --backend-url <url>      Backend API URL (or SECMAN_HOST / SECMAN_BACKEND_URL env var)
+
+                Description:
+                  For every imported GitHub repository, compares the current open high+critical
+                  Dependabot alert count against the newest import snapshot at least --days old.
+                  When the count is still greater than zero and has NOT decreased, the repo's
+                  owner email receives one consolidated alert listing all such repos.
+
+                  Repositories with an active alert exception are skipped (reported as excepted).
+                  Repositories without an owner email are reported as unmapped. Repositories
+                  without a snapshot old enough are reported as skipped (insufficient history).
+                  Run import-github-repos regularly (e.g. daily via cron) to build the history.
+
+                Exit codes:
+                  0  alerts sent (or dry run) without failures
+                  1  alert run failed or some emails failed
+                  2  usage error (e.g. --days < 1)
+
+                Examples:
+                  secman alert-github-repo-owners --dry-run
+                  secman alert-github-repo-owners
+                  secman alert-github-repo-owners --days 60 --verbose
+            """.trimIndent(),
+
+            "manage-user-mappings" to """
+                secman manage-user-mappings - Manage user mappings for domains and AWS accounts
+
+                Usage: secman manage-user-mappings <subcommand> [options]
+
+                Subcommands:
+                  add-domain     Add domain-to-user mappings
+                  add-aws        Add AWS account-to-user mappings
+                  list           List existing user mappings
+                  remove         Remove user mappings
+                  import         Batch import from CSV/JSON file
+                  import-s3      Import user mappings from AWS S3
+                  list-bucket    List S3 bucket contents
+
+                Common Options:
+                  --admin-user, -u <email>  Admin email (or set SECMAN_ADMIN_EMAIL env var)
+
+                Examples:
+                  secman manage-user-mappings add-domain --emails user@example.com --domains example.com -u admin@company.com
+                  secman manage-user-mappings add-aws --emails user@example.com --accounts 123456789012 -u admin@company.com
+                  secman manage-user-mappings list --format TABLE
+                  secman manage-user-mappings remove --email user@example.com --all
+                  secman manage-user-mappings import --file mappings.csv --dry-run
+                  secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv -u admin@company.com
+                  secman manage-user-mappings list-bucket --bucket my-bucket --prefix user-mappings/
+
+                Tip: To email statistics to ADMIN/REPORT users after an import (S3 or local),
+                     run: secman manage-user-mappings list --send-email
+                     Use --dry-run with --send-email to preview recipients without sending.
+
+                Run 'secman manage-user-mappings <subcommand> --help' for subcommand-specific options.
+
+                See also: secman help manage-user-mappings-s3
+            """.trimIndent(),
+
+            "manage-user-mappings-s3" to """
+                secman manage-user-mappings import-s3 / list-bucket - S3 import operations
+
+                Usage:
+                  secman manage-user-mappings import-s3 [options]
+                  secman manage-user-mappings list-bucket [options]
+
+                import-s3 Options:
+                  --bucket, -b <name>        S3 bucket name (required)
+                  --key, -k <path>           S3 object key / path to file (required)
+                  --aws-region <region>      AWS region (default: SDK auto-resolution)
+                  --aws-profile <name>       AWS credential profile name
+                  --aws-access-key-id        AWS access key ID (or AWS_ACCESS_KEY_ID env var)
+                  --aws-secret-access-key    AWS secret access key (or AWS_SECRET_ACCESS_KEY env var)
+                  --aws-session-token        AWS session token for temporary credentials
+                  --format <type>            File format: CSV, JSON, or AUTO (default: AUTO)
+                  --dry-run                  Validate file without creating mappings
+                  --admin-user, -u           Admin email (or SECMAN_ADMIN_EMAIL env var)
+
+                list-bucket Options:
+                  --bucket, -b <name>        S3 bucket name (required)
+                  --prefix, -p <prefix>      Filter objects by key prefix
+                  --aws-region <region>      AWS region (default: SDK auto-resolution)
+                  --aws-profile <name>       AWS credential profile name
+                  --aws-access-key-id        AWS access key ID (or AWS_ACCESS_KEY_ID env var)
+                  --aws-secret-access-key    AWS secret access key (or AWS_SECRET_ACCESS_KEY env var)
+                  --aws-session-token        AWS session token for temporary credentials
+                  --admin-user, -u           Admin email (or SECMAN_ADMIN_EMAIL env var)
+
+                AWS Credential Resolution Priority (highest to lowest):
+                  1. Explicit CLI flags (--aws-access-key-id + --aws-secret-access-key)
+                  2. Environment variables (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY)
+                  3. Named profile (--aws-profile, reads from ~/.aws/credentials)
+                  4. Default credential chain (IAM role, SSO, etc.)
+
+                Exit Codes (import-s3):
+                  0  All mappings imported successfully
+                  1  Partial import (some mappings skipped)
+                  2+ Fatal error (S3 access, parsing, or authentication failure)
+
+                Email Notification:
+                  To email statistics to ADMIN/REPORT users after an S3 import,
+                  follow up with: secman manage-user-mappings list --send-email
+                  Use --dry-run with --send-email to preview recipients without sending.
+                  Use --verbose with --send-email to see per-recipient delivery status.
+
+                Examples:
+                  export AWS_ACCESS_KEY_ID=AKIA...
+                  export AWS_SECRET_ACCESS_KEY=...
+                  secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv -u admin@company.com
+                  secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv --dry-run -u admin@company.com
+                  secman manage-user-mappings import-s3 --bucket my-bucket --key data/users.json --aws-profile prod -u admin@company.com
+                  secman manage-user-mappings list-bucket --bucket my-bucket -u admin@company.com
+                  secman manage-user-mappings list-bucket --bucket my-bucket --prefix user-mappings/ -u admin@company.com
+
+                  # Import from S3, then email statistics to admins:
+                  secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv && \
+                    secman manage-user-mappings list --send-email
+            """.trimIndent(),
+
+            "manage-workgroups" to """
+                secman manage-workgroups - Manage workgroup asset assignments
+
+                Usage: secman manage-workgroups <subcommand> [options]
+
+                Subcommands:
+                  list             List workgroups and their assets
+                  assign-assets    Assign assets to a workgroup
+                  remove-assets    Remove assets from a workgroup
+
+                Common Options:
+                  --admin-user, -u <email>  Admin email (or set SECMAN_ADMIN_EMAIL env var)
+
+                Examples:
+                  secman manage-workgroups list
+                  secman manage-workgroups list --workgroup Production
+                  secman manage-workgroups list --search-assets "ip-10-*"
+                  secman manage-workgroups assign-assets -w Production -p "ip-10-*" -u admin@company.com
+                  secman manage-workgroups assign-assets -w Production -p "*prod*" --type SERVER -u admin@company.com
+                  secman manage-workgroups assign-assets -w Production --ids 1,2,3 -u admin@company.com
+                  secman manage-workgroups remove-assets -w Test -p "*test*" -u admin@company.com
+                  secman manage-workgroups remove-assets -w Test --all -u admin@company.com
+
+                Run 'secman manage-workgroups <subcommand> --help' for subcommand-specific options.
+            """.trimIndent(),
+
+            "add-vulnerability" to """
+                secman add-vulnerability - Add or update a vulnerability for an asset
+
+                Usage: secman add-vulnerability [options]
+
+                Options:
+                  --hostname <hostname>    Target asset hostname (required)
+                  --cve <cve-id>           CVE identifier or custom vulnerability ID (required)
+                  --criticality <level>    Severity: CRITICAL, HIGH, MEDIUM, or LOW (required)
+                  --days-open <num>        Days the vulnerability has been open (default: 0)
+                  --verbose                Enable verbose output
+
+                If the asset does not exist, it will be created automatically.
+
+                Examples:
+                  secman add-vulnerability --hostname webserver01 --cve CVE-2024-1234 --criticality HIGH
+                  secman add-vulnerability --hostname webserver01 --cve CVE-2024-1234 --criticality HIGH --days-open 30
+                  secman add-vulnerability --hostname newserver99 --cve CVE-2023-5678 --criticality CRITICAL --verbose
+            """.trimIndent(),
+
+            "deduplicate-vulnerabilities" to """
+                secman deduplicate-vulnerabilities - Remove duplicate vulnerability records
+
+                Usage: secman deduplicate-vulnerabilities [options]
+
+                Requires: ADMIN role
+
+                Options:
+                  --backend-url <url>      Backend API URL (default: http://localhost:8080)
+                  --username <user>        Backend username with ADMIN role (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --verbose, -v            Show per-asset deduplication details
+
+                Examples:
+                  secman deduplicate-vulnerabilities --username admin --password secret
+                  secman deduplicate-vulnerabilities --verbose
+                  secman deduplicate-vulnerabilities --backend-url http://prod:8080
+            """.trimIndent(),
+
+            "asset-match-clear" to """
+                secman asset-match-clear - Delete AWS assets missing from an S3 resource snapshot
+
+                Usage: secman asset-match-clear [options]
+
+                Requires: ADMIN role
+
+                Description:
+                  Downloads a JSON snapshot of authoritative AWS resources from S3 and
+                  deletes every AWS asset in secman whose cloudAccountId is present in
+                  the snapshot's account set AND whose cloudInstanceId is NOT in the
+                  snapshot's resourceId set. Assets in accounts NOT covered by the
+                  snapshot are never touched (partial-snapshot safe).
+
+                Snapshot format (JSON array of objects):
+                  [
+                    {"accountId":"199942131465","resourceId":"i-0001e614fcd21166d","awsRegion":"eu-central-1","tags":[...]},
+                    ...
+                  ]
+                  Entries missing accountId or resourceId are skipped.
+
+                S3 source (resolution order, highest priority first):
+                  --bucket           or AWS_ASSET_BUCKET_NAME env var (required)
+                  --key              or AWS_ASSET_BUCKET_KEY_NAME env var   (required)
+
+                Options:
+                  --bucket <name>          S3 bucket name (or AWS_ASSET_BUCKET_NAME env var)
+                  --key <path>             S3 object key (or AWS_ASSET_BUCKET_KEY_NAME env var)
+                  --aws-region <region>    AWS region (default: SDK auto-resolution)
+                  --aws-profile <name>     AWS credential profile name
+                  --aws-access-key-id      AWS access key ID (or AWS_ACCESS_KEY_ID)
+                  --aws-secret-access-key  AWS secret access key (or AWS_SECRET_ACCESS_KEY)
+                  --aws-session-token      AWS session token for temporary credentials
+                  --dry-run                Preview matching assets without deleting them
+                  --check                  Only check whether downloaded resource IDs exist
+                                           in SECMan asset inventory; no delete/dry-run action
+                  --check-fix              Create missing SECMan assets from downloaded
+                                           resource IDs; no delete/dry-run action
+                  --strict                 Treat the snapshot as globally authoritative across all
+                                           SECMan AWS assets with cloudInstanceId
+                  --save                   Save the downloaded AWS JSON snapshot to /tmp/asset.json
+                  --max-delete-percent <n> Abort if proposed deletions exceed N% of scoped
+                                           AWS assets (default: 25, set 0 to disable)
+                  --backend-url <url>      Backend API URL (or SECMAN_HOST / SECMAN_BACKEND_URL)
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --insecure               Accept self-signed TLS certificates (or SECMAN_INSECURE=true)
+                  --verbose, -v            Show matching asset details and credential diagnostics
+
+                Safety:
+                  - Operates ONLY on assets with a non-blank cloudInstanceId AND whose
+                    cloudAccountId appears in the snapshot. Assets in other accounts
+                    are NEVER deleted.
+                  - With --strict, evaluates all SECMan AWS assets with a non-blank
+                    cloudInstanceId, even when their account is absent from the snapshot.
+                  - With --check, only validates downloaded resourceIds against SECMan
+                    cloudInstanceIds; it never calls the match-clear delete endpoint
+                    and ignores --save.
+                  - With --check-fix, missing resourceIds are imported as SERVER
+                    assets with cloudAccountId=accountId and cloudInstanceId=resourceId;
+                    it never calls the match-clear delete endpoint and ignores --save.
+                  - --check-fix cannot be combined with --check or --dry-run.
+                  - Rejects empty snapshots (no accountIds OR no resourceIds).
+                  - Safety brake aborts a real run when proposed deletions exceed
+                    --max-delete-percent of the scoped account total. Trips with
+                    status=ABORTED_SAFETY_BRAKE and exits 2.
+
+                Exit codes:
+                  0  Success
+                  1  Per-asset deletion errors or pre-flight failure (S3, auth, parse)
+                  2  Safety brake tripped
+
+                IAM permissions required on the S3 object:
+                  s3:GetObject  (mandatory)
+                  s3:HeadObject (recommended — enables pre-download size check)
+
+                Examples:
+                  # Local config via env vars, dry run first:
+                  export AWS_ASSET_BUCKET_NAME=cov-aws-inventory
+                  export AWS_ASSET_BUCKET_KEY_NAME=cov-instances/latest.json
+                  export AWS_REGION=eu-central-1
+                  export SECMAN_ADMIN_NAME=admin
+                  export SECMAN_ADMIN_PASS=...
+
+                  secman asset-match-clear --dry-run --verbose
+                  secman asset-match-clear --check --verbose
+                  secman asset-match-clear --check-fix --verbose
+                  secman asset-match-clear --max-delete-percent 10
+                  secman asset-match-clear --bucket cov-aws-inventory --key snapshots/2026-05-15.json
+                  secman asset-match-clear --aws-profile prod --backend-url https://secman.example.com
+            """.trimIndent(),
+
+            "delete-asset-not-seen" to """
+                secman delete-asset-not-seen - Delete CrowdStrike assets not imported for N days
+
+                Usage: secman delete-asset-not-seen <days> [options]
+
+                Requires: ADMIN role
+
+                Options:
+                  --dry-run                Preview matching assets without deleting them
+                  --backend-url <url>      Backend API URL (default: SECMAN_HOST, SECMAN_BACKEND_URL, or http://localhost:8080)
+                  --username <user>        Backend username with ADMIN role (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --insecure               Accept self-signed TLS certificates (or SECMAN_INSECURE=true env var)
+                  --verbose, -v            Show matching asset details
+
+                Notes:
+                  Only assets with a CrowdStrike import timestamp are eligible.
+                  Assets with no CrowdStrike import timestamp are ignored until they are
+                  seen by a future CrowdStrike import or an explicit admin backfill.
+
+                Examples:
+                  secman delete-asset-not-seen 30 --dry-run
+                  secman delete-asset-not-seen 90 --verbose
+                  secman delete-asset-not-seen 60 --backend-url https://secman.example.com
+            """.trimIndent(),
+
+            "export-requirements" to """
+                secman export-requirements - Export all requirements to Excel or Word
+
+                Usage: secman export-requirements [options]
+
+                Options:
+                  --format <xlsx|docx>     Export format: xlsx (Excel) or docx (Word) (required)
+                  --output <path>          Output file path (default: requirements_export_YYYYMMDD.{format})
+                  --backend-url <url>      Backend API URL (default: http://localhost:8080)
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --verbose                Enable verbose output
+
+                Examples:
+                  export SECMAN_ADMIN_NAME=admin
+                  export SECMAN_ADMIN_PASS=secret
+                  secman export-requirements --format xlsx
+                  secman export-requirements --format docx --output security_requirements.docx
+                  secman export-requirements --format xlsx --output /path/to/export.xlsx --verbose
+                  secman export-requirements --format xlsx --username admin --password secret
+            """.trimIndent(),
+
+            "add-requirement" to """
+                secman add-requirement - Add a new security requirement
+
+                Usage: secman add-requirement [options]
+
+                Options:
+                  --shortreq <text>        Short requirement text (required)
+                  --chapter <name>         Chapter/category for grouping
+                  --details <text>         Detailed description
+                  --motivation <text>      Why this requirement exists
+                  --example <text>         Implementation example
+                  --norm <name>            Regulatory norm reference (e.g., ISO 27001)
+                  --usecase <name>         Use case description
+                  --backend-url <url>      Backend API URL (default: http://localhost:8080)
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --verbose                Enable verbose output
+
+                Examples:
+                  secman add-requirement --shortreq "All passwords must be at least 12 characters"
+                  secman add-requirement --shortreq "MFA required for admin access" --chapter "Authentication"
+                  secman add-requirement --shortreq "Encrypt data at rest" --chapter "Data Protection" --norm "GDPR Article 32"
+                  secman add-requirement --shortreq "Log all admin actions" --chapter "Audit" --username admin --password secret
+            """.trimIndent(),
+
+            "delete-all-requirements" to """
+                secman delete-all-requirements - Delete ALL requirements from the system
+
+                Usage: secman delete-all-requirements [options]
+
+                WARNING: This is a destructive operation! Requires ADMIN role.
+
+                Options:
+                  --confirm                Required safety flag to confirm deletion (required)
+                  --backend-url <url>      Backend API URL (default: http://localhost:8080)
+                  --username <user>        Backend username with ADMIN role (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --verbose                Enable verbose output
+
+                Examples:
+                  secman delete-all-requirements --confirm
+                  secman delete-all-requirements --confirm --verbose
+                  secman delete-all-requirements --confirm --backend-url http://test-server:8080
+            """.trimIndent(),
+
+            "crowdstrike-last-import" to """
+                secman crowdstrike-last-import - Show the timestamp of the most recent CrowdStrike import
+
+                Usage: secman crowdstrike-last-import [options]
+
+                Requires: ADMIN or VULN role
+
+                Options:
+                  --backend-url <url>      Backend API URL (default: SECMAN_HOST, SECMAN_BACKEND_URL, or http://localhost:8080)
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --format <text|json>     Output format (default: text)
+                  --insecure               Accept self-signed TLS certificates (or SECMAN_INSECURE=true env var)
+                  --verbose, -v            Enable verbose output
+
+                Examples:
+                  secman crowdstrike-last-import
+                  secman crowdstrike-last-import --format json
+                  secman crowdstrike-last-import --verbose
+            """.trimIndent(),
+
+            "port-scan" to """
+                secman port-scan - Port-scan internet-facing assets using nmap
+
+                Usage: secman port-scan [options]
+
+                Requires: ADMIN role, nmap installed on the local machine
+
+                Options:
+                  --backend-url <url>      Backend API URL (default: SECMAN_HOST or http://localhost:8080)
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --nmap-path <path>       Path to nmap binary (default: "nmap")
+                  --nmap-args <args>       Additional nmap arguments (default: "-sV -T4")
+                  --ports, -p <range>      Port range to scan (default: nmap top 1000)
+                  --targets <pattern>      Filter assets by name pattern (e.g., "web-*")
+                  --dry-run                Show scan targets without running nmap
+                  --verbose, -v            Enable verbose output
+                  --output-dir <path>      Directory to save nmap XML files (default: temp dir)
+
+                Workflow:
+                  1. Authenticates with backend API
+                  2. Fetches assets with networkZone EXTERNAL or DMZ that have an IP
+                  3. Validates nmap is installed
+                  4. Runs nmap against each target
+                  5. Uploads XML results to backend via /api/scan/upload-nmap
+                  6. Reports scan summary
+
+                Prerequisites:
+                  - Assets must have networkZone set to EXTERNAL or DMZ
+                  - Assets must have a non-empty IP address
+                  - nmap must be installed on the machine running this command
+
+                Examples:
+                  secman port-scan --dry-run
+                  secman port-scan --verbose
+                  secman port-scan --targets "web-*" --ports "80,443,8080"
+                  secman port-scan --nmap-args "-sV -sC -T4 --top-ports 100"
+                  secman port-scan --output-dir /tmp/scans --verbose
+            """.trimIndent(),
+
+            "notify-new-accounts" to """
+                secman notify-new-accounts - Notify users about new AWS account mappings
+
+                Usage: secman notify-new-accounts --file <path> [options]
+
+                Requires: ADMIN role
+
+                Description:
+                  Finds UserMapping rows where aws_account_id is set and created_at falls
+                  within the last --hours hours (default: 24). Groups results by email address
+                  and sends each affected user one consolidated notification listing all newly
+                  mapped AWS account IDs. The email body is taken from the file supplied via
+                  --file; the list of account IDs is always appended below the custom text.
+
+                  Typical use-case: run this command after an automated user-mapping import to
+                  inform newly-onboarded users which AWS accounts they now have access to.
+
+                Options:
+                  -f, --file <path>        Path to a text file used as the email body (required)
+                  --hours <n>              Look-back window in hours (default: 24)
+                  --dry-run                Preview planned recipients without sending emails
+                  --verbose, -v            Per-recipient delivery status
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --backend-url <url>      Backend API URL (or SECMAN_HOST / SECMAN_BACKEND_URL env var)
+
+                Exit codes:
+                  0  Success (or dry run completed)
+                  1  Partial failure or unexpected error
+                  2  Invalid arguments (missing file, bad hours value, empty file)
+
+                Examples:
+                  # Notify all users who got a new AWS mapping in the last 24 hours:
+                  secman notify-new-accounts --file /etc/secman/welcome-aws.txt
+
+                  # Preview recipients without sending (useful for scheduling scripts):
+                  secman notify-new-accounts --file welcome-aws.txt --dry-run
+
+                  # Use a 48-hour window and show per-recipient status:
+                  secman notify-new-accounts --file welcome-aws.txt --hours 48 --verbose
+
+                  # Custom credentials and backend:
+                  secman notify-new-accounts --file msg.txt --username admin --password secret \
+                    --backend-url https://secman.example.com
+            """.trimIndent(),
+
+            "send-exception-expiry-reminders" to """
+                secman send-exception-expiry-reminders - Notify vulnerability exception owners about exceptions expiring soon
+
+                Usage: secman send-exception-expiry-reminders [options]
+
+                Requires: ADMIN role
+
+                Description:
+                  Finds VulnerabilityException rows whose expiration_date falls exactly
+                  --days days from today (default: 7), resolves each exception's owner
+                  (the exception's createdBy username, mapped to that user's email), and
+                  sends each owner one consolidated email listing all of their expiring
+                  exceptions (id, subject/scope, expiration date, reason).
+
+                  A reminder is sent at most once per (exception, expiration date) pair,
+                  so running this command daily (e.g. via cron) never re-notifies an owner
+                  for the same expiration date. If an exception's expiration date is later
+                  edited/extended, a fresh reminder is sent for the new date once it falls
+                  inside the window again.
+
+                  Typical use-case: schedule this command to run once a day so exception
+                  owners always get a heads-up exactly one week before their exception
+                  lapses and matching vulnerabilities reappear as active findings.
+
+                Options:
+                  --days <n>                Remind about exceptions expiring exactly this many days from today (default: 7)
+                  --dry-run                 Preview planned recipients without sending emails
+                  --verbose, -v              Per-recipient delivery status
+                  --username <user>         Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>         Backend password (or SECMAN_ADMIN_PASS env var)
+                  --backend-url <url>       Backend API URL (or SECMAN_HOST / SECMAN_BACKEND_URL env var)
+
+                Exit codes:
+                  0  Success (or dry run completed)
+                  1  Partial failure or unexpected error
+                  2  Invalid arguments (e.g. --days < 1)
+
+                Examples:
+                  # Preview who would be reminded about exceptions expiring in exactly 7 days:
+                  secman send-exception-expiry-reminders --dry-run
+
+                  # Send the actual reminders (default 7-day window):
+                  secman send-exception-expiry-reminders
+
+                  # Use a 14-day window with per-recipient status:
+                  secman send-exception-expiry-reminders --days 14 --verbose
+
+                  # Custom credentials and backend:
+                  secman send-exception-expiry-reminders --username admin --password secret \
+                    --backend-url https://secman.example.com
+            """.trimIndent(),
+
+            "environment" to """
+                secman environment variables reference
+
+                Backend Authentication:
+                  SECMAN_ADMIN_NAME          Backend username for authentication
+                  SECMAN_ADMIN_PASS          Backend password (recommended over --password flag)
+
+                Admin Operations:
+                  SECMAN_ADMIN_EMAIL       Admin email for user mapping and S3 import operations
+
+                AWS S3 Operations:
+                  AWS_ACCESS_KEY_ID        AWS access key ID (or use --aws-access-key-id)
+                  AWS_SECRET_ACCESS_KEY    AWS secret access key (or use --aws-secret-access-key)
+                  AWS_SESSION_TOKEN        AWS session token for temporary credentials
+                  AWS_REGION               Default AWS region for S3 operations
+                  AWS_ASSET_BUCKET_NAME    S3 bucket for the asset-match-clear snapshot JSON
+                  AWS_ASSET_BUCKET_KEY_NAME      S3 object key for the asset-match-clear snapshot JSON
+
+                AWS Credential Resolution Priority (highest to lowest):
+                  1. Explicit CLI flags (--aws-access-key-id + --aws-secret-access-key)
+                  2. Environment variables (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY)
+                  3. Named profile (--aws-profile, reads from ~/.aws/credentials)
+                  4. Default credential chain (IAM role, SSO, etc.)
+            """.trimIndent()
+        )
+    }
+}
+
+/**
+ * Main entry point function
+ */
+fun main(args: Array<String>) {
+    applyInsecureSslIfRequested(args)
+    val cli = SecmanCli()
+    val exitCode = cli.execute(args)
+    System.exit(exitCode)
+}
+
+/**
+ * Detect `--insecure` CLI flag or `SECMAN_INSECURE` env var BEFORE the
+ * Micronaut context starts. The injected `@Client` bean reads
+ * `micronaut.http.client.ssl.insecure-trust-all-certificates` at context
+ * startup (via `secman.ssl.insecure` in application.yml) — setting it later
+ * from a Picocli `@Option` is too late.
+ *
+ * Truthy env values: "true", "1", "yes", "on" (case-insensitive).
+ */
+private fun applyInsecureSslIfRequested(args: Array<String>) {
+    val flagPresent = args.any { it == "--insecure" }
+    val envValue = System.getenv("SECMAN_INSECURE")?.lowercase()?.trim()
+    val envTruthy = envValue in setOf("true", "1", "yes", "on")
+    if (flagPresent || envTruthy) {
+        System.setProperty("secman.ssl.insecure", "true")
+    }
+}

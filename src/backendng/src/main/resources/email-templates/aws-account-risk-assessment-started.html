@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Risk assessment started for your AWS account</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #222; max-width: 640px; margin: 0 auto; padding: 24px;">
+  <p style="text-align: center;">
+    <img src="cid:secman-logo" alt="SecMan" style="max-height: 64px;">
+  </p>
+
+  <h2 style="color: #1f4e79;">Risk assessment started</h2>
+
+  <p>A risk assessment has been started for AWS account
+     <strong style="font-family: monospace;">{awsAccountId}</strong>,
+     which was mapped to you in SecMan.</p>
+
+  <table style="border-collapse: collapse; margin: 0 0 16px;">
+    <tr>
+      <td style="padding: 4px 16px 4px 0; color: #555;">Use case</td>
+      <td style="padding: 4px 0;">{useCaseName}</td>
+    </tr>
+    <tr>
+      <td style="padding: 4px 16px 4px 0; color: #555;">Requirements version</td>
+      <td style="padding: 4px 0;">{requirementsVersion}</td>
+    </tr>
+    <tr>
+      <td style="padding: 4px 16px 4px 0; color: #555;">Assessor</td>
+      <td style="padding: 4px 0;">{assessor}</td>
+    </tr>
+    <tr>
+      <td style="padding: 4px 16px 4px 0; color: #555;">Deadline</td>
+      <td style="padding: 4px 0;"><strong>{deadline}</strong></td>
+    </tr>
+  </table>
+
+  <p>Please complete the assessment before the deadline. You will receive reminders
+     2 days and 1 day before it is due.</p>
+
+  <p>
+    <a href="{assessmentsUrl}"
+       style="background: #1f4e79; color: #fff; padding: 10px 18px; text-decoration: none; border-radius: 4px;">
+      Open the assessment in SecMan
+    </a>
+  </p>
+
+  <p style="color: #555; font-size: 0.9em;">
+    If the button does not work, open
+    <a href="{assessmentsUrl}" style="color: #1f4e79;">{assessmentsUrl}</a>.
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 32px 0 16px;">
+
+  <p style="color: #777; font-size: 0.85em;">
+    You are receiving this because your email address is mapped to this AWS account in
+    SecMan. If that is not correct, contact your SecMan administrator.
+  </p>
+</body>
+</html>

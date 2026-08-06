@@ -1,0 +1,393 @@
+openapi: 3.0.3
+info:
+  title: CSV User Mapping Upload API
+  description: |
+    CSV-based user mapping upload endpoint for bulk importing email-to-AWS-account mappings.
+    Extends existing Excel upload functionality (Feature 013) with CSV format support.
+  version: 1.0.0
+  contact:
+    name: secman API Support
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.secman.example.com
+    description: Production server
+
+tags:
+  - name: import
+    description: Data import operations
+
+paths:
+  /api/import/upload-user-mappings-csv:
+    post:
+      tags:
+        - import
+      summary: Upload user mappings from CSV file
+      description: |
+        Uploads a CSV file containing AWS account to user email mappings.
+
+        **Required CSV Headers** (case-insensitive):
+        - `account_id` - AWS account ID (12 digits, supports scientific notation)
+        - `owner_email` - User email address
+
+        **Optional CSV Headers**:
+        - `domain` - Organization domain (defaults to "-NONE-" if omitted)
+
+        **File Requirements**:
+        - Format: CSV (RFC 4180 compliant)
+        - Encoding: UTF-8 or ISO-8859-1
+        - Delimiter: Comma, semicolon, or tab (auto-detected)
+        - Max size: 10MB
+        - Extension: .csv
+
+        **Behavior**:
+        - Valid rows are imported, invalid rows are skipped
+        - Duplicate mappings (same email + account + domain) are skipped
+        - Returns count of imported and skipped rows with error details
+
+        **Access Control**:
+        - Requires authentication (JWT token)
+        - Requires ADMIN role
+      operationId: uploadUserMappingsCSV
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - csvFile
+              properties:
+                csvFile:
+                  type: string
+                  format: binary
+                  description: CSV file containing user mappings (max 10MB)
+            encoding:
+              csvFile:
+                contentType: text/csv, application/csv
+      responses:
+        '200':
+          description: CSV processed successfully (may include skipped rows)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+              examples:
+                allSuccess:
+                  summary: All rows imported successfully
+                  value:
+                    message: "Successfully imported 10 user mappings"
+                    imported: 10
+                    skipped: 0
+                    errors: []
+                partialSuccess:
+                  summary: Some rows skipped due to validation errors
+                  value:
+                    message: "Successfully imported 8 user mappings"
+                    imported: 8
+                    skipped: 2
+                    errors:
+                      - line: 3
+                        field: "owner_email"
+                        reason: "Invalid email format"
+                        value: "not-an-email"
+                      - line: 5
+                        field: "account_id"
+                        reason: "Must be exactly 12 digits"
+                        value: "12345"
+                duplicates:
+                  summary: Duplicate mappings skipped
+                  value:
+                    message: "Successfully imported 7 user mappings"
+                    imported: 7
+                    skipped: 3
+                    errors:
+                      - line: 4
+                        field: null
+                        reason: "Duplicate mapping already exists"
+                        value: "user@example.com / 123456789012 / domain.com"
+                      - line: 8
+                        field: null
+                        reason: "Duplicate mapping already exists"
+                        value: "admin@example.com / 999888777666 / -NONE-"
+                      - line: 9
+                        field: null
+                        reason: "Duplicate within uploaded file"
+                        value: "user@example.com / 123456789012 / domain.com"
+        '400':
+          description: Bad request - invalid CSV format, missing headers, or empty file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingHeaders:
+                  summary: Required CSV headers missing
+                  value:
+                    message: "CSV parsing failed"
+                    imported: 0
+                    skipped: 0
+                    errors:
+                      - line: 1
+                        field: null
+                        reason: "Missing required headers: owner_email"
+                        value: null
+                emptyFile:
+                  summary: Empty CSV file uploaded
+                  value:
+                    message: "CSV parsing failed"
+                    imported: 0
+                    skipped: 0
+                    errors:
+                      - line: 0
+                        field: null
+                        reason: "Empty file uploaded"
+                        value: null
+                invalidFormat:
+                  summary: Invalid CSV format
+                  value:
+                    message: "CSV parsing failed"
+                    imported: 0
+                    skipped: 0
+                    errors:
+                      - line: 5
+                        field: null
+                        reason: "Unable to parse CSV - invalid format or encoding"
+                        value: null
+                invalidExtension:
+                  summary: Invalid file extension
+                  value:
+                    message: "Invalid file type"
+                    imported: 0
+                    skipped: 0
+                    errors:
+                      - line: 0
+                        field: null
+                        reason: "Expected .csv file, received .xlsx"
+                        value: null
+        '401':
+          description: Unauthorized - missing or invalid JWT token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingToken:
+                  summary: No authentication token provided
+                  value:
+                    message: "Unauthorized"
+                    timestamp: "2025-10-13T10:30:00Z"
+                    path: "/api/import/upload-user-mappings-csv"
+        '403':
+          description: Forbidden - user does not have ADMIN role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                insufficientRole:
+                  summary: User lacks ADMIN role
+                  value:
+                    message: "Access denied. ADMIN role required."
+                    timestamp: "2025-10-13T10:30:00Z"
+                    path: "/api/import/upload-user-mappings-csv"
+        '413':
+          description: Payload too large - CSV file exceeds 10MB limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                fileTooLarge:
+                  summary: File size exceeds limit
+                  value:
+                    message: "File size exceeds maximum limit of 10MB"
+                    imported: 0
+                    skipped: 0
+                    errors:
+                      - line: 0
+                        field: null
+                        reason: "File size: 15.2MB, Maximum allowed: 10MB"
+                        value: null
+        '500':
+          description: Internal server error - unexpected failure during processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                serverError:
+                  summary: Unexpected server error
+                  value:
+                    message: "Internal server error"
+                    timestamp: "2025-10-13T10:30:00Z"
+                    path: "/api/import/upload-user-mappings-csv"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login endpoint
+
+  schemas:
+    ImportResult:
+      type: object
+      required:
+        - message
+        - imported
+        - skipped
+        - errors
+      properties:
+        message:
+          type: string
+          description: Human-readable summary of import operation
+          example: "Successfully imported 8 user mappings"
+        imported:
+          type: integer
+          format: int32
+          description: Number of rows successfully imported
+          minimum: 0
+          example: 8
+        skipped:
+          type: integer
+          format: int32
+          description: Number of rows skipped due to validation errors or duplicates
+          minimum: 0
+          example: 2
+        errors:
+          type: array
+          description: List of validation errors for skipped rows
+          items:
+            $ref: '#/components/schemas/ImportError'
+          example:
+            - line: 3
+              field: "owner_email"
+              reason: "Invalid email format"
+              value: "not-an-email"
+            - line: 5
+              field: "account_id"
+              reason: "Must be exactly 12 digits"
+              value: "12345"
+
+    ImportError:
+      type: object
+      required:
+        - line
+        - reason
+      properties:
+        line:
+          type: integer
+          format: int32
+          description: Line number in CSV file (1-indexed, excludes header row)
+          minimum: 0
+          example: 3
+        field:
+          type: string
+          nullable: true
+          description: Field name that caused the error (null for row-level errors)
+          example: "owner_email"
+        reason:
+          type: string
+          description: Human-readable error message
+          example: "Invalid email format"
+        value:
+          type: string
+          nullable: true
+          description: Invalid value that caused the error (sanitized, max 100 chars)
+          example: "not-an-email"
+
+    ErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: Error message
+          example: "CSV parsing failed"
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of error occurrence
+          example: "2025-10-13T10:30:00Z"
+        path:
+          type: string
+          description: Request path that generated the error
+          example: "/api/import/upload-user-mappings-csv"
+        imported:
+          type: integer
+          format: int32
+          description: Number of rows imported before error (if applicable)
+          minimum: 0
+          example: 0
+        skipped:
+          type: integer
+          format: int32
+          description: Number of rows skipped before error (if applicable)
+          minimum: 0
+          example: 0
+        errors:
+          type: array
+          description: Detailed error information
+          items:
+            $ref: '#/components/schemas/ImportError'
+
+  examples:
+    validCSV:
+      summary: Valid CSV with all required fields
+      value: |
+        account_id,owner_email,domain
+        000487141098,markus.schmall@covestro.com,covestro.com
+        9.98987E+11,test1.test1@covestro.com,covestro.com
+        123456789012,admin@example.com,-NONE-
+
+    validCSVNoDomain:
+      summary: Valid CSV without domain column (defaults to -NONE-)
+      value: |
+        account_id,owner_email
+        000487141098,markus.schmall@covestro.com
+        9.98987E+11,test1.test1@covestro.com
+        123456789012,admin@example.com
+
+    invalidCSV:
+      summary: CSV with validation errors
+      value: |
+        account_id,owner_email
+        123456789012,user@example.com
+        not-a-number,invalid-email
+        12345,user2@example.com
+        123456789012,user@example.com
+
+# Validation Rules Reference
+#
+# Email Validation:
+# - Must contain @ character
+# - Pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+# - Case-insensitive (normalized to lowercase)
+# - Max length: 255 characters
+#
+# AWS Account ID Validation:
+# - Exactly 12 digits after parsing
+# - Supports scientific notation (e.g., 9.98987E+11)
+# - Pattern: ^\d{12}$
+# - Parsed via BigDecimal for precision
+#
+# Domain Validation:
+# - Alphanumeric characters, dots, hyphens only
+# - Pattern: ^[a-zA-Z0-9.-]+$ OR ^-NONE-$
+# - Case-insensitive (normalized to lowercase)
+# - Max length: 100 characters
+# - Special value: "-NONE-" for mappings without domain
+#
+# CSV Format:
+# - RFC 4180 compliant
+# - Encoding: UTF-8 (with BOM support) or ISO-8859-1 fallback
+# - Delimiter: Auto-detected (comma, semicolon, tab)
+# - Headers: Case-insensitive matching
+# - Empty rows: Ignored
+# - Quoted fields: Supported (e.g., "value,with,commas")
