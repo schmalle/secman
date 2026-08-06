@@ -1,7 +1,11 @@
 # Skills and Agents
 
-Project-local Claude Code automation defined under `.claude/` (mirrored to
-`.agents/` for Codex).
+Project-local agent automation. Skills live twice — `.claude/skills/` for Claude
+Code and `.agents/skills/` for Codex — and the two are kept in sync **both
+ways**: an edit to either tree must be ported to the other in the same commit
+(`CLAUDE.md` §"Tooling Conventions", `AGENTS.md` §Skills, gate
+`./scripts/check-skill-sync.sh`). Commands (`.claude/commands/`) and agents
+(`.claude/agents/`) are Claude Code only.
 
 ## Skills — which one to use
 

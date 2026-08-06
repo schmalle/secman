@@ -8,6 +8,18 @@ description: >
   "admin asset test", or similar.
 context: fork
 ---
+
+> **Sync policy (two-way, mandatory)**: This file and `.agents/skills/admin-
+> asset-e2e/SKILL.md` are one skill kept in two harness trees — Claude Code
+> reads this copy, Codex reads the other. Whichever copy an agent edits, the
+> same change is ported to the other **in the same commit**; translate
+> harness-specific mechanics rather than copying verbatim (e.g. Bash tool
+> `dangerouslyDisableSandbox: true` ↔ `sandbox_permissions:
+> "require_escalated"`). `.claude/skills/` is the tie-breaker when the two
+> disagree — that is a conflict rule, not a licence to edit one side only.
+> Verify with `./scripts/check-skill-sync.sh` (exit 0) before calling the
+> change done. See `CLAUDE.md` §"Tooling Conventions" and `AGENTS.md` §Skills.
+
 # Admin Asset & Vulnerability E2E Test — Iterative Fix Loop
 
 You are an orchestration agent that brings up a full-stack environment, executes

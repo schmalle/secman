@@ -15,6 +15,17 @@ description: >
 context: fork
 ---
 
+> **Sync policy (two-way, mandatory)**: This file and
+> `.agents/skills/testsuite/SKILL.md` are one skill kept in two harness trees
+> — Claude Code reads this copy, Codex reads the other. Whichever copy an
+> agent edits, the same change is ported to the other **in the same commit**;
+> translate harness-specific mechanics rather than copying verbatim (e.g. Bash
+> tool `dangerouslyDisableSandbox: true` ↔ `sandbox_permissions:
+> "require_escalated"`). `.claude/skills/` is the tie-breaker when the two
+> disagree — that is a conflict rule, not a licence to edit one side only.
+> Verify with `./scripts/check-skill-sync.sh` (exit 0) before calling the
+> change done. See `CLAUDE.md` §"Tooling Conventions" and `AGENTS.md` §Skills.
+
 # Test suite — fast tier run, repair, and coverage evaluation
 
 You run every test in this repo that does **not** need a running backend and
@@ -117,9 +128,12 @@ All three matter and they fail differently:
 ./scripts/check-skill-sync.sh
 ```
 
-`.claude/skills/` is authoritative; `.agents/skills/` mirrors it. The script
-reports drift and never edits either tree — decide per finding which side is
-correct and port it by hand.
+The two trees — `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex) —
+carry the same skills and must move together in **both** directions: an edit in
+either tree belongs in the other in the same commit. The script reports drift and
+never edits either tree — decide per finding which side is newer and port it by
+hand. `.claude/skills/` is the tie-breaker only when neither side is clearly
+newer.
 
 ## Step 6 — Coverage evaluation
 

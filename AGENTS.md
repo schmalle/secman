@@ -16,12 +16,25 @@
 - CLI: build once `./gradlew :cli:shadowJar`, then `./scripts/secman <cmd>`.
 
 ## Skills
-Eleven project skills live in **`.agents/skills/`** — the Codex mirror of
-`.claude/skills/`, which is the authoritative copy (`CLAUDE.md` §Tooling
+Eleven project skills live in **`.agents/skills/`** — the Codex rendering of the
+same skill set Claude Code loads from `.claude/skills/` (`CLAUDE.md` §Tooling
 Conventions). They are plain Markdown: there is no slash command here, so read
-the matching `.agents/skills/<name>/SKILL.md` **in full** and follow it. Editing
-either tree obliges you to port the same change to the other in the same commit;
-`./scripts/check-skill-sync.sh` reports drift and never fixes it.
+the matching `.agents/skills/<name>/SKILL.md` **in full** and follow it.
+
+### Two-way sync is mandatory
+
+The two trees are two renderings of the *same* skill, not two skills.
+**Whichever tree you edit, the same change must land in the counterpart file in
+the same commit** — Codex editing `.agents/skills/` ports to `.claude/skills/`
+exactly as Claude Code editing `.claude/skills/` ports to `.agents/skills/`. A
+commit that touches one tree only is incomplete. This covers every `*.md` under
+the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
+
+- **Translate, don't copy.** Swap harness-specific mechanics for their equivalent: `sandbox_permissions: "require_escalated"` ↔ Bash tool `dangerouslyDisableSandbox: true`; "ask the user directly" ↔ `AskUserQuestion`; `.agents/skills/…` ↔ `.claude/skills/…` paths. Everything else — steps, commands, thresholds, credential handling — stays word-for-word identical.
+- **Tie-breaker, not sole writer.** If the two copies already disagree and neither is clearly newer, `.claude/skills/` wins. That resolves existing drift; it does not make a Codex-side edit second-class and never excuses leaving `.claude/skills/` stale.
+- **New skill → create both; delete → delete both.** If you *find* an entry that exists in only one tree, report it rather than synthesizing the missing side.
+- **Gate**: `./scripts/check-skill-sync.sh` must exit 0 before a skill change is done (`--verbose` shows differing lines). It is report-only and never edits either tree.
+- Each skill file carries a `> **Sync policy (two-way, mandatory)**` banner naming its counterpart. The checker strips banners before diffing, so their wording may differ.
 
 | Skill | Use it to | Writes data? |
 |---|---|---|

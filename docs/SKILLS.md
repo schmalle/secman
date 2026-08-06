@@ -1,6 +1,9 @@
 # Which secman skill to use when
 
-Eleven skills live in `.claude/skills/` (mirrored to `.agents/skills/` for Codex).
+Eleven skills live in `.claude/skills/` (Claude Code) and again in
+`.agents/skills/` (Codex). The two trees are one skill set: an edit to either
+side must be ported to the other in the same commit — see `CLAUDE.md`
+§"Tooling Conventions" and verify with `./scripts/check-skill-sync.sh`.
 They overlap enough that picking the wrong one wastes a run — and in three cases
 the wrong pick **destroys data**. This is the routing guide.
 

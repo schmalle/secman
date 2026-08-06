@@ -14,15 +14,20 @@ description: >
   auto-started AWS account risk assessments — even when they only say "check the
   owner gets notified".
 ---
-# AWS Account Owner Email — Iterative Fix Loop
 
-> **Sync policy**: This file mirrors
-> `.claude/skills/aws-account-owner-email/SKILL.md`, which is the **leading,
-> authoritative** copy for this repo (see `CLAUDE.md` §"Tooling Conventions").
-> Whenever the Claude Code version changes, port the same change here,
-> translating Claude-specific mechanics to their Codex equivalent (e.g. Bash
-> tool `dangerouslyDisableSandbox: true` ↔ `sandbox_permissions:
-> "require_escalated"`). Never let this file diverge from the Claude Code copy.
+> **Sync policy (two-way, mandatory)**: This file and `.claude/skills/aws-
+> account-owner-email/SKILL.md` are one skill kept in two harness trees —
+> Codex reads this copy, Claude Code reads the other. Whichever copy an agent
+> edits, the same change is ported to the other **in the same commit**;
+> translate harness-specific mechanics rather than copying verbatim (e.g.
+> `sandbox_permissions: "require_escalated"` ↔ Bash tool
+> `dangerouslyDisableSandbox: true`). `.claude/skills/` is the tie-breaker
+> when the two disagree — that is a conflict rule, not a licence to edit one
+> side only. Verify with `./scripts/check-skill-sync.sh` (exit 0) before
+> calling the change done. See `CLAUDE.md` §"Tooling Conventions" and
+> `AGENTS.md` §Skills.
+
+# AWS Account Owner Email — Iterative Fix Loop
 
 You are an orchestration agent. Get the recipient address, bring up the stack,
 run the driver, and **iteratively fix every failure** until it passes or the
