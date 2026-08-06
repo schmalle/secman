@@ -15,14 +15,20 @@
 - Frontend: `cd src/frontend && npm install`, then `./scripts/startfrontenddev.sh` (canonical dev start — never `npm run dev` directly); production check `npm run build && npm run preview`; lint `npm run lint`.
 - CLI: build once `./gradlew :cli:shadowJar`, then `./scripts/secman <cmd>`.
 
-## Skills (two-way sync — mandatory)
+## Skills
+Eleven project skills live in **`.agents/skills/`** — the Codex rendering of the
+same skill set Claude Code loads from `.claude/skills/` (`CLAUDE.md` §Tooling
+Conventions). They are plain Markdown: there is no slash command here, so read
+the matching `.agents/skills/<name>/SKILL.md` **in full** and follow it.
 
-Every skill in this repo exists twice, once per agent harness:
+### Two-way sync is mandatory
 
-- `.agents/skills/` — what **Codex** (and other `AGENTS.md`-driven agents) load.
-- `.claude/skills/` — what **Claude Code** loads.
-
-They are two renderings of the *same* skill, not two skills. **Whichever tree you edit, the same change must land in the counterpart file in the same commit** — Codex editing `.agents/skills/` ports to `.claude/skills/` exactly as Claude Code editing `.claude/skills/` ports to `.agents/skills/`. A commit that touches one tree only is incomplete. This covers every `*.md` under the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
+The two trees are two renderings of the *same* skill, not two skills.
+**Whichever tree you edit, the same change must land in the counterpart file in
+the same commit** — Codex editing `.agents/skills/` ports to `.claude/skills/`
+exactly as Claude Code editing `.claude/skills/` ports to `.agents/skills/`. A
+commit that touches one tree only is incomplete. This covers every `*.md` under
+the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
 
 - **Translate, don't copy.** Swap harness-specific mechanics for their equivalent: `sandbox_permissions: "require_escalated"` ↔ Bash tool `dangerouslyDisableSandbox: true`; "ask the user directly" ↔ `AskUserQuestion`; `.agents/skills/…` ↔ `.claude/skills/…` paths. Everything else — steps, commands, thresholds, credential handling — stays word-for-word identical.
 - **Tie-breaker, not sole writer.** If the two copies already disagree and neither is clearly newer, `.claude/skills/` wins. That resolves existing drift; it does not make a Codex-side edit second-class and never excuses leaving `.claude/skills/` stale.
@@ -30,12 +36,47 @@ They are two renderings of the *same* skill, not two skills. **Whichever tree yo
 - **Gate**: `./scripts/check-skill-sync.sh` must exit 0 before a skill change is done (`--verbose` shows differing lines). It is report-only and never edits either tree.
 - Each skill file carries a `> **Sync policy (two-way, mandatory)**` banner naming its counterpart. The checker strips banners before diffing, so their wording may differ.
 
+| Skill | Use it to | Writes data? |
+|---|---|---|
+| `finalizer` | Pre-merge pass: version/doc drift, `extensions/` contract drift, HIGH/CRITICAL security review, skill sync | docs only |
+| `testsuite` | Fast test tier (backend, CLI, frontend) + name-reference coverage gaps | no |
+| `e2ejs` | Scan every page for JS errors as admin *and* normal user | no |
+| `e2evulnexception` | Full vuln + exception lifecycle over MCP and the UI | ⚠️ **wipes the DB** |
+| `e2eexception` | Fast MCP-only exception smoke test | ⚠️ **deletes all assets** |
+| `admin-asset-e2e` | Admin adds a system + vulnerability, normal user sees it | adds one asset |
+| `importtest` | Run and debug the CrowdStrike import | ⚠️ **imports live data** |
+| `crowdstrike-vuln-match` | Compare stored rows against a fresh Falcon query | no |
+| `aws-account-risk-assessment` | New AWS account starts a correctly scoped assessment | seeds + removes a testbed |
+| `aws-account-owner-email` | The account owner actually receives the mail | testbed, ⚠️ **sends real mail** |
+| `createtestdata` | Seed a fixture to click through | adds a fixture |
+
+The three destructive ones are unsafe against a shared instance — resolve
+`SECMAN_HOST` before running them. `aws-account-risk-assessment` carries a
+quieter one: it activates its own requirements release, archiving the current
+`ACTIVE` one, and `ARCHIVED` is terminal.
+
+`.agents/skills/_shared/stack-lifecycle.md` is **mandatory reading** before any
+skill that touches the running stack: it defines the unconditional cold start
+(both stop scripts first, even when the ports look free), port-bind liveness
+(`lsof -iTCP:8080`, 120s; `:4321`, 60s), the `pass-cli` credentials, the log
+paths and the 5-iteration fix budget. The start scripts need `pass-cli`, so run
+them with `sandbox_permissions: "require_escalated"` — a sandboxed shell cannot
+reach the vault and the process fails to start.
+
+`docs/SKILLS.md` is the longer routing guide, including the pairs that get
+confused (`e2eexception` vs `e2evulnexception`, `importtest` vs
+`crowdstrike-vuln-match`, the two AWS-account skills).
+
+Not mirrored, Claude Code only: the `speckit.*` commands in `.claude/commands/`
+(spec-driven-development pipeline, see `docs/SKILLS_AND_AGENTS.md`) and the two
+subagents in `.claude/agents/`, which no skill spawns.
+
 ## Style
 - Kotlin: 4-space indent, `UpperCamelCase` types, constructor injection, immutable data classes; ktlint if configured.
 - TS/TSX: 2-space indent, named exports, ESLint via `npm run lint`. Import order: external → internal → relative.
 
 ## Tests (mandatory)
-Always write tests for new code. JUnit 6 + Mockk for unit; integration tests run against an **external MariaDB** (no Docker/Testcontainers — removed from the build) via `BaseIntegrationTest`. Tests must route HTTP through `SECMAN_HOST` (sourced from `pass-cli`) — never hardcode `http://localhost:*`. After **every** change, `/e2ejs` and `/e2evulnexception` must exit clean (see `CLAUDE.md` principle 7).
+Always write tests for new code. JUnit 6 + Mockk for unit; integration tests run against an **external MariaDB** (no Docker/Testcontainers — removed from the build) via `BaseIntegrationTest`. Tests must route HTTP through `SECMAN_HOST` (sourced from `pass-cli`) — never hardcode `http://localhost:*`. After **every** change, the `e2ejs` and `e2evulnexception` skills (§Skills) must exit clean (see `CLAUDE.md` principle 7).
 
 ## Commits / PRs
 - `type(scope): description` (Conventional Commits) or short `Type: Summary` form.

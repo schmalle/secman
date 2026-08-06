@@ -15,6 +15,19 @@ import jakarta.validation.Valid
 import jakarta.validation.constraints.*
 import java.time.LocalDateTime
 
+/**
+ * Translation (LLM) configuration.
+ *
+ * SECURITY: reads stay IS_AUTHENTICATED because non-admin pages depend on them — Export.tsx and
+ * ImportExport.tsx call GET /active to decide whether to offer translated export — and every read
+ * masks the credential via TranslationConfig.toSafeResponse().
+ *
+ * Every *mutating* method is ADMIN-only, matching the sibling EmailConfig/FalconConfig/GithubConfig
+ * controllers. Without that gate any authenticated user could rewrite `baseUrl` on the active
+ * config, and TranslationService sends the stored key as `Authorization: Bearer` to whatever host
+ * it names — leaking the API key and the requirement text being translated. `/test` is likewise an
+ * outbound-fetch primitive, and `activate` deactivates every other config in one call.
+ */
 @Controller("/api/translation-config")
 @Secured(SecurityRule.IS_AUTHENTICATED)
 @ExecuteOn(TaskExecutors.BLOCKING)
@@ -110,6 +123,7 @@ open class TranslationConfigController(
     }
 
     @Post
+    @Secured("ADMIN")
     @Transactional
     open fun createConfig(@Valid @Body request: CreateTranslationConfigRequest): HttpResponse<*> {
         return try {
@@ -135,6 +149,7 @@ open class TranslationConfigController(
     }
 
     @Put("/{id}")
+    @Secured("ADMIN")
     @Transactional
     open fun updateConfig(id: Long, @Valid @Body request: UpdateTranslationConfigRequest): HttpResponse<*> {
         return try {
@@ -175,6 +190,7 @@ open class TranslationConfigController(
     }
 
     @Delete("/{id}")
+    @Secured("ADMIN")
     @Transactional
     open fun deleteConfig(id: Long): HttpResponse<*> {
         return try {
@@ -191,6 +207,7 @@ open class TranslationConfigController(
     }
 
     @Post("/{id}/test")
+    @Secured("ADMIN")
     open fun testConfig(id: Long): HttpResponse<*> {
         return try {
             val config = translationConfigRepository.findById(id)
@@ -206,6 +223,7 @@ open class TranslationConfigController(
     }
 
     @Post("/{id}/activate")
+    @Secured("ADMIN")
     @Transactional
     open fun activateConfig(id: Long): HttpResponse<*> {
         return try {
@@ -232,6 +250,7 @@ open class TranslationConfigController(
     }
 
     @Post("/{id}/deactivate")
+    @Secured("ADMIN")
     @Transactional
     open fun deactivateConfig(id: Long): HttpResponse<*> {
         return try {

@@ -10,6 +10,11 @@ the wrong pick **destroys data**. This is the routing guide.
 Invoke a skill as `/<name>`, or just describe the task; the `description:` in each
 skill's frontmatter decides whether it triggers.
 
+Codex has no slash commands, so `AGENTS.md` §Skills carries the condensed version
+of this table plus the instruction to read `.agents/skills/<name>/SKILL.md` in
+full. Keep the two in step when a skill is added, removed, or changes what it
+writes.
+
 ---
 
 ## Start here
