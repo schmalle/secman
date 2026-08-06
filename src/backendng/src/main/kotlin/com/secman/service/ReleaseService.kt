@@ -140,6 +140,20 @@ open class ReleaseService(
             throw IllegalStateException("Cannot delete an ACTIVE release. Set another release as active first.")
         }
 
+        if (force) {
+            // Detach any risk assessments locked to this release so the FK
+            // release_id -> release.id does not block deletion (mirrors the
+            // detachment deleteAllReleases() does before its own force-delete loop).
+            val lockedAssessments = riskAssessmentRepository.findAll().filter { it.lockedRelease?.id == releaseId }
+            for (ra in lockedAssessments) {
+                ra.lockedRelease = null
+                riskAssessmentRepository.update(ra)
+            }
+            if (lockedAssessments.isNotEmpty()) {
+                logger.info("Detached ${lockedAssessments.size} risk assessment(s) from release ID=$releaseId before force delete")
+            }
+        }
+
         // Delete alignment session data (respecting FK order: reviews → snapshots/reviewers → sessions)
         val sessions = alignmentSessionRepository.findAllByRelease_Id(releaseId)
         for (session in sessions) {

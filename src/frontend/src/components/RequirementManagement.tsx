@@ -1,5 +1,6 @@
 import { Fragment, useState, useEffect } from 'react';
-import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete, getUser } from '../utils/auth';
+import { isAdmin } from '../utils/permissions';
 import ReleaseIndicator from './ReleaseIndicator';
 import ReleaseSelector from './ReleaseSelector';
 import HtmlEditor from './admin/HtmlEditor';
@@ -44,6 +45,7 @@ interface Release {
 }
 
 export default function RequirementManagement() {
+    const currentUserIsAdmin = isAdmin(getUser()?.roles);
     const [requirements, setRequirements] = useState<Requirement[]>([]);
     const [filteredRequirements, setFilteredRequirements] = useState<Requirement[]>([]);
     const [allUseCases, setAllUseCases] = useState<UseCase[]>([]); // To store all available use cases
@@ -383,7 +385,7 @@ export default function RequirementManagement() {
             const data = await response.json();
 
             if (response.ok) {
-                setDeleteSuccess(`Successfully deleted ${data.deletedCount} requirements.`);
+                setDeleteSuccess(`Successfully deleted ${data.deletedRequirements ?? data.deletedCount} requirements and ${data.deletedNorms ?? 0} standards.`);
                 setShowSecondDeleteModal(false);
                 setConfirmationText('');
                 fetchRequirements();
@@ -605,11 +607,11 @@ export default function RequirementManagement() {
                                         )}
                                     </button>
                                 )}
-                                {requirements.length > 0 && (
+                                {currentUserIsAdmin && requirements.length > 0 && (
                                     <button
                                         className="btn btn-outline-warning"
                                         onClick={() => setShowFirstDeleteModal(true)}
-                                        title="Delete all requirements"
+                                        title="Delete all requirements and standards (ADMIN only)"
                                         disabled={isDeleting || isMappingInProgress}
                                     >
                                         Delete All Requirements
@@ -1143,11 +1145,12 @@ export default function RequirementManagement() {
                             </div>
                             <div className="modal-body">
                                 <div className="alert alert-danger">
-                                    <strong>Warning:</strong> You are about to delete all requirements!
+                                    <strong>Warning:</strong> You are about to delete all requirements and all standards!
                                 </div>
                                 <p><strong>This action will:</strong></p>
                                 <ul>
                                     <li>Delete all <strong>{requirements.length}</strong> requirements</li>
+                                    <li>Delete all standards (norms), e.g. ISO 27001, IEC 62443</li>
                                     <li>Remove all associated relationships (use case and norm associations)</li>
                                     <li>Cannot be undone</li>
                                 </ul>
@@ -1180,7 +1183,7 @@ export default function RequirementManagement() {
                                 <div className="alert alert-danger">
                                     <strong>FINAL WARNING:</strong> This action is irreversible!
                                 </div>
-                                <p>To confirm deletion of all <strong>{requirements.length}</strong> requirements, type <strong>DELETE ALL</strong> in the box below:</p>
+                                <p>To confirm deletion of all <strong>{requirements.length}</strong> requirements and all standards, type <strong>DELETE ALL</strong> in the box below:</p>
                                 
                                 {deleteError && <div className="alert alert-danger">{deleteError}</div>}
                                 
