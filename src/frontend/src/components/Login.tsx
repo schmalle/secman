@@ -328,7 +328,7 @@ const Login = () => {
                                     </div>
                                 )}
                                 <div className="d-grid">
-                                    <button type="submit" className="btn btn-primary" disabled={isLoading}>
+                                    <button type="submit" className="btn btn-login" disabled={isLoading}>
                                         {isLoading ? 'Logging in...' : 'Login'}
                                     </button>
                                 </div>

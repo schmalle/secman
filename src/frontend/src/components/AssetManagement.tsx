@@ -4,7 +4,6 @@ import { isAdmin, isSecChampion } from '../utils/permissions';
 import PortHistory from './PortHistory';
 import VulnerabilityHistory from './VulnerabilityHistory';
 import { BulkDeleteConfirmModal } from './BulkDeleteConfirmModal';
-import NoEdrExceptionRequestModal from './NoEdrExceptionRequestModal';
 import { bulkDeleteAssets, type BulkDeleteResult } from '../services/assetService';
 import { exportVulnerabilitiesServerSide, cancelExportJob, type ExportJob } from '../services/vulnerabilityManagementService';
 
@@ -64,10 +63,6 @@ const AssetManagement: React.FC = () => {
   const [selectedAssetForPorts, setSelectedAssetForPorts] = useState<Asset | null>(null);
   const [showVulnerabilities, setShowVulnerabilities] = useState(false);
   const [selectedAssetForVulns, setSelectedAssetForVulns] = useState<Asset | null>(null);
-  // Only the id and name are needed, so the modal cannot accidentally depend on any other
-  // asset field and go stale if the list reloads while it is open.
-  const [noEdrModalAsset, setNoEdrModalAsset] = useState<{ id: number; name: string } | null>(null);
-  const [noEdrSuccess, setNoEdrSuccess] = useState<string | null>(null);
 
   // Filter states
   const [nameFilter, setNameFilter] = useState<string>('');
@@ -947,20 +942,6 @@ const AssetManagement: React.FC = () => {
                               >
                                 <i className="bi bi-shield-exclamation"></i> Vulns
                               </a>
-                              {/* Only shown for EC2 instances: cloudInstanceId is exactly the
-                                  population the EDR-coverage KPI measures, so an exemption is
-                                  meaningless for anything else. */}
-                              {asset.cloudInstanceId && asset.id && (
-                                <button
-                                  type="button"
-                                  onClick={() => setNoEdrModalAsset({ id: asset.id!, name: asset.name })}
-                                  className="btn btn-sm btn-outline-secondary"
-                                  title="Request a 'No EDR possible' exception for this system"
-                                  data-testid={`no-edr-request-${asset.id}`}
-                                >
-                                  <i className="bi bi-shield-slash"></i> No EDR
-                                </button>
-                              )}
                               {/* Delete button only visible to ADMIN users (Feature 033) */}
                               {isAdmin(getUser()?.roles) && (
                                 <button
@@ -1034,38 +1015,6 @@ const AssetManagement: React.FC = () => {
         isDeleting={isDeletingBulk}
         assetCount={getFilteredAssets().length}
       />
-
-      {/* "No EDR possible" exception request (EDR-coverage KPI) */}
-      {noEdrSuccess && (
-        <div className="position-fixed top-0 start-50 translate-middle-x mt-3" style={{ zIndex: 9999 }}>
-          <div className="alert alert-success alert-dismissible fade show" role="alert" data-testid="no-edr-request-success">
-            <i className="bi bi-check-circle-fill me-2"></i>
-            {noEdrSuccess}
-            <button
-              type="button"
-              className="btn-close"
-              onClick={() => setNoEdrSuccess(null)}
-              aria-label="Close"
-            ></button>
-          </div>
-        </div>
-      )}
-
-      {noEdrModalAsset && (
-        <NoEdrExceptionRequestModal
-          isOpen={true}
-          assetId={noEdrModalAsset.id}
-          assetName={noEdrModalAsset.name}
-          onClose={() => setNoEdrModalAsset(null)}
-          onSuccess={() => {
-            // Deliberately does not say "approved": ADMIN/SECCHAMPION requests auto-approve
-            // but everyone else's land in the approval queue, and the response shape that
-            // distinguishes them is not surfaced here.
-            setNoEdrSuccess(`"No EDR possible" request submitted for ${noEdrModalAsset.name}.`);
-            setNoEdrModalAsset(null);
-          }}
-        />
-      )}
 
     </div>
   );

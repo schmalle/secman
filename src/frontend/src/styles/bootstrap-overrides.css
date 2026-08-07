@@ -111,6 +111,22 @@ body {
   color: var(--scand-text-light);
 }
 
+/* Login submit button — deliberately blue rather than the sage primary, so it
+   matches the Microsoft OAuth button above it on /login (whose #0078d4 comes
+   from the identity_provider row, not from the theme). */
+.btn-login {
+  background-color: #0078d4;
+  border-color: #0078d4;
+  color: var(--scand-text-light);
+}
+
+.btn-login:hover,
+.btn-login:focus {
+  background-color: #106ebe;
+  border-color: #106ebe;
+  color: var(--scand-text-light);
+}
+
 .btn-danger {
   background-color: var(--scand-danger);
   border-color: var(--scand-danger);

@@ -367,7 +367,7 @@ const AccountVulnsView: React.FC = () => {
                                         nonExceptedCount={group.totalNonExcepted ?? Math.max(group.totalVulnerabilities - (group.totalExcepted ?? 0), 0)}
                                     />
                                     {(group.assetsNeedingAttention ?? 0) > 0 && (
-                                        <span className="badge bg-warning bg-opacity-10 text-warning border border-warning">
+                                        <span className="badge bg-danger">
                                             {group.assetsNeedingAttention} need{group.assetsNeedingAttention === 1 ? 's' : ''} attention
                                         </span>
                                     )}
