@@ -143,6 +143,34 @@ class UserProfilePictureIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `uploads a picture when the part carries no declared content type`() {
+        // Regression: this is the shape a real browser and curl produce. Before the fix the
+        // service treated an absent declaration as grounds for rejection, so no upload of any
+        // format could ever succeed — while every other test in this class passed.
+        val uploadResponse = uploadWithoutDeclaredType(userA, pngBytes())
+
+        assertThat(uploadResponse.status).isEqualTo(HttpStatus.OK)
+        assertThat(uploadResponse.body()!!["hasProfilePicture"]).isEqualTo(true)
+        assertThat(uploadResponse.body()!!["width"]).isEqualTo(256)
+
+        val decoded = ImageIO.read(fetchPicture(userA).body()!!.inputStream())
+        assertThat(decoded.width).isEqualTo(256)
+    }
+
+    @Test
+    fun `rejects a non-image even when the part carries no declared content type`() {
+        // The fallback must sniff, not wave things through: with nothing declared, the content
+        // is the only signal left, so it has to be the one that decides.
+        val html = "<html><body><script>alert(1)</script></body></html>".toByteArray()
+
+        val thrown = assertThrows<HttpClientResponseException> {
+            uploadWithoutDeclaredType(userA, html)
+        }
+
+        assertThat(thrown.status).isEqualTo(HttpStatus.BAD_REQUEST)
+    }
+
+    @Test
     fun `replacing a picture updates the existing row rather than adding another`() {
         upload(userA, pngBytes(fill = Color.BLUE))
         val firstEtag = fetchPicture(userA).header("ETag")
