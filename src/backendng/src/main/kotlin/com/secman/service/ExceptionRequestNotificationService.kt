@@ -50,6 +50,19 @@ open class ExceptionRequestNotificationService(
     private fun dashboardUrl(): String =
         "${appConfig.backend.baseUrl.trimEnd('/')}$DASHBOARD_PATH"
 
+    /**
+     * Escape HTML metacharacters before interpolating user/DB-controlled text (requester
+     * username, free-text reason, reviewer comment, subject/scope values) into an HTML email
+     * body. Mirrors the identical helper already used by AwsAccountRiskAssessmentService,
+     * NewAccountNotificationService, OAuthService and other email-generating services.
+     */
+    private fun escapeHtml(text: String): String =
+        text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&#39;")
+
     private fun loadLogoInlineImage(): Map<String, Pair<ByteArray, String>> {
         return try {
             val logoBytes = javaClass.getResourceAsStream("/email-templates/SecManLogo.png")
@@ -378,25 +391,27 @@ open class ExceptionRequestNotificationService(
      * @return HTML email content
      */
     private fun generateNewRequestEmail(request: VulnerabilityExceptionRequest, recipientName: String): String {
-        val cveId = describeSubject(request)
-        val scopeDescription = describeScope(request)
-        val assetName = resolveAssetName(request)
-        val assetIp = resolveAssetIp(request)
-        val originatingAssetRow = if (request.scope != VulnerabilityException.Scope.ASSET && assetName != "Unknown Asset") {
+        val cveId = escapeHtml(describeSubject(request))
+        val scopeDescription = escapeHtml(describeScope(request))
+        val assetName = escapeHtml(resolveAssetName(request))
+        val assetIp = escapeHtml(resolveAssetIp(request))
+        val originatingAssetRow = if (request.scope != VulnerabilityException.Scope.ASSET && resolveAssetName(request) != "Unknown Asset") {
             """
                                 <tr>
                                     <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Originating Asset</td>
                                     <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;">$assetName <span style="color:#64748b;">($assetIp)</span></td>
                                 </tr>"""
         } else ""
-        val requesterName = request.requestedByUsername
-        val reasonSummary = if (request.reason.length > 200) {
+        val requesterName = escapeHtml(request.requestedByUsername)
+        val rawReasonSummary = if (request.reason.length > 200) {
             request.reason.substring(0, 200) + "..."
         } else {
             request.reason
         }
+        val reasonSummary = escapeHtml(rawReasonSummary)
         val submittedDate = request.createdAt?.format(DATE_FORMATTER) ?: "Unknown"
         val expirationDate = request.expirationDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+        val safeRecipientName = escapeHtml(recipientName)
 
         return """
 <!DOCTYPE html>
@@ -431,7 +446,7 @@ open class ExceptionRequestNotificationService(
                     </tr>
                     <tr>
                         <td style="padding:28px 32px 8px 32px;">
-                            <p style="margin:0 0 14px 0;font-size:15px;line-height:1.5;">Hello <strong>$recipientName</strong>,</p>
+                            <p style="margin:0 0 14px 0;font-size:15px;line-height:1.5;">Hello <strong>$safeRecipientName</strong>,</p>
                             <p style="margin:0 0 22px 0;font-size:15px;line-height:1.5;color:#475569;">A new vulnerability exception request has been submitted and is awaiting your review.</p>
                         </td>
                     </tr>
@@ -550,11 +565,11 @@ open class ExceptionRequestNotificationService(
      * @return HTML email content
      */
     private fun generateApprovalEmail(request: VulnerabilityExceptionRequest): String {
-        val cveId = describeSubject(request)
-        val assetName = describeScope(request)
-        val reviewerName = request.reviewedByUsername ?: "Unknown Reviewer"
+        val cveId = escapeHtml(describeSubject(request))
+        val assetName = escapeHtml(describeScope(request))
+        val reviewerName = escapeHtml(request.reviewedByUsername ?: "Unknown Reviewer")
         val reviewDate = request.reviewDate?.format(DATE_FORMATTER) ?: "Unknown"
-        val reviewComment = request.reviewComment ?: "(No comment provided)"
+        val reviewComment = escapeHtml(request.reviewComment ?: "(No comment provided)")
         val expirationDate = request.expirationDate.format(DateTimeFormatter.ofPattern("MMMM d, yyyy"))
 
         return """
@@ -640,11 +655,11 @@ open class ExceptionRequestNotificationService(
      * @return HTML email content
      */
     private fun generateRejectionEmail(request: VulnerabilityExceptionRequest): String {
-        val cveId = describeSubject(request)
-        val assetName = describeScope(request)
-        val reviewerName = request.reviewedByUsername ?: "Unknown Reviewer"
+        val cveId = escapeHtml(describeSubject(request))
+        val assetName = escapeHtml(describeScope(request))
+        val reviewerName = escapeHtml(request.reviewedByUsername ?: "Unknown Reviewer")
         val reviewDate = request.reviewDate?.format(DATE_FORMATTER) ?: "Unknown"
-        val reviewComment = request.reviewComment ?: "(No comment provided)"
+        val reviewComment = escapeHtml(request.reviewComment ?: "(No comment provided)")
 
         return """
 <!DOCTYPE html>
@@ -784,9 +799,14 @@ open class ExceptionRequestNotificationService(
     }
 
     private fun generateExpirationNoticeEmail(
-        cveId: String, assetName: String, requesterName: String,
-        expirationDate: String, recipientName: String
-    ): String = """
+        rawCveId: String, rawAssetName: String, rawRequesterName: String,
+        expirationDate: String, rawRecipientName: String
+    ): String {
+        val cveId = escapeHtml(rawCveId)
+        val assetName = escapeHtml(rawAssetName)
+        val requesterName = escapeHtml(rawRequesterName)
+        val recipientName = escapeHtml(rawRecipientName)
+        return """
 <!DOCTYPE html>
 <html>
 <head>
@@ -868,6 +888,7 @@ open class ExceptionRequestNotificationService(
 </body>
 </html>
     """.trimIndent()
+    }
 
     private fun generateExpirationNoticeTextEmail(
         cveId: String, assetName: String, requesterName: String,
@@ -904,8 +925,8 @@ open class ExceptionRequestNotificationService(
      * @return HTML email content
      */
     private fun generateExpirationReminderEmail(request: VulnerabilityExceptionRequest): String {
-        val cveId = describeSubject(request)
-        val assetName = describeScope(request)
+        val cveId = escapeHtml(describeSubject(request))
+        val assetName = escapeHtml(describeScope(request))
         val expirationDate = request.expirationDate.format(DateTimeFormatter.ofPattern("MMMM d, yyyy"))
 
         return """

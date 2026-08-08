@@ -195,4 +195,61 @@ class ExceptionRequestNotificationServiceTest {
         assertThat(service.notifyRequesterOfApproval(request).get()).isFalse()
         verify(exactly = 0) { emailService.sendHtmlEmail(any(), any(), any()) }
     }
+
+    @Test
+    fun `new-request email HTML-escapes attacker-controlled username and reason`() {
+        val payload = "<script>alert(document.cookie)</script>"
+        val request = VulnerabilityExceptionRequest(
+            id = 1,
+            requestedByUsername = "demo$payload",
+            subject = VulnerabilityException.Subject.CVE,
+            scope = VulnerabilityException.Scope.ASSET,
+            reason = payload + "x".repeat(50),
+            expirationDate = LocalDateTime.now().plusDays(30),
+            status = ExceptionRequestStatus.PENDING,
+            cveId = "CVE-2026-12448",
+            assetId = 42
+        )
+
+        val combined = captureNewRequestHtml(request)
+
+        assertThat(combined).doesNotContain("<script>")
+        assertThat(combined).contains("&lt;script&gt;")
+    }
+
+    @Test
+    fun `approval email HTML-escapes an attacker-controlled reviewer comment`() {
+        val payload = "<img src=x onerror=alert(1)>"
+        val request = baseRequest(VulnerabilityException.Scope.ASSET).apply {
+            reviewComment = payload
+        }
+        every { assetRepository.findById(42L) } returns Optional.of(originatingAsset)
+        every { userRepository.findByUsername("demo") } returns Optional.of(requester)
+        val htmlSlot = slot<String>()
+        every { emailService.sendHtmlEmail(any(), any(), capture(htmlSlot)) } returns
+            CompletableFuture.completedFuture(true)
+
+        service.notifyRequesterOfApproval(request).get()
+
+        assertThat(htmlSlot.captured).doesNotContain("<img src=x onerror=alert(1)>")
+        assertThat(htmlSlot.captured).contains("&lt;img src=x onerror=alert(1)&gt;")
+    }
+
+    @Test
+    fun `rejection email HTML-escapes an attacker-controlled reviewer comment`() {
+        val payload = "<img src=x onerror=alert(1)>"
+        val request = baseRequest(VulnerabilityException.Scope.ASSET).apply {
+            reviewComment = payload
+        }
+        every { assetRepository.findById(42L) } returns Optional.of(originatingAsset)
+        every { userRepository.findByUsername("demo") } returns Optional.of(requester)
+        val htmlSlot = slot<String>()
+        every { emailService.sendHtmlEmail(any(), any(), capture(htmlSlot)) } returns
+            CompletableFuture.completedFuture(true)
+
+        service.notifyRequesterOfRejection(request).get()
+
+        assertThat(htmlSlot.captured).doesNotContain("<img src=x onerror=alert(1)>")
+        assertThat(htmlSlot.captured).contains("&lt;img src=x onerror=alert(1)&gt;")
+    }
 }
