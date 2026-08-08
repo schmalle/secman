@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-All releases are alpha. Patches land on `main` only.
+All releases are still beta. Patches land on `dev` only.
 
 ## Reporting
 
@@ -16,9 +16,9 @@ Include: description, repro steps, impact assessment, suggested fix (optional). 
 | | Target |
 |---|---|
 | Acknowledgement | 48 h |
-| Initial assessment | 7 d |
-| Critical fix | 72 h |
-| High fix | 14 d |
+| Initial assessment | 3 d |
+| Critical fix | 24 h |
+| High fix | 28h d |
 | Medium fix | 30 d |
 
 ## In-tree controls
