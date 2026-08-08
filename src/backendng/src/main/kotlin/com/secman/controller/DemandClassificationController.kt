@@ -340,13 +340,33 @@ open class DemandClassificationController(
         }
     }
     
+    /**
+     * `classificationHash` is derived from `demandId-classification-timestamp` (see
+     * DemandClassificationResult.generateHash) purely to make results independently
+     * addressable — it is not a secret capability token. Anonymous access is safe only for
+     * results with `demand == null`, i.e. ones created via the genuinely public
+     * `/public/classify` endpoint above. A result with a non-null `demand` came from the
+     * ADMIN/SECCHAMPION-only `/classify-demand` endpoint and carries the real demand's
+     * title/description/businessJustification (`inputData`) — anonymous callers must not be
+     * able to read that just by holding (or brute-forcing/leaking) the hash.
+     */
     @Get("/results/{hash}")
     @Secured(SecurityRule.IS_ANONYMOUS)
     @Transactional(readOnly = true)
-    open fun getResultByHash(hash: String): HttpResponse<DemandClassificationResult> {
-        return resultRepository.findByClassificationHash(hash)
-            .map { HttpResponse.ok(it) }
-            .orElse(HttpResponse.notFound())
+    open fun getResultByHash(hash: String, @Nullable authentication: Authentication?): HttpResponse<DemandClassificationResult> {
+        val result = resultRepository.findByClassificationHash(hash).orElse(null)
+            ?: return HttpResponse.notFound()
+
+        if (result.demand != null) {
+            val roles = authentication?.roles ?: emptyList()
+            if (!roles.contains("ADMIN") && !roles.contains("SECCHAMPION")) {
+                // 404, not 403: do not confirm to an anonymous caller that a demand-linked
+                // hash exists.
+                return HttpResponse.notFound()
+            }
+        }
+
+        return HttpResponse.ok(result)
     }
     
     @Get("/statistics")
