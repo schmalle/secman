@@ -94,3 +94,5 @@ docker/backend/app.jar
 /docs/superpowers/
 *.yml
 .playwright-cli/ChatGPT-Atlas.dmg
+/extensions/secman_ai_github
+/extensions/secman_visual_check
