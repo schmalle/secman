@@ -342,6 +342,47 @@ expect_silent A09-secret-log  "tokenConfigured boolean, no secret value"
 expect_silent A09-empty-catch "exception logged, not swallowed"
 
 # ============================================================================
+# Comment lines — behavioural rules stay quiet, credential rules do not
+# ============================================================================
+#
+# A rule that fires on the comment explaining why a bad pattern was removed
+# teaches people to delete the explanation. But a credential committed inside a
+# comment is leaked just as thoroughly as one on a live line, so A02-secret-lit
+# deliberately keeps firing there. Both halves are pinned.
+
+setup_repo
+plant src/frontend/src/services/notes.ts <<'EOF'
+/**
+ * This used to append `?token=` from `localStorage.getItem('authToken')`.
+ * Removed: the JWT lives in the HttpOnly cookie now.
+ */
+export function streamUrl(id: number): string {
+  return `/api/jobs/${id}/events`;
+}
+EOF
+expect_silent A02-token-storage "a comment describing the removed anti-pattern"
+
+setup_repo
+plant src/backendng/src/main/kotlin/com/secman/service/CommentedSecret.kt <<'EOF'
+package com.secman.service
+class CommentedSecret {
+    // dbPassword = "left-behind-in-a-comment-42"
+    fun connect() = Unit
+}
+EOF
+expect_fires A02-secret-lit "a credential is still leaked when commented out"
+
+# A trailing comment must not launder the live code in front of it.
+setup_repo
+plant src/frontend/src/services/trailing.ts <<'EOF'
+export function bad() {
+  const token = localStorage.getItem('authToken'); // legacy, remove later
+  return token;
+}
+EOF
+expect_fires A02-token-storage "live code with a trailing comment still fires"
+
+# ============================================================================
 # Self-exemption — the gate must not flag its own fixtures
 # ============================================================================
 #

@@ -163,9 +163,22 @@ export interface JobProgressEvent {
 }
 
 /**
- * Open an EventSource over the SSE endpoint. JWT travels in `?token=` because
- * EventSource has no API for request headers — same pattern as the existing
- * `/api/exception-badge-updates` and `/api/materialized-view-refresh/progress`.
+ * Open an EventSource over the SSE endpoint.
+ *
+ * Auth travels in the HttpOnly `secman_auth` cookie, sent because of
+ * `withCredentials: true` and read server-side by `CookieTokenReader` — the
+ * same way `/api/exception-badge-updates` is opened in `exceptionBadgeService`.
+ *
+ * This used to append `?token=` from `localStorage.getItem('authToken')`. That
+ * key has been empty since the JWT moved into the cookie, and
+ * `QueryParameterTokenReader` ignores an empty value, so the parameter never
+ * authenticated anything — the cookie already did. It is removed rather than
+ * repopulated: a JWT in a query string lands in access logs, proxy logs,
+ * `Referer` headers and browser history, which is exactly what the cookie
+ * migration set out to stop (A02). Do not reintroduce it — if a future client
+ * genuinely cannot send cookies, give it a header, not a URL parameter.
+ *
+ * `baseUrl` is same-origin, so no CORS credentials negotiation is involved.
  *
  * Callers must `.close()` the EventSource when done.
  */
@@ -173,7 +186,13 @@ export function openJobEventStream(
   assessmentId: number,
   jobId: number
 ): EventSource {
-  const token = (typeof window !== 'undefined' && localStorage.getItem('authToken')) || '';
-  const url = `${baseUrl(assessmentId)}/jobs/${jobId}/events?token=${encodeURIComponent(token)}`;
-  return new EventSource(url, { withCredentials: true });
+  return new EventSource(jobEventStreamUrl(assessmentId, jobId), { withCredentials: true });
+}
+
+/**
+ * URL for {@link openJobEventStream}, split out so the "no credential in the
+ * query string" property is unit-testable without a DOM `EventSource`.
+ */
+export function jobEventStreamUrl(assessmentId: number, jobId: number): string {
+  return `${baseUrl(assessmentId)}/jobs/${jobId}/events`;
 }

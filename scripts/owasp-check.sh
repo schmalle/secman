@@ -162,12 +162,31 @@ emit() { # emit SEV CAT RULE path line message text
     printf '%s|%s|%s|%s|%s|%s|%s\n' "$1" "$2" "$3" "$4" "$5" "$6" "$7" >> "$TMP/findings"
 }
 
+# A line that is entirely a comment cannot execute, so *behavioural* rules must
+# not fire on one. This is not politeness: the rule that flags the comment
+# explaining why a bad pattern was removed teaches people to delete the
+# explanation, which is strictly worse than the finding. (It fired on exactly
+# that — the note recording why `?token=` left `aiSuggestions.ts`.)
+COMMENT_RE='^[ \t]*(//|\*|/\*|<!--|#)'
+
+# Two kinds of finding survive in a comment, because there the *text* is the
+# defect rather than the behaviour: a credential committed inside a comment is
+# leaked just as thoroughly as one on a live line.
+fires_in_comments() {
+    case " A02-secret-lit " in
+        *" $1 "*) return 0 ;;
+        *)        return 1 ;;
+    esac
+}
+
 # added_rule RULE SEV CAT PATH_RE CONTENT_RE EXCLUDE_RE MESSAGE
 #   EXCLUDE_RE of "-" means no exclusion. Fires on lines this change added.
 added_rule() {
     local rule="$1" sev="$2" cat="$3" path_re="$4" content_re="$5" excl="$6" msg="$7"
-    awk -F'\t' -v PR="$path_re" -v CR="$content_re" -v EX="$excl" \
-        '$1 ~ PR && $3 ~ CR { if (EX != "-" && $3 ~ EX) next; print }' "$TMP/added.lines" \
+    local skip="$COMMENT_RE"
+    fires_in_comments "$rule" && skip=""
+    awk -F'\t' -v PR="$path_re" -v CR="$content_re" -v EX="$excl" -v SK="$skip" \
+        '$1 ~ PR && $3 ~ CR { if (SK != "" && $3 ~ SK) next; if (EX != "-" && $3 ~ EX) next; print }' "$TMP/added.lines" \
     | while IFS=$'\t' read -r p l t; do
         emit "$sev" "$cat" "$rule" "$p" "$l" "$msg" "$t"
       done
@@ -179,8 +198,10 @@ added_rule() {
 #   with the word "from" in it, and a rule that cries wolf 24 times gets muted.
 added_rule_and() {
     local rule="$1" sev="$2" cat="$3" path_re="$4" re1="$5" re2="$6" excl="$7" msg="$8"
-    awk -F'\t' -v PR="$path_re" -v R1="$re1" -v R2="$re2" -v EX="$excl" \
-        '$1 ~ PR && $3 ~ R1 && $3 ~ R2 { if (EX != "-" && $3 ~ EX) next; print }' "$TMP/added.lines" \
+    local skip="$COMMENT_RE"
+    fires_in_comments "$rule" && skip=""
+    awk -F'\t' -v PR="$path_re" -v R1="$re1" -v R2="$re2" -v EX="$excl" -v SK="$skip" \
+        '$1 ~ PR && $3 ~ R1 && $3 ~ R2 { if (SK != "" && $3 ~ SK) next; if (EX != "-" && $3 ~ EX) next; print }' "$TMP/added.lines" \
     | while IFS=$'\t' read -r p l t; do
         emit "$sev" "$cat" "$rule" "$p" "$l" "$msg" "$t"
       done

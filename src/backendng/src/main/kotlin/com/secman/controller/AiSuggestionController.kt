@@ -86,10 +86,11 @@ open class AiSuggestionController(
      *
      * Auth: the standard `@Secured("ADMIN","SECCHAMPION")` annotation on
      * this controller is enforced by the Micronaut filter chain on the
-     * initial GET. EventSource clients pass the JWT in the `?token=` query
-     * param (browsers can't set headers on EventSource), handled by the
-     * existing SSE auth filter. We additionally run the ownership guard so
-     * a SECCHAMPION cannot subscribe to a peer's job.
+     * initial GET. `EventSource` cannot set request headers, but it does send
+     * the HttpOnly `secman_auth` cookie when constructed with
+     * `withCredentials: true`, and `CookieTokenReader` resolves it — so no
+     * credential travels in the URL. We additionally run the ownership guard
+     * so a SECCHAMPION cannot subscribe to a peer's job.
      */
     @Get(value = "/jobs/{jobId}/events", produces = [MediaType.TEXT_EVENT_STREAM])
     open fun streamJobEvents(
