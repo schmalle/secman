@@ -4,6 +4,7 @@ import com.secman.domain.McpOperation
 import com.secman.dto.BulkUserMappingEntry
 import com.secman.dto.BulkUserMappingRequest
 import com.secman.dto.mcp.McpExecutionContext
+import com.secman.service.AwsAccountRiskAssessmentService
 import com.secman.service.UserMappingBulkImportService
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
@@ -27,10 +28,12 @@ import org.slf4j.LoggerFactory
  * - startRiskAssessment: start a risk assessment for the owner of every brand-new
  *   AWS account this import introduces. Requires riskAssessmentUseCase.
  * - riskAssessmentUseCase: name of the use case the assessments are scoped to.
- * - riskAssessmentDeadlineDays: days until the deadline. Default 7.
+ * - riskAssessmentDeadlineDays: days until the deadline. Default 7, max 3650.
  *
  * Returns totalProcessed, created, createdPending, skipped, errors[], dryRun,
- * newAccounts[] and riskAssessments[].
+ * newAccounts[] and riskAssessments[]. A riskAssessments[] entry carries either
+ * `error` (failed) or `skipped`/`skipReason` (an open assessment already existed —
+ * an idempotent no-op, not a failure).
  */
 @Singleton
 class ImportUserMappingsTool(
@@ -90,8 +93,10 @@ class ImportUserMappingsTool(
             ),
             "riskAssessmentDeadlineDays" to mapOf(
                 "type" to "number",
-                "description" to "Days from today until the risk assessment deadline. Default: 7",
-                "minimum" to 1
+                "description" to "Days from today until the risk assessment deadline. " +
+                    "Default: 7, maximum: ${AwsAccountRiskAssessmentService.MAX_DEADLINE_DAYS}",
+                "minimum" to 1,
+                "maximum" to AwsAccountRiskAssessmentService.MAX_DEADLINE_DAYS
             )
         ),
         "required" to listOf("mappings")
@@ -176,6 +181,10 @@ class ImportUserMappingsTool(
                             "useCase" to ra.useCase,
                             "releaseVersion" to ra.releaseVersion,
                             "requirementCount" to ra.requirementCount,
+                            // A skip is an idempotent no-op, not a failure — kept in its own
+                            // field so an agent reading this result does not report it as one.
+                            "skipped" to ra.skipped,
+                            "skipReason" to ra.skipReason,
                             "error" to ra.error
                         )
                     }

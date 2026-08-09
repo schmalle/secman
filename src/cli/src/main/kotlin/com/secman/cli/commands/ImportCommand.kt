@@ -104,7 +104,7 @@ class ImportCommand(
 
     @Option(
         names = ["--risk-deadline-days"],
-        description = ["Days until the risk assessment deadline (default: \${DEFAULT-VALUE})"],
+        description = ["Days until the risk assessment deadline (default: \${DEFAULT-VALUE}, maximum: 3650)"],
         defaultValue = "7"
     )
     var riskDeadlineDays: Int = 7
@@ -126,7 +126,10 @@ class ImportCommand(
     /**
      * Validate the risk-assessment options. Returns an error message if invalid,
      * or null if OK. --start-risk-assessment requires a non-blank --risk-usecase
-     * and a deadline of at least 1 day.
+     * and a deadline between 1 and [UserMappingCliService.MAX_RISK_DEADLINE_DAYS] days.
+     *
+     * The backend re-checks all of this (`AwsAccountRiskAssessmentService.validateStartRequest`);
+     * checking here too saves a round trip and names the flag rather than the JSON field.
      */
     fun validateRiskAssessmentOptions(): String? {
         if (startRiskAssessment && riskUseCase.isNullOrBlank()) {
@@ -134,6 +137,10 @@ class ImportCommand(
         }
         if (startRiskAssessment && riskDeadlineDays < 1) {
             return "--risk-deadline-days must be at least 1 (got $riskDeadlineDays)"
+        }
+        if (startRiskAssessment && riskDeadlineDays > UserMappingCliService.MAX_RISK_DEADLINE_DAYS) {
+            return "--risk-deadline-days must be at most " +
+                "${UserMappingCliService.MAX_RISK_DEADLINE_DAYS} (got $riskDeadlineDays)"
         }
         return null
     }
@@ -272,6 +279,12 @@ class ImportCommand(
                         if (ra.error != null) {
                             riskAssessmentFailures++
                             println("  ❌ ${ra.awsAccountId}  ${ra.ownerEmail}: ${ra.error}")
+                        } else if (ra.skipped) {
+                            // Idempotent no-op, deliberately NOT counted as a failure: re-running
+                            // an import that finds the pair already covered is the intended
+                            // outcome, not something the operator has to act on.
+                            println("  ⏭️  ${ra.awsAccountId}  ${ra.ownerEmail}: skipped — " +
+                                (ra.skipReason ?: "an assessment already exists"))
                         } else {
                             println("  ✅ ${ra.awsAccountId}  ${ra.ownerEmail}  ->  assessment #${ra.riskAssessmentId}" +
                                 (ra.assessor?.let { ", assessor $it" } ?: "") +

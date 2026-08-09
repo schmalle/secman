@@ -84,6 +84,7 @@ MCP `VALIDATION_ERROR`) when:
 |---|---|
 | No use case given | `riskAssessmentUseCase is required when startRiskAssessment is true` |
 | Deadline < 1 | `riskAssessmentDeadlineDays must be at least 1` |
+| Deadline > 3650 | `riskAssessmentDeadlineDays must be at most 3650` |
 | Use case unknown | `Use case '<name>' not found` |
 | No SECCHAMPION user | `No user with SECCHAMPION role exists to act as assessor` |
 | **No ACTIVE release** | `No ACTIVE release exists to base the risk assessment on - activate a requirements release first` |
@@ -92,6 +93,32 @@ MCP `VALIDATION_ERROR`) when:
 The last two exist so an operator never ends up with assessments whose
 questionnaire is empty. Mappings still import normally without
 `--start-risk-assessment`.
+
+### Why the deadline is capped at 10 years
+
+`endDate` is a SQL `DATE`. Left unbounded, `--risk-deadline-days 2147483647`
+produces a year the column cannot hold, and because assessments are started
+*after* the import commits, the failure arrives per account with the mappings
+already persisted. Well short of that limit, a deadline decades out is
+indistinguishable from a typo — `100000` is one keystroke from `1000` — and
+yields an assessment the reminder scheduler will never wake up for, since it
+only looks two days ahead. `MAX_DEADLINE_DAYS = 3650` is checked in
+`validateStartRequest` (both surfaces) and mirrored in the two CLI commands so
+the operator sees the flag name rather than the JSON field name. A value that
+reaches `startAssessmentsForNewAccounts` directly is clamped, not thrown: by
+then we are past the commit point.
+
+### Owner addresses are validated at the import boundary
+
+A mapped email is not just a row: it becomes the SMTP recipient of the mails
+below, it is interpolated into log lines, and it is written into the
+assessment's `notes`. `UserMappingService.emailRegex` therefore excludes
+whitespace, control characters and the separator/quoting characters
+`, ; : < > " \` — a comma would make `InternetAddress.parse` split one
+recipient into two, and a CR/LF would reach a log line. Length is capped at the
+column width (255) so an overlong address fails as one ordinary row error
+instead of a post-commit `DataException`. The CLI's `UserMappingValidator`
+carries the same pattern; the backend is the boundary.
 
 ## What gets created
 
@@ -202,7 +229,14 @@ environment's ACTIVE release and never creates or deletes a user for the
 recipient address — see the skill for why both matter.
 
 `/aws-account-risk-assessment` covers the assessment path instead and asserts
-nothing about mail.
+nothing about mail. It exercises both surfaces — CLI and MCP — and covers the
+opt-in default (no flag → no assessment, no asset, no mail), release pinning and
+its stability, the idempotent skip *including* that it does not fail the run,
+the deadline bound on both surfaces, and the missing-ACTIVE-release and
+non-admin negatives. Its cleanup runs before and after and is keyed on the
+stable `e2e-awsra-` owner prefix, so it also sweeps up whatever an earlier
+interrupted run left behind — including the `AWS_ACCOUNT` basis assets, which
+nothing used to remove.
 
 Reminder mails have **no manual trigger** — only the 08:15 scheduler — so nothing
 tests them end to end today.
@@ -216,8 +250,24 @@ the next run retries.
 ## Idempotency
 
 Re-running an import does not create a second assessment for a pair that already
-has an **open** one — `createAssessment` skips and reports
-`Skipped: an open risk assessment (id=…) already exists for this account/owner`.
+has an **open** one — `createAssessment` skips and reports it in the result's
+`skipped` / `skipReason` fields, **not** in `error`:
+
+```
+⏭️  111111111111  alice@corp.com: skipped — an open risk assessment (id=1000)
+    already exists for this account/owner
+```
+
+A skip is a no-op, not a failure. It does not count towards the CLI's
+`riskAssessmentFailures`, does not make the CLI exit 1, and suppresses the owner
+mail (they were told when the assessment was first created). The notification
+gate tests `!skipped` as well as `error == null` for exactly that reason — with
+the message no longer in `error`, testing `error` alone would re-notify on every
+re-import.
+
+In practice the guard is only reached when the mapping row was deleted and the
+account is imported again while its assessment is still open. A plain re-import
+never gets that far: the account is no longer new, so nothing is even attempted.
 
 There is deliberately no DB unique constraint: a *new* assessment for the same pair
 is legitimate once the previous one is completed. Only concurrent or repeated

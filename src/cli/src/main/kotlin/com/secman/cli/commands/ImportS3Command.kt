@@ -151,7 +151,7 @@ class ImportS3Command(
 
     @Option(
         names = ["--risk-deadline-days"],
-        description = ["Days until the risk assessment deadline (default: \${DEFAULT-VALUE})"],
+        description = ["Days until the risk assessment deadline (default: \${DEFAULT-VALUE}, maximum: 3650)"],
         defaultValue = "7"
     )
     var riskDeadlineDays: Int = 7
@@ -192,6 +192,17 @@ class ImportS3Command(
             }
             if (startRiskAssessment && riskDeadlineDays < 1) {
                 throw IllegalArgumentException("--risk-deadline-days must be at least 1 (got $riskDeadlineDays)")
+            }
+            if (startRiskAssessment && riskDeadlineDays > UserMappingCliService.MAX_RISK_DEADLINE_DAYS) {
+                throw IllegalArgumentException(
+                    "--risk-deadline-days must be at most " +
+                        "${UserMappingCliService.MAX_RISK_DEADLINE_DAYS} (got $riskDeadlineDays)"
+                )
+            }
+            // Same nudge ImportCommand gives: a use case without the enabling flag is a no-op,
+            // and silently ignoring it is how an operator ends up believing assessments ran.
+            if (!startRiskAssessment && !riskUseCase.isNullOrBlank()) {
+                println("Warning: --risk-usecase is ignored because --start-risk-assessment is not set")
             }
 
             // Resolve bucket/key: CLI flag takes priority, then env var (flags rule)
@@ -331,6 +342,10 @@ class ImportS3Command(
                         if (ra.error != null) {
                             riskAssessmentFailures++
                             println("  FAILED  ${ra.awsAccountId}  ${ra.ownerEmail}: ${ra.error}")
+                        } else if (ra.skipped) {
+                            // Idempotent no-op, deliberately NOT counted as a failure.
+                            println("  SKIPPED ${ra.awsAccountId}  ${ra.ownerEmail}: " +
+                                (ra.skipReason ?: "an assessment already exists"))
                         } else {
                             println("  OK      ${ra.awsAccountId}  ${ra.ownerEmail}  ->  assessment #${ra.riskAssessmentId}" +
                                 (ra.assessor?.let { ", assessor $it" } ?: "") +

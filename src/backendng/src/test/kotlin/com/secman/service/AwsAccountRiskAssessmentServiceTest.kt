@@ -101,6 +101,39 @@ class AwsAccountRiskAssessmentServiceTest {
     }
 
     @Test
+    fun `validation rejects a deadline beyond the 10 year cap`() {
+        // Unbounded, an endDate past year 9999 fails the SQL DATE insert — and it fails per
+        // pair, AFTER the mappings have committed. A typo two keystrokes wide (100000 for
+        // 1000) also produces an assessment no reminder will ever fire for.
+        val error = service.validateStartRequest(
+            "Cloud Onboarding", AwsAccountRiskAssessmentService.MAX_DEADLINE_DAYS + 1
+        )
+
+        assertThat(error).contains("at most ${AwsAccountRiskAssessmentService.MAX_DEADLINE_DAYS}")
+        assertThat(service.validateStartRequest("Cloud Onboarding", Int.MAX_VALUE)).isNotNull()
+        // The cap itself is accepted — the boundary is inclusive.
+        assertThat(
+            service.validateStartRequest("Cloud Onboarding", AwsAccountRiskAssessmentService.MAX_DEADLINE_DAYS)
+        ).isNull()
+    }
+
+    @Test
+    fun `an out-of-range deadline reaching the service directly is clamped, not persisted`() {
+        // validateStartRequest guards both entry points, so this can only come from a direct
+        // service call. We are past the commit point here: clamp rather than throw.
+        val results = service.startAssessmentsForNewAccounts(
+            listOf(NewAccountImportInfo("111111111111", listOf("alice@corp.com"))),
+            "Cloud Onboarding", Int.MAX_VALUE, null
+        )
+
+        assertThat(results.single().error).isNull()
+        val saved = slot<RiskAssessment>()
+        verify { riskAssessmentRepository.save(capture(saved)) }
+        assertThat(saved.captured.endDate)
+            .isEqualTo(LocalDate.now().plusDays(AwsAccountRiskAssessmentService.MAX_DEADLINE_DAYS.toLong()))
+    }
+
+    @Test
     fun `validation rejects unknown use case`() {
         every { useCaseRepository.findByNameIgnoreCase("Nope") } returns Optional.empty()
         assertThat(service.validateStartRequest("Nope", 7)).contains("not found")
@@ -305,10 +338,17 @@ class AwsAccountRiskAssessmentServiceTest {
             "Cloud Onboarding", 7, 9L
         )
 
-        assertThat(results.single().error).contains("already exists")
+        // A skip is an idempotent no-op, not a failure: `error` must stay null so neither CLI
+        // renders it as ❌/FAILED nor exits 1 on a re-import.
+        assertThat(results.single().skipped).isTrue()
+        assertThat(results.single().skipReason).contains("already exists")
+        assertThat(results.single().error).isNull()
         assertThat(results.single().riskAssessmentId).isEqualTo(77L)
         verify(exactly = 0) { riskAssessmentRepository.save(any()) }
         verify(exactly = 0) { trackingRepository.save(any()) }
+        // And the owner is not mailed a second time about an assessment they were already told
+        // about. This is what the `!info.skipped` half of the notification gate protects — with
+        // `error` no longer set, testing `error` alone would re-notify on every re-import.
         verify(exactly = 0) { emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any()) }
     }
 

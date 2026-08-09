@@ -12,17 +12,22 @@
 #   Use case:     <prefix>usecase
 #   Requirements: 2 tagged with that use case, + 1 untagged (must NOT appear)
 #   Release:      version 99.<epoch-suffix>.0, set ACTIVE (snapshots the corpus)
-#   Accounts:     two never-before-seen 12-digit IDs (CLI phase, MCP phase)
+#   Accounts:     six never-before-seen 12-digit IDs, one per phase
 #
 # What it proves:
-#   1. CLI import starts an assessment pinned to the ACTIVE release
-#   2. The questionnaire is exactly the release's use-case-tagged requirements
-#   3. Importing MORE requirements does not change that questionnaire (pinning)
-#   4. Re-importing the same account is idempotent (no second open assessment)
-#   5. MCP import_user_mappings does the same over the streamable HTTP transport
-#   6. Negatives: no ACTIVE release -> rejected; non-admin MCP -> ADMIN_REQUIRED
+#   1. Without --start-risk-assessment nothing is started — the opt-in default
+#   2. CLI import starts an assessment pinned to the ACTIVE release
+#   3. The questionnaire is exactly the release's use-case-tagged requirements
+#   4. Importing MORE requirements does not change that questionnaire (pinning)
+#   5. Re-importing is idempotent, and the skip is reported as a skip — not as a
+#      failure, and not with a non-zero exit code
+#   6. MCP import_user_mappings does the same over the streamable HTTP transport
+#   7. Negatives: no ACTIVE release -> rejected; deadline outside 1..3650 ->
+#      rejected on both surfaces; non-admin MCP -> ADMIN_REQUIRED
 #
-# Cleanup runs both before (unconditional) and after (trap EXIT).
+# Cleanup runs both before (unconditional) and after (trap EXIT), and sweeps every
+# earlier run's leftovers too — it matches on the test owner-email prefix, not on
+# this run's timestamped account ids.
 #
 # Required env (resolved via pass-cli):
 #   SECMAN_ADMIN_NAME
@@ -78,9 +83,14 @@ USECASE_NAME="${E2E_PREFIX}usecase"
 RELEASE_VERSION="99.${SUFFIX}.0"
 RELEASE_NAME="${E2E_PREFIX}release"
 
-# Two accounts that cannot collide with real data (886/887 prefix + timestamp).
+# Synthetic accounts, one per phase. All share the shape 88[4-9] + 6-digit timestamp +
+# "000", which is what the cleanup sweep matches on — keep any new account in that shape.
 CLI_ACCOUNT="886${SUFFIX}000"
 MCP_ACCOUNT="887${SUFFIX}000"
+NO_FLAG_ACCOUNT="885${SUFFIX}000"   # default-is-off phase
+DEADLINE_ACCOUNT="884${SUFFIX}000"  # deadline-out-of-range phase
+MCP_NEG_ACCOUNT="888${SUFFIX}000"   # MCP negative (missing use case)
+NO_RELEASE_ACCOUNT="889${SUFFIX}000" # no-ACTIVE-release negative
 
 CLI_JAR="$REPO_ROOT/src/cli/build/libs/cli-0.1.0-all.jar"
 COOKIE_JAR="$(mktemp)"
@@ -209,22 +219,50 @@ cleanup() {
     local phase_label="${1:-post-run}"
     log_info "Cleanup ($phase_label) …"
 
-    # Assessments first (FK: aws_account_risk_assessment -> risk_assessment).
+    # Assessments first (FK: aws_account_risk_assessment -> risk_assessment, and the asset
+    # sweep below is refused while a risk assessment still references the asset).
+    #
+    # Matched on the OWNER EMAIL the service writes into the notes
+    # ("... (owner: e2e-awsra-owner@e2e.local, use case: ...)"), never on the account id.
+    # The account ids carry a per-run timestamp, so an id match would miss every earlier run;
+    # a loose `contains("886")` — what this used to do — would match a *real* assessment for
+    # any genuine AWS account whose id contains 886 and delete it. The owner prefix is both
+    # stable across runs and impossible for real data to collide with.
     local tracked
     tracked=$(api GET "/api/risk-assessments" || echo '[]')
-    echo "$tracked" | jq -r --arg p "$E2E_PREFIX" \
-        '.[]? | select((.notes // "") | contains("886") or contains("887")) | .id' 2>/dev/null \
+    echo "$tracked" | jq -r --arg p "owner: ${E2E_PREFIX}" \
+        '(if type == "array" then . else (.content // []) end)[]?
+         | select((.notes // "") | contains($p)) | .id' 2>/dev/null \
         | while read -r ra_id; do
             [[ -n "$ra_id" ]] && api DELETE "/api/risk-assessments/${ra_id}" >/dev/null || true
         done
 
-    # User mappings for the test accounts.
+    # User mappings — matched on the test owner email prefix rather than this run's two
+    # account ids, so mappings orphaned by an interrupted earlier run are swept up too.
     local mappings
     mappings=$(api GET "/api/user-mappings/current?size=1000" || echo '{}')
-    echo "$mappings" | jq -r --arg a1 "$CLI_ACCOUNT" --arg a2 "$MCP_ACCOUNT" \
-        '(.content // .mappings // [])[]? | select(.awsAccountId == $a1 or .awsAccountId == $a2) | .id' 2>/dev/null \
+    echo "$mappings" | jq -r --arg p "$E2E_PREFIX" \
+        '(.content // .mappings // [])[]? | select((.email // "") | startswith($p)) | .id' 2>/dev/null \
         | while read -r m_id; do
             [[ -n "$m_id" ]] && api DELETE "/api/user-mappings/${m_id}" >/dev/null || true
+        done
+
+    # The AWS_ACCOUNT assets the feature auto-creates as the assessment basis
+    # ("AWS Account <id>"). Nothing else in this driver creates them and nothing else
+    # removed them, so before this sweep every run left one behind for good.
+    #
+    # Doubly constrained, because an asset can only be matched through the account id:
+    # the id must have the exact synthetic shape this driver mints (88[6-9] + 6 digits +
+    # "000") AND the owner must be a test address. A real account satisfies at most one.
+    local assets
+    assets=$(api GET "/api/assets" || echo '[]')
+    echo "$assets" | jq -r --arg p "$E2E_PREFIX" \
+        '(if type == "array" then . else (.content // []) end)[]?
+         | select(.type == "AWS_ACCOUNT")
+         | select((.cloudAccountId // "") | test("^88[4-9][0-9]{6}000$"))
+         | select((.owner // "") | startswith($p)) | .id' 2>/dev/null \
+        | while read -r a_id; do
+            [[ -n "$a_id" ]] && api DELETE "/api/assets/${a_id}" >/dev/null || true
         done
 
     # Release (also drops its requirement snapshots).
@@ -479,29 +517,208 @@ phase_pinning_is_stable() {
     fi
 }
 
+# tracked_count <account> -> number of tracked assessments for the account.
+#
+# Prefers the MCP read tool (it reads the tracking table directly). With SKIP_MCP the CLI
+# phases still need the count, so it falls back to the REST list and counts the assessments
+# whose auto-generated notes name the account — the same string the service writes.
+tracked_count() {
+    local account="$1"
+    if [[ "$SKIP_MCP" != "true" ]]; then
+        mcp_payload "$(mcp_call "list_aws_account_risk_assessments" \
+            "$(jq -nc --arg a "$account" '{awsAccountId:$a}')")" | jq -r '.count // 0'
+        return
+    fi
+    api GET "/api/risk-assessments" \
+        | jq -r --arg n "for account ${account} " \
+            '[(if type == "array" then . else (.content // []) end)[]?
+              | select((.notes // "") | contains($n))] | length'
+}
+
+# delete_mappings_for <account> — remove every user_mapping row naming the account,
+# which is what makes the account look brand-new to the next import again.
+delete_mappings_for() {
+    local account="$1"
+    api GET "/api/user-mappings/current?size=1000" \
+        | jq -r --arg a "$account" '(.content // .mappings // [])[]? | select(.awsAccountId == $a) | .id' \
+        | while read -r m_id; do
+            [[ -n "$m_id" ]] && api DELETE "/api/user-mappings/${m_id}" >/dev/null || true
+        done
+}
+
 phase_idempotency() {
     phase "Idempotency: re-importing the same account starts no second assessment"
 
+    # Part 1 — the plain re-import. The account is no longer new (its mapping exists), so
+    # detection finds nothing and the assessment starter is never even reached.
     local out rc
     set +e
     out=$(run_cli 2>&1); rc=$?
     set -e
     log_dbg "$out"
 
-    local count
-    count=$(mcp_payload "$(mcp_call "list_aws_account_risk_assessments" \
-        "$(jq -nc --arg a "$CLI_ACCOUNT" '{awsAccountId:$a}')")" | jq -r '.count // 0')
+    [[ $rc -eq 0 ]] && log_pass "Plain re-import exited 0" || log_fail "Plain re-import exited $rc"
 
+    local count
+    count=$(tracked_count "$CLI_ACCOUNT")
     if [[ "$count" == "1" ]]; then
         log_pass "Still exactly one tracked assessment for $CLI_ACCOUNT"
     else
         log_fail "Expected 1 tracked assessment for $CLI_ACCOUNT, found $count"
     fi
 
-    if echo "$out" | grep -qi "already exists\|Skipped"; then
+    # Part 2 — the path that actually reaches the idempotency guard. Dropping the mapping
+    # makes the account brand-new again while its assessment stays open, so the import does
+    # get as far as createAssessment and has to skip there.
+    #
+    # This is the case that used to be reported as a per-account FAILURE and exit 1: the
+    # guard returned its message in `error`. A skip is a no-op, not a failure — the operator
+    # must see a successful run.
+    delete_mappings_for "$CLI_ACCOUNT"
+
+    set +e
+    out=$(run_cli 2>&1); rc=$?
+    set -e
+    log_dbg "$out"
+
+    if [[ $rc -eq 0 ]]; then
+        log_pass "Re-import over an open assessment exited 0 (a skip is not a failure)"
+    else
+        log_fail "Re-import over an open assessment exited $rc — a skip must not fail the run"
+        echo "$out" >&2
+    fi
+
+    if echo "$out" | grep -qi "skipped"; then
         log_pass "Re-import reported the open assessment as skipped"
     else
-        log_warn "Re-import did not report a skip (account may no longer be 'new', which is also correct)"
+        log_fail "Re-import did not report a skip: $out"
+    fi
+
+    if echo "$out" | grep -q "❌"; then
+        log_fail "Re-import rendered the skip as a failure (❌)"
+    else
+        log_pass "The skip is not rendered as a failure"
+    fi
+
+    count=$(tracked_count "$CLI_ACCOUNT")
+    if [[ "$count" == "1" ]]; then
+        log_pass "Still exactly one tracked assessment after the skip"
+    else
+        log_fail "Expected 1 tracked assessment after the skip, found $count"
+    fi
+}
+
+phase_default_is_off() {
+    phase "Default: without --start-risk-assessment nothing is started"
+
+    cat > "$WORK_DIR/mappings-noflag.csv" <<EOF
+email,type,value
+${OWNER_EMAIL},AWS_ACCOUNT,${NO_FLAG_ACCOUNT}
+EOF
+
+    local out rc
+    set +e
+    out=$(java -jar "$CLI_JAR" manage-user-mappings import \
+        --file "$WORK_DIR/mappings-noflag.csv" \
+        --username "$SECMAN_ADMIN_NAME" --password "$SECMAN_ADMIN_PASS" \
+        --backend-url "$BASE_URL" 2>&1); rc=$?
+    set -e
+    log_dbg "$out"
+
+    [[ $rc -eq 0 ]] && log_pass "Import without the flag exited 0" \
+        || { log_fail "Import without the flag exited $rc"; echo "$out" >&2; return; }
+
+    # The mapping must be imported — the flag governs the assessment, not the import.
+    local mapped
+    mapped=$(api GET "/api/user-mappings/current?size=1000" \
+        | jq -r --arg a "$NO_FLAG_ACCOUNT" \
+            '[(.content // .mappings // [])[]? | select(.awsAccountId == $a)] | length')
+    [[ "$mapped" == "1" ]] && log_pass "The mapping itself was imported" \
+        || log_fail "Expected the mapping to be imported, found $mapped row(s)"
+
+    # …and nothing else may have happened.
+    local count
+    count=$(tracked_count "$NO_FLAG_ACCOUNT")
+    [[ "$count" == "0" ]] && log_pass "No risk assessment started (opt-in default holds)" \
+        || log_fail "Expected 0 assessments for $NO_FLAG_ACCOUNT, found $count"
+
+    # Not even the AWS_ACCOUNT basis asset, which only the assessment path creates.
+    local assets
+    assets=$(api GET "/api/assets" \
+        | jq -r --arg a "$NO_FLAG_ACCOUNT" \
+            '[(if type == "array" then . else (.content // []) end)[]?
+              | select((.cloudAccountId // "") == $a)] | length')
+    [[ "$assets" == "0" ]] && log_pass "No AWS_ACCOUNT asset created either" \
+        || log_fail "Expected no asset for $NO_FLAG_ACCOUNT, found $assets"
+
+    # A use case without the enabling flag is a no-op, and the CLI must say so rather than
+    # let the operator believe assessments ran.
+    set +e
+    out=$(java -jar "$CLI_JAR" manage-user-mappings import \
+        --file "$WORK_DIR/mappings-noflag.csv" \
+        --risk-usecase "$USECASE_NAME" \
+        --username "$SECMAN_ADMIN_NAME" --password "$SECMAN_ADMIN_PASS" \
+        --backend-url "$BASE_URL" 2>&1); rc=$?
+    set -e
+    log_dbg "$out"
+
+    if echo "$out" | grep -qi "risk-usecase is ignored"; then
+        log_pass "--risk-usecase without --start-risk-assessment warns that it is ignored"
+    else
+        log_fail "No warning for --risk-usecase without --start-risk-assessment: $out"
+    fi
+}
+
+phase_deadline_bounds() {
+    phase "Negative: a deadline outside 1..3650 is rejected before anything is imported"
+
+    cat > "$WORK_DIR/mappings-deadline.csv" <<EOF
+email,type,value
+${OWNER_EMAIL},AWS_ACCOUNT,${DEADLINE_ACCOUNT}
+EOF
+
+    local out rc
+    set +e
+    out=$(java -jar "$CLI_JAR" manage-user-mappings import \
+        --file "$WORK_DIR/mappings-deadline.csv" \
+        --start-risk-assessment --risk-usecase "$USECASE_NAME" \
+        --risk-deadline-days 100000 \
+        --username "$SECMAN_ADMIN_NAME" --password "$SECMAN_ADMIN_PASS" \
+        --backend-url "$BASE_URL" 2>&1); rc=$?
+    set -e
+    log_dbg "$out"
+
+    [[ $rc -ne 0 ]] && log_pass "CLI refused a 100000-day deadline (exit $rc)" \
+        || log_fail "CLI accepted a 100000-day deadline"
+
+    if echo "$out" | grep -qi "at most 3650"; then
+        log_pass "The error names the maximum"
+    else
+        log_fail "The error does not name the maximum: $out"
+    fi
+
+    # Fail-fast: the rejected run must not have imported the mapping.
+    local mapped
+    mapped=$(api GET "/api/user-mappings/current?size=1000" \
+        | jq -r --arg a "$DEADLINE_ACCOUNT" \
+            '[(.content // .mappings // [])[]? | select(.awsAccountId == $a)] | length')
+    [[ "$mapped" == "0" ]] && log_pass "The rejected run imported nothing" \
+        || log_fail "The rejected run still imported $mapped mapping(s)"
+
+    # The same bound has to hold on the MCP surface, which does not go through picocli.
+    if [[ "$SKIP_MCP" != "true" ]]; then
+        local resp payload
+        resp=$(mcp_call "import_user_mappings" "$(jq -nc \
+            --arg e "$OWNER_EMAIL" --arg a "$DEADLINE_ACCOUNT" --arg uc "$USECASE_NAME" \
+            '{mappings:[{email:$e, awsAccountId:$a}],
+              startRiskAssessment:true, riskAssessmentUseCase:$uc,
+              riskAssessmentDeadlineDays:100000}')")
+        payload=$(mcp_payload "$resp")
+        if echo "$resp$payload" | grep -qi "at most 3650"; then
+            log_pass "MCP rejects the same deadline with the same message"
+        else
+            log_fail "MCP did not reject a 100000-day deadline: $resp"
+        fi
     fi
 }
 
@@ -554,7 +771,7 @@ phase_mcp_negatives() {
         log_fail "Non-admin caller was NOT denied: $resp"
     fi
 
-    resp=$(mcp_call "import_user_mappings" "$(jq -nc --arg e "$OWNER_EMAIL" --arg a "888${SUFFIX}000" \
+    resp=$(mcp_call "import_user_mappings" "$(jq -nc --arg e "$OWNER_EMAIL" --arg a "$MCP_NEG_ACCOUNT" \
         '{mappings:[{email:$e, awsAccountId:$a}], startRiskAssessment:true}')")
     payload=$(mcp_payload "$resp")
     if echo "$resp$payload" | grep -q "riskAssessmentUseCase is required"; then
@@ -584,7 +801,7 @@ phase_no_active_release() {
 
     cat > "$WORK_DIR/mappings-neg.csv" <<EOF
 email,type,value
-${OWNER_EMAIL},AWS_ACCOUNT,889${SUFFIX}000
+${OWNER_EMAIL},AWS_ACCOUNT,${NO_RELEASE_ACCOUNT}
 EOF
 
     local out rc
@@ -612,7 +829,7 @@ EOF
     # Nothing may have been imported — validation is fail-fast.
     local mapped
     mapped=$(api GET "/api/user-mappings/current?size=1000" \
-        | jq -r --arg a "889${SUFFIX}000" '[(.content // .mappings // [])[]? | select(.awsAccountId == $a)] | length')
+        | jq -r --arg a "$NO_RELEASE_ACCOUNT" '[(.content // .mappings // [])[]? | select(.awsAccountId == $a)] | length')
     if [[ "$mapped" == "0" ]]; then
         log_pass "No mappings were imported by the rejected run"
     else
@@ -637,6 +854,8 @@ main() {
     setup_testbed
 
     if [[ "$SKIP_CLI" != "true" ]]; then
+        phase_default_is_off
+        phase_deadline_bounds
         phase_cli_import
         phase_pinning_is_stable
         phase_idempotency
