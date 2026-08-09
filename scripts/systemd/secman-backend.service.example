@@ -1,0 +1,103 @@
+# =============================================================================
+# EXAMPLE systemd unit — secman backend, running the compiled shadow JAR, with
+# every environment variable sourced from AWS Secrets Manager at start time.
+#
+# This file is an example. Copy it, adjust the paths/user/region, then install:
+#
+#   sudo install -m 0644 scripts/systemd/secman-backend.service.example \
+#        /etc/systemd/system/secman-backend.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now secman-backend.service
+#   journalctl -u secman-backend -f
+#
+# Deliberately NOT using EnvironmentFile= for the application secrets: that
+# would require the DB password, JWT secret and encryption password to sit in a
+# plaintext file on disk. Instead ExecStart runs a launcher that fetches the
+# JSON secret from Secrets Manager and execs the JVM with the values in its own
+# process environment only. See scripts/systemd/secman-backend-aws.sh and
+# docs/AWS.md § Secret keys reference.
+#
+# Related, non-example docs: docs/DEPLOYMENT.md § systemd (pass-cli / env-file
+# deployment) and docs/AWS.md § systemd alternative (gradle-run deployment).
+# =============================================================================
+
+[Unit]
+Description=Secman Backend API (compiled JAR, AWS Secrets Manager)
+Documentation=file:///opt/secman/docs/DEPLOYMENT.md
+# network-online, not just network: the launcher makes an HTTPS call to the
+# Secrets Manager endpoint before the JVM starts.
+After=network-online.target mariadb.service
+Wants=network-online.target
+# Drop the two mariadb lines if the database is RDS / not on this host.
+Requires=mariadb.service
+# Don't hammer Secrets Manager if the secret is misconfigured — 5 tries / 5 min.
+# These two belong in [Unit], not [Service]; systemd silently ignores
+# StartLimitIntervalSec under [Service] (verify with `systemd-analyze verify`).
+StartLimitBurst=5
+StartLimitIntervalSec=300
+
+[Service]
+Type=simple
+User=secman
+Group=secman
+WorkingDirectory=/opt/secman
+
+# --- Where things live -------------------------------------------------------
+# SECMAN_JAR      built by: ./gradlew :backendng:clean :backendng:shadowJar -x test
+#                 (or ./scripts/compiledistsetup.sh, which stages it for you)
+# SECMAN_JAVA_BIN absolute path — a systemd unit has no SDKMAN shell init.
+Environment=SECMAN_JAR=/opt/secman/src/backendng/build/libs/backendng-0.1-all.jar
+Environment=SECMAN_JAVA_BIN=/usr/bin/java
+
+# --- Which secret to read ----------------------------------------------------
+# The launcher reuses scripts/lib/aws-secrets.sh, so these are the same two
+# knobs every other *aws.sh launcher honours.
+Environment=SECMAN_AWS_SECRET_ID=secman/prod
+Environment=AWS_REGION=eu-central-1
+# Credentials for the *Secrets Manager call itself* come from the EC2 instance
+# role / IRSA — never put an access key here. The IAM policy needs only
+# secretsmanager:GetSecretValue on that one secret ARN.
+
+# --- JVM ---------------------------------------------------------------------
+# Must be quoted: a value containing spaces is otherwise parsed as several
+# assignments and every flag after the first is dropped.
+Environment="SECMAN_JAVA_OPTS=-Xms512m -Xmx2g -XX:+UseG1GC -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/var/log/secman/oom.hprof -XX:+ExitOnOutOfMemoryError"
+
+ExecStart=/opt/secman/scripts/systemd/secman-backend-aws.sh
+
+# --- Lifecycle ---------------------------------------------------------------
+# ExitOnOutOfMemoryError above kills the JVM on OOM; Restart=on-failure is what
+# then gives you a clean one (docs/ENVIRONMENT.md § JVM heap).
+Restart=on-failure
+RestartSec=10
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
+# --- Hardening ---------------------------------------------------------------
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+# Outbound TCP/TLS (Secrets Manager, MariaDB, SMTP, CrowdStrike) plus AF_NETLINK,
+# which the JDK uses to enumerate network interfaces at startup.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+# ProtectSystem=strict makes / read-only, so name every writable path.
+ReadWritePaths=/opt/secman/logs /var/log/secman
+# ProtectHome=true hides ~/.sdkman and ~/.aws from the service. That is
+# intentional: SECMAN_JAVA_BIN is absolute and AWS auth comes from the instance
+# role. If you genuinely need ~/.aws, set ProtectHome=read-only instead.
+
+# --- Logging -----------------------------------------------------------------
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=secman-backend
+
+[Install]
+WantedBy=multi-user.target
