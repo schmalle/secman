@@ -9,17 +9,18 @@ ways**: an edit to either tree must be ported to the other in the same commit
 
 ## Skills — which one to use
 
-**See `docs/SKILLS.md`** for the authoritative routing guide to all eleven
-test/testbed skills (`/finalizer`, `/testsuite`, `/e2ejs`,
+**See `docs/SKILLS.md`** for the authoritative routing guide to all twelve
+skills (`/secure-code`, `/finalizer`, `/testsuite`, `/e2ejs`,
 `/e2evulnexception`, `/e2eexception`, `/admin-asset-e2e`, `/importtest`,
 `/crowdstrike-vuln-match`, `/aws-account-risk-assessment`,
 `/aws-account-owner-email`, `/createtestdata`) — what each one does, which are
 destructive, and the pairs that get confused. This file does not duplicate that
 content.
 
-Two of the eleven never touch the running stack: `/finalizer` (docs and
-contract drift) and `/testsuite` (unit/integration tests plus a coverage-gap
-report). The other nine cold-start backend and frontend.
+Three of the twelve never touch the running stack: `/secure-code` (OWASP
+routing plus the static gate), `/finalizer` (docs and contract drift) and
+`/testsuite` (unit/integration tests plus a coverage-gap report). The other nine
+cold-start backend and frontend.
 
 ## SpecKit commands (`/speckit.*`)
 

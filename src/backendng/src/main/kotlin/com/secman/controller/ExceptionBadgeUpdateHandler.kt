@@ -70,10 +70,17 @@ class ExceptionBadgeUpdateHandler(
      * **Access**: Requires authentication (any authenticated user)
      * **Content-Type**: text/event-stream
      *
-     * **Authentication**:
-     * - Supports JWT token via Authorization header OR query parameter
-     * - Query parameter: `/api/exception-badge-updates?token=<jwt>`
-     * - Required for EventSource (cannot send custom headers)
+     * **Authentication**: the HttpOnly `secman_auth` cookie, read by
+     * `CookieTokenReader`. `EventSource` cannot set request headers, but it
+     * does send cookies when constructed with `withCredentials: true`, so no
+     * URL-borne credential is needed here.
+     *
+     * `QueryParameterTokenReader` still accepts `?token=<jwt>` for any client
+     * that cannot use cookies, but **no caller in this repo does** and new code
+     * must not start: a JWT in a query string reaches access logs, proxy logs,
+     * `Referer` headers and browser history. The example below used to show the
+     * `localStorage` token pattern, which stopped working — and stopped being
+     * acceptable — when the JWT moved into the cookie.
      *
      * **Response Stream**:
      * 1. Initial event: Current pending count
@@ -81,8 +88,7 @@ class ExceptionBadgeUpdateHandler(
      *
      * **Client Usage** (Frontend):
      * ```typescript
-     * const token = localStorage.getItem('authToken');
-     * const eventSource = new EventSource(`/api/exception-badge-updates?token=${token}`);
+     * const eventSource = new EventSource('/api/exception-badge-updates', { withCredentials: true });
      * eventSource.addEventListener('count-update', (event) => {
      *   const data = JSON.parse(event.data);
      *   updateBadge(data.pendingCount);

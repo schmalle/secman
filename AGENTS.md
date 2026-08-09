@@ -16,7 +16,7 @@
 - CLI: build once `./gradlew :cli:shadowJar`, then `./scripts/secman <cmd>`.
 
 ## Skills
-Eleven project skills live in **`.agents/skills/`** — the Codex rendering of the
+Twelve project skills live in **`.agents/skills/`** — the Codex rendering of the
 same skill set Claude Code loads from `.claude/skills/` (`CLAUDE.md` §Tooling
 Conventions). They are plain Markdown: there is no slash command here, so read
 the matching `.agents/skills/<name>/SKILL.md` **in full** and follow it.
@@ -38,6 +38,7 @@ the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
 
 | Skill | Use it to | Writes data? |
 |---|---|---|
+| `secure-code` | Write code that satisfies OWASP Top 10:2021 by construction, then verify it (`./scripts/owasp-check.sh`) | no |
 | `finalizer` | Pre-merge pass: version/doc drift, `extensions/` contract drift, HIGH/CRITICAL security review, skill sync | docs only |
 | `testsuite` | Fast test tier (backend, CLI, frontend) + name-reference coverage gaps | no |
 | `e2ejs` | Scan every page for JS errors as admin *and* normal user | no |

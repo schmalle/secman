@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import { authenticatedGet, authenticatedPost, authenticatedDelete } from '../utils/auth';
+import { extractErrorMessage } from '../services/workgroupApi';
 import { getDistinctAdDomains } from '../services/vulnerabilityManagementService';
 
 interface WorkgroupAdDomainDto {
@@ -40,14 +41,14 @@ export default function WorkgroupDomainsModal({
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('authToken');
-      const res = await axios.get<WorkgroupAdDomainDto[]>(
-        `/api/workgroups/${workgroupId}/ad-domains`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setDomains(res.data);
-    } catch (e: any) {
-      setError(e.response?.data?.error ?? 'Failed to load domains');
+      const res = await authenticatedGet(`/api/workgroups/${workgroupId}/ad-domains`);
+      if (!res.ok) {
+        setError(await extractErrorMessage(res, 'Failed to load domains'));
+        return;
+      }
+      setDomains((await res.json()) as WorkgroupAdDomainDto[]);
+    } catch {
+      setError('Failed to load domains');
     } finally {
       setLoading(false);
     }
@@ -91,34 +92,36 @@ export default function WorkgroupDomainsModal({
       return;
     }
     try {
-      const token = localStorage.getItem('authToken');
-      await axios.post(
-        `/api/workgroups/${workgroupId}/ad-domains`,
-        { adDomain: normalizedDomain },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await authenticatedPost(`/api/workgroups/${workgroupId}/ad-domains`, {
+        adDomain: normalizedDomain,
+      });
+      if (!res.ok) {
+        if (res.status === 409) setError('That AD domain is already assigned to this workgroup');
+        else if (res.status === 400) setError(await extractErrorMessage(res, 'Invalid AD domain'));
+        else setError('Failed to add AD domain');
+        return;
+      }
       setNewDomain('');
       await fetchDomains();
       onChange?.();
-    } catch (e: any) {
-      const status = e.response?.status;
-      if (status === 409) setError('That AD domain is already assigned to this workgroup');
-      else if (status === 400) setError(e.response?.data?.error ?? 'Invalid AD domain');
-      else setError('Failed to add AD domain');
+    } catch {
+      setError('Failed to add AD domain');
     }
   };
 
   const handleRemove = async (adDomain: string) => {
     setError(null);
     try {
-      const token = localStorage.getItem('authToken');
-      await axios.delete(
-        `/api/workgroups/${workgroupId}/ad-domains/${encodeURIComponent(adDomain)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+      const res = await authenticatedDelete(
+        `/api/workgroups/${workgroupId}/ad-domains/${encodeURIComponent(adDomain)}`
       );
+      if (!res.ok) {
+        setError('Failed to remove AD domain');
+        return;
+      }
       await fetchDomains();
       onChange?.();
-    } catch (e: any) {
+    } catch {
       setError('Failed to remove AD domain');
     }
   };
