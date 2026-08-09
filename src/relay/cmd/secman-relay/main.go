@@ -28,6 +28,7 @@ import (
 	"github.com/schmalle/secman/src/relay/internal/config"
 	"github.com/schmalle/secman/src/relay/internal/devices"
 	"github.com/schmalle/secman/src/relay/internal/httpx"
+	"github.com/schmalle/secman/src/relay/internal/idp"
 	"github.com/schmalle/secman/src/relay/internal/ingest"
 	"github.com/schmalle/secman/src/relay/internal/logging"
 	"github.com/schmalle/secman/src/relay/internal/store"
@@ -72,7 +73,10 @@ func run(checkConfigOnly bool) error {
 		return nil
 	}
 
-	registry, err := devices.Open(cfg.StateDir, cfg.Device.MaxDevices)
+	registry, err := devices.Open(cfg.StateDir, cfg.Device.MaxDevices, devices.Policy{
+		PrivilegedRoles: cfg.Identity.PrivilegedRoles,
+		StrongProviders: cfg.Identity.StrongProviders,
+	})
 	if err != nil {
 		return fmt.Errorf("opening the device registry: %w", err)
 	}
@@ -88,6 +92,14 @@ func run(checkConfigOnly bool) error {
 	}
 	challenges := auth.NewChallengeStore(cfg.Device.ChallengeTTL)
 	limiter := httpx.NewRateLimiter(cfg.Limits.RateLimitRPS, cfg.Limits.RateLimitBurst)
+
+	verifiers, githubClient, err := buildIdentityProviders(cfg)
+	if err != nil {
+		return err
+	}
+	loginNonces := idp.NewEphemeralStore(idp.TicketTTL, 10_000)
+	oauthStates := idp.NewEphemeralStore(idp.StateTTL, 10_000)
+	bindTickets := idp.NewEphemeralStore(idp.TicketTTL, 10_000)
 
 	certManager, err := tlsx.New(cfg.TLS, logger)
 	if err != nil {
@@ -107,13 +119,19 @@ func run(checkConfigOnly bool) error {
 	}
 
 	apiHandler := &api.Handler{
-		Store:      snapshots,
-		Devices:    registry,
-		Tokens:     tokens,
-		Challenges: challenges,
-		Limiter:    limiter,
-		Logger:     logger,
-		MaxAge:     cfg.Limits.SnapshotMaxAge,
+		Store:                  snapshots,
+		Devices:                registry,
+		Tokens:                 tokens,
+		Challenges:             challenges,
+		Limiter:                limiter,
+		Logger:                 logger,
+		MaxAge:                 cfg.Limits.SnapshotMaxAge,
+		Verifiers:              verifiers,
+		GitHub:                 githubClient,
+		LoginNonces:            loginNonces,
+		States:                 oauthStates,
+		Tickets:                bindTickets,
+		EnrollmentCodesEnabled: cfg.Identity.EnrollmentCodesEnabled,
 	}
 	ingestHandler := &ingest.Handler{
 		Verifier: verifier,
@@ -181,7 +199,7 @@ func run(checkConfigOnly bool) error {
 		servers = append(servers, challengeServer)
 	}
 
-	go maintenance(ctx, verifier, challenges, registry, limiter)
+	go maintenance(ctx, verifier, challenges, registry, limiter, loginNonces, oauthStates, bindTickets)
 
 	errCh := make(chan error, len(servers))
 	for _, srv := range servers {
@@ -269,7 +287,7 @@ func registerOps(mux *http.ServeMux, snapshots *store.Store, registry *devices.R
 // self-limiting; this keeps a quiet relay from holding expired entries for the
 // lifetime of the process.
 func maintenance(ctx context.Context, verifier *auth.IngestVerifier, challenges *auth.ChallengeStore,
-	registry *devices.Registry, limiter *httpx.RateLimiter) {
+	registry *devices.Registry, limiter *httpx.RateLimiter, ephemeral ...*idp.EphemeralStore) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	for {
@@ -281,8 +299,63 @@ func maintenance(ctx context.Context, verifier *auth.IngestVerifier, challenges 
 			challenges.Sweep(now)
 			registry.Prune(now)
 			limiter.Sweep()
+			for _, s := range ephemeral {
+				s.Sweep(now)
+			}
 		}
 	}
+}
+
+// buildIdentityProviders wires up whichever providers the deployment enabled.
+//
+// All of them share one HTTP client so the SSRF policy (https only, port 443
+// only, no redirects, post-DNS address check) is defined once and cannot be
+// forgotten by a provider added later.
+func buildIdentityProviders(cfg *config.Config) (map[string]*idp.Verifier, *idp.GitHubClient, error) {
+	client := idp.NewHTTPClient(cfg.Identity.LoginTimeout)
+	verifiers := map[string]*idp.Verifier{}
+
+	if cfg.Identity.AppleEnabled {
+		v, err := idp.NewVerifier(idp.OIDCConfig{
+			Provider:  "apple",
+			Issuers:   []string{idp.AppleIssuer},
+			Audiences: cfg.Identity.AppleAudiences,
+			JWKSURL:   idp.AppleJWKSURL,
+		}, client)
+		if err != nil {
+			return nil, nil, err
+		}
+		verifiers["apple"] = v
+	}
+
+	if cfg.Identity.GoogleEnabled {
+		v, err := idp.NewVerifier(idp.OIDCConfig{
+			Provider:  "google",
+			Issuers:   idp.GoogleIssuers,
+			Audiences: cfg.Identity.GoogleAudiences,
+			JWKSURL:   idp.GoogleJWKSURL,
+		}, client)
+		if err != nil {
+			return nil, nil, err
+		}
+		verifiers["google"] = v
+	}
+
+	var githubClient *idp.GitHubClient
+	if cfg.Identity.GitHubEnabled {
+		gc, err := idp.NewGitHubClient(idp.GitHubConfig{
+			ClientID:          cfg.Identity.GitHubClientID,
+			ClientSecret:      cfg.Identity.GitHubClientSecret,
+			RedirectURI:       cfg.Identity.GitHubRedirectURI,
+			AppCallbackScheme: cfg.Identity.AppCallbackScheme,
+		}, client)
+		if err != nil {
+			return nil, nil, err
+		}
+		githubClient = gc
+	}
+
+	return verifiers, githubClient, nil
 }
 
 func shutdown(ctx context.Context, servers []*http.Server, timeout time.Duration, logger *slog.Logger) {

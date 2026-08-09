@@ -74,10 +74,11 @@ type Config struct {
 	// optional CIDR allowlist alone.
 	IngestListenAddr string
 
-	TLS    TLSConfig
-	Ingest IngestConfig
-	Device DeviceConfig
-	Limits LimitsConfig
+	TLS      TLSConfig
+	Ingest   IngestConfig
+	Device   DeviceConfig
+	Identity IdentityConfig
+	Limits   LimitsConfig
 
 	// StateDir holds the device registry. Created with 0700 if absent.
 	StateDir string
@@ -125,6 +126,51 @@ type IngestConfig struct {
 	// AllowedCIDRs optionally restricts which peers may reach the ingest plane
 	// at all. Empty means no network restriction — authentication still applies.
 	AllowedCIDRs []*net.IPNet
+}
+
+// IdentityConfig covers the federated-login side of the mobile plane.
+//
+// Each provider is off until it is configured. A relay with no provider and no
+// enrollment codes cannot bind any device at all, which config validation
+// treats as an error rather than a curiosity.
+type IdentityConfig struct {
+	// AppleEnabled and AppleAudiences: the audience is the iOS bundle
+	// identifier (or the Service ID for a web flow). Checking it is what stops
+	// an Apple ID token minted for a *different* app being accepted here.
+	AppleEnabled   bool
+	AppleAudiences []string
+
+	// GoogleEnabled and GoogleAudiences: the audience is the OAuth client id.
+	GoogleEnabled   bool
+	GoogleAudiences []string
+
+	// GitHub runs as a confidential OAuth client: the secret stays here and
+	// never reaches the device.
+	GitHubEnabled      bool
+	GitHubClientID     string
+	GitHubClientSecret string
+	GitHubRedirectURI  string
+
+	// AppCallbackScheme is the app's custom URL scheme, used to hand the
+	// browser session back after the GitHub round trip.
+	AppCallbackScheme string
+
+	// EnrollmentCodesEnabled allows the typed-code path to be switched off in a
+	// deployment that wants federated login only.
+	EnrollmentCodesEnabled bool
+
+	// PrivilegedRoles are the secman roles that may only be bound through a
+	// strong provider. StrongProviders is that list.
+	//
+	// The default is the deployment rule this relay was built for: an ADMIN
+	// account signs in with Apple or Google, never with GitHub and never with a
+	// typed enrollment code. Both are re-checked on every token issue, so
+	// promoting a user to ADMIN immediately invalidates a weakly-bound device.
+	PrivilegedRoles []string
+	StrongProviders []string
+
+	// LoginTimeout bounds each outbound call to a provider.
+	LoginTimeout time.Duration
 }
 
 // DeviceConfig covers the mobile-app side.
@@ -203,6 +249,22 @@ func Load(getenv Getenv) (*Config, error) {
 		MaxDevices:      e.integer("RELAY_MAX_DEVICES", 500),
 	}
 
+	cfg.Identity = IdentityConfig{
+		AppleEnabled:           e.boolean("RELAY_APPLE_ENABLED", false),
+		AppleAudiences:         splitList(e.str("RELAY_APPLE_AUDIENCES", "")),
+		GoogleEnabled:          e.boolean("RELAY_GOOGLE_ENABLED", false),
+		GoogleAudiences:        splitList(e.str("RELAY_GOOGLE_AUDIENCES", "")),
+		GitHubEnabled:          e.boolean("RELAY_GITHUB_ENABLED", false),
+		GitHubClientID:         e.str("RELAY_GITHUB_CLIENT_ID", ""),
+		GitHubClientSecret:     e.str("RELAY_GITHUB_CLIENT_SECRET", ""),
+		GitHubRedirectURI:      e.str("RELAY_GITHUB_REDIRECT_URI", ""),
+		AppCallbackScheme:      e.str("RELAY_APP_CALLBACK_SCHEME", "secman-relay"),
+		EnrollmentCodesEnabled: e.boolean("RELAY_ENROLLMENT_CODES_ENABLED", true),
+		PrivilegedRoles:        splitList(e.str("RELAY_PRIVILEGED_ROLES", "ADMIN")),
+		StrongProviders:        splitList(e.str("RELAY_STRONG_PROVIDERS", "apple,google")),
+		LoginTimeout:           e.duration("RELAY_LOGIN_TIMEOUT", 15*time.Second),
+	}
+
 	cfg.Limits = LimitsConfig{
 		MaxBodyBytes:    int64(e.integer("RELAY_MAX_BODY_BYTES", 4<<20)),
 		RateLimitRPS:    e.float("RELAY_RATE_LIMIT_RPS", 5),
@@ -240,6 +302,7 @@ func (c *Config) validate() error {
 	}
 
 	errs = append(errs, c.validateTLS()...)
+	errs = append(errs, c.validateIdentity()...)
 
 	if err := validateSecret("RELAY_INGEST_TOKEN", c.Ingest.Token); err != nil {
 		errs = append(errs, err)
@@ -298,6 +361,64 @@ func (c *Config) validate() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+func (c *Config) validateIdentity() []error {
+	var errs []error
+	id := c.Identity
+
+	if id.AppleEnabled && len(id.AppleAudiences) == 0 {
+		errs = append(errs, errors.New("RELAY_APPLE_AUDIENCES must list the app's bundle identifier when RELAY_APPLE_ENABLED=true"))
+	}
+	if id.GoogleEnabled && len(id.GoogleAudiences) == 0 {
+		errs = append(errs, errors.New("RELAY_GOOGLE_AUDIENCES must list the OAuth client id when RELAY_GOOGLE_ENABLED=true"))
+	}
+	if id.GitHubEnabled {
+		if id.GitHubClientID == "" || id.GitHubClientSecret == "" {
+			errs = append(errs, errors.New("RELAY_GITHUB_CLIENT_ID and RELAY_GITHUB_CLIENT_SECRET are required when RELAY_GITHUB_ENABLED=true"))
+		}
+		if id.GitHubRedirectURI == "" {
+			errs = append(errs, errors.New("RELAY_GITHUB_REDIRECT_URI is required when RELAY_GITHUB_ENABLED=true"))
+		}
+	}
+
+	// A relay that can bind nothing is misconfigured, not minimal.
+	if !id.AppleEnabled && !id.GoogleEnabled && !id.GitHubEnabled && !id.EnrollmentCodesEnabled {
+		errs = append(errs, errors.New(
+			"no way to bind a device: enable at least one of RELAY_APPLE_ENABLED, RELAY_GOOGLE_ENABLED, RELAY_GITHUB_ENABLED or RELAY_ENROLLMENT_CODES_ENABLED"))
+	}
+
+	for _, r := range id.PrivilegedRoles {
+		if r == "" {
+			errs = append(errs, errors.New("RELAY_PRIVILEGED_ROLES contains an empty entry"))
+		}
+	}
+	for _, p := range id.StrongProviders {
+		switch p {
+		case "apple", "google", "github":
+		default:
+			errs = append(errs, fmt.Errorf("RELAY_STRONG_PROVIDERS contains an unknown provider %q", sanitizeForError(p)))
+		}
+	}
+	// If privileged roles exist, at least one strong provider must actually be
+	// enabled — otherwise an admin can never sign in and the failure looks like
+	// a bug in the app.
+	if len(id.PrivilegedRoles) > 0 {
+		reachable := false
+		for _, p := range id.StrongProviders {
+			if (p == "apple" && id.AppleEnabled) || (p == "google" && id.GoogleEnabled) || (p == "github" && id.GitHubEnabled) {
+				reachable = true
+			}
+		}
+		if !reachable {
+			errs = append(errs, errors.New(
+				"RELAY_PRIVILEGED_ROLES is set but none of RELAY_STRONG_PROVIDERS is enabled; a privileged user would have no way to sign in"))
+		}
+	}
+	if id.LoginTimeout <= 0 || id.LoginTimeout > time.Minute {
+		errs = append(errs, errors.New("RELAY_LOGIN_TIMEOUT must be > 0 and <= 1m"))
+	}
+	return errs
 }
 
 func (c *Config) validateTLS() []error {
@@ -368,7 +489,15 @@ func (c *Config) Redacted() map[string]any {
 		"rateLimitRPS":       c.Limits.RateLimitRPS,
 		"maxDevices":         c.Device.MaxDevices,
 		"logLevel":           c.LogLevel,
+		"appleEnabled":       c.Identity.AppleEnabled,
+		"googleEnabled":      c.Identity.GoogleEnabled,
+		"githubEnabled":      c.Identity.GitHubEnabled,
+		"enrollmentCodes":    c.Identity.EnrollmentCodesEnabled,
+		"privilegedRoles":    c.Identity.PrivilegedRoles,
+		"strongProviders":    c.Identity.StrongProviders,
+		"appCallbackScheme":  c.Identity.AppCallbackScheme,
 		"ingestToken":        "***",
+		"githubClientSecret": "***",
 		"ingestHmacKey":      "***",
 		"tokenSigningKey":    "***",
 	}

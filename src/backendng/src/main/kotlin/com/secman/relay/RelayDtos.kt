@@ -13,10 +13,10 @@ import io.micronaut.serde.annotation.Serdeable
  */
 
 /** Envelope version understood by the relay. Bump on a breaking change. */
-const val RELAY_SNAPSHOT_SCHEMA_VERSION = 1
+const val RELAY_SNAPSHOT_SCHEMA_VERSION = 2
 
 /** Envelope version of the control document. */
-const val RELAY_CONTROL_SCHEMA_VERSION = 1
+const val RELAY_CONTROL_SCHEMA_VERSION = 2
 
 /**
  * The pushed status snapshot.
@@ -24,31 +24,77 @@ const val RELAY_CONTROL_SCHEMA_VERSION = 1
  * [sections] is deliberately `Map<String, Any>`: the relay treats a section as
  * opaque JSON and re-serves it byte for byte, so adding a widget to the mobile
  * app never requires a relay release.
+ *
+ * [policy] is the part the relay *does* read. It carries, per section, the same
+ * roles the secman controller that produced the data demands in its `@Secured`
+ * annotation. That is what makes the phone show exactly what the web UI would:
+ * secman states the rule, the relay enforces it, and neither invents one.
  */
 @Serdeable
 data class RelaySnapshot(
     val schemaVersion: Int = RELAY_SNAPSHOT_SCHEMA_VERSION,
     val instanceId: String,
     val generatedAt: String,
-    val sections: Map<String, Any>
+    val sections: Map<String, Any>,
+    val policy: Map<String, RelaySectionPolicy>
+)
+
+/** The role gate for one section. Any-of semantics, exactly like `@Secured`. */
+@Serdeable
+data class RelaySectionPolicy(
+    val requiredRoles: List<String>,
+    val description: String? = null
 )
 
 /**
- * The pushed authorisation document: enrollment grants and revocations.
- * Additive — the relay unions it with what it already holds and never
- * un-revokes a device because a later push omitted it.
+ * The pushed authorisation document.
+ *
+ * The three parts have deliberately different merge semantics on the relay:
+ *
+ *  - [principals] are replaced wholesale when [principalsAuthoritative] is set,
+ *    because roles must be able to *shrink* — a user demoted in secman has to
+ *    lose the matching sections on their phone.
+ *  - [enrollments] are additive and expire on their own.
+ *  - [revocations] are additive and permanent; omitting one never undoes it.
  */
 @Serdeable
 data class RelayControl(
     val schemaVersion: Int = RELAY_CONTROL_SCHEMA_VERSION,
     val instanceId: String,
     val issuedAt: String,
+    val principalsAuthoritative: Boolean = false,
+    val principals: List<RelayPrincipal> = emptyList(),
     val enrollments: List<RelayEnrollmentGrant> = emptyList(),
     val revocations: List<RelayRevocation> = emptyList()
 )
 
 /**
- * Authorisation for exactly one device enrollment.
+ * A secman user as the relay sees them: a stable subject, the roles secman says
+ * they hold right now, and the external logins that map to them.
+ *
+ * No credential of any kind travels here. The relay cannot authenticate anyone
+ * from this record — it can only decide, once a provider has proved an identity,
+ * whether that identity corresponds to a secman user and what that user may see.
+ */
+@Serdeable
+data class RelayPrincipal(
+    val subject: String,
+    val displayName: String? = null,
+    val roles: List<String>,
+    val identities: List<RelayExternalIdentity> = emptyList(),
+    val disabled: Boolean = false
+)
+
+/** One external login bound to a principal. */
+@Serdeable
+data class RelayExternalIdentity(
+    val provider: String,
+    val subject: String,
+    val label: String? = null
+)
+
+/**
+ * Authorisation for exactly one device enrollment by code.
  *
  * Only the SHA-256 of the code travels. secman shows the plaintext to the admin
  * once and never stores it, so neither a relay compromise nor a secman database
@@ -77,7 +123,7 @@ data class RelayRevocation(
 /** Body of `POST /api/relay/enrollments`. */
 @Serdeable
 data class CreateRelayEnrollmentRequest(
-    /** Who the code is for. Recorded on the relay for audit; not a credential. */
+    /** The secman username the code enrols a device for. */
     val subject: String,
     /** Sections the device may read: `status:*` or `status:<section>`. */
     val scopes: List<String> = listOf("status:*"),
@@ -109,6 +155,33 @@ data class CreateRelayRevocationRequest(
     val reason: String? = null
 )
 
+/** Body of `POST /api/relay/identities`. */
+@Serdeable
+data class CreateRelayIdentityRequest(
+    /** secman username to bind the external account to. */
+    val username: String,
+    /** `apple`, `google` or `github`. */
+    val provider: String,
+    /**
+     * The provider's stable account identifier — Apple's / Google's `sub`, or
+     * GitHub's numeric account id. Never an email or a login name.
+     */
+    val providerSubject: String,
+    val label: String? = null
+)
+
+/** One row of `GET /api/relay/identities`. */
+@Serdeable
+data class RelayIdentityResponse(
+    val id: Long,
+    val username: String,
+    val provider: String,
+    val providerSubject: String,
+    val label: String?,
+    val createdAt: String,
+    val createdBy: String?
+)
+
 /** Local publisher state, plus whatever the relay reported on the last poll. */
 @Serdeable
 data class RelayStatusResponse(
@@ -122,6 +195,8 @@ data class RelayStatusResponse(
     val consecutiveFailures: Int = 0,
     val pushesAttempted: Long = 0,
     val pushesSucceeded: Long = 0,
+    val principalsPublished: Int = 0,
+    val lastPrincipalPushAt: String? = null,
     /** Raw body of the relay's `GET /ingest/v1/status`, or null if unreachable. */
     val relay: Map<String, Any>? = null,
     val relayError: String? = null

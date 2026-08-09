@@ -135,7 +135,7 @@ func (h *Handler) handleControl(w http.ResponseWriter, r *http.Request, body []b
 		return
 	}
 
-	added, revoked, err := h.Devices.ApplyControl(&ctrl, now)
+	applied, err := h.Devices.ApplyControl(&ctrl, now)
 	if err != nil {
 		h.Logger.Error("applying control document failed",
 			"requestId", httpx.RequestIDFrom(r.Context()),
@@ -148,23 +148,31 @@ func (h *Handler) handleControl(w http.ResponseWriter, r *http.Request, body []b
 		"requestId", httpx.RequestIDFrom(r.Context()),
 		"peer", httpx.ClientIPFrom(r.Context()),
 		"instanceId", logging.Sanitize(ctrl.InstanceID),
-		"enrollmentsAdded", added,
-		"devicesRevoked", revoked,
+		"principalsUpdated", applied.PrincipalsUpdated,
+		"principalsDisabled", applied.PrincipalsDisabled,
+		"enrollmentsAdded", applied.EnrollmentsAdded,
+		"devicesRevoked", applied.DevicesRevoked,
+		"authoritative", ctrl.PrincipalsAuthoritative,
 		"outcome", "accepted")
 
 	httpx.WriteJSON(w, r, http.StatusOK, map[string]any{
-		"enrollmentsAdded":   added,
-		"devicesRevoked":     revoked,
+		"principalsUpdated":  applied.PrincipalsUpdated,
+		"principalsDisabled": applied.PrincipalsDisabled,
+		"enrollmentsAdded":   applied.EnrollmentsAdded,
+		"devicesRevoked":     applied.DevicesRevoked,
 		"pendingEnrollments": h.Devices.PendingEnrollments(now),
 	})
 }
 
 func (h *Handler) handleDevices(w http.ResponseWriter, r *http.Request, _ []byte) {
+	now := h.now()
 	list := h.Devices.List()
+	_, principals, pending := h.Devices.Counts(now)
 	httpx.WriteJSON(w, r, http.StatusOK, map[string]any{
 		"devices":            list,
 		"count":              len(list),
-		"pendingEnrollments": h.Devices.PendingEnrollments(h.now()),
+		"principals":         principals,
+		"pendingEnrollments": pending,
 	})
 }
 
@@ -174,12 +182,14 @@ func (h *Handler) handleStatus(w http.ResponseWriter, r *http.Request, _ []byte)
 	now := h.now()
 	accepted, rejected, has := h.Store.Stats()
 
+	deviceCount, principalCount, pending := h.Devices.Counts(now)
 	body := map[string]any{
 		"hasSnapshot":        has,
 		"pushesAccepted":     accepted,
 		"pushesRejected":     rejected,
-		"devices":            len(h.Devices.List()),
-		"pendingEnrollments": h.Devices.PendingEnrollments(now),
+		"devices":            deviceCount,
+		"principals":         principalCount,
+		"pendingEnrollments": pending,
 		"serverTime":         now.UTC(),
 	}
 	if meta, err := h.Store.Metadata(now, 0); err == nil {

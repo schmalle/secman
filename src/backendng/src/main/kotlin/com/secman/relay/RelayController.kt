@@ -1,10 +1,15 @@
 package com.secman.relay
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.secman.domain.RelayIdentity
+import com.secman.repository.RelayIdentityRepository
+import com.secman.repository.UserRepository
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.annotation.Body
 import io.micronaut.http.annotation.Controller
+import io.micronaut.http.annotation.Delete
 import io.micronaut.http.annotation.Get
+import io.micronaut.http.annotation.PathVariable
 import io.micronaut.http.annotation.Post
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
@@ -32,6 +37,9 @@ open class RelayController(
     private val properties: RelayProperties,
     private val publisher: RelayPublisher,
     private val enrollmentService: RelayEnrollmentService,
+    private val principalService: RelayPrincipalService,
+    private val relayIdentityRepository: RelayIdentityRepository,
+    private val userRepository: UserRepository,
     private val client: RelayClient,
     private val objectMapper: ObjectMapper
 ) {
@@ -161,6 +169,122 @@ open class RelayController(
     }
 
     /**
+     * GET /api/relay/identities
+     *
+     * The external accounts linked to secman users for mobile sign-in.
+     * Read-only inventory: nothing here is a credential.
+     */
+    @Get("/identities")
+    open fun listIdentities(): HttpResponse<*> {
+        val usernamesById = userRepository.findAll().mapNotNull { u -> u.id?.let { it to u.username } }.toMap()
+        val rows = relayIdentityRepository.findAll().map { identity ->
+            RelayIdentityResponse(
+                id = identity.id ?: 0,
+                username = usernamesById[identity.userId] ?: "(deleted user #${identity.userId})",
+                provider = identity.provider,
+                providerSubject = identity.providerSubject,
+                label = identity.label,
+                createdAt = RelaySnapshotBuilder.rfc3339(identity.createdAt),
+                createdBy = identity.createdBy
+            )
+        }.sortedBy { it.username }
+        return HttpResponse.ok(mapOf("identities" to rows, "count" to rows.size))
+    }
+
+    /**
+     * POST /api/relay/identities
+     *
+     * Links an Apple / Google / GitHub account to a secman user so that person
+     * can sign in on the app. This is the *only* way a device is authorised
+     * without a typed code, and it is deliberately an ADMIN action: signing in
+     * with Apple proves who somebody is, but only this mapping decides whether
+     * they may see anything.
+     *
+     * The link is pushed to the relay immediately, so it takes effect on the
+     * user's next sign-in rather than at the next scheduled tick.
+     */
+    @Post("/identities")
+    open fun createIdentity(
+        @Body request: CreateRelayIdentityRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        val userId = try {
+            principalService.validateLink(request)
+        } catch (e: IllegalArgumentException) {
+            return HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid identity link")))
+        }
+
+        val label = request.label?.trim()?.take(128)?.takeIf { it.isNotEmpty() && it.none(Char::isISOControl) }
+        val saved = relayIdentityRepository.save(
+            RelayIdentity(
+                userId = userId,
+                provider = principalService.normalizeProvider(request.provider),
+                providerSubject = request.providerSubject.trim(),
+                label = label,
+                createdBy = authentication.name
+            )
+        )
+
+        logger.info(
+            "Relay identity linked: actor={} username={} provider={} outcome=linked",
+            sanitizeForLog(authentication.name), sanitizeForLog(request.username), sanitizeForLog(saved.provider)
+        )
+        // Push straight away; a link the relay has not heard about is a login
+        // that mysteriously fails.
+        val pushError = publisher.publishPrincipalsIfDue(force = true)
+
+        return HttpResponse.created(
+            mapOf(
+                "id" to (saved.id ?: 0),
+                "username" to request.username.trim(),
+                "provider" to saved.provider,
+                "providerSubject" to saved.providerSubject,
+                "relayPushError" to pushError
+            )
+        )
+    }
+
+    /**
+     * DELETE /api/relay/identities/{id}
+     *
+     * Unlinks an external account. Devices already bound through it keep
+     * working until the principal push lands, which happens immediately below —
+     * and any device whose principal no longer resolves is refused from that
+     * moment on.
+     */
+    @Delete("/identities/{id}")
+    open fun deleteIdentity(@PathVariable id: Long, authentication: Authentication): HttpResponse<*> {
+        val identity = relayIdentityRepository.findById(id).orElse(null)
+            ?: return HttpResponse.notFound(mapOf("error" to "No such identity link"))
+
+        relayIdentityRepository.delete(identity)
+        logger.info(
+            "Relay identity unlinked: actor={} identityId={} provider={} outcome=unlinked",
+            sanitizeForLog(authentication.name), id, sanitizeForLog(identity.provider)
+        )
+        val pushError = publisher.publishPrincipalsIfDue(force = true)
+        return HttpResponse.ok(mapOf("deleted" to true, "relayPushError" to pushError))
+    }
+
+    /**
+     * POST /api/relay/principals/publish
+     *
+     * Forces the authorization state (users, roles, linked identities) to the
+     * relay. Normally automatic; useful after a bulk role change or when a
+     * relay has been rebuilt from scratch.
+     */
+    @Post("/principals/publish")
+    open fun publishPrincipals(authentication: Authentication): HttpResponse<*> {
+        val error = publisher.publishPrincipalsIfDue(force = true)
+        return if (error == null) {
+            logger.info("Relay principals published manually: actor={}", sanitizeForLog(authentication.name))
+            HttpResponse.ok(mapOf("published" to true))
+        } else {
+            HttpResponse.serverError(mapOf("published" to false, "error" to error))
+        }
+    }
+
+    /**
      * GET /api/relay/sections
      *
      * The section names this build can publish, so an admin composing a scope
@@ -170,7 +294,10 @@ open class RelayController(
     open fun sections(): HttpResponse<Map<String, Any>> = HttpResponse.ok(
         mapOf(
             "available" to RelaySnapshotBuilder.ALL_SECTIONS,
-            "published" to properties.sections
+            "published" to properties.sections,
+            // The role gate each section carries, so an admin can see at a
+            // glance which of their users will be able to see what.
+            "policy" to RelaySnapshotBuilder.SECTION_POLICIES.mapValues { it.value.requiredRoles }
         )
     )
 }

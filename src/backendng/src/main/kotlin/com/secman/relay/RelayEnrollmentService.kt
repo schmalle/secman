@@ -1,5 +1,7 @@
 package com.secman.relay
 
+import com.secman.domain.RelayIdentity
+import com.secman.repository.UserRepository
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 import java.security.MessageDigest
@@ -27,7 +29,9 @@ import java.time.temporal.ChronoUnit
 @Singleton
 open class RelayEnrollmentService(
     private val properties: RelayProperties,
-    private val publisher: RelayPublisher
+    private val publisher: RelayPublisher,
+    private val principalService: RelayPrincipalService,
+    private val userRepository: UserRepository
 ) {
     private val logger = LoggerFactory.getLogger(RelayEnrollmentService::class.java)
     private val random = SecureRandom()
@@ -73,9 +77,17 @@ open class RelayEnrollmentService(
         val code = generateCode()
         val expiresAt = Instant.now().plus(ttlMinutes, ChronoUnit.MINUTES)
 
+        // The grant names a principal; the relay refuses one it does not know.
+        // Publishing the principal list in the same document (with the new
+        // subject forced in, even if they have no linked identity yet) removes
+        // an ordering hazard that would otherwise reject every first code.
+        val principals = principalService.buildPrincipals(extraSubjects = setOf(subject))
+
         val control = RelayControl(
             instanceId = properties.instanceId,
             issuedAt = RelaySnapshotBuilder.rfc3339(Instant.now()),
+            principalsAuthoritative = principals.isNotEmpty(),
+            principals = principals,
             enrollments = listOf(
                 RelayEnrollmentGrant(
                     codeSha256 = sha256Hex(code),
@@ -174,6 +186,18 @@ open class RelayEnrollmentService(
         return out.toString()
     }
 
+    /**
+     * Validates the enrollment subject.
+     *
+     * Two checks beyond syntax, both of which would otherwise surface as an
+     * opaque 403 in the app rather than as an answerable error here:
+     *
+     *  - the subject must be a real secman user, because the relay resolves the
+     *    grant against the principal list and refuses an unknown one;
+     *  - the user must not hold a privileged role, because an admin may only be
+     *    bound through a strong identity provider. The relay enforces that
+     *    independently; this copy exists so the admin is told at issue time.
+     */
     private fun validateSubject(raw: String): String {
         val subject = raw.trim()
         if (subject.isEmpty()) throw IllegalArgumentException("subject is required")
@@ -185,6 +209,15 @@ open class RelayEnrollmentService(
         // record in any of the three.
         if (subject.any { it.isISOControl() }) {
             throw IllegalArgumentException("subject must not contain control characters")
+        }
+
+        val user = userRepository.findByUsername(subject).orElse(null)
+            ?: throw IllegalArgumentException("No secman user named '${sanitizeForLog(subject)}'")
+        if (user.roles.any { it.name == "ADMIN" }) {
+            throw IllegalArgumentException(
+                "'${sanitizeForLog(subject)}' holds ADMIN and may only sign in with " +
+                    "${RelayIdentity.Provider.STRONG.sorted()}; an enrollment code will be refused by the relay"
+            )
         }
         return subject
     }

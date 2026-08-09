@@ -63,6 +63,53 @@ open class RelaySnapshotBuilder(
             SECTION_TOP_SERVERS
         )
 
+        /**
+         * The role gate for each section, and the single most important table
+         * in this file.
+         *
+         * Each entry mirrors the `@Secured` annotation on the secman controller
+         * the data comes from, so a user sees on their phone exactly the
+         * sections they could open in the web UI — no more, and no less:
+         *
+         *  - [SECTION_KPIS]       DashboardController        @Secured("ADMIN","SECCHAMPION")
+         *  - [SECTION_EXCEPTIONS] VulnerabilityExceptionRequestController
+         *                         .getPendingCount           @Secured("ADMIN","SECCHAMPION")
+         *  - [SECTION_IMPORTS]    CrowdStrikeController      ADMIN/VULN
+         *  - the remaining three are the admin summary, which is ADMIN-only.
+         *
+         * **When you change a controller's `@Secured`, change the matching row
+         * here.** Nothing in the build can catch the drift: the relay will
+         * happily enforce whatever it is told, and the result is a phone
+         * showing data the web UI would refuse. `RelaySnapshotBuilderTest`
+         * pins the pairs that exist today.
+         */
+        val SECTION_POLICIES: Map<String, RelaySectionPolicy> = mapOf(
+            SECTION_TOTALS to RelaySectionPolicy(
+                requiredRoles = listOf("ADMIN"),
+                description = "Asset, vulnerability and user counts"
+            ),
+            SECTION_KPIS to RelaySectionPolicy(
+                requiredRoles = listOf("ADMIN", "SECCHAMPION"),
+                description = "AWS clean-server and EDR coverage KPIs"
+            ),
+            SECTION_EXCEPTIONS to RelaySectionPolicy(
+                requiredRoles = listOf("ADMIN", "SECCHAMPION"),
+                description = "Vulnerability exception requests awaiting review"
+            ),
+            SECTION_IMPORTS to RelaySectionPolicy(
+                requiredRoles = listOf("ADMIN", "VULN"),
+                description = "Freshness of the last CrowdStrike import"
+            ),
+            SECTION_TOP_PRODUCTS to RelaySectionPolicy(
+                requiredRoles = listOf("ADMIN"),
+                description = "Products with the most vulnerabilities"
+            ),
+            SECTION_TOP_SERVERS to RelaySectionPolicy(
+                requiredRoles = listOf("ADMIN"),
+                description = "Servers with the most vulnerabilities"
+            )
+        )
+
         /** Renders an instant as the RFC 3339 UTC string the relay parses. */
         fun rfc3339(instant: Instant): String = DateTimeFormatter.ISO_INSTANT.format(instant)
 
@@ -107,10 +154,19 @@ open class RelaySnapshotBuilder(
             throw IllegalStateException("No relay snapshot section could be built; check secman.relay.sections")
         }
 
+        // Every section must carry a policy or the relay refuses the whole
+        // push. That is the desired failure: a section nobody can read looks
+        // exactly like a broken app, and this way it surfaces here instead.
+        val policy = built.keys.associateWith { name ->
+            SECTION_POLICIES[name]
+                ?: throw IllegalStateException("Relay section '$name' has no role policy in SECTION_POLICIES")
+        }
+
         return RelaySnapshot(
             instanceId = instanceId,
             generatedAt = rfc3339(Instant.now()),
-            sections = built
+            sections = built,
+            policy = policy
         )
     }
 

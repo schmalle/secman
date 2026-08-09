@@ -140,3 +140,37 @@ func VerifyDeviceSignature(pub *ecdsa.PublicKey, deviceID, nonce, signatureB64 s
 	}
 	return nil
 }
+
+// deviceBindingContext separates a binding signature from the per-session
+// authentication signature above. Two purposes, two prefixes: a signature
+// produced for one must never be replayable as the other.
+const deviceBindingContext = "secman-relay-device-bind-v1"
+
+// DeviceBindingInput is the byte string a device signs when it binds itself to
+// a principal, proving it holds the private half of the key it is registering.
+//
+// Without this, an attacker who captured a login nonce and an identity token
+// could register a key they do not control — or, worse, someone else's public
+// key, silently attaching their own session to another person's device record.
+func DeviceBindingInput(nonce, keyFingerprint string) []byte {
+	return []byte(deviceBindingContext + "|" + nonce + "|" + keyFingerprint)
+}
+
+// VerifyBindingSignature checks the proof of possession offered at binding.
+func VerifyBindingSignature(pub *ecdsa.PublicKey, nonce, keyFingerprint, signatureB64 string) error {
+	if pub == nil {
+		return ErrChallenge
+	}
+	if len(signatureB64) > 512 {
+		return ErrChallenge
+	}
+	sig, err := base64.StdEncoding.DecodeString(signatureB64)
+	if err != nil {
+		return ErrChallenge
+	}
+	digest := sha256.Sum256(DeviceBindingInput(nonce, keyFingerprint))
+	if !ecdsa.VerifyASN1(pub, digest[:], sig) {
+		return ErrChallenge
+	}
+	return nil
+}

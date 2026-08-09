@@ -80,6 +80,36 @@ type Meta struct {
 	Sections      []string  `json:"sections"`
 }
 
+// VisibleSections lists the section names the caller may read. Used by the
+// metadata endpoint so the listing does not become a map of everything the
+// relay holds.
+func (s *Store) VisibleSections(roles, scopes []string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.snapshot == nil {
+		return nil
+	}
+	out := make([]string, 0, len(s.snapshot.Sections))
+	for _, name := range s.snapshot.SectionNames() {
+		if model.CanRead(s.snapshot.Policy[name], roles, scopes, name) {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// Policy returns the role gate declared for a section, and whether one exists.
+func (s *Store) Policy(name string) (model.SectionPolicy, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.snapshot == nil {
+		return model.SectionPolicy{}, false
+	}
+	p, ok := s.snapshot.Policy[name]
+	return p, ok
+}
+
 // Metadata returns the envelope facts. It never returns ErrStale: a client that
 // asks "how old is the data" must get an answer even when the answer is "too
 // old".
@@ -102,36 +132,48 @@ func (s *Store) Metadata(now time.Time, maxAge time.Duration) (Meta, error) {
 	}, nil
 }
 
-// Section returns one section's raw JSON.
+// Section returns one section's raw JSON if `roles` and `scopes` both permit it.
 //
-// A stale snapshot is still returned, together with ErrStale, so the caller can
-// decide: the mobile API serves it with an explicit `stale: true` marker rather
-// than hiding it, because "the last known state, clearly labelled as N minutes
-// old" is more useful to an on-call admin than an empty screen — and far less
-// likely to be misread than silently stale data.
-func (s *Store) Section(name string, now time.Time, maxAge time.Duration) (json.RawMessage, bool, error) {
+// `allowed` is false when the caller may not read the section, and is reported
+// identically whether the section is out of policy, out of scope, or simply
+// absent — the caller turns all three into the same 403, so the authorization
+// boundary is not a discovery tool.
+//
+// A stale snapshot is still returned, together with ErrStale: the mobile API
+// serves it with an explicit `stale: true` marker rather than hiding it,
+// because "the last known state, clearly labelled as N minutes old" is more
+// useful to an on-call admin than an empty screen — and, unlike silently stale
+// data, cannot be mistaken for "all clear right now".
+func (s *Store) Section(name string, roles, scopes []string, now time.Time, maxAge time.Duration) (raw json.RawMessage, allowed bool, err error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	if s.snapshot == nil {
 		return nil, false, ErrEmpty
 	}
-	raw, ok := s.snapshot.Sections[name]
+	stored, ok := s.snapshot.Sections[name]
 	if !ok {
+		return nil, false, nil
+	}
+	if !model.CanRead(s.snapshot.Policy[name], roles, scopes, name) {
 		return nil, false, nil
 	}
 	stale := now.Sub(s.snapshot.GeneratedAt) > maxAge
 	// Copy: the caller must not be able to mutate the stored bytes.
-	out := make(json.RawMessage, len(raw))
-	copy(out, raw)
+	out := make(json.RawMessage, len(stored))
+	copy(out, stored)
 	if stale {
 		return out, true, ErrStale
 	}
 	return out, true, nil
 }
 
-// Sections returns every section the caller's scopes permit, plus the metadata.
-func (s *Store) Sections(scopes []string, now time.Time, maxAge time.Duration) (Meta, map[string]json.RawMessage, error) {
+// Sections returns every section the caller may read, plus the metadata.
+//
+// Both gates are applied here, in the one place the bytes are selected, rather
+// than by the handler: a filter that has to be remembered at the call site is a
+// filter that will eventually be forgotten at one.
+func (s *Store) Sections(roles, scopes []string, now time.Time, maxAge time.Duration) (Meta, map[string]json.RawMessage, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -139,14 +181,24 @@ func (s *Store) Sections(scopes []string, now time.Time, maxAge time.Duration) (
 		return Meta{}, nil, ErrEmpty
 	}
 	out := make(map[string]json.RawMessage, len(s.snapshot.Sections))
-	for name, raw := range s.snapshot.Sections {
-		if !model.ScopeAllows(scopes, name) {
+	for name, stored := range s.snapshot.Sections {
+		if !model.CanRead(s.snapshot.Policy[name], roles, scopes, name) {
 			continue
 		}
-		cp := make(json.RawMessage, len(raw))
-		copy(cp, raw)
+		cp := make(json.RawMessage, len(stored))
+		copy(cp, stored)
 		out[name] = cp
 	}
+	// Meta.Sections names only what this caller may read. Listing every
+	// section the relay holds would tell a low-privilege device exactly which
+	// data exists and that it is being kept from them.
+	visible := make([]string, 0, len(out))
+	for _, name := range s.snapshot.SectionNames() {
+		if _, ok := out[name]; ok {
+			visible = append(visible, name)
+		}
+	}
+
 	age := now.Sub(s.snapshot.GeneratedAt)
 	meta := Meta{
 		SchemaVersion: s.snapshot.SchemaVersion,
@@ -155,7 +207,7 @@ func (s *Store) Sections(scopes []string, now time.Time, maxAge time.Duration) (
 		ReceivedAt:    s.receivedAt,
 		AgeSeconds:    int64(age.Seconds()),
 		Stale:         age > maxAge,
-		Sections:      s.snapshot.SectionNames(),
+		Sections:      visible,
 	}
 	if meta.Stale {
 		return meta, out, ErrStale

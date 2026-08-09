@@ -13,6 +13,9 @@ func validSnapshot() *Snapshot {
 		InstanceID:    "secman-prod",
 		GeneratedAt:   time.Now(),
 		Sections:      map[string]json.RawMessage{"kpis": json.RawMessage(`{"a":1}`)},
+		Policy: map[string]SectionPolicy{
+			"kpis": {RequiredRoles: []string{"ADMIN", "SECCHAMPION"}},
+		},
 	}
 }
 
@@ -57,10 +60,47 @@ func TestSnapshotValidation(t *testing.T) {
 	t.Run("section flood rejected", func(t *testing.T) {
 		s := validSnapshot()
 		for i := 0; i < 100; i++ {
-			s.Sections[sectionName(i)] = json.RawMessage(`{}`)
+			name := sectionName(i)
+			s.Sections[name] = json.RawMessage(`{}`)
+			s.Policy[name] = SectionPolicy{RequiredRoles: []string{"ADMIN"}}
 		}
 		if err := s.Validate(now); err == nil {
 			t.Fatal("an unbounded number of sections must be refused")
+		}
+	})
+
+	// A section nobody can read looks exactly like a broken app. Refusing the
+	// push means secman finds out immediately instead of a user reporting it.
+	t.Run("section without a policy is refused", func(t *testing.T) {
+		s := validSnapshot()
+		s.Sections["orphan"] = json.RawMessage(`{}`)
+		if err := s.Validate(now); err == nil {
+			t.Fatal("a section with no policy entry must be refused")
+		}
+	})
+
+	t.Run("policy naming an absent section is refused", func(t *testing.T) {
+		s := validSnapshot()
+		s.Policy["ghost"] = SectionPolicy{RequiredRoles: []string{"ADMIN"}}
+		if err := s.Validate(now); err == nil {
+			t.Fatal("a policy entry for a section that is not present must be refused")
+		}
+	})
+
+	t.Run("policy with no roles is refused", func(t *testing.T) {
+		s := validSnapshot()
+		s.Policy["kpis"] = SectionPolicy{}
+		if err := s.Validate(now); err == nil {
+			t.Fatal("a section must declare at least one required role")
+		}
+	})
+
+	// A typo would otherwise produce a section that silently matches nobody.
+	t.Run("unknown role is refused", func(t *testing.T) {
+		s := validSnapshot()
+		s.Policy["kpis"] = SectionPolicy{RequiredRoles: []string{"ADMINISTRATOR"}}
+		if err := s.Validate(now); err == nil {
+			t.Fatal("a role outside secman's vocabulary must be refused")
 		}
 	})
 }
@@ -116,15 +156,62 @@ func TestScopeValidationAndMatching(t *testing.T) {
 	}
 }
 
+func TestRolesAllow(t *testing.T) {
+	policy := SectionPolicy{RequiredRoles: []string{"ADMIN", "SECCHAMPION"}}
+
+	if !RolesAllow(policy, []string{"SECCHAMPION"}) {
+		t.Error("holding one of the required roles should allow the section")
+	}
+	if !RolesAllow(policy, []string{"USER", "ADMIN"}) {
+		t.Error("any-of semantics: one match is enough")
+	}
+	if RolesAllow(policy, []string{"VULN"}) {
+		t.Error("a role the policy does not name must not allow the section")
+	}
+	// Deny by default in every direction.
+	if RolesAllow(policy, nil) {
+		t.Error("no roles must allow nothing")
+	}
+	if RolesAllow(SectionPolicy{}, []string{"ADMIN"}) {
+		t.Error("a policy with no roles must allow nobody, not everybody")
+	}
+}
+
+// CanRead is the only correct way to authorize a read: both gates, every time.
+func TestCanReadRequiresBothGates(t *testing.T) {
+	policy := SectionPolicy{RequiredRoles: []string{"ADMIN"}}
+
+	if !CanRead(policy, []string{"ADMIN"}, []string{ScopeAll}, "kpis") {
+		t.Error("role and scope both satisfied should allow")
+	}
+	if CanRead(policy, []string{"ADMIN"}, []string{"status:other"}, "kpis") {
+		t.Error("the scope gate must be able to deny what the role gate allows")
+	}
+	if CanRead(policy, []string{"USER"}, []string{ScopeAll}, "kpis") {
+		t.Error("the role gate must be able to deny what the scope gate allows")
+	}
+	if CanRead(SectionPolicy{}, []string{"ADMIN"}, []string{ScopeAll}, "kpis") {
+		t.Error("a missing policy must deny")
+	}
+}
+
 func TestControlValidation(t *testing.T) {
 	now := time.Now()
 	valid := &Control{
-		SchemaVersion: ControlSchemaVersion,
-		InstanceID:    "secman-prod",
-		IssuedAt:      now,
+		SchemaVersion:           ControlSchemaVersion,
+		InstanceID:              "secman-prod",
+		IssuedAt:                now,
+		PrincipalsAuthoritative: true,
+		Principals: []Principal{{
+			Subject: "markus",
+			Roles:   []string{"ADMIN"},
+			Identities: []ExternalIdentity{
+				{Provider: ProviderApple, Subject: "001234.abcdef"},
+			},
+		}},
 		Enrollments: []EnrollmentGrant{{
 			CodeSHA256: strings.Repeat("a", 64),
-			Subject:    "admin@example.com",
+			Subject:    "markus",
 			Scopes:     []string{ScopeAll},
 			ExpiresAt:  now.Add(time.Hour),
 		}},
@@ -168,6 +255,56 @@ func TestControlValidation(t *testing.T) {
 			t.Fatal("a revocation naming nothing must be rejected")
 		}
 	})
+
+	t.Run("unknown role on a principal is refused", func(t *testing.T) {
+		c := *valid
+		c.Principals = []Principal{{Subject: "markus", Roles: []string{"SUPERUSER"}}}
+		if err := c.Validate(now); err == nil {
+			t.Fatal("a role outside secman's vocabulary must be refused")
+		}
+	})
+
+	t.Run("unknown identity provider is refused", func(t *testing.T) {
+		c := *valid
+		c.Principals = []Principal{{
+			Subject:    "markus",
+			Roles:      []string{"ADMIN"},
+			Identities: []ExternalIdentity{{Provider: "facebook", Subject: "1"}},
+		}}
+		if err := c.Validate(now); err == nil {
+			t.Fatal("an unsupported identity provider must be refused")
+		}
+	})
+
+	t.Run("duplicate principals are refused", func(t *testing.T) {
+		c := *valid
+		c.Principals = []Principal{
+			{Subject: "markus", Roles: []string{"ADMIN"}},
+			{Subject: "markus", Roles: []string{"USER"}},
+		}
+		if err := c.Validate(now); err == nil {
+			t.Fatal("two records for one subject are ambiguous and must be refused")
+		}
+	})
+
+	// An authoritative push with an empty list would disable everyone at once.
+	// Almost certainly a bug on the pushing side, so say so out loud.
+	t.Run("authoritative push with no principals is refused", func(t *testing.T) {
+		c := *valid
+		c.Principals = nil
+		c.PrincipalsAuthoritative = true
+		if err := c.Validate(now); err == nil {
+			t.Fatal("an authoritative push carrying no principals must be refused")
+		}
+	})
+}
+
+func TestIdentityKeyIsProviderScoped(t *testing.T) {
+	// Two providers can legitimately issue the same subject string; the key
+	// must keep them apart or one provider could impersonate the other.
+	if IdentityKey(ProviderApple, "123") == IdentityKey(ProviderGitHub, "123") {
+		t.Fatal("identity keys must be scoped by provider")
+	}
 }
 
 func sectionName(i int) string {

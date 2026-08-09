@@ -16,6 +16,10 @@ func validEnv() map[string]string {
 		"RELAY_INGEST_TOKEN":      "ingest-token-that-is-long-enough-01",
 		"RELAY_INGEST_HMAC_KEY":   "ingest-hmac-key-that-is-long-enough",
 		"RELAY_TOKEN_SIGNING_KEY": "token-signing-key-that-is-long-enough",
+		// Apple is on because the default privileged-role rule (ADMIN needs a
+		// strong provider) requires at least one strong provider to exist.
+		"RELAY_APPLE_ENABLED":   "true",
+		"RELAY_APPLE_AUDIENCES": "com.example.secman",
 	}
 }
 
@@ -254,6 +258,98 @@ func TestIsBlockedIP(t *testing.T) {
 	}
 	if !IsBlockedIP(nil) {
 		t.Error("a nil address must be treated as blocked")
+	}
+}
+
+// The identity layer must fail closed in the ways that matter operationally.
+func TestIdentityValidation(t *testing.T) {
+	t.Run("a provider needs its audience", func(t *testing.T) {
+		env := validEnv()
+		delete(env, "RELAY_APPLE_AUDIENCES")
+		_, err := loadFrom(t, env)
+		if err == nil {
+			t.Fatal("a verifier with no audience would accept tokens minted for any app")
+		}
+		if !strings.Contains(err.Error(), "RELAY_APPLE_AUDIENCES") {
+			t.Errorf("error should name the variable: %v", err)
+		}
+	})
+
+	t.Run("github needs a client secret and a redirect", func(t *testing.T) {
+		env := validEnv()
+		env["RELAY_GITHUB_ENABLED"] = "true"
+		if _, err := loadFrom(t, env); err == nil {
+			t.Fatal("a confidential client with no secret should be rejected")
+		}
+
+		env["RELAY_GITHUB_CLIENT_ID"] = "id"
+		env["RELAY_GITHUB_CLIENT_SECRET"] = "secret"
+		env["RELAY_GITHUB_REDIRECT_URI"] = "https://relay.example.com/api/v1/auth/github/callback"
+		mustLoad(t, env)
+	})
+
+	// A relay that can bind nothing is misconfigured, not minimal.
+	t.Run("some way to bind a device is required", func(t *testing.T) {
+		env := validEnv()
+		env["RELAY_APPLE_ENABLED"] = "false"
+		delete(env, "RELAY_APPLE_AUDIENCES")
+		env["RELAY_ENROLLMENT_CODES_ENABLED"] = "false"
+		env["RELAY_PRIVILEGED_ROLES"] = ""
+		if _, err := loadFrom(t, env); err == nil {
+			t.Fatal("a relay with no binding method at all should be rejected")
+		}
+	})
+
+	// The rule the deployment asked for: an ADMIN signs in with Apple or
+	// Google. If neither is enabled, an admin could never sign in — and that
+	// failure would look like an app bug, so the relay refuses to start.
+	t.Run("a privileged role needs a reachable strong provider", func(t *testing.T) {
+		env := validEnv()
+		env["RELAY_APPLE_ENABLED"] = "false"
+		delete(env, "RELAY_APPLE_AUDIENCES")
+		_, err := loadFrom(t, env)
+		if err == nil {
+			t.Fatal("ADMIN with no strong provider enabled should be rejected")
+		}
+		if !strings.Contains(err.Error(), "RELAY_STRONG_PROVIDERS") {
+			t.Errorf("error should name the variable: %v", err)
+		}
+	})
+
+	t.Run("unknown strong provider rejected", func(t *testing.T) {
+		env := validEnv()
+		env["RELAY_STRONG_PROVIDERS"] = "apple,facebook"
+		if _, err := loadFrom(t, env); err == nil {
+			t.Fatal("an unknown provider name should be rejected")
+		}
+	})
+
+	t.Run("defaults match the deployment rule", func(t *testing.T) {
+		cfg := mustLoad(t, validEnv())
+		if len(cfg.Identity.PrivilegedRoles) != 1 || cfg.Identity.PrivilegedRoles[0] != "ADMIN" {
+			t.Errorf("privileged roles = %v, want [ADMIN]", cfg.Identity.PrivilegedRoles)
+		}
+		if len(cfg.Identity.StrongProviders) != 2 {
+			t.Errorf("strong providers = %v, want apple and google", cfg.Identity.StrongProviders)
+		}
+		if !cfg.Identity.EnrollmentCodesEnabled {
+			t.Error("enrollment codes should be available by default for non-privileged users")
+		}
+	})
+}
+
+func TestGitHubClientSecretIsRedacted(t *testing.T) {
+	env := validEnv()
+	env["RELAY_GITHUB_ENABLED"] = "true"
+	env["RELAY_GITHUB_CLIENT_ID"] = "id"
+	env["RELAY_GITHUB_CLIENT_SECRET"] = "a-very-secret-github-client-secret"
+	env["RELAY_GITHUB_REDIRECT_URI"] = "https://relay.example.com/cb"
+	cfg := mustLoad(t, env)
+
+	for key, value := range cfg.Redacted() {
+		if s, ok := value.(string); ok && strings.Contains(s, "a-very-secret-github-client-secret") {
+			t.Fatalf("Redacted()[%q] leaked the GitHub client secret", key)
+		}
 	}
 }
 
