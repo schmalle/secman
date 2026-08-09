@@ -144,6 +144,32 @@ EOF
 expect_silent A01-no-secured "secured controller using AssetFilterService"
 
 setup_repo
+plant src/backendng/src/main/kotlin/com/secman/controller/BadEndpoint.kt <<'EOF'
+package com.secman.controller
+
+@Endpoint(id = "memory")
+class BadEndpoint {
+    @Read
+    fun memory(): Map<String, Any> = mapOf("heap" to 1)
+}
+EOF
+expect_fires A01-endpoint-secured "management @Endpoint with no @Secured"
+expect_severity BLOCK A01-endpoint-secured "newly added unsecured management endpoint"
+
+setup_repo
+plant src/backendng/src/main/kotlin/com/secman/controller/GoodEndpoint.kt <<'EOF'
+package com.secman.controller
+
+@Endpoint(id = "memory")
+@Secured("ADMIN")
+class GoodEndpoint {
+    @Read
+    fun memory(): Map<String, Any> = mapOf("heap" to 1)
+}
+EOF
+expect_silent A01-endpoint-secured "management @Endpoint gated to ADMIN"
+
+setup_repo
 plant src/backendng/src/main/kotlin/com/secman/mcp/McpToolPermissions.kt <<'EOF'
 object McpToolPermissions {
     val LISTING = table(setOf(ASSETS_READ) to listOf("existing_tool"))

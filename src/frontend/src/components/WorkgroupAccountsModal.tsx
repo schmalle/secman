@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import { authenticatedGet, authenticatedPost, authenticatedDelete } from '../utils/auth';
+import { extractErrorMessage } from '../services/workgroupApi';
 
 interface WorkgroupAwsAccountDto {
   id: number;
@@ -34,14 +35,14 @@ export default function WorkgroupAccountsModal({
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('authToken');
-      const res = await axios.get<WorkgroupAwsAccountDto[]>(
-        `/api/workgroups/${workgroupId}/aws-accounts`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setAccounts(res.data);
-    } catch (e: any) {
-      setError(e.response?.data?.error ?? 'Failed to load accounts');
+      const res = await authenticatedGet(`/api/workgroups/${workgroupId}/aws-accounts`);
+      if (!res.ok) {
+        setError(await extractErrorMessage(res, 'Failed to load accounts'));
+        return;
+      }
+      setAccounts((await res.json()) as WorkgroupAwsAccountDto[]);
+    } catch {
+      setError('Failed to load accounts');
     } finally {
       setLoading(false);
     }
@@ -62,34 +63,36 @@ export default function WorkgroupAccountsModal({
       return;
     }
     try {
-      const token = localStorage.getItem('authToken');
-      await axios.post(
-        `/api/workgroups/${workgroupId}/aws-accounts`,
-        { awsAccountId: newAccountId },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await authenticatedPost(`/api/workgroups/${workgroupId}/aws-accounts`, {
+        awsAccountId: newAccountId,
+      });
+      if (!res.ok) {
+        if (res.status === 409) setError('That account is already assigned to this workgroup');
+        else if (res.status === 400) setError(await extractErrorMessage(res, 'Invalid account ID'));
+        else setError('Failed to add account');
+        return;
+      }
       setNewAccountId('');
       await fetchAccounts();
       onChange?.();
-    } catch (e: any) {
-      const status = e.response?.status;
-      if (status === 409) setError('That account is already assigned to this workgroup');
-      else if (status === 400) setError(e.response?.data?.error ?? 'Invalid account ID');
-      else setError('Failed to add account');
+    } catch {
+      setError('Failed to add account');
     }
   };
 
   const handleRemove = async (awsAccountId: string) => {
     setError(null);
     try {
-      const token = localStorage.getItem('authToken');
-      await axios.delete(
-        `/api/workgroups/${workgroupId}/aws-accounts/${awsAccountId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+      const res = await authenticatedDelete(
+        `/api/workgroups/${workgroupId}/aws-accounts/${encodeURIComponent(awsAccountId)}`
       );
+      if (!res.ok) {
+        setError('Failed to remove account');
+        return;
+      }
       await fetchAccounts();
       onChange?.();
-    } catch (e: any) {
+    } catch {
       setError('Failed to remove account');
     }
   };

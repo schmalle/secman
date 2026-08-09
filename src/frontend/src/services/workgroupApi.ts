@@ -173,7 +173,12 @@ export async function moveWorkgroup(
   return await response.json();
 }
 
-async function extractErrorMessage(response: Response, fallback: string): Promise<string> {
+/**
+ * Read the server's error message off a failed Response, falling back to a
+ * generic message plus the status code. Exported so the workgroup modals share
+ * this one implementation rather than each growing their own.
+ */
+export async function extractErrorMessage(response: Response, fallback: string): Promise<string> {
   try {
     const text = await response.text();
     if (!text) return `${fallback} (HTTP ${response.status})`;

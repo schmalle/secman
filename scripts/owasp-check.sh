@@ -227,6 +227,15 @@ file_rule A01-no-secured A01 'controller/.*\.kt$' \
     '@(Get|Post|Put|Delete|Patch)([^A-Za-z]|$)' '@Secured' \
     'Controller declares HTTP endpoints but no @Secured anywhere in the file'
 
+# Micronaut management endpoints (`@Endpoint` + `@Read`/`@Write`/`@Delete`) are
+# routed OUTSIDE `/api/**`, so the `isAuthenticated()` catch-all in
+# application.yml's intercept-url-map never sees them, and they carry none of
+# the annotations the rule above looks for. `MemoryController` was invisible to
+# this gate for exactly that reason and had to be found by hand.
+file_rule A01-endpoint-secured A01 '\.kt$' \
+    '@Endpoint\(' '@Secured' \
+    'Management @Endpoint with no @Secured — it routes outside /api/** so the intercept-url-map catch-all does not cover it; sensitive:true alone leaves the role unstated'
+
 # An id in a request is untrusted input (CLAUDE.md, restated twice on purpose).
 added_rule A01-findbyid REVIEW A01 "$CTRL_RE" \
     '\.findById\(' 'findById\((currentUser|authUser|userId|principal)' \

@@ -2,6 +2,7 @@ package com.secman.controller
 
 import io.micronaut.management.endpoint.annotation.Endpoint
 import io.micronaut.management.endpoint.annotation.Read
+import io.micronaut.security.annotation.Secured
 
 /**
  * Management endpoint for JVM memory metrics
@@ -12,10 +13,20 @@ import io.micronaut.management.endpoint.annotation.Read
  * - SC-001: Query memory <50MB above baseline
  * - SC-002: Export memory <100MB above baseline
  *
- * Access: Authenticated (management endpoint, sensitive: true)
- * Path: GET /memory
+ * Access: ADMIN only. Path: GET /memory
+ *
+ * Security (A01): this is a management `@Endpoint`, not a `@Controller`, so it
+ * is routed outside `/api/**` and the `isAuthenticated()` catch-all in
+ * `application.yml`'s `intercept-url-map` does not reach it. Its protection
+ * used to rest entirely on `endpoints.memory.sensitive: true` and Micronaut
+ * Security's default `SensitiveEndpointRule` — which is real, but is a
+ * framework default rather than a stated decision, and it only requires *some*
+ * authenticated user. Heap metrics are operational data: ADMIN is the narrowest
+ * role that needs them, so the rule is now explicit and annotation-based here.
+ * `sensitive: true` stays as the second layer.
  */
 @Endpoint(id = "memory")
+@Secured("ADMIN")
 class MemoryController {
 
     /**
