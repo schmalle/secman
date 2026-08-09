@@ -86,7 +86,7 @@ class InputValidationService {
         }
         
         if (containsSqlInjection(email) || containsXss(email)) {
-            logger.warn("Potential injection attempt in email: {}", email)
+            logger.warn("Potential injection attempt in email: {}", sanitizeLogInput(email))
             return ValidationResult(false, "Invalid email format")
         }
         
@@ -106,7 +106,7 @@ class InputValidationService {
         }
         
         if (containsSqlInjection(name) || containsXss(name)) {
-            logger.warn("Potential injection attempt in {}: {}", fieldName, name)
+            logger.warn("Potential injection attempt in {}: {}", fieldName, sanitizeLogInput(name))
             return ValidationResult(false, "$fieldName contains invalid characters")
         }
         
@@ -126,7 +126,7 @@ class InputValidationService {
         }
         
         if (containsSqlInjection(text) || containsXss(text)) {
-            logger.warn("Potential injection attempt in {}: {}", fieldName, text.take(100))
+            logger.warn("Potential injection attempt in {}: {}", fieldName, sanitizeLogInput(text.take(100)))
             return ValidationResult(false, "$fieldName contains invalid content")
         }
         
@@ -170,7 +170,7 @@ class InputValidationService {
         }
         
         if (containsSqlInjection(url) || containsXss(url)) {
-            logger.warn("Potential injection attempt in URL: {}", url)
+            logger.warn("Potential injection attempt in URL: {}", sanitizeLogInput(url))
             return ValidationResult(false, "Invalid URL")
         }
         
@@ -211,6 +211,14 @@ class InputValidationService {
         return ValidationResult(true, input)
     }
     
+    /**
+     * Strip CR/LF/tab before an untrusted value reaches a log line, to prevent
+     * log forging (CWE-117). Mirrors AuditLogService.sanitizeLogInput.
+     */
+    private fun sanitizeLogInput(input: String): String {
+        return input.replace(Regex("[\r\n\t]"), "_")
+    }
+
     /**
      * Check for SQL injection patterns
      */
