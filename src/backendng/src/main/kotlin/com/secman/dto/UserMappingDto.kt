@@ -73,8 +73,14 @@ data class NewAccountImportInfo(
 
 /**
  * Outcome of auto-starting a risk assessment for one (new AWS account, owner)
- * pair during a mapping import. Exactly one of [riskAssessmentId] / [error]
- * is meaningful: id set on success, error message set on per-item failure.
+ * pair during a mapping import. Exactly one of three shapes:
+ *
+ * - **started**  — [riskAssessmentId] set, [skipped] false, [error] null
+ * - **skipped**  — [skipped] true and [skipReason] set, pointing at the already-open
+ *                  assessment in [riskAssessmentId]. Not a failure: the import did what
+ *                  it was asked to, the assessment simply already existed. Callers must
+ *                  not count these towards a non-zero exit status.
+ * - **failed**   — [error] set
  */
 @Serdeable
 data class AccountRiskAssessmentInfo(
@@ -89,6 +95,10 @@ data class AccountRiskAssessmentInfo(
     val releaseVersion: String? = null,
     /** Number of requirements the pinned release contributes for [useCase]. */
     val requirementCount: Int? = null,
+    /** True when an open assessment already existed and none was created (idempotent no-op). */
+    val skipped: Boolean = false,
+    /** Why the pair was skipped. Set iff [skipped]. */
+    val skipReason: String? = null,
     val error: String? = null
 )
 

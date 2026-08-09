@@ -5,13 +5,15 @@ description: >
   account-mapping import introduces an account SecMan has never seen. Seeds a
   SECCHAMPION, an owner user, a use case, tagged requirements and an ACTIVE
   requirements release; imports a brand-new 12-digit account via the CLI and
-  again via MCP; asserts the assessment is pinned to the ACTIVE release, that
-  its questionnaire is exactly that release's use-case-tagged requirements and
-  does not drift when more requirements are imported, that re-import is
-  idempotent, and that a missing ACTIVE release is rejected up front. Cleans up
-  before and after. Use this skill when the user says "aws account risk
-  assessment", "run the new account risk assessment e2e", "test new aws account
-  assessment", or similar.
+  again via MCP; asserts that nothing starts without the opt-in flag, that the
+  assessment is pinned to the ACTIVE release, that its questionnaire is exactly
+  that release's use-case-tagged requirements and does not drift when more
+  requirements are imported, that re-import is idempotent and reports the skip
+  as a skip rather than a failure, and that a missing ACTIVE release or an
+  out-of-range deadline is rejected up front on both surfaces. Cleans up before
+  and after, including leftovers from earlier runs. Use this skill when the user
+  says "aws account risk assessment", "run the new account risk assessment e2e",
+  "test new aws account assessment", or similar.
 context: fork
 ---
 
@@ -100,6 +102,10 @@ Success is `Failed: 0` in the summary block. `[WARN]` lines are not failures.
 | `Questionnaire mismatch` | wrong requirement scoping | `service/ReleaseRequirementScopeService.kt`, `controller/ResponseController.kt` `getRequirementsForAssessment` |
 | `Questionnaire drifted` | pinning not honoured on read | `getRequirementsForAssessment` is falling through to the unpinned branch |
 | `Expected 1 tracked assessment, found 2` | idempotency guard broken | `createAssessment` open-assessment check |
+| `a skip must not fail the run` / `rendered the skip as a failure` | the skip is coming back in `error` instead of `skipped` | `createAssessment` idempotency branch, and the `ra.skipped` arm in `cli/commands/ImportCommand.kt` / `ImportS3Command.kt` |
+| `No risk assessment started (opt-in default holds)` fails | the flag is not actually gating the side effect | `service/UserMappingBulkImportService.kt` `execute` — the `request.startRiskAssessment && !request.dryRun` guard |
+| `CLI accepted a 100000-day deadline` | upper bound missing | `validateRiskAssessmentOptions` (CLI) and `validateStartRequest` `MAX_DEADLINE_DAYS` (backend) |
+| `MCP did not reject a 100000-day deadline` | CLI-only bound; the backend is the real boundary | `AwsAccountRiskAssessmentService.MAX_DEADLINE_DAYS` |
 | MCP JSON-RPC `error` on `import_user_mappings` | tool not authorized on the streamable transport | `mcp/McpToolPermissions.kt` `CALLING` — **this map is separate from the `LISTING` map used by `tools/list`, and a missing entry silently denies** |
 | `ADMIN_REQUIRED` where admin expected | delegation email wrong, or key lacks the permission | `SECMAN_MCP_KEY` needs `USER_ACTIVITY` and `ASSESSMENTS_READ` |
 | `CLI accepted the import despite no ACTIVE release` | validation gap | `validateStartRequest` |
@@ -121,8 +127,15 @@ logs) and look for stack traces inside the run window.
 
 ## Phase 4 — Teardown & Report
 
-The driver cleans up on `EXIT` (users, use case, requirements, release, mappings
-and assessments — all prefix- or account-scoped). Stop both services when done.
+The driver cleans up **before** the run and again on `EXIT`: users, use case,
+requirements, release, mappings, tracked assessments and the `AWS_ACCOUNT` basis
+assets the feature auto-creates. Stop both services when done.
+
+Cleanup is keyed on the stable `e2e-awsra-` owner prefix rather than on this run's
+timestamped account ids, so leftovers from an earlier interrupted run are swept up
+too. If you add a phase, give its account the same `88[4-9]<6-digit stamp>000`
+shape the asset sweep matches — an account outside that shape leaves its asset
+behind for good.
 
 Report a table: phase, assertion, result, and for anything still failing the file
 and the reason.
@@ -132,9 +145,12 @@ and the reason.
 - Never commit or push.
 - Never `curl localhost` — go through `BASE_URL` from `pass-cli`.
 - Never `kill` a dev server; use the stop scripts.
-- The driver is destructive **only** within its own `e2e-awsra-` prefix and its
-  two generated account IDs. It must never delete other releases; if the
+- The driver is destructive **only** within its own `e2e-awsra-` prefix and the
+  synthetic account IDs it mints. It must never delete other releases; if the
   environment already has an unrelated ACTIVE release, the no-ACTIVE-release
   negative is skipped with a `[WARN]` — that is expected, not a failure.
+- Never widen a cleanup filter to a bare substring. Matching assessments on
+  `contains("886")`, as an earlier version did, deletes real assessments for any
+  genuine AWS account whose id happens to contain those digits.
 - Creating a release snapshots the **entire** requirement corpus. On a large
   environment the setup phase is slower than it looks; do not treat that as a hang.

@@ -62,4 +62,53 @@ open class UserMappingServiceNewAccountTest : BaseIntegrationTest() {
         // nothing new persisted (only the seeded pre-existing row remains)
         assertThat(repository.findByAwsAccountId("222222222222")).isEmpty()
     }
+
+    /**
+     * A mapped email is not merely a database value: it becomes the SMTP recipient of the
+     * AWS-account risk assessment start mail, it is interpolated into log lines, and it is
+     * written into the assessment notes. So the import boundary — not the mail layer — is
+     * where addresses carrying separators or control characters have to be turned away.
+     */
+    @Test
+    fun `rejects emails carrying separators, control characters or excess length`() {
+        val rejected = listOf(
+            "alice\r\nBcc: attacker@evil.com" to "CR/LF (log forging, mail headers)",
+            "alice,bob@corp.com" to "comma (InternetAddress.parse splits into two recipients)",
+            "alice bob@corp.com" to "space",
+            "<alice@corp.com>" to "angle brackets",
+            "alice@corp.com;bob@corp.com" to "semicolon",
+            "a".repeat(250) + "@corp.com" to "longer than the 255-char column"
+        )
+
+        for ((email, why) in rejected) {
+            val result = service.bulkCreateMappings(
+                BulkUserMappingRequest(
+                    mappings = listOf(BulkUserMappingEntry(email = email, awsAccountId = "444444444444"))
+                )
+            )
+
+            assertThat(result.errors).describedAs("must reject %s", why).hasSize(1)
+            assertThat(result.created + result.createdPending).describedAs("must persist nothing for %s", why)
+                .isZero()
+            // The rejected value is echoed back — sanitized, so it cannot inject a log line.
+            assertThat(result.errors.single()).doesNotContain("\n").doesNotContain("\r")
+            // A rejected row must not make its account look brand-new to the assessment starter.
+            assertThat(result.newAccounts).isEmpty()
+        }
+    }
+
+    @Test
+    fun `still accepts the ordinary shapes of a real address`() {
+        val result = service.bulkCreateMappings(
+            BulkUserMappingRequest(
+                mappings = listOf(
+                    BulkUserMappingEntry(email = "first.last+tag@sub.example.co.uk", awsAccountId = "555555555555"),
+                    BulkUserMappingEntry(email = "UPPER_Case-99@ex-ample.io", awsAccountId = "666666666666")
+                )
+            )
+        )
+
+        assertThat(result.errors).isEmpty()
+        assertThat(result.created + result.createdPending).isEqualTo(2)
+    }
 }

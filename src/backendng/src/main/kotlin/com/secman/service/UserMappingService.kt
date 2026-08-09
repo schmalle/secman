@@ -234,12 +234,43 @@ open class UserMappingService(
     }
 
     // Validation regex patterns (matching CLI patterns)
-    private val emailRegex = Regex("^[^@]+@[^@]+\\.[^@]+$")
+    //
+    // The email pattern is deliberately stricter than "one @ somewhere". A mapped email is
+    // not just a database value: it becomes an SMTP recipient (the AWS-account risk
+    // assessment start mail and its reminders), it is interpolated into log lines, and it is
+    // written into the assessment's notes. The previous `[^@]+@[^@]+\.[^@]+` accepted
+    // control characters, spaces and commas anywhere outside the `@`, which is how CR/LF
+    // reaches a log line (forging) and how a comma turns one `InternetAddress.parse` argument
+    // into two recipients. Excluding the separator and quoting characters below closes both
+    // without rejecting any address a real mail system would route.
+    private val emailRegex = Regex("^[^\\s@,;:<>\"\\\\]+@[^\\s@,;:<>\"\\\\]+\\.[^\\s@,;:<>\"\\\\]+$")
     private val awsAccountIdRegex = Regex("^\\d{12}$")
     private val domainRegex = Regex("^[a-zA-Z0-9.-]+$")
 
     companion object {
         const val MAX_BULK_ENTRIES = 100_000
+
+        /**
+         * Longest accepted email address — the width of `user_mapping.email` and of
+         * `aws_account_risk_assessment.owner_email`. Rejecting here turns what would be a
+         * post-commit `DataException` (mappings already imported, every assessment for the
+         * pair failing) into one ordinary per-row validation error.
+         */
+        const val MAX_EMAIL_LENGTH = 255
+
+        private const val MAX_ECHOED_VALUE_LENGTH = 80
+
+        /**
+         * Make a rejected value safe to echo back in an error message.
+         *
+         * These messages travel into `errors[]`, the CLI's stdout and the server log, so a
+         * value that failed validation must not be able to inject line breaks (log forging)
+         * or flood the response. Control characters become `?`; the rest is truncated.
+         */
+        fun sanitizeForMessage(value: String): String =
+            value.take(MAX_ECHOED_VALUE_LENGTH)
+                .map { if (it.isISOControl()) '?' else it }
+                .joinToString("")
     }
 
     /**
@@ -267,7 +298,11 @@ open class UserMappingService(
         request.mappings.forEachIndexed { index, entry ->
             val trimmedEmail = entry.email.trim()
             if (trimmedEmail.isBlank() || !emailRegex.matches(trimmedEmail)) {
-                errors.add("Entry ${index + 1}: Invalid email format '${entry.email}'")
+                errors.add("Entry ${index + 1}: Invalid email format '${sanitizeForMessage(entry.email)}'")
+                return@forEachIndexed
+            }
+            if (trimmedEmail.length > MAX_EMAIL_LENGTH) {
+                errors.add("Entry ${index + 1}: Email exceeds $MAX_EMAIL_LENGTH characters")
                 return@forEachIndexed
             }
             if (entry.awsAccountId.isNullOrBlank() && entry.domain.isNullOrBlank()) {
@@ -275,11 +310,14 @@ open class UserMappingService(
                 return@forEachIndexed
             }
             if (entry.awsAccountId != null && !awsAccountIdRegex.matches(entry.awsAccountId.trim())) {
-                errors.add("Entry ${index + 1}: Invalid AWS account ID '${entry.awsAccountId}' (must be 12 digits)")
+                errors.add(
+                    "Entry ${index + 1}: Invalid AWS account ID " +
+                        "'${sanitizeForMessage(entry.awsAccountId)}' (must be 12 digits)"
+                )
                 return@forEachIndexed
             }
             if (entry.domain != null && entry.domain.isNotBlank() && !domainRegex.matches(entry.domain.trim())) {
-                errors.add("Entry ${index + 1}: Invalid domain format '${entry.domain}'")
+                errors.add("Entry ${index + 1}: Invalid domain format '${sanitizeForMessage(entry.domain)}'")
                 return@forEachIndexed
             }
             validEntries.add(entry)

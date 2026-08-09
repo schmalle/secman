@@ -25,7 +25,11 @@ open class UserMappingBulkImportService(
     private val importCompletionNotifier: ImportCompletionNotifier
 ) {
     private val logger = LoggerFactory.getLogger(UserMappingBulkImportService::class.java)
-    private val emailRegex = Regex("^[^@]+@[^@]+\\.[^@]+$")
+
+    // Same pattern UserMappingService applies to imported addresses, and for the same reason:
+    // notifyAddress is handed to InternetAddress.parse, where a comma would silently split one
+    // recipient into two and a CR/LF would reach a mail header. Kept in step with that copy.
+    private val emailRegex = Regex("^[^\\s@,;:<>\"\\\\]+@[^\\s@,;:<>\"\\\\]+\\.[^\\s@,;:<>\"\\\\]+$")
 
     /**
      * Fail-fast validation of the request's side-effect options. Returns a

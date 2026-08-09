@@ -496,7 +496,11 @@ Requires `ADMIN`.
 |---|---|---|
 | `--start-risk-assessment` | false | opt-in; one assessment per (new account, mapped owner email) pair |
 | `--risk-usecase <name>` | — | **required when `--start-risk-assessment` is set**; name of an existing use case the assessment is scoped to (case-insensitive match) |
-| `--risk-deadline-days <n>` | 7 | days from today until the assessment deadline (`endDate`); must be ≥ 1 |
+| `--risk-deadline-days <n>` | 7 | days from today until the assessment deadline (`endDate`); must be between 1 and 3650 |
+
+Without `--start-risk-assessment` the mappings import exactly as before and
+**nothing** is started — no assessment, no `AWS_ACCOUNT` asset, no owner mail.
+Passing `--risk-usecase` on its own does nothing and the CLI says so.
 
 **The standard the assessment is measured against** is the current version of the
 security requirements — the single **ACTIVE release**. Each assessment is pinned to
@@ -510,7 +514,9 @@ every account in one run is measured against the same version. Full semantics:
 **Behavior:**
 
 - Validation is fail-fast (HTTP 400 → exit 2 before anything is imported): the
-  use case must exist, the deadline must be ≥ 1 day, at least one user with
+  use case must exist, the deadline must be between 1 and 3650 days
+  (10 years — beyond that the `endDate` leaves the SQL `DATE` range and the
+  failure would land per account *after* the mappings had committed), at least one user with
   the **SECCHAMPION** role must exist — the assessor is picked from the
   SECCHAMPION users (round-robin, so any SECCHAMPION can be the assessor and
   load spreads evenly) — **and an ACTIVE release must exist that contains at
@@ -532,8 +538,14 @@ every account in one run is measured against the same version. Full semantics:
 - Assessments are started **after** the mapping import commits — a failure
   while starting an assessment never rolls back imported mappings; per-account
   failures are listed in the output and exit code 1 is returned.
+- A pair that already has an **open** assessment is reported as a skip, not a
+  failure: `⏭️  111111111111  alice@corp.com: skipped — an open risk assessment
+  (id=1000) already exists for this account/owner`. It does not affect the exit
+  code and does not re-send the owner mail. (Reachable when the mapping row was
+  deleted and the account is re-imported while its assessment is still open; a
+  plain re-import never gets that far, because the account is no longer new.)
 
-**Exit codes:** `0` OK / dry-run · `1` mappings saved but ≥ 1 assessment failed to start · `2` invalid arguments (missing/unknown `--risk-usecase`, deadline < 1, no SECCHAMPION user, no ACTIVE release, or the ACTIVE release has no requirements for the use case).
+**Exit codes:** `0` OK / dry-run / assessments skipped as already open · `1` mappings saved but ≥ 1 assessment failed to start · `2` invalid arguments (missing/unknown `--risk-usecase`, deadline outside 1..3650, no SECCHAMPION user, no ACTIVE release, or the ACTIVE release has no requirements for the use case).
 
 Inspect what an import produced with the MCP tool `list_aws_account_risk_assessments`.
 

@@ -68,6 +68,19 @@ open class AwsAccountRiskAssessmentService(
 
     companion object {
         const val DEFAULT_DEADLINE_DAYS = 7
+
+        /**
+         * Upper bound for the caller-supplied deadline, 10 years.
+         *
+         * Not cosmetic. `endDate` is a SQL DATE: past roughly year 9999 the insert fails
+         * outright, and the per-pair error arrives only *after* the mappings have already
+         * committed. Well short of that, a deadline decades out is indistinguishable from a
+         * typo (`--risk-deadline-days 100000` is one keystroke away from `1000`) and produces
+         * an assessment the reminder scheduler will never wake up for, because it only looks
+         * two days ahead. Rejecting up front, in validateStartRequest, keeps both cases out
+         * of the database.
+         */
+        const val MAX_DEADLINE_DAYS = 3650
         const val ACCOUNT_ASSET_TYPE = "AWS_ACCOUNT"
         private val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 
@@ -96,6 +109,9 @@ open class AwsAccountRiskAssessmentService(
         }
         if (deadlineDays != null && deadlineDays < 1) {
             return "riskAssessmentDeadlineDays must be at least 1 (got $deadlineDays)"
+        }
+        if (deadlineDays != null && deadlineDays > MAX_DEADLINE_DAYS) {
+            return "riskAssessmentDeadlineDays must be at most $MAX_DEADLINE_DAYS (got $deadlineDays)"
         }
         val useCase = useCaseRepository.findByNameIgnoreCase(useCaseName.trim()).orElse(null)
             ?: return "Use case '${useCaseName.trim()}' not found"
@@ -174,8 +190,18 @@ open class AwsAccountRiskAssessmentService(
 
         val results = mutableListOf<AccountRiskAssessmentInfo>()
         var assessorIndex = 0
+        // Both entry points run validateStartRequest first, so an out-of-range value can only
+        // reach here from a direct service call. Clamp rather than throw: we are past the
+        // commit point, and a silently absurd endDate is worse than a corrected one.
+        val effectiveDeadlineDays = deadlineDays.coerceIn(1, MAX_DEADLINE_DAYS)
+        if (effectiveDeadlineDays != deadlineDays) {
+            log.warn(
+                "deadlineDays={} is outside 1..{} - clamped to {}",
+                deadlineDays, MAX_DEADLINE_DAYS, effectiveDeadlineDays
+            )
+        }
         // Computed once so the persisted endDate and the emailed deadline can never disagree.
-        val endDate = LocalDate.now().plusDays(deadlineDays.toLong())
+        val endDate = LocalDate.now().plusDays(effectiveDeadlineDays.toLong())
 
         for (account in newAccounts) {
             for (ownerEmail in account.emails) {
@@ -206,11 +232,13 @@ open class AwsAccountRiskAssessmentService(
                 results += info
 
                 // Notify the owner only AFTER the persist transaction has committed, so the
-                // blocking SMTP send holds no pooled DB connection. Skip when error != null:
-                // that is either a genuine failure or an idempotent skip (already notified when
-                // the still-open assessment was first created). Best-effort — a mail failure
-                // must not undo the committed assessment.
-                if (info.error == null && info.riskAssessmentId != null) {
+                // blocking SMTP send holds no pooled DB connection. Both `error` and `skipped`
+                // suppress the mail — a failure has nothing to announce, and a skip means the
+                // owner was already told when the still-open assessment was first created.
+                // Load-bearing: `skipped` no longer sets `error`, so testing `error` alone
+                // would re-notify on every re-import. Best-effort — a mail failure must not
+                // undo the committed assessment.
+                if (info.error == null && !info.skipped && info.riskAssessmentId != null) {
                     try {
                         sendStartNotification(
                             ownerEmail, account.awsAccountId, useCase.name, endDate, assessor, activeRelease,
@@ -257,11 +285,16 @@ open class AwsAccountRiskAssessmentService(
                 "Skipping risk assessment creation for AWS account {} / owner {}: open assessment {} already tracked",
                 awsAccountId, ownerEmail, existingOpen.riskAssessment.id
             )
+            // Reported as `skipped`, NOT as `error`: the import did exactly what it was asked
+            // to and the pair already has a live assessment. Callers surface it as a no-op and
+            // must not let it drive a non-zero exit status.
             return AccountRiskAssessmentInfo(
                 awsAccountId = awsAccountId,
                 ownerEmail = ownerEmail,
                 riskAssessmentId = existingOpen.riskAssessment.id,
-                error = "Skipped: an open risk assessment (id=${existingOpen.riskAssessment.id}) already exists for this account/owner"
+                skipped = true,
+                skipReason = "an open risk assessment (id=${existingOpen.riskAssessment.id}) " +
+                    "already exists for this account/owner"
             )
         }
 

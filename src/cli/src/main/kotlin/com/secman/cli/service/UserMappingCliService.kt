@@ -66,6 +66,14 @@ class UserMappingCliService(
     companion object {
         const val MAX_IMPORT_ROWS = 100_000
 
+        /**
+         * Upper bound for `--risk-deadline-days`, mirroring
+         * `AwsAccountRiskAssessmentService.MAX_DEADLINE_DAYS` on the backend (10 years).
+         * Duplicated rather than shared because the CLI is a separate Gradle module with no
+         * dependency on backendng — keep the two in step.
+         */
+        const val MAX_RISK_DEADLINE_DAYS = 3650
+
         init {
             // When -Dsecman.ssl.insecure=true is set by the secmanng wrapper script,
             // configure JVM-level SSL defaults before any HTTP client is created.
@@ -690,6 +698,8 @@ class UserMappingCliService(
                             useCase = it["useCase"]?.toString(),
                             releaseVersion = it["releaseVersion"]?.toString(),
                             requirementCount = (it["requirementCount"] as? Number)?.toInt(),
+                            skipped = (it["skipped"] as? Boolean) ?: false,
+                            skipReason = it["skipReason"]?.toString(),
                             error = it["error"]?.toString()
                         )
                     } ?: emptyList()
@@ -1012,8 +1022,9 @@ data class CliNewAccount(
 
 /**
  * Outcome of auto-starting a risk assessment for one (new AWS account, owner)
- * pair (--start-risk-assessment). On success [riskAssessmentId] is set; on a
- * per-item failure [error] carries the backend message.
+ * pair (--start-risk-assessment). Three shapes, mirroring the backend's
+ * `AccountRiskAssessmentInfo`: started ([riskAssessmentId] set), skipped
+ * ([skipped] with [skipReason]) and failed ([error]).
  */
 data class CliAccountRiskAssessment(
     val awsAccountId: String,
@@ -1027,6 +1038,10 @@ data class CliAccountRiskAssessment(
     val releaseVersion: String? = null,
     /** Requirements that version contributes for [useCase]. */
     val requirementCount: Int? = null,
+    /** An open assessment already existed for the pair — an idempotent no-op, not a failure. */
+    val skipped: Boolean = false,
+    /** Why the pair was skipped. Set iff [skipped]. */
+    val skipReason: String? = null,
     val error: String? = null
 )
 

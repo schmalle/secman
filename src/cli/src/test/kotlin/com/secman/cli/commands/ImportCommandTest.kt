@@ -89,4 +89,27 @@ class ImportCommandTest {
         assertThat(riskCmd(start = false, useCase = null).validateRiskAssessmentOptions()).isNull()
         assertThat(riskCmd(start = false, useCase = "Cloud Onboarding", deadlineDays = 0).validateRiskAssessmentOptions()).isNull()
     }
+
+    @Test
+    fun `start-risk-assessment with a deadline beyond the cap is rejected`() {
+        val max = UserMappingCliService.MAX_RISK_DEADLINE_DAYS
+
+        assertThat(riskCmd(start = true, useCase = "Cloud Onboarding", deadlineDays = max + 1)
+            .validateRiskAssessmentOptions()).contains("at most $max")
+        assertThat(riskCmd(start = true, useCase = "Cloud Onboarding", deadlineDays = Int.MAX_VALUE)
+            .validateRiskAssessmentOptions()).isNotNull()
+        // Inclusive boundary.
+        assertThat(riskCmd(start = true, useCase = "Cloud Onboarding", deadlineDays = max)
+            .validateRiskAssessmentOptions()).isNull()
+    }
+
+    /**
+     * The cap must be the same number the backend enforces
+     * (`AwsAccountRiskAssessmentService.MAX_DEADLINE_DAYS`). The CLI is a separate Gradle
+     * module and cannot reference that constant, so this pins the duplicate.
+     */
+    @Test
+    fun `the CLI deadline cap matches the backend cap`() {
+        assertThat(UserMappingCliService.MAX_RISK_DEADLINE_DAYS).isEqualTo(3650)
+    }
 }

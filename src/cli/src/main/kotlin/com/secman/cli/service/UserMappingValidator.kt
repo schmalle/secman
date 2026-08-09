@@ -4,7 +4,12 @@ import jakarta.inject.Singleton
 
 @Singleton
 class UserMappingValidator {
-    private val emailRegex = Regex("^[^@]+@[^@]+\\.[^@]+$")
+    // Kept character-for-character in step with UserMappingService.emailRegex on the backend,
+    // which is the actual boundary. A looser pattern here would only defer the rejection to a
+    // per-row backend error after the round trip; a stricter one would reject rows the backend
+    // would have accepted. Excludes whitespace, control characters and the separator/quoting
+    // characters that give a comma or a CR/LF meaning inside a mail header.
+    private val emailRegex = Regex("^[^\\s@,;:<>\"\\\\]+@[^\\s@,;:<>\"\\\\]+\\.[^\\s@,;:<>\"\\\\]+$")
     private val awsAccountIdRegex = Regex("^\\d{12}$")
     private val domainRegex = Regex("^[a-zA-Z0-9.-]+$")
 
