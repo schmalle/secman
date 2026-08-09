@@ -40,8 +40,8 @@ and it is where a coverage gap is visible at all.
 ## Scope fence
 
 **In scope:** `./gradlew :backendng:test`, `./gradlew :cli:test`, the frontend
-unit tests and build gate, `./scripts/check-skill-sync.sh`, and
-`./scripts/test-coverage-report.sh`.
+unit tests and build gate, `./scripts/check-skill-sync.sh`,
+`./scripts/test/owasp-check-test.sh`, and `./scripts/test-coverage-report.sh`.
 
 **Out of scope:** starting the backend or frontend, `/e2ejs`,
 `/e2evulnexception`, Playwright under `tests/e2e/`, and anything that imports
@@ -123,10 +123,11 @@ All three matter and they fail differently:
 - **`npm run build`** is the type-check gate. A test-only change can still break
   it, so never skip it after editing frontend source.
 
-## Step 5 — Skill sync
+## Step 5 — Skill sync and the OWASP gate
 
 ```bash
 ./scripts/check-skill-sync.sh
+./scripts/test/owasp-check-test.sh
 ```
 
 The two trees — `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex) —
@@ -135,6 +136,14 @@ either tree belongs in the other in the same commit. The script reports drift an
 never edits either tree — decide per finding which side is newer and port it by
 hand. `.claude/skills/` is the tie-breaker only when neither side is clearly
 newer.
+
+`owasp-check-test.sh` is the self-test for `./scripts/owasp-check.sh`, the
+static OWASP gate behind `/secure-code`. It plants a deliberately vulnerable
+fixture per rule, asserts the rule fires at the right severity, then plants the
+repo's *approved* pattern for the same risk and asserts the rule stays silent.
+It runs entirely inside a throwaway git repo under `/tmp` and touches nothing
+here. Treat a failure as a real regression: a scanner rule that stopped matching
+reports OK forever and nobody finds out.
 
 ## Step 6 — Coverage evaluation
 
@@ -201,7 +210,7 @@ with an `.as(...)` description instead.
 Report once, at the end:
 
 1. **Per-tier result** — backend / CLI / frontend unit / frontend build /
-   skill-sync, each pass or fail with counts.
+   skill-sync / owasp-gate self-test, each pass or fail with counts.
 2. **What you fixed**, and for each: was it a stale test or a real bug?
 3. **What is still red**, and why, if you exhausted the iteration budget.
 4. **Coverage table** from step 6, with the understatement caveat.

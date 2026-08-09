@@ -1,6 +1,6 @@
 # Which secman skill to use when
 
-Eleven skills live in `.claude/skills/` (Claude Code) and again in
+Twelve skills live in `.claude/skills/` (Claude Code) and again in
 `.agents/skills/` (Codex). The two trees are one skill set: an edit to either
 side must be ported to the other in the same commit — see `CLAUDE.md`
 §"Tooling Conventions" and verify with `./scripts/check-skill-sync.sh`.
@@ -23,6 +23,7 @@ writes.
 
 | I want to… | Skill | Writes data? |
 |---|---|---|
+| Write code that satisfies the OWASP Top 10 by construction | `/secure-code` | No |
 | Finish a change and check it before merging | `/finalizer` | Docs only |
 | Run the unit/integration tests, or ask where coverage is thin | `/testsuite` | No |
 | Prove no page throws JS errors | `/e2ejs` | No |
@@ -61,6 +62,11 @@ SessionFactory only fail at startup.
 frontend `npm ci && npm test && npm run build` gate) but it deliberately never
 starts the stack, so it does not discharge either Hard Principle 5 or the two
 gates above. It is the cheap check you run *first*, not a substitute for them.
+
+`/secure-code` covers a third, orthogonal requirement: Hard Principle 1 and the
+binding OWASP checklist. It is the only skill meant to run **before** the code
+exists rather than after, and it is the only one whose output is a decision
+about what to write. It does not discharge the gates above either.
 
 ---
 
@@ -136,6 +142,29 @@ restarting would kill the browser session you are about to use.
 
 ## Per-skill reference
 
+### `/secure-code` — OWASP Top 10 by construction
+**Offline for the parts that matter.** Phases 1-3b need no stack, no `pass-cli`,
+no network.
+
+The only skill designed to run *before* you write code. It routes the change to
+the A01-A10 categories it can actually violate, names the existing repo control
+to reuse for each (`AssetFilterService`, `ExcelSanitizer`, the `NmapParserService`
+XXE block, `SlackClient.validateWebhookUrl`, …), then verifies three ways:
+`./scripts/owasp-check.sh` for the mechanical rules, a semantic re-read against
+`references/blind-spots.md` for the rules no grep can see, and `/security-review`
+when the diff touches auth, crypto, upload, export or outbound HTTP.
+
+`./scripts/owasp-check.sh` is diff-scoped by default and **includes untracked
+files** — a freshly generated controller is exactly what it is for. Findings are
+`BLOCK` (this change introduced it; exit 1) or `REVIEW` (decide and say what you
+decided). `--all` audits the whole repo and is for audits only: the repo has
+substantial pre-existing findings, and a gate that is red on arrival is a gate
+people learn to ignore.
+
+Use it whenever you are about to add an endpoint, a query, an MCP tool, an
+upload, an export, an HTML sink or an outbound HTTP call — and any time the
+answer to "is this secure?" needs to be more than an opinion.
+
 ### `/finalizer` — pre-merge consistency pass
 **Offline.** No backend, no frontend, no `pass-cli`.
 
@@ -158,7 +187,8 @@ integration tests bind 8080 and a running backend turns the suite into a hang.
 
 Runs `./scripts/runbackendtests.sh` (needs `TEST_DB_*` from `pass-cli`),
 `./gradlew :cli:test`, `npm ci && npm test && npm run build` in `src/frontend`,
-`./scripts/check-skill-sync.sh`, and finally `./scripts/test-coverage-report.sh`.
+`./scripts/check-skill-sync.sh`, `./scripts/test/owasp-check-test.sh`, and
+finally `./scripts/test-coverage-report.sh`.
 Fixes what it can, up to 5 iterations, and never disables or deletes a test to
 reach green.
 
