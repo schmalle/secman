@@ -4,7 +4,6 @@ import com.secman.domain.RelayIdentity
 import com.secman.repository.UserRepository
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
-import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -179,12 +178,15 @@ open class RelayEnrollmentService(
         return String(chars).chunked(GROUP_SIZE).joinToString("-")
     }
 
-    internal fun sha256Hex(value: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
-        val out = StringBuilder(digest.size * 2)
-        for (b in digest) out.append("%02x".format(b))
-        return out.toString()
-    }
+    /**
+     * The digest of an enrollment code — the only thing that ever leaves this
+     * process. secman does not store the plaintext, and the relay can verify a
+     * presented code but never produce one.
+     *
+     * See [RelayDigest] for why a high-entropy single-use token is hashed with
+     * SHA-256 rather than BCrypt.
+     */
+    internal fun sha256Hex(value: String): String = RelayDigest.hashEnrollmentCode(value)
 
     /**
      * Validates the enrollment subject.

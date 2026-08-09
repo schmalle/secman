@@ -5,7 +5,6 @@ import com.secman.repository.RelayIdentityRepository
 import com.secman.repository.UserRepository
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
-import java.security.MessageDigest
 
 /**
  * Builds the principal list the relay uses to answer "who is this, and what may
@@ -79,7 +78,9 @@ open class RelayPrincipalService(
      * rather than the whole authorization table every minute.
      */
     open fun digest(principals: List<RelayPrincipal>): String {
-        val md = MessageDigest.getInstance("SHA-256")
+        // A change-detection fingerprint over usernames and role names. No
+        // secret is involved; see RelayDigest.
+        val md = RelayDigest.newAccumulator()
         for (p in principals) {
             md.update(p.subject.toByteArray(Charsets.UTF_8))
             md.update(0)
@@ -96,10 +97,7 @@ open class RelayPrincipalService(
             md.update(if (p.disabled) 1 else 0)
             md.update(4)
         }
-        val digest = md.digest()
-        val out = StringBuilder(digest.size * 2)
-        for (b in digest) out.append("%02x".format(b))
-        return out.toString()
+        return RelayDigest.hex(md.digest())
     }
 
     /**

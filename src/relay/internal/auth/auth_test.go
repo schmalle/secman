@@ -335,3 +335,49 @@ func TestSignatureIsBoundToNonceAndDevice(t *testing.T) {
 		t.Error("a signature must not verify against another device's key")
 	}
 }
+
+// TestSignPayloadCrossLanguageVector pins the ingest signature construction
+// against a known answer shared with secman.
+//
+// The identical expectation lives in `signature matches the cross-language
+// vector` in
+// src/backendng/src/test/kotlin/com/secman/relay/RelayContractTest.kt. The two
+// implementations are in different languages and cannot import each other, so
+// this vector is the only thing standing between a quiet change to the
+// canonical string — a separator, the version prefix, hashing the body instead
+// of its digest — and an authentication failure that first appears in a
+// deployment.
+//
+// If this test fails, do not "fix" the constant: work out which side moved.
+func TestSignPayloadCrossLanguageVector(t *testing.T) {
+	key := []byte("relay-parity-test-key-0123456789")
+	const (
+		unixSeconds = int64(1_700_000_000)
+		nonce       = "0123456789abcdef0123456789abcdef"
+		body        = `{"schemaVersion":1,"instanceId":"secman","generatedAt":"2026-08-09T12:00:00Z","sections":{"totals":{"assets":3}}}`
+		want        = "v1=fc941aae10985d7899cc9f5c2de1805db682ddf75758674607b3415e3f696771"
+	)
+
+	if got := SignPayload(key, unixSeconds, nonce, []byte(body)); got != want {
+		t.Fatalf("signature drifted from the shared vector:\n got %s\nwant %s", got, want)
+	}
+}
+
+// Each signed component must actually be covered, or the binding is decorative.
+func TestSignPayloadCoversEveryComponent(t *testing.T) {
+	key := []byte("relay-parity-test-key-0123456789")
+	body := []byte(`{"a":1}`)
+	base := SignPayload(key, 1_700_000_000, "0123456789abcdef", body)
+
+	cases := map[string]string{
+		"timestamp": SignPayload(key, 1_700_000_001, "0123456789abcdef", body),
+		"nonce":     SignPayload(key, 1_700_000_000, "fedcba9876543210", body),
+		"body":      SignPayload(key, 1_700_000_000, "0123456789abcdef", []byte(`{"a":2}`)),
+		"key":       SignPayload([]byte("another-key-that-is-long-enough1"), 1_700_000_000, "0123456789abcdef", body),
+	}
+	for name, got := range cases {
+		if got == base {
+			t.Errorf("changing the %s did not change the signature", name)
+		}
+	}
+}

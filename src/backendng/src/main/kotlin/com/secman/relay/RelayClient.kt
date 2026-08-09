@@ -173,17 +173,19 @@ open class RelayClient(
      * document and a large snapshot.
      */
     internal fun signPayload(key: String, unixSeconds: Long, nonce: String, body: ByteArray): String {
-        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(body)
-        val canonical = "$SIGNATURE_VERSION:$unixSeconds:$nonce:${hex(digest)}"
+        // SHA-256 here is a message digest inside the HMAC construction, not
+        // secret storage — see RelayDigest for why that distinction matters.
+        val bodyDigest = RelayDigest.hex(RelayDigest.digestOf(body))
+        val canonical = "$SIGNATURE_VERSION:$unixSeconds:$nonce:$bodyDigest"
         val mac = Mac.getInstance("HmacSHA256")
         mac.init(SecretKeySpec(key.toByteArray(Charsets.UTF_8), "HmacSHA256"))
-        return "$SIGNATURE_VERSION=${hex(mac.doFinal(canonical.toByteArray(Charsets.UTF_8)))}"
+        return "$SIGNATURE_VERSION=${RelayDigest.hex(mac.doFinal(canonical.toByteArray(Charsets.UTF_8)))}"
     }
 
     private fun newNonce(): String {
         val buf = ByteArray(16)
         random.nextBytes(buf)
-        return hex(buf)
+        return RelayDigest.hex(buf)
     }
 
     private fun resolveOrNull(host: String): InetAddress? = try {
@@ -204,12 +206,6 @@ open class RelayClient(
     private fun truncate(body: String): String = sanitizeForLog(
         if (body.length > MAX_ERROR_BODY) body.take(MAX_ERROR_BODY) + "…" else body
     )
-
-    private fun hex(bytes: ByteArray): String {
-        val out = StringBuilder(bytes.size * 2)
-        for (b in bytes) out.append("%02x".format(b))
-        return out.toString()
-    }
 }
 
 /**
