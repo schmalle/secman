@@ -1,6 +1,6 @@
 # Which secman skill to use when
 
-Twelve skills live in `.claude/skills/` (Claude Code) and again in
+Thirteen skills live in `.claude/skills/` (Claude Code) and again in
 `.agents/skills/` (Codex). The two trees are one skill set: an edit to either
 side must be ported to the other in the same commit — see `CLAUDE.md`
 §"Tooling Conventions" and verify with `./scripts/check-skill-sync.sh`.
@@ -29,6 +29,7 @@ writes.
 | Prove no page throws JS errors | `/e2ejs` | No |
 | Exercise the full exception lifecycle (MCP + UI) | `/e2evulnexception` | **Wipes the DB** |
 | Quick MCP-only exception smoke test | `/e2eexception` | **Deletes all assets** |
+| Test the end-of-life feature end to end | `/e2eeol` | Adds + removes a testbed; rebuilds derived findings |
 | Test the admin add-system → user-visibility flow | `/admin-asset-e2e` | Adds one asset |
 | Run and debug the CrowdStrike import | `/importtest` | **Imports live data** |
 | Compare SecMan against Falcon without changing anything | `/crowdstrike-vuln-match` | No |
@@ -229,6 +230,29 @@ driver, the spec and the cleanup semantics without starting anything.
 
 An 11-step MCP workflow ending in approval. Prefer `/e2evulnexception` unless you
 specifically want the fast path.
+
+### `/e2eeol` — end-of-life lifecycle
+Non-destructive. Everything it creates carries the `e2e-eol-` prefix and is
+removed by cleanup that runs both before (unconditional) and after (`trap EXIT`).
+
+Covers every function the EOL feature added: the catalogue sync and matching
+scan, the owner-notification run, the asset-scoped read APIs, the
+ADMIN/SECCHAMPION top-10 repository ranking, both CLI commands, and the
+authorization negatives.
+
+Two assertions carry the run. The **false-positive check** seeds a system on a
+current LTS and requires it *not* to appear — a matcher that flags everything
+passes everything else. The **scoping check** requires a plain user to see zero
+of the admin-owned findings, and is only meaningful because the admin phase
+proved those rows exist.
+
+It does rebuild the `eol_finding` table, which is derived data regenerated from
+the inventory on every sync — a refresh, not data loss.
+
+**A skipped catalogue assertion is not a failure.** The upstream source is a live
+third party; when the backend cannot reach it the driver reports SKIP and the run
+can still pass. That is a *partial* result — report it as one, and use
+`--offline` deliberately rather than treating the skip as a bug.
 
 ### `/admin-asset-e2e` — admin add-system flow
 Playwright test of a single user-visible flow: admin creates a "DUMMY" asset

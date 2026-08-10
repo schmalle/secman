@@ -47,6 +47,15 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
     """)
     fun findLogicalDuplicate(assetId: Long, name: String, vendor: String?, version: String?): InstalledProduct?
 
+    /**
+     * Paged, id-ordered sweep with the asset eagerly joined. Used by the EOL
+     * scan, which walks the whole table once per run: without the JOIN FETCH the
+     * lazy `asset` turns each page into N+1 queries, and without the stable id
+     * ordering pages can skip or repeat rows while the import writes.
+     */
+    @Query("SELECT p FROM InstalledProduct p JOIN FETCH p.asset ORDER BY p.id ASC")
+    fun findAllWithAssetOrdered(pageable: Pageable): List<InstalledProduct>
+
     @Query("""
         SELECT p FROM InstalledProduct p
         JOIN FETCH p.asset

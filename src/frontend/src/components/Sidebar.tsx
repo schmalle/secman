@@ -357,6 +357,15 @@ const Sidebar = () => {
                                         <i className="bi bi-boxes me-2"></i> Installed products
                                     </a>
                                 </li>
+                                {/* End-of-life software — scoped server-side to the caller's
+                                    accessible systems (GET /api/eol/findings), so every role
+                                    in this section may open it. */}
+                                <li>
+                                    <a href="/vulnerabilities/eol" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                        title="Operating systems and software on your systems that are end of life or approaching it">
+                                        <i className="bi bi-calendar-x me-2"></i> End of life
+                                    </a>
+                                </li>
                                 <li>
                                     <a href="/vulnerabilities/exceptions" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-x-circle me-2"></i> Exceptions
