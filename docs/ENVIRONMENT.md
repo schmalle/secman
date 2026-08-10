@@ -90,6 +90,21 @@ transport endpoints and timing.
 | `VULN_USE_PATCH_PUBLICATION_DATE` | `false` | `false`: `daysOpen = now − detection`. `true`: `now − patchPublicationDate`. |
 | `VULN_REQUIRE_PATCH_PUBLICATION_DATE` | `false` | only import vulns with patch-publication date |
 
+### End-of-life catalogue (see `docs/EOL.md`)
+Source of the EOL lifecycle data. Operator configuration only — no request value ever reaches this URL.
+
+`SECMAN_EOL_BASE_URL` and `SECMAN_EOL_ALLOWED_HOSTS` are a **pair**: changing the base URL without adding the new host to the allowlist fails closed by design (§A10). That is the SSRF guard working, not a misconfiguration to relax. Point both at an internal mirror for a restricted network.
+
+| Var | Default | Effect |
+|---|---|---|
+| `SECMAN_EOL_BASE_URL` | `https://endoflife.date` | upstream catalogue; https only, default port only, no credentials |
+| `SECMAN_EOL_ALLOWED_HOSTS` | `endoflife.date` | comma-separated host allowlist checked on every request; resolved addresses that are loopback/link-local/RFC-1918/metadata are rejected regardless |
+| `SECMAN_EOL_HORIZON_MONTHS` | `12` | how far ahead counts as "approaching EOL"; also the default look-ahead of `send-eol-notifications`, so lowering it shrinks what that mail can report |
+| `SECMAN_EOL_TIMEOUT_SECONDS` | `20` | connect + request timeout per upstream call |
+| `SECMAN_EOL_MAX_RESPONSE_BYTES` | `8388608` | response size cap |
+| `SECMAN_EOL_MAX_PRODUCTS` | `2000` | bound on the upstream-controlled product index, so one admin action cannot become an unbounded crawl |
+| `SECMAN_EOL_SCAN_PAGE_SIZE` | `500` | page size for the inventory sweep (coerced to 50..5000) |
+
 ### CrowdStrike stale-asset cleanup
 Daily scheduled job (02:30 server TZ) that deletes assets whose `crowdStrikeLastImportedAt` is older than `STALE_DAYS`. Manual runs (admin UI / CLI `delete-asset-not-seen`) ignore the brake but are still recorded in `crowdstrike_cleanup_run`.
 

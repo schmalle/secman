@@ -8,6 +8,8 @@ import {
 } from '../services/emailBroadcastService';
 import { getUser } from '../utils/auth';
 import { canNotifyProductUsers } from './productNotifyAccess';
+import { getEolFindings, type EolFinding } from '../services/eolService';
+import { assetComponentKey, describeDeadline, statusBadge } from './eolFormat';
 
 const InstalledProducts: React.FC = () => {
   const [products, setProducts] = useState<InstalledProductResponse[]>([]);
@@ -26,6 +28,11 @@ const InstalledProducts: React.FC = () => {
   const [notifyError, setNotifyError] = useState<string | null>(null);
   const [canNotifyUsers] = useState(() => canNotifyProductUsers(getUser()?.roles));
   const [productNames, setProductNames] = useState<string[]>([]);
+  // (assetId, product name) -> EOL finding, for the Lifecycle badge. Keyed the
+  // same way on both sides via assetComponentKey, or the badge silently never
+  // shows. The lookup is bounded and best-effort: a failure here must not take
+  // the products table down with it.
+  const [eolByComponent, setEolByComponent] = useState<Map<string, EolFinding>>(new Map());
 
   const notifyProductName = products.length > 0 ? products[0].name : search.trim();
 
@@ -54,6 +61,27 @@ const InstalledProducts: React.FC = () => {
       .then(setProductNames)
       .catch((err) => console.error('Failed to load installed product names:', err));
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      getEolFindings({ status: 'ALL', search: serverSearch.trim() || search, pageSize: 500 })
+        .then((response) => {
+          if (cancelled) return;
+          const lookup = new Map<string, EolFinding>();
+          for (const finding of response.findings) {
+            if (finding.subjectType !== 'ASSET_PRODUCT') continue;
+            lookup.set(assetComponentKey(finding.assetId, finding.componentName), finding);
+          }
+          setEolByComponent(lookup);
+        })
+        .catch((err) => console.error('Failed to load EOL status for installed products:', err));
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [search, serverSearch]);
 
   const openNotifyModal = async (productName: string) => {
     setNotifyProduct(productName);
@@ -189,21 +217,36 @@ const InstalledProducts: React.FC = () => {
                       <th>Version</th>
                       <th>System</th>
                       <th>AWS Account ID</th>
+                      <th>Lifecycle</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
-                      <tr><td colSpan={4} className="text-center py-4">Loading installed products...</td></tr>
+                      <tr><td colSpan={5} className="text-center py-4">Loading installed products...</td></tr>
                     ) : products.length === 0 ? (
-                      <tr><td colSpan={4} className="text-center py-4 text-muted">No installed products found.</td></tr>
-                    ) : products.map((product) => (
-                      <tr key={product.id}>
-                        <td className="fw-semibold">{product.name}</td>
-                        <td><span className="text-danger">{product.version || '—'}</span></td>
-                        <td><a href={`/assets/${product.assetId}`}>{product.hostname}</a></td>
-                        <td>{product.cloudAccountId || '–'}</td>
-                      </tr>
-                    ))}
+                      <tr><td colSpan={5} className="text-center py-4 text-muted">No installed products found.</td></tr>
+                    ) : products.map((product) => {
+                      const eol = eolByComponent.get(assetComponentKey(product.assetId, product.name));
+                      const badge = eol ? statusBadge(eol.status) : null;
+                      return (
+                        <tr key={product.id}>
+                          <td className="fw-semibold">{product.name}</td>
+                          <td><span className="text-danger">{product.version || '—'}</span></td>
+                          <td><a href={`/assets/${product.assetId}`}>{product.hostname}</a></td>
+                          <td>{product.cloudAccountId || '–'}</td>
+                          <td>
+                            {badge && eol ? (
+                              <a href="/vulnerabilities/eol" className="text-decoration-none"
+                                title={`Cycle ${eol.cycle} — ${describeDeadline(eol.eolDate, eol.daysUntilEol)}`}>
+                                <span className={badge.className}>{badge.label}</span>
+                              </a>
+                            ) : (
+                              <span className="text-muted">–</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

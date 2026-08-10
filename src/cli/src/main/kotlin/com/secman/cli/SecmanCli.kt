@@ -9,6 +9,7 @@ import com.secman.cli.commands.CrowdStrikeLastImportCommand
 import com.secman.cli.commands.DeduplicateVulnerabilitiesCommand
 import com.secman.cli.commands.DeleteAssetNotSeenCommand
 import com.secman.cli.commands.DeleteAllRequirementsCommand
+import com.secman.cli.commands.EolSyncCommand
 import com.secman.cli.commands.ExportRequirementsCommand
 import com.secman.cli.commands.ImportGithubReposCommand
 import com.secman.cli.commands.InstalledProductsCommand
@@ -25,6 +26,7 @@ import com.secman.cli.commands.SendNotificationUsersCommand
 import com.secman.cli.commands.NotifyNewAccountsCommand
 import com.secman.cli.commands.SendPatchNotificationsCommand
 import com.secman.cli.commands.SendApplicationRegisterRemindersCommand
+import com.secman.cli.commands.SendEolNotificationsCommand
 import com.secman.cli.commands.SendExceptionExpiryRemindersCommand
 import com.secman.cli.commands.ServersCommand
 import io.micronaut.configuration.picocli.PicocliRunner
@@ -419,6 +421,22 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "eol-sync" -> {
+                // Download the EOL catalogue (backend-side fetch) and re-match the inventory
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(EolSyncCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "send-eol-notifications" -> {
+                // Email account owners about software/OS reaching EOL within N months
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(SendEolNotificationsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             args[0] == "alert-github-repo-owners" -> {
                 // Alert repo owners whose high/critical vuln count has not decreased in N days
                 val subArgs = args.drop(1).toTypedArray()
@@ -478,6 +496,11 @@ class SecmanCli {
                 send-application-register-reminders  Send reminders for stale application register quality checks
                 notify-new-accounts    Notify users about new AWS account mappings created in the last N hours
                 send-exception-expiry-reminders  Notify vulnerability exception owners about exceptions expiring soon
+                send-eol-notifications  Email account owners about software/OS reaching end of life within N months
+
+              End of Life:
+                eol-sync               Download the EOL catalogue and re-match secman's inventory (ADMIN)
+                send-eol-notifications  Email account owners about upcoming end-of-life software (ADMIN)
 
               User & Access Management:
                 manage-user-mappings   Manage user mappings for domains and AWS accounts
@@ -541,6 +564,8 @@ class SecmanCli {
             "env" to "environment",
             "vars" to "environment",
             "s3" to "manage-user-mappings-s3",
+            "eol" to "eol-sync",
+            "eol-notifications" to "send-eol-notifications",
         )
 
         private val commandHelpTexts = mapOf(
@@ -838,6 +863,106 @@ class SecmanCli {
                   secman alert-github-repo-owners --dry-run
                   secman alert-github-repo-owners
                   secman alert-github-repo-owners --days 60 --verbose
+            """.trimIndent(),
+
+            "eol-sync" to """
+                secman eol-sync - Download the end-of-life catalogue and re-match secman's inventory
+
+                Usage: secman eol-sync [options]
+
+                Requires: ADMIN role
+
+                Description:
+                  Triggers the backend to download the end-of-life (EOL) catalogue from the
+                  configured source and then re-match every system's OS and installed products,
+                  plus every imported GitHub repository's dependencies, against it.
+
+                  Default source: endoflife.date — a public, unauthenticated, community
+                  maintained JSON catalogue covering ~350 products (Windows and Windows Server,
+                  RHEL, Ubuntu, Debian, SLES, Amazon Linux, ESXi, Java, .NET, Python, Node.js,
+                  nginx, Apache, Tomcat, PostgreSQL, MySQL/MariaDB, Spring Boot, Kubernetes and
+                  more). Needs no credential, which is why the fetch runs in the backend where
+                  the outbound host allowlist and the audit record live — the CLI host does not
+                  need internet access to the EOL source.
+
+                  The source is operator configuration, not a CLI flag:
+                    secman.eol.base-url        (default https://endoflife.date)
+                    secman.eol.allowed-hosts   (default endoflife.date)
+                    secman.eol.horizon-months  (default 12)
+
+                  Matching is conservative: a component whose version cannot be parsed, or whose
+                  version matches no release cycle in the catalogue, produces no finding. Only
+                  end-of-life and approaching-end-of-life components are stored.
+
+                Options:
+                  --products <list>        Comma-separated upstream product keys to refresh
+                                           (default: the whole catalogue, max 200 entries)
+                  --no-scan                Download the catalogue but skip the matching scan
+                  --scan-only              Skip the download; only re-run the matching scan
+                  --horizon-months <n>     How far ahead counts as approaching EOL, 1-120
+                                           (default: server setting, 12)
+                  --verbose, -v            List products that could not be synced
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --backend-url <url>      Backend API URL (or SECMAN_HOST / SECMAN_BACKEND_URL)
+
+                Exit codes:
+                  0  Sync completed without errors
+                  1  Sync failed or completed with warnings
+                  2  Usage error (conflicting flags, out-of-range horizon)
+
+                Examples:
+                  secman eol-sync
+                  secman eol-sync --verbose
+                  secman eol-sync --products ubuntu,rhel,windows-server
+                  secman eol-sync --scan-only --horizon-months 18
+
+                See also: secman help send-eol-notifications
+            """.trimIndent(),
+
+            "send-eol-notifications" to """
+                secman send-eol-notifications - Email account owners about upcoming end-of-life software
+
+                Usage: secman send-eol-notifications [options]
+
+                Requires: ADMIN role
+
+                Description:
+                  Finds every stored EOL finding whose end-of-life date falls within the next
+                  --months months, groups them by recipient and sends each recipient one
+                  consolidated email listing the affected systems and components.
+
+                  Recipients are resolved the same way as the other owner-facing notifications:
+                  the AWS account's owners (UserMapping), members of workgroups holding assets in
+                  the account, and users the account is shared with — falling back to the asset's
+                  own owner for systems with no cloud account. Owners that cannot be resolved to
+                  a valid address are reported, never guessed at.
+
+                  Run `secman eol-sync` first: this command reads stored findings and performs no
+                  matching of its own. Typical use is a monthly cron after the nightly sync.
+
+                Options:
+                  --months <n>             Look-ahead window in months, 1-60 (default: 12)
+                  --dry-run                Preview planned recipients without sending emails
+                  --include-already-eol    Also report components already past end of life
+                  --only-email <email>     Only notify this address (case-insensitive)
+                  --verbose, -v            Per-recipient delivery status
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --backend-url <url>      Backend API URL (or SECMAN_HOST / SECMAN_BACKEND_URL)
+
+                Exit codes:
+                  0  Success (or dry run completed)
+                  1  Partial failure or unexpected error
+                  2  Usage error (e.g. --months out of range)
+
+                Examples:
+                  secman send-eol-notifications --dry-run
+                  secman send-eol-notifications
+                  secman send-eol-notifications --months 6 --verbose
+                  secman send-eol-notifications --include-already-eol --only-email owner@example.com
+
+                See also: secman help eol-sync
             """.trimIndent(),
 
             "manage-user-mappings" to """

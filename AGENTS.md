@@ -16,7 +16,7 @@
 - CLI: build once `./gradlew :cli:shadowJar`, then `./scripts/secman <cmd>`.
 
 ## Skills
-Twelve project skills live in **`.agents/skills/`** — the Codex rendering of the
+Thirteen project skills live in **`.agents/skills/`** — the Codex rendering of the
 same skill set Claude Code loads from `.claude/skills/` (`CLAUDE.md` §Tooling
 Conventions). They are plain Markdown: there is no slash command here, so read
 the matching `.agents/skills/<name>/SKILL.md` **in full** and follow it.
@@ -44,6 +44,7 @@ the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
 | `e2ejs` | Scan every page for JS errors as admin *and* normal user | no |
 | `e2evulnexception` | Full vuln + exception lifecycle over MCP and the UI | ⚠️ **wipes the DB** |
 | `e2eexception` | Fast MCP-only exception smoke test | ⚠️ **deletes all assets** |
+| `e2eeol` | Full end-of-life lifecycle: catalogue sync, matching, owner mail, top-10 repos, authz negatives | seeds + removes a testbed; rebuilds derived `eol_finding` rows |
 | `admin-asset-e2e` | Admin adds a system + vulnerability, normal user sees it | adds one asset |
 | `importtest` | Run and debug the CrowdStrike import | ⚠️ **imports live data** |
 | `crowdstrike-vuln-match` | Compare stored rows against a fresh Falcon query | no |

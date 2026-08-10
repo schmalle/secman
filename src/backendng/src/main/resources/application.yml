@@ -238,6 +238,24 @@ secman:
     max-source-pixels: ${SECMAN_PROFILE_PICTURE_MAX_SOURCE_PIXELS:40000000}
     # Edge length of the stored square thumbnail.
     target-edge: ${SECMAN_PROFILE_PICTURE_TARGET_EDGE:256}
+  eol:
+    # End-of-life catalogue. Default source is endoflife.date: public,
+    # unauthenticated, ~350 products. Operator configuration only — no request
+    # value ever reaches this URL.
+    #
+    # base-url and allowed-hosts are a PAIR. Changing base-url without adding the
+    # new host to allowed-hosts fails closed by design (§A10) — that is the
+    # SSRF guard doing its job, never something to relax.
+    base-url: ${SECMAN_EOL_BASE_URL:https://endoflife.date}
+    allowed-hosts: ${SECMAN_EOL_ALLOWED_HOSTS:endoflife.date}
+    # How far ahead counts as "approaching EOL". Also the default look-ahead of
+    # the owner notification, so lowering it below 12 shrinks what that mail can
+    # report.
+    horizon-months: ${SECMAN_EOL_HORIZON_MONTHS:12}
+    timeout-seconds: ${SECMAN_EOL_TIMEOUT_SECONDS:20}
+    max-response-bytes: ${SECMAN_EOL_MAX_RESPONSE_BYTES:8388608}
+    max-products: ${SECMAN_EOL_MAX_PRODUCTS:2000}
+    scan-page-size: ${SECMAN_EOL_SCAN_PAGE_SIZE:500}
   encryption:
     # Encryption password for sensitive data - MUST be overridden in production
     password: ${SECMAN_ENCRYPTION_PASSWORD:SecManDefaultEncryptionPassword2024}

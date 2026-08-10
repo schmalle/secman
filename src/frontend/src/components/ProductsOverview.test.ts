@@ -63,7 +63,21 @@ test('installed products renders product, version, system, and AWS account colum
     assert.doesNotMatch(source, /product\.importedAt/);
     assert.match(source, /<th>AWS Account ID<\/th>/);
     assert.match(source, /product\.cloudAccountId/);
-    assert.match(source, /colSpan=\{4\}/);
+    // Lifecycle badge column added with the EOL feature; the empty/loading rows
+    // must span every header or the placeholder text stops centring.
+    assert.match(source, /<th>Lifecycle<\/th>/);
+    assert.match(source, /colSpan=\{5\}/);
+    assert.doesNotMatch(source, /colSpan=\{4\}/);
+});
+
+test('installed products lifecycle badge keys on the shared asset+component key', () => {
+    const source = readFileSync(new URL('./InstalledProducts.tsx', import.meta.url), 'utf8');
+
+    // Both sides of the lookup must normalize through the same helper — a
+    // hand-rolled key on either side makes the badge silently never appear.
+    assert.match(source, /assetComponentKey\(product\.assetId, product\.name\)/);
+    assert.match(source, /assetComponentKey\(finding\.assetId, finding\.componentName\)/);
+    assert.match(source, /finding\.subjectType !== 'ASSET_PRODUCT'/);
 });
 
 test('admin email broadcast preview sanitizes html before rendering', () => {
