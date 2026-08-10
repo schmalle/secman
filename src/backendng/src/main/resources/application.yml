@@ -362,6 +362,31 @@ secman:
     # When true: vulnerabilities without patch_publication_date are skipped during import
     # When false: all vulnerabilities are imported (current behavior)
     require-patch-publication-date: ${VULN_REQUIRE_PATCH_PUBLICATION_DATE:false}
+  # Mobile relay (docs/RELAY.md). secman pushes an admin-level status snapshot
+  # OUT to a zero-trust relay in a DMZ; the relay never connects back, holds no
+  # secman credential and is never told where secman is. Everything here is off
+  # until SECMAN_RELAY_ENABLED=true, which is the single switch that "forces
+  # secman to establish a connection to the external server".
+  #
+  # token / hmac-key are secrets: source them from pass-cli, never from a file.
+  # They must differ from each other — a leaked bearer token alone must not be
+  # enough to forge a snapshot, because every request is also HMAC-signed.
+  relay:
+    enabled: ${SECMAN_RELAY_ENABLED:false}
+    url: ${SECMAN_RELAY_URL:}
+    token: ${SECMAN_RELAY_TOKEN:}
+    hmac-key: ${SECMAN_RELAY_HMAC_KEY:}
+    # Must be stable for the life of the deployment: the relay refuses a
+    # snapshot whose instance id differs from the one it is already serving.
+    instance-id: ${SECMAN_RELAY_INSTANCE_ID:secman}
+    publish-interval: ${SECMAN_RELAY_PUBLISH_INTERVAL:60s}
+    timeout-seconds: ${SECMAN_RELAY_TIMEOUT_SECONDS:10}
+    # Data minimisation: only the sections listed here are ever assembled, so
+    # anything removed from this list never leaves the trusted network.
+    # Valid values: totals, kpis, exceptions, imports, top-products, top-servers
+    sections: ${SECMAN_RELAY_SECTIONS:totals,kpis,exceptions,imports,top-products,top-servers}
+    # Development only. A production relay URL is https.
+    allow-plaintext-url: ${SECMAN_RELAY_ALLOW_PLAINTEXT_URL:false}
   crowdstrike:
     # Scheduled cleanup of assets that have not been re-imported by CrowdStrike
     # for `stale-days` days. Opt-in: disabled by default so existing deployments

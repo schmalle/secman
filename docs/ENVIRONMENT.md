@@ -293,6 +293,101 @@ clientSecret: ...
 baseUrl: https://api.crowdstrike.com
 ```
 
+## Mobile relay
+
+Two processes, two sets of variables. secman pushes an admin-level status
+snapshot **out** to a standalone relay in a DMZ; the relay serves it read-only
+to mobile devices and can never reach back. Design and threat model:
+[`RELAY.md`](RELAY.md).
+
+### secman side (`SECMAN_RELAY_*`)
+
+Everything is off until `SECMAN_RELAY_ENABLED=true` — that single switch is what
+"forces secman to establish a connection to the external server". With it unset,
+no outbound connection is ever attempted.
+
+| Var | Default | Notes |
+|---|---|---|
+| `SECMAN_RELAY_ENABLED` | `false` | master switch |
+| `SECMAN_RELAY_URL` | *(empty)* | e.g. `https://relay.example.com`, or the private ingest address. https required |
+| `SECMAN_RELAY_TOKEN` | *(empty)* | bearer credential. **Secret** — `pass-cli` |
+| `SECMAN_RELAY_HMAC_KEY` | *(empty)* | signs every request body. **Secret**, and must differ from the token: a leaked bearer token alone must not be enough to forge a snapshot |
+| `SECMAN_RELAY_INSTANCE_ID` | `secman` | stable per deployment. The relay refuses a snapshot whose instance id differs from the one it is serving, so two environments cannot interleave onto one phone |
+| `SECMAN_RELAY_PUBLISH_INTERVAL` | `60s` | measured end-to-start, so a slow relay stretches the interval rather than piling up pushes |
+| `SECMAN_RELAY_TIMEOUT_SECONDS` | `10` | per outbound call |
+| `SECMAN_RELAY_SECTIONS` | all six | `totals,kpis,exceptions,imports,top-products,top-servers`. **The data-minimisation control**: a section not listed is never assembled, so it cannot leak |
+| `SECMAN_RELAY_ALLOW_PLAINTEXT_URL` | `false` | development only |
+
+### Relay side (`RELAY_*`)
+
+Full example: `src/relay/deploy/relay.env.example`. The relay **fails to boot**
+on a missing, short (<32 chars) or well-known-placeholder secret — the same
+posture as `JwtSigningValidator`.
+
+**Listeners and TLS**
+
+| Var | Default | Notes |
+|---|---|---|
+| `RELAY_LISTEN_ADDR` | `:8443` | the selectable public port |
+| `RELAY_INGEST_LISTEN_ADDR` | *(empty)* | when set, ingest gets its own listener — bind it to a private interface. Recommended |
+| `RELAY_TLS_MODE` | `acme` | `acme` \| `file` \| `off` |
+| `RELAY_PLAINTEXT_ACK` | `false` | **required** for `off`. Makes ALB-terminated plaintext a deliberate choice, never an accident |
+| `RELAY_ACME_DOMAINS` | *(empty)* | comma list. No wildcards — HTTP-01 cannot satisfy them |
+| `RELAY_ACME_EMAIL` | *(empty)* | CA contact |
+| `RELAY_ACME_ACCEPT_TOS` | `false` | must be true to request a certificate |
+| `RELAY_ACME_DIRECTORY_URL` | Let's Encrypt production | point at staging while testing; production limits can lock you out for a week |
+| `RELAY_ACME_HTTP01_ADDR` | `:80` | must be reachable from the internet during issuance |
+| `RELAY_ACME_CACHE_DIR` | `$RELAY_STATE_DIR/acme` | account key and certificate, 0700 |
+| `RELAY_TLS_CERT_FILE` / `RELAY_TLS_KEY_FILE` | *(empty)* | `file` mode; reloaded within a minute of changing |
+| `RELAY_TRUSTED_PROXY_CIDRS` | *(empty)* | the **only** thing that makes `X-Forwarded-For` believed. Empty means always use the TCP peer |
+
+**Credentials** (all secret, all ≥32 chars, all mutually distinct)
+
+| Var | Notes |
+|---|---|
+| `RELAY_INGEST_TOKEN` | must match `SECMAN_RELAY_TOKEN` |
+| `RELAY_INGEST_HMAC_KEY` | must match `SECMAN_RELAY_HMAC_KEY` |
+| `RELAY_TOKEN_SIGNING_KEY` | signs the relay's own device access tokens |
+| `RELAY_INGEST_MAX_CLOCK_SKEW` | default `5m`; also the replay-nonce window |
+| `RELAY_INGEST_ALLOWED_CIDRS` | optional; checked against the TCP peer, never a header |
+
+**Identity providers**
+
+| Var | Default | Notes |
+|---|---|---|
+| `RELAY_APPLE_ENABLED` | `false` | |
+| `RELAY_APPLE_AUDIENCES` | *(empty)* | the app's bundle id. A security control: an Apple ID token minted for another app is a *valid* token, and `aud` is what refuses it |
+| `RELAY_GOOGLE_ENABLED` | `false` | |
+| `RELAY_GOOGLE_AUDIENCES` | *(empty)* | the iOS OAuth client id |
+| `RELAY_GITHUB_ENABLED` | `false` | |
+| `RELAY_GITHUB_CLIENT_ID` | *(empty)* | |
+| `RELAY_GITHUB_CLIENT_SECRET` | *(empty)* | **Secret.** Stays on the relay; never reaches a device |
+| `RELAY_GITHUB_REDIRECT_URI` | *(empty)* | the relay's own callback, https |
+| `RELAY_APP_CALLBACK_SCHEME` | `secman-relay` | must match the app's `CFBundleURLSchemes` |
+| `RELAY_PRIVILEGED_ROLES` | `ADMIN` | roles that demand a strong provider |
+| `RELAY_STRONG_PROVIDERS` | `apple,google` | providers accepted for those roles. Re-checked on **every** token issue, so a promotion invalidates a weakly-bound device |
+| `RELAY_ENROLLMENT_CODES_ENABLED` | `true` | set false for federated-login-only |
+| `RELAY_LOGIN_TIMEOUT` | `15s` | per outbound provider call |
+
+The relay refuses to start if a privileged role is configured but none of the
+strong providers is enabled — otherwise an admin could never sign in and the
+failure would look like an app bug.
+
+**Limits and state**
+
+| Var | Default |
+|---|---|
+| `RELAY_STATE_DIR` | `/var/lib/secman-relay` (0700; `devices.json` 0600) |
+| `RELAY_SNAPSHOT_MAX_AGE` | `15m` — past this, responses are flagged `stale` (still served) |
+| `RELAY_MAX_BODY_BYTES` | `4194304` |
+| `RELAY_RATE_LIMIT_RPS` / `_BURST` | `5` / `20`, per client per route family |
+| `RELAY_MAX_DEVICES` | `500` |
+| `RELAY_TOKEN_TTL` | `15m` |
+| `RELAY_CHALLENGE_TTL` | `2m` |
+| `RELAY_ENROLLMENT_TTL` | `15m` |
+| `RELAY_READ_TIMEOUT` / `_WRITE_TIMEOUT` / `_IDLE_TIMEOUT` | `15s` / `30s` / `90s` |
+| `RELAY_LOG_LEVEL` | `info` |
+
 ## Hygiene
 
 - Never commit credentials. Use `pass-cli` (Proton Pass) for shared secrets — see `docs/PASS_CLI.md`.
@@ -311,3 +406,10 @@ baseUrl: https://api.crowdstrike.com
 | OAuth `Your login session was not found` | state expired/lost — increase `OAUTH_STATE_RETRY_MAX_ATTEMPTS`/`MAX_DELAY`; check `oauth_states` cleanup job |
 | OAuth `Could not complete authentication` | token exchange failed (network/IdP) — bump `OAUTH_TOKEN_EXCHANGE_MAX_RETRIES`; check provider logs |
 | OAuth `Your login session expired` | user took >10 min at IdP login — UX issue, not a config bug |
+| Relay: `no way to bind a device` at boot | every provider and enrollment codes are all disabled |
+| Relay: `RELAY_PRIVILEGED_ROLES is set but none of RELAY_STRONG_PROVIDERS is enabled` | an ADMIN could never sign in; enable Apple or Google |
+| Relay push `401` | token or HMAC key mismatch, or clock skew beyond `RELAY_INGEST_MAX_CLOCK_SKEW` |
+| Relay push `409` | a snapshot not newer than the stored one, or a different `SECMAN_RELAY_INSTANCE_ID` |
+| Relay push `400 section has no policy entry` | a section was added to `RelaySnapshotBuilder` without a row in `SECTION_POLICIES` |
+| App: "this account is not authorized" | no `RelayIdentity` links that provider subject to a secman user |
+| App: "requires a stronger login method" | the account holds ADMIN and tried GitHub or an enrollment code — working as intended |
