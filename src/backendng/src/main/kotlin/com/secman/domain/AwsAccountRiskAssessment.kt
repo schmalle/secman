@@ -45,7 +45,14 @@ data class AwsAccountRiskAssessment(
     @JoinColumn(name = "risk_assessment_id", nullable = false)
     var riskAssessment: RiskAssessment,
 
-    @Column(name = "use_case_name", nullable = false, length = 255)
+    /**
+     * The use case(s) the assessment is scoped to, comma-joined and sorted.
+     *
+     * Several names rather than one since guided onboarding
+     * ([com.secman.domain.AccountOnboardingMode.GUIDED]) scopes an assessment to the *union*
+     * of every matching rule's use cases. Hence 1024, not 255 — see V253.
+     */
+    @Column(name = "use_case_name", nullable = false, length = 1024)
     @NotBlank
     var useCaseName: String,
 

@@ -16,7 +16,7 @@
 - CLI: build once `./gradlew :cli:shadowJar`, then `./scripts/secman <cmd>`.
 
 ## Skills
-Thirteen project skills live in **`.agents/skills/`** — the Codex rendering of the
+Fourteen project skills live in **`.agents/skills/`** — the Codex rendering of the
 same skill set Claude Code loads from `.claude/skills/` (`CLAUDE.md` §Tooling
 Conventions). They are plain Markdown: there is no slash command here, so read
 the matching `.agents/skills/<name>/SKILL.md` **in full** and follow it.
@@ -50,6 +50,7 @@ the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
 | `crowdstrike-vuln-match` | Compare stored rows against a fresh Falcon query | no |
 | `aws-account-risk-assessment` | New AWS account starts a correctly scoped assessment | seeds + removes a testbed |
 | `aws-account-owner-email` | The account owner actually receives the mail | testbed, ⚠️ **sends real mail** |
+| `account-onboarding` | Welcome mail, direct and guided assessments, the owner's tokenized questionnaire | seeds + removes a testbed |
 | `createtestdata` | Seed a fixture to click through | adds a fixture |
 
 The three destructive ones are unsafe against a shared instance — resolve

@@ -33,7 +33,15 @@ Stack: Kotlin 2.4.10 / Java 25 · Micronaut 5.1 · Hibernate JPA · Astro 7.2 / 
 | [DB_CONNECTION_LOST_RUNBOOK.md](./DB_CONNECTION_LOST_RUNBOOK.md) | Step-by-step recovery when `/health` reports the database connection lost |
 | [E2E_EXCEPTION_WORKFLOW_TEST.md](./E2E_EXCEPTION_WORKFLOW_TEST.md) | Vuln-exception MCP E2E |
 | [S3_USER_MAPPING_IMPORT.md](./S3_USER_MAPPING_IMPORT.md) | `import-s3` / `download-s3` / `print-s3` / `list-bucket` |
+| [SKILLS.md](./SKILLS.md) | Which agent skill to use when, and what each one writes |
 | [SKILLS_AND_AGENTS.md](./SKILLS_AND_AGENTS.md) | Claude Code skills + sub-agents |
+| [AWS_ACCOUNT_RISK_ASSESSMENT.md](./AWS_ACCOUNT_RISK_ASSESSMENT.md) | Auto risk assessment for newly discovered AWS accounts |
+| [ACCOUNT_ONBOARDING.md](./ACCOUNT_ONBOARDING.md) | Welcome mail, direct and guided assessments, the owner questionnaire and its rules |
+| [EOL.md](./EOL.md) | End-of-life catalogue, matching, owner mail, repository ranking |
+| [RELAY.md](./RELAY.md) | Zero-trust mobile relay (Go, DMZ) and the iOS app |
+| [AWS.md](./AWS.md) | AWS account mapping, sharing and access rules |
+| [RACE_CONDITIONS.md](./RACE_CONDITIONS.md) | Known races and the guards that close them |
+| [CHANGELOG.md](./CHANGELOG.md) | Full change history (archived from CLAUDE.md) |
 | [PASS_CLI.md](./PASS_CLI.md) | `pass-cli` (Proton Pass) secret resolution |
 | [../src/clinotify/README.md](../src/clinotify/README.md) | CrowdStrike checkin Telegram monitor |
 | [../docker/README.md](../docker/README.md) | Docker container deployment |
@@ -45,7 +53,7 @@ Stack: Kotlin 2.4.10 / Java 25 · Micronaut 5.1 · Hibernate JPA · Astro 7.2 / 
 
 - **Admins** — `DEPLOYMENT.md` → `ENVIRONMENT.md` → `CLI.md` (cron) → `TROUBLESHOOTING.md`.
 - **Developers** — `ARCHITECTURE.md` → `TESTING.md` → `ENVIRONMENT.md` → `CROWDSTRIKE_IMPORT.md` → `CLAUDE.md` (root).
-- **Security teams** — `MCP.md` → `CROWDSTRIKE_IMPORT.md` → `CLI.md`.
+- **Security teams** — `MCP.md` → `CROWDSTRIKE_IMPORT.md` → `CLI.md` → `ACCOUNT_ONBOARDING.md`.
 
 ## Local dev (TL;DR)
 

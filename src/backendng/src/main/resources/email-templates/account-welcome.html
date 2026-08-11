@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Your AWS account is registered in SecMan</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #222; max-width: 640px; margin: 0 auto; padding: 24px;">
+  <p style="text-align: center;">
+    <img src="cid:secman-logo" alt="SecMan" style="max-height: 64px;">
+  </p>
+
+  {ifSimulated}
+  <p style="background: #fff3cd; border: 1px solid #ffe08a; border-radius: 4px; padding: 10px 14px; color: #6b5200;">
+    <strong>This is a test message</strong> sent by {simulatedBy} from SecMan. No action is required.
+  </p>
+  {/ifSimulated}
+  <h2 style="color: #1f4e79;">Welcome to SecMan</h2>
+
+  <p>AWS account
+     <strong style="font-family: monospace;">{awsAccountId}</strong>
+     has been registered in SecMan and mapped to you as its owner.</p>
+
+  <p>SecMan is where this organisation tracks security requirements, vulnerabilities and risk
+     assessments. From now on you will see this account's assets, findings and any assessments
+     addressed to you when you sign in.</p>
+
+  {ifVersion}
+  <table style="border-collapse: collapse; margin: 0 0 16px;">
+    <tr>
+      <td style="padding: 4px 16px 4px 0; color: #555;">Current requirements version</td>
+      <td style="padding: 4px 0;">{requirementsVersion}</td>
+    </tr>
+  </table>
+  {/ifVersion}
+
+  <p>
+    <a href="{portalUrl}"
+       style="background: #1f4e79; color: #fff; padding: 10px 18px; text-decoration: none; border-radius: 4px;">
+      Open SecMan
+    </a>
+  </p>
+
+  <p style="color: #555; font-size: 0.9em;">
+    If the button does not work, open
+    <a href="{portalUrl}" style="color: #1f4e79;">{portalUrl}</a>.
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 32px 0 16px;">
+
+  <p style="color: #777; font-size: 0.85em;">
+    You are receiving this because {ownerEmail} is mapped to this AWS account in SecMan.
+    If that is not correct, contact your SecMan administrator.
+  </p>
+</body>
+</html>

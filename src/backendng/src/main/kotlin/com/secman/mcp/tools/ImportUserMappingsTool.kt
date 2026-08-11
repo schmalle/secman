@@ -1,5 +1,6 @@
 package com.secman.mcp.tools
 
+import com.secman.domain.AccountOnboardingMode
 import com.secman.domain.McpOperation
 import com.secman.dto.BulkUserMappingEntry
 import com.secman.dto.BulkUserMappingRequest
@@ -97,6 +98,26 @@ class ImportUserMappingsTool(
                     "Default: 7, maximum: ${AwsAccountRiskAssessmentService.MAX_DEADLINE_DAYS}",
                 "minimum" to 1,
                 "maximum" to AwsAccountRiskAssessmentService.MAX_DEADLINE_DAYS
+            ),
+            "onboardingMode" to mapOf(
+                "type" to "string",
+                "description" to "What to do for the owner of every brand-new AWS account. " +
+                    "WELCOME_ONLY sends a welcome mail only. DIRECT starts a risk assessment " +
+                    "immediately for riskAssessmentUseCase. GUIDED mails the owner a one-time link; " +
+                    "the assessment is created from the use cases their answers resolve to. " +
+                    "Omit to fall back to startRiskAssessment (which means DIRECT with no welcome mail).",
+                "enum" to listOf("WELCOME_ONLY", "DIRECT", "GUIDED")
+            ),
+            "sendWelcomeEmail" to mapOf(
+                "type" to "boolean",
+                "description" to "Override the welcome mail. Defaults to true when onboardingMode is " +
+                    "given, false for a bare startRiskAssessment."
+            ),
+            "questionnaireExpiryDays" to mapOf(
+                "type" to "number",
+                "description" to "Days the GUIDED questionnaire link stays valid. Default 14.",
+                "minimum" to com.secman.domain.AccountOnboardingInvite.MIN_EXPIRY_DAYS,
+                "maximum" to com.secman.domain.AccountOnboardingInvite.MAX_EXPIRY_DAYS
             )
         ),
         "required" to listOf("mappings")
@@ -143,7 +164,20 @@ class ImportUserMappingsTool(
             startRiskAssessment = arguments["startRiskAssessment"] as? Boolean ?: false,
             riskAssessmentUseCase = (arguments["riskAssessmentUseCase"] as? String)?.trim()
                 ?.takeIf { it.isNotBlank() },
-            riskAssessmentDeadlineDays = (arguments["riskAssessmentDeadlineDays"] as? Number)?.toInt()
+            riskAssessmentDeadlineDays = (arguments["riskAssessmentDeadlineDays"] as? Number)?.toInt(),
+            onboardingMode = (arguments["onboardingMode"] as? String)?.trim()?.takeIf { it.isNotBlank() }
+                ?.let { raw ->
+                    // Parsed here, not deeper: an unknown value must be a VALIDATION_ERROR
+                    // naming the accepted set, not an IllegalArgumentException from valueOf.
+                    runCatching { AccountOnboardingMode.valueOf(raw.uppercase()) }.getOrNull()
+                        ?: return McpToolResult.error(
+                            "VALIDATION_ERROR",
+                            "onboardingMode must be one of " +
+                                AccountOnboardingMode.entries.joinToString(", ") { it.name }
+                        )
+                },
+            sendWelcomeEmail = arguments["sendWelcomeEmail"] as? Boolean,
+            questionnaireExpiryDays = (arguments["questionnaireExpiryDays"] as? Number)?.toInt()
         )
 
         bulkImportService.validate(request)?.let { validationError ->
@@ -186,6 +220,23 @@ class ImportUserMappingsTool(
                             "skipped" to ra.skipped,
                             "skipReason" to ra.skipReason,
                             "error" to ra.error
+                        )
+                    },
+                    // Same three shapes as riskAssessments (done / skipped+skipReason / error),
+                    // so an agent reads both lists by one rule.
+                    "onboarding" to result.onboarding.map { ob ->
+                        mapOf(
+                            "awsAccountId" to ob.awsAccountId,
+                            "ownerEmail" to ob.ownerEmail,
+                            "mode" to ob.mode,
+                            "welcomeEmailSent" to ob.welcomeEmailSent,
+                            "questionnaireInviteId" to ob.questionnaireInviteId,
+                            "questionnaireExpiresAt" to ob.questionnaireExpiresAt,
+                            "riskAssessmentId" to ob.riskAssessmentId,
+                            "dryRun" to ob.dryRun,
+                            "skipped" to ob.skipped,
+                            "skipReason" to ob.skipReason,
+                            "error" to ob.error
                         )
                     }
                 )

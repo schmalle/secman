@@ -174,6 +174,17 @@ micronaut:
       - pattern: /api/auth/status
         access:
           - isAuthenticated()
+      # Account onboarding questionnaire: the account owner is not a SecMan user and holds no
+      # credential — the single-use token in the path IS the capability
+      # (AccountOnboardingPublicController, @Secured(IS_ANONYMOUS) on every method).
+      # Listed explicitly for the same reason /api/mcp is: without it the /api/** catch-all
+      # runs JWT validation first, so an owner who happens to have a stale `secman_auth` cookie
+      # from an old session gets 401 on their own questionnaire link instead of the form.
+      # Everything under /api/account-onboarding (no `/public`) stays ADMIN/SECCHAMPION-gated
+      # by the catch-all plus @Secured — only this prefix is open.
+      - pattern: /api/public/account-onboarding/**
+        access:
+          - isAnonymous()
       - pattern: "/api/**"
         http-method: OPTIONS
         access:
@@ -249,6 +260,27 @@ secman:
     # Install the shipped example template on first start, so a fresh installation exports in a
     # company design instead of the built-in layout. Only ever seeds into an empty table.
     seed-example: ${SECMAN_REQUIREMENT_TEMPLATE_SEED_EXAMPLE:true}
+  account-onboarding:
+    # Welcome mail + optional risk assessment for the owner of a newly discovered AWS account.
+    # See docs/ACCOUNT_ONBOARDING.md.
+    #
+    # Ceiling on the (new account, owner) pairs one import may onboard. GUIDED sends two mails
+    # per pair, so an import introducing hundreds of accounts would otherwise fire a mail storm.
+    # Exceeding it is refused up front, before anything is imported — never throttled silently.
+    max-accounts-per-run: ${SECMAN_ONBOARDING_MAX_ACCOUNTS_PER_RUN:200}
+    # How long a guided questionnaire link stays valid. Shorter than the 30 days
+    # assessment_token grants, because this token *creates* a risk assessment rather than
+    # opening one that already exists. Range 1..90, enforced in code.
+    invite-expiry-days: ${SECMAN_ONBOARDING_INVITE_EXPIRY_DAYS:14}
+    # Days before expiry the owner is nudged. One nudge, then the link lapses — nothing is
+    # ever auto-created, because an assessment nobody scoped is worse than none.
+    reminder-days-before: ${SECMAN_ONBOARDING_REMINDER_DAYS_BEFORE:3}
+    # Which template pair each mail renders from. Basenames under email-templates/, resolved
+    # through EmailTemplateRenderer.ALLOWED_TEMPLATES — a closed allowlist, because a config
+    # string interpolated into getResourceAsStream would be a classpath-traversal read.
+    welcome-template: ${SECMAN_ONBOARDING_WELCOME_TEMPLATE:account-welcome}
+    questionnaire-template: ${SECMAN_ONBOARDING_QUESTIONNAIRE_TEMPLATE:account-onboarding-questionnaire}
+    reminder-template: ${SECMAN_ONBOARDING_REMINDER_TEMPLATE:account-onboarding-reminder}
   eol:
     # End-of-life catalogue. Default source is endoflife.date: public,
     # unauthenticated, ~350 products. Operator configuration only — no request

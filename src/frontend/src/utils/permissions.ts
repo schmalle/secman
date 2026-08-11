@@ -153,6 +153,24 @@ export function canAccessUseCaseManagement(roles: string[] | undefined): boolean
 }
 
 /**
+ * Check if user can access AWS Account Onboarding configuration
+ *
+ * Rules:
+ * - ADMIN can access
+ * - SECCHAMPION can access
+ *
+ * Mirrors `@Secured("ADMIN", "SECCHAMPION")` on `AccountOnboardingController` — for reads *and*
+ * writes, unlike Demand Classification which is read-both/write-ADMIN. Deciding which security
+ * requirements apply to a cloud account is a security champion's job; routing every rule edit
+ * through an ADMIN would make the feature unusable by the people who own it.
+ *
+ * This is the UI gate only. The controller annotation is the boundary (CLAUDE.md Principle 2).
+ */
+export function canAccessAccountOnboarding(roles: string[] | undefined): boolean {
+  return isAdmin(roles) || isSecChampion(roles);
+}
+
+/**
  * Check if user can access Releases
  * Feature: 067-requirement-releases
  *

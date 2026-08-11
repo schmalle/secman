@@ -156,6 +156,41 @@ class ImportS3Command(
     )
     var riskDeadlineDays: Int = 7
 
+    // Onboarding options, identical to ImportCommand's. Kept in step deliberately: an operator
+    // who learned the flags on `import` must not find them missing on `import-s3`.
+    @Option(
+        names = ["--onboarding-mode"],
+        description = [
+            "What to do for the owner of every brand-new AWS account this import introduces. " +
+                "WELCOME_ONLY sends a welcome mail only. DIRECT also starts a risk assessment " +
+                "for --risk-usecase. GUIDED mails the owner a one-time link and creates the " +
+                "assessment from their answers. Valid values: \${COMPLETION-CANDIDATES}. " +
+                "Default: none, nothing is sent."
+        ]
+    )
+    var onboardingMode: ImportCommand.OnboardingMode? = null
+
+    @Option(
+        names = ["--welcome-email"],
+        negatable = true,
+        description = [
+            "Force the welcome mail on or off. On by default whenever --onboarding-mode is given; " +
+                "off for a bare --start-risk-assessment."
+        ]
+    )
+    var welcomeEmail: Boolean? = null
+
+    @Option(
+        names = ["--questionnaire-expiry-days"],
+        description = ["Days the GUIDED questionnaire link stays valid (default: \${DEFAULT-VALUE}, range 1-90)"],
+        defaultValue = "14"
+    )
+    var questionnaireExpiryDays: Int = 14
+
+    /** The mode actually in effect, applying the same fallback the backend applies. */
+    fun effectiveMode(): ImportCommand.OnboardingMode? =
+        onboardingMode ?: if (startRiskAssessment) ImportCommand.OnboardingMode.DIRECT else null
+
     // Feature 085: Email distribution options (same as ListCommand)
     @Option(
         names = ["--send-email"],
@@ -201,8 +236,39 @@ class ImportS3Command(
             }
             // Same nudge ImportCommand gives: a use case without the enabling flag is a no-op,
             // and silently ignoring it is how an operator ends up believing assessments ran.
-            if (!startRiskAssessment && !riskUseCase.isNullOrBlank()) {
-                println("Warning: --risk-usecase is ignored because --start-risk-assessment is not set")
+            if (!startRiskAssessment && onboardingMode == null && !riskUseCase.isNullOrBlank()) {
+                println(
+                    "Warning: --risk-usecase is ignored because neither --start-risk-assessment " +
+                        "nor --onboarding-mode is set"
+                )
+            }
+
+            // Onboarding options, validated by the same rules ImportCommand applies. The one
+            // combination that is rejected rather than guessed is --start-risk-assessment with a
+            // non-DIRECT mode: honouring either half would silently do something else.
+            val mode = onboardingMode
+            if (startRiskAssessment && mode != null && mode != ImportCommand.OnboardingMode.DIRECT) {
+                throw IllegalArgumentException(
+                    "--start-risk-assessment only applies to --onboarding-mode DIRECT (got $mode)"
+                )
+            }
+            if (mode == ImportCommand.OnboardingMode.DIRECT && riskUseCase.isNullOrBlank()) {
+                throw IllegalArgumentException("--risk-usecase is required when --onboarding-mode is DIRECT")
+            }
+            if (mode != null && mode != ImportCommand.OnboardingMode.DIRECT && !riskUseCase.isNullOrBlank()) {
+                throw IllegalArgumentException("--risk-usecase only applies to --onboarding-mode DIRECT (got $mode)")
+            }
+            if (questionnaireExpiryDays < ImportCommand.MIN_QUESTIONNAIRE_EXPIRY_DAYS ||
+                questionnaireExpiryDays > ImportCommand.MAX_QUESTIONNAIRE_EXPIRY_DAYS
+            ) {
+                throw IllegalArgumentException(
+                    "--questionnaire-expiry-days must be between " +
+                        "${ImportCommand.MIN_QUESTIONNAIRE_EXPIRY_DAYS} and " +
+                        "${ImportCommand.MAX_QUESTIONNAIRE_EXPIRY_DAYS} (got $questionnaireExpiryDays)"
+                )
+            }
+            if (welcomeEmail != null && mode == null && !startRiskAssessment) {
+                throw IllegalArgumentException("--welcome-email requires --onboarding-mode")
             }
 
             // Resolve bucket/key: CLI flag takes priority, then env var (flags rule)
@@ -254,8 +320,19 @@ class ImportS3Command(
             }
 
             println("Format: $format")
-            if (startRiskAssessment) {
-                println("Risk assessment: enabled (use case '$riskUseCase', deadline $riskDeadlineDays day(s))")
+            when (effectiveMode()) {
+                ImportCommand.OnboardingMode.WELCOME_ONLY ->
+                    println("Onboarding: WELCOME_ONLY (welcome mail to each new account owner)")
+                ImportCommand.OnboardingMode.DIRECT -> {
+                    val label = if (onboardingMode == null) "DIRECT (via --start-risk-assessment)" else "DIRECT"
+                    println("Onboarding: $label (use case '$riskUseCase', deadline $riskDeadlineDays day(s))")
+                }
+                ImportCommand.OnboardingMode.GUIDED ->
+                    println(
+                        "Onboarding: GUIDED (welcome mail + guided assessment, " +
+                            "link valid $questionnaireExpiryDays day(s))"
+                    )
+                null -> {}
             }
             if (dryRun) {
                 println("Mode: DRY-RUN (validation only, no changes will be made)")
@@ -285,7 +362,14 @@ class ImportS3Command(
                 authToken = token,
                 startRiskAssessment = startRiskAssessment,
                 riskUseCase = riskUseCase,
-                riskDeadlineDays = if (startRiskAssessment) riskDeadlineDays else null
+                riskDeadlineDays = if (effectiveMode() == ImportCommand.OnboardingMode.DIRECT) {
+                    riskDeadlineDays
+                } else null,
+                onboardingMode = onboardingMode?.name,
+                sendWelcomeEmail = welcomeEmail,
+                questionnaireExpiryDays = if (effectiveMode() == ImportCommand.OnboardingMode.GUIDED) {
+                    questionnaireExpiryDays
+                } else null
             )
 
             // Display summary (matching existing ImportCommand format)
@@ -325,8 +409,54 @@ class ImportS3Command(
                 }
             }
 
+            // Onboarding block, printed for every mode including DIRECT, where it carries the
+            // welcome-mail outcome the risk-assessment block below does not cover. Plain-text
+            // markers here rather than emoji, matching this command's existing OK/SKIPPED/FAILED
+            // vocabulary — it is commonly run from cron with a non-UTF-8 locale.
+            var onboardingFailures = 0
+            if (effectiveMode() != null) {
+                println()
+                if (result.onboarding.isEmpty()) {
+                    println("No brand-new AWS accounts in this import — nothing to onboard.")
+                } else {
+                    if (dryRun) {
+                        println("DRY-RUN — nothing persisted, nothing sent, no invite token minted.")
+                        println(
+                            "Would onboard ${result.onboarding.size} account/owner pair(s) " +
+                                "in ${effectiveMode()} mode:"
+                        )
+                    } else {
+                        println("Onboarding (${result.onboarding.size}):")
+                    }
+                    result.onboarding.forEach { ob ->
+                        val where = "${ob.awsAccountId}  ${ob.ownerEmail}"
+                        when {
+                            ob.error != null -> {
+                                onboardingFailures++
+                                println("  FAILED  $where: ${ob.error}")
+                            }
+                            // A skip is an idempotent no-op, never a failure.
+                            ob.skipped ->
+                                println("  SKIPPED $where: ${ob.skipReason ?: "already onboarded"}")
+                            ob.dryRun ->
+                                println("  WOULD   $where  ->  ${ob.mode} onboarding")
+                            ob.questionnaireInviteId != null ->
+                                println(
+                                    "  OK      $where  ->  questionnaire invite #${ob.questionnaireInviteId}" +
+                                        (ob.questionnaireExpiresAt?.let { ", expires $it" } ?: "")
+                                )
+                            ob.riskAssessmentId != null ->
+                                println("  OK      $where  ->  assessment #${ob.riskAssessmentId}" +
+                                    (if (ob.welcomeEmailSent) ", welcome mail sent" else ""))
+                            ob.welcomeEmailSent -> println("  OK      $where  ->  welcome mail sent")
+                            else -> println("  WARN    $where  ->  nothing sent (check the email configuration)")
+                        }
+                    }
+                }
+            }
+
             var riskAssessmentFailures = 0
-            if (startRiskAssessment) {
+            if (startRiskAssessment || onboardingMode == ImportCommand.OnboardingMode.DIRECT) {
                 println()
                 if (dryRun) {
                     if (result.newAccounts.isNotEmpty()) {
@@ -391,6 +521,12 @@ class ImportS3Command(
                     if (riskAssessmentFailures > 0) {
                         println("Warning: $riskAssessmentFailures risk assessment(s) could not be started")
                         // Exit code 1: partial success (mappings saved, assessments failed)
+                        System.exit(1)
+                    }
+                    // Skips are excluded by construction — onboardingFailures counts only
+                    // entries carrying an `error`.
+                    if (onboardingFailures > 0) {
+                        println("Warning: $onboardingFailures account(s) could not be onboarded")
                         System.exit(1)
                     }
                 }

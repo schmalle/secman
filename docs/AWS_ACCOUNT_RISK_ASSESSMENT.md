@@ -6,12 +6,44 @@ against the **current version of the security requirements**, scoped to a use ca
 
 Opt-in. Nothing happens unless the caller asks for it.
 
-| Surface | How |
+| Surface | How | Mode |
+|---|---|---|
+| CLI | `manage-user-mappings import --start-risk-assessment --risk-usecase <name>` (also on `import-s3`) | `DIRECT` |
+| REST | `POST /api/user-mappings/bulk` with `startRiskAssessment: true` (ADMIN) | `DIRECT` |
+| MCP | `import_user_mappings` with `startRiskAssessment: true` (ADMIN, delegation) | `DIRECT` |
+| Inspect | MCP `list_aws_account_risk_assessments` (ADMIN, delegation) | — |
+
+## Onboarding modes
+
+What this document describes is now one of three things an import can do for a new
+account's owner. The other two — a welcome mail on its own, and a **guided**
+questionnaire whose answers decide the scope — are documented in
+`docs/ACCOUNT_ONBOARDING.md`.
+
+| Mode | This document |
 |---|---|
-| CLI | `manage-user-mappings import --start-risk-assessment --risk-usecase <name>` (also on `import-s3`) |
-| REST | `POST /api/user-mappings/bulk` with `startRiskAssessment: true` (ADMIN) |
-| MCP | `import_user_mappings` with `startRiskAssessment: true` (ADMIN, delegation) |
-| Inspect | MCP `list_aws_account_risk_assessments` (ADMIN, delegation) |
+| `WELCOME_ONLY` | not covered |
+| `DIRECT` | **everything below** |
+| `GUIDED` | the assessment it eventually creates is created by the code below, with a *set* of use cases instead of one |
+
+**`--start-risk-assessment` on its own still means exactly what it always meant.**
+It resolves to `DIRECT` and sends no welcome mail — byte-identical to the behaviour
+before modes existed, which is what the `extensions/` clients and the two existing
+E2E drivers depend on. Naming `--onboarding-mode` explicitly is what opts into the
+welcome mail. Combining the flag with a non-`DIRECT` mode is rejected, never guessed.
+
+## The guided questionnaire
+
+In `GUIDED` mode the owner is mailed a one-time, expiring link. Their answers
+resolve through admin-configured rules into a **set** of use cases, and the
+assessment is scoped to the union — which is why `createAssessment` takes
+`useCases: Set<UseCase>` and why `aws_account_risk_assessment.use_case_name` holds
+comma-joined names (widened to 1024 in V253). Everything else below — release
+pinning, the assessor round-robin, the idempotency guard, the reminder stream, the
+"assessment started" mail — is shared verbatim.
+
+Rules, matching semantics, the token's security properties and worked examples for
+every combination: `docs/ACCOUNT_ONBOARDING.md`.
 
 ## What counts as a "new" account
 
@@ -330,5 +362,6 @@ names whose mapping is meant. Covered by `UserMappingServiceDeleteTest`.)*
 | CLI | `cli/commands/ImportCommand.kt`, `ImportS3Command.kt`, `cli/service/UserMappingCliService.kt` |
 | E2E (assessment) | `scripts/test/test-e2e-aws-account-risk-assessment.sh`, skill `/aws-account-risk-assessment` |
 | E2E (owner email) | `scripts/test/test-e2e-aws-account-owner-email.sh`, skill `/aws-account-owner-email` |
+| Onboarding modes and the guided questionnaire | `service/AccountOnboardingService.kt`, `docs/ACCOUNT_ONBOARDING.md`, skill `/account-onboarding` |
 
-See also: `docs/CLI.md`, `docs/MCP.md`.
+See also: `docs/ACCOUNT_ONBOARDING.md`, `docs/CLI.md`, `docs/MCP.md`.

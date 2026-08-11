@@ -157,7 +157,25 @@ const AdminPage = () => {
                         </div>
                     </div>
                 </div>
-                
+
+                <div className="col-md-4 mb-3">
+                    <div className="card">
+                        <div className="card-body">
+                            <h5 className="card-title">
+                                <i className="bi bi-envelope-paper me-2"></i>
+                                Account Onboarding
+                            </h5>
+                            <p className="card-text">
+                                Configure the welcome mail and the questions whose answers scope a new AWS
+                                account owner's risk assessment.
+                            </p>
+                            <a href="/admin/account-onboarding" className="btn btn-primary">
+                                Manage Account Onboarding
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
                 <div className="col-md-4 mb-3">
                     <div className="card">
                         <div className="card-body">

@@ -1,0 +1,24 @@
+---
+/**
+ * AWS account onboarding configuration.
+ *
+ * ADMIN or SECCHAMPION — the island applies the visible gate and
+ * `AccountOnboardingController` applies the real one. Reachable from the RISK MANAGEMENT
+ * sidebar section rather than the ADMIN one, because that block is gated on `isAdmin` alone
+ * and a SECCHAMPION would never see the link.
+ */
+import Layout from '../../layouts/Layout.astro';
+import AccountOnboardingManager from '../../components/admin/AccountOnboardingManager';
+---
+
+<Layout title="Account Onboarding - SecMan">
+  <div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2 class="mb-0">AWS Account Onboarding</h2>
+      <a href="/admin" class="btn btn-secondary">
+        <i class="bi bi-arrow-left me-2"></i>Back to Admin
+      </a>
+    </div>
+    <AccountOnboardingManager client:load />
+  </div>
+</Layout>

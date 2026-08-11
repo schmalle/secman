@@ -1,0 +1,27 @@
+---
+/**
+ * Public account-onboarding questionnaire.
+ *
+ * The owner of a newly discovered AWS account lands here from the link in their mail. They are
+ * not a SecMan user and hold no credential — the single-use token in the URL is the capability,
+ * which is why this uses PublicLayout and never checks a session.
+ *
+ * The token is only passed through to the island; nothing is fetched here. Rendering server-side
+ * would put the token in the HTML SSR cache and, more importantly, would leak whether it is
+ * valid before the rate limiter ever sees the request.
+ */
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import AccountOnboardingQuestionnaire from '../../components/AccountOnboardingQuestionnaire.tsx';
+
+const { token } = Astro.params;
+
+// A missing token cannot be a questionnaire. Send them to the front page rather than to /login:
+// the recipient has no account to log into, so a login prompt would be a dead end.
+if (!token) {
+    return Astro.redirect('/');
+}
+---
+
+<PublicLayout title="Tell us about your AWS account - SecMan">
+    <AccountOnboardingQuestionnaire token={token} client:load />
+</PublicLayout>

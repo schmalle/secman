@@ -1,0 +1,19 @@
+Welcome to SecMan - AWS account {awsAccountId}
+==============================================
+{ifSimulated}
+*** This is a test message sent by {simulatedBy} from SecMan. No action is required. ***
+{/ifSimulated}
+AWS account {awsAccountId} has been registered in SecMan and mapped to you
+as its owner.
+
+SecMan is where this organisation tracks security requirements, vulnerabilities
+and risk assessments. From now on you will see this account's assets, findings
+and any assessments addressed to you when you sign in.
+{ifVersion}
+Current requirements version:  {requirementsVersion}
+{/ifVersion}
+Open SecMan: {portalUrl}
+
+---
+You are receiving this because {ownerEmail} is mapped to this AWS account in
+SecMan. If that is not correct, contact your SecMan administrator.
