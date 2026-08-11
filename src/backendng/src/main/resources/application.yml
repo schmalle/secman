@@ -238,6 +238,17 @@ secman:
     max-source-pixels: ${SECMAN_PROFILE_PICTURE_MAX_SOURCE_PIXELS:40000000}
     # Edge length of the stored square thumbnail.
     target-edge: ${SECMAN_PROFILE_PICTURE_TARGET_EDGE:256}
+  requirement-export-templates:
+    # Company Word templates for requirement exports. An uploaded .docx is an untrusted ZIP that
+    # POI will parse, so these caps are decompression-bomb guards, not tuning knobs — they are
+    # checked before any parse. Kept well below micronaut.server.multipart.max-file-size, which
+    # stays large for the XLSX/vulnerability importers.
+    max-file-size-bytes: ${SECMAN_REQUIREMENT_TEMPLATE_MAX_UPLOAD_BYTES:5242880}
+    max-uncompressed-size-bytes: ${SECMAN_REQUIREMENT_TEMPLATE_MAX_UNCOMPRESSED_BYTES:20971520}
+    max-zip-entries: ${SECMAN_REQUIREMENT_TEMPLATE_MAX_ZIP_ENTRIES:512}
+    # Install the shipped example template on first start, so a fresh installation exports in a
+    # company design instead of the built-in layout. Only ever seeds into an empty table.
+    seed-example: ${SECMAN_REQUIREMENT_TEMPLATE_SEED_EXAMPLE:true}
   eol:
     # End-of-life catalogue. Default source is endoflife.date: public,
     # unauthenticated, ~350 products. Operator configuration only — no request

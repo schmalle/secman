@@ -21,12 +21,22 @@ open class RequirementExportTemplateValidationService(
 ) {
     companion object {
         const val DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+        /** The insertion-point token, as it appears in a template. */
+        const val REQUIREMENTS_TOKEN = "\${requirements}"
+
+        /** How far past a `${` opener to look when the token was split across runs. */
+        private const val SPLIT_PLACEHOLDER_WINDOW = 4096
+
         val ALLOWED_PLACEHOLDERS = setOf(
             "requirements",
             "documentTitle",
             "exportDate",
+            "releaseName",
             "releaseVersion",
+            "releaseDate",
             "releaseStatus",
+            "releaseDescription",
             "useCaseName",
             "exportedBy",
             "language",
@@ -84,6 +94,11 @@ open class RequirementExportTemplateValidationService(
         var hasMainDocumentContentType = false
         var uncompressedSize = 0L
         var entryCount = 0
+        // Tracked separately from `placeholders`: only a body-level ${requirements} can act as the
+        // insertion anchor. One that sits in a header, a footer or a table cell cannot host
+        // body-level content, so the export would silently drop the requirements there.
+        var requirementsAnchorInBody = false
+        var requirementsAnchorInTable = false
 
         if (errors.none { it == "Template is not a valid OpenXML ZIP package." }) {
             try {
@@ -125,7 +140,13 @@ open class RequirementExportTemplateValidationService(
                             }
                             "word/document.xml" -> {
                                 hasWordDocument = true
-                                placeholders += extractPlaceholders(entryBytes.toString(Charsets.UTF_8))
+                                val documentXml = entryBytes.toString(Charsets.UTF_8)
+                                placeholders += extractPlaceholders(documentXml)
+                                val anchorOffset = findRequirementsAnchorOffset(documentXml)
+                                if (anchorOffset >= 0) {
+                                    requirementsAnchorInTable = isInsideTable(documentXml, anchorOffset)
+                                    requirementsAnchorInBody = !requirementsAnchorInTable
+                                }
                             }
                             else -> {
                                 if (entryName.startsWith("word/header") || entryName.startsWith("word/footer")) {
@@ -153,6 +174,15 @@ open class RequirementExportTemplateValidationService(
         if (!hasMainDocumentContentType) errors += "Template is not a standard .docx Word document."
         if (requireRequirementsPlaceholder && "requirements" !in placeholders) {
             errors += "Template must include the ${'$'}{requirements} placeholder or use append mode."
+        }
+        if ("requirements" in placeholders && !requirementsAnchorInBody) {
+            // The placeholder exists but cannot be used as an insertion point, so requirement
+            // content would be appended at the end instead of rendered where the author put it.
+            val where = if (requirementsAnchorInTable) "inside a table" else "in a header or footer"
+            val message = "The ${'$'}{requirements} placeholder is $where. Requirement content can " +
+                "only be inserted at the top level of the document body; move the placeholder into " +
+                "its own paragraph outside any table, header or footer."
+            if (requireRequirementsPlaceholder) errors += message else warnings += message
         }
 
         val unsupportedPlaceholders = placeholders - ALLOWED_PLACEHOLDERS
@@ -201,5 +231,41 @@ open class RequirementExportTemplateValidationService(
     private fun extractPlaceholders(xml: String): Set<String> {
         val regex = Regex("\\$\\{([A-Za-z][A-Za-z0-9]*)}")
         return regex.findAll(xml).map { it.groupValues[1] }.toSet()
+    }
+
+    /**
+     * Character offset of the `${requirements}` token in `word/document.xml`, or -1.
+     *
+     * Word may split a typed placeholder across runs, in which case the literal token is absent
+     * from the raw XML even though the rendered paragraph reads correctly. Fall back to locating
+     * the `${` opener and confirming the rest of the token survives once the intervening XML tags
+     * are stripped.
+     */
+    private fun findRequirementsAnchorOffset(xml: String): Int {
+        val literal = xml.indexOf(REQUIREMENTS_TOKEN)
+        if (literal >= 0) return literal
+
+        var searchFrom = 0
+        while (true) {
+            val opener = xml.indexOf("\${", searchFrom)
+            if (opener < 0) return -1
+            // Look ahead far enough to cover a placeholder shredded into several runs.
+            val window = xml.substring(opener, minOf(xml.length, opener + SPLIT_PLACEHOLDER_WINDOW))
+            if (stripXmlTags(window).startsWith(REQUIREMENTS_TOKEN)) return opener
+            searchFrom = opener + 2
+        }
+    }
+
+    private fun stripXmlTags(xml: String): String = xml.replace(Regex("<[^>]*>"), "")
+
+    /**
+     * Whether [offset] falls inside a `<w:tbl>` element. Counts table open/close tags before the
+     * offset rather than parsing, which is sufficient because the tags nest strictly.
+     */
+    private fun isInsideTable(xml: String, offset: Int): Boolean {
+        val before = xml.substring(0, offset)
+        val opened = Regex("<w:tbl(?=[ >/])").findAll(before).count()
+        val closed = Regex("</w:tbl>").findAll(before).count()
+        return opened > closed
     }
 }

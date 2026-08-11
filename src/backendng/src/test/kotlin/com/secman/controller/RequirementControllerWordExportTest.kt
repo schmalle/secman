@@ -1,5 +1,6 @@
 package com.secman.controller
 
+import com.secman.domain.Release
 import com.secman.domain.Requirement
 import com.secman.domain.UseCase
 import com.secman.repository.NormRepository
@@ -20,6 +21,9 @@ import io.mockk.mockk
 import org.apache.poi.xwpf.usermodel.XWPFDocument
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import java.io.ByteArrayOutputStream
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.concurrent.CompletableFuture
 
 class RequirementControllerWordExportTest {
@@ -151,6 +155,156 @@ class RequirementControllerWordExportTest {
         )
     }
 
+    @Test
+    fun `templated export renders requirements where the placeholder sat, not at the end`() {
+        val document = createTemplatedWordDocument(
+            templateBytes = templateDocx(
+                "Cover: \${documentTitle}",
+                "\${requirements}",
+                "Appendix: approval signatures"
+            ),
+            requirements = listOf(requirement(1L, "REQ-1", "Use SSM for EC2 console access"))
+        )
+
+        val texts = document.paragraphs.map { it.text }
+        val appendixIndex = texts.indexOfFirst { it.contains("Appendix") }
+        val requirementIndex = texts.indexOfFirst { it.contains("REQ-1:") }
+
+        assertThat(requirementIndex).describedAs("requirement content must be rendered").isGreaterThanOrEqualTo(0)
+        assertThat(appendixIndex).describedAs("template back matter must survive").isGreaterThanOrEqualTo(0)
+        assertThat(requirementIndex)
+            .describedAs("requirements must land before the template's back matter")
+            .isLessThan(appendixIndex)
+    }
+
+    @Test
+    fun `templated export removes the placeholder paragraph`() {
+        val document = createTemplatedWordDocument(
+            templateBytes = templateDocx("Cover", "\${requirements}", "Appendix"),
+            requirements = listOf(requirement(1L, "REQ-1", "Use SSM for EC2 console access"))
+        )
+
+        assertThat(document.paragraphs.map { it.text }).noneMatch { it.contains("\${requirements}") }
+    }
+
+    @Test
+    fun `templated export falls back to appending when the template has no insertion point`() {
+        val document = createTemplatedWordDocument(
+            templateBytes = templateDocx("Cover: \${documentTitle}", "Appendix: approval signatures"),
+            requirements = listOf(requirement(1L, "REQ-1", "Use SSM for EC2 console access"))
+        )
+
+        val texts = document.paragraphs.map { it.text }
+        val appendixIndex = texts.indexOfFirst { it.contains("Appendix") }
+        val requirementIndex = texts.indexOfFirst { it.contains("REQ-1:") }
+
+        assertThat(requirementIndex).isGreaterThan(appendixIndex)
+    }
+
+    @Test
+    fun `release placeholders bind from the release entity, not the document title`() {
+        val release = Release(
+            id = 7L,
+            version = "2026.1",
+            name = "Baseline security requirements",
+            description = "Everything in force for the 2026 audit",
+            status = Release.ReleaseStatus.ACTIVE,
+            releaseDate = LocalDate.of(2026, 3, 14).atStartOfDay(ZoneId.systemDefault()).toInstant()
+        )
+
+        val document = createTemplatedWordDocument(
+            templateBytes = templateDocx(
+                "Name: \${releaseName}",
+                "Version: \${releaseVersion}",
+                "Date: \${releaseDate}",
+                "Status: \${releaseStatus}",
+                "About: \${releaseDescription}",
+                "\${requirements}"
+            ),
+            requirements = listOf(requirement(1L, "REQ-1", "Use SSM for EC2 console access")),
+            // Deliberately a title that does NOT contain the version, so a regression back to
+            // slicing `title.substringAfter("Release ")` fails this test.
+            title = "Corporate Security Standard",
+            release = release
+        )
+
+        val texts = document.paragraphs.map { it.text }
+        assertThat(texts).contains(
+            "Name: Baseline security requirements",
+            "Version: 2026.1",
+            "Date: 2026-03-14",
+            "Status: ACTIVE",
+            "About: Everything in force for the 2026 audit"
+        )
+    }
+
+    @Test
+    fun `release placeholders resolve to empty when the export is not pinned to a release`() {
+        val document = createTemplatedWordDocument(
+            templateBytes = templateDocx("Version:\${releaseVersion}", "Status:\${releaseStatus}", "\${requirements}"),
+            requirements = listOf(requirement(1L, "REQ-1", "Use SSM for EC2 console access")),
+            title = "All Requirements",
+            release = null
+        )
+
+        val texts = document.paragraphs.map { it.text }
+        assertThat(texts).contains("Version:", "Status:")
+    }
+
+    @Test
+    fun `use case placeholder binds from the use case entity`() {
+        val document = createTemplatedWordDocument(
+            templateBytes = templateDocx("UseCase: \${useCaseName}", "\${requirements}"),
+            requirements = listOf(requirement(1L, "REQ-1", "Use SSM for EC2 console access")),
+            title = "Some unrelated title",
+            useCase = UseCase(id = 3L, name = "OT")
+        )
+
+        assertThat(document.paragraphs.map { it.text }).contains("UseCase: OT")
+    }
+
+    @Test
+    fun `control characters in a placeholder value are stripped`() {
+        // `classification` is caller-supplied and lands in both the document and the audit log,
+        // so CR/LF must never survive into it (log forging).
+        val document = createTemplatedWordDocument(
+            templateBytes = templateDocx("Class: \${classification}", "\${requirements}"),
+            requirements = listOf(requirement(1L, "REQ-1", "Use SSM for EC2 console access")),
+            classification = "Secret\r\nX-Injected: true"
+        )
+
+        val text = document.paragraphs.map { it.text }.first { it.startsWith("Class:") }
+        assertThat(text).doesNotContain("\r")
+        assertThat(text).doesNotContain("\n")
+        assertThat(text).contains("Secret")
+    }
+
+    @Test
+    fun `an over-long placeholder value is bounded`() {
+        val document = createTemplatedWordDocument(
+            templateBytes = templateDocx("Class: \${classification}", "\${requirements}"),
+            requirements = listOf(requirement(1L, "REQ-1", "Use SSM for EC2 console access")),
+            classification = "A".repeat(5000)
+        )
+
+        val text = document.paragraphs.map { it.text }.first { it.startsWith("Class:") }
+        assertThat(text.length).isLessThanOrEqualTo("Class: ".length + 512)
+    }
+
+    @Test
+    fun `templated export preserves a table that precedes the insertion point`() {
+        // Regression guard: removing the placeholder by paragraph index rather than body-element
+        // index deletes the wrong element once a template contains a table.
+        val document = createTemplatedWordDocument(
+            templateBytes = templateDocxWithTable(),
+            requirements = listOf(requirement(1L, "REQ-1", "Use SSM for EC2 console access"))
+        )
+
+        assertThat(document.tables).describedAs("the template's release table must survive").isNotEmpty()
+        assertThat(document.paragraphs.map { it.text }).anyMatch { it.contains("Appendix") }
+        assertThat(document.paragraphs.map { it.text }).noneMatch { it.contains("\${requirements}") }
+    }
+
     private fun requirement(id: Long, internalId: String, shortreq: String): Requirement =
         Requirement(
             id = id,
@@ -161,6 +315,58 @@ class RequirementControllerWordExportTest {
             motivation = "Motivation for $shortreq",
             chapter = "AWS Configuration Requirements"
         )
+
+    /** A minimal template: one paragraph per supplied line. */
+    private fun templateDocx(vararg lines: String): ByteArray {
+        val document = XWPFDocument()
+        lines.forEach { line -> document.createParagraph().createRun().setText(line) }
+        val output = ByteArrayOutputStream()
+        document.write(output)
+        document.close()
+        return output.toByteArray()
+    }
+
+    /** A template shaped like the shipped example: cover, release table, marker, back matter. */
+    private fun templateDocxWithTable(): ByteArray {
+        val document = XWPFDocument()
+        document.createParagraph().createRun().setText("Cover: \${documentTitle}")
+        val table = document.createTable(1, 2)
+        table.getRow(0).getCell(0).paragraphs.first().createRun().setText("Version")
+        table.getRow(0).getCell(1).paragraphs.first().createRun().setText("\${releaseVersion}")
+        document.createParagraph().createRun().setText("\${requirements}")
+        document.createParagraph().createRun().setText("Appendix: approval signatures")
+        val output = ByteArrayOutputStream()
+        document.write(output)
+        document.close()
+        return output.toByteArray()
+    }
+
+    private fun createTemplatedWordDocument(
+        templateBytes: ByteArray,
+        requirements: List<Requirement>,
+        title: String = "Corporate Security Standard",
+        exportedBy: String = "admin",
+        language: String = "english",
+        classification: String = "Internal",
+        release: Release? = null,
+        useCase: UseCase? = null
+    ): XWPFDocument {
+        val method = RequirementController::class.java.getDeclaredMethod(
+            "createTemplatedWordDocument",
+            ByteArray::class.java,
+            List::class.java,
+            String::class.java,
+            String::class.java,
+            String::class.java,
+            String::class.java,
+            Release::class.java,
+            UseCase::class.java
+        )
+        method.isAccessible = true
+        return method.invoke(
+            controller, templateBytes, requirements, title, exportedBy, language, classification, release, useCase
+        ) as XWPFDocument
+    }
 
     private fun createTranslatedWordDocument(requirements: List<Requirement>): XWPFDocument {
         val method = RequirementController::class.java.getDeclaredMethod(

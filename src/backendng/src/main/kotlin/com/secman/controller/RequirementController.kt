@@ -8,6 +8,7 @@ import com.secman.domain.RequirementExportTemplateMode
 import com.secman.domain.RequirementExportTemplateStatus
 import com.secman.domain.RequirementExportTemplateUsage
 import com.secman.domain.RequirementSnapshot
+import com.secman.domain.Release
 import com.secman.util.ExcelSanitizer
 import com.secman.domain.UseCase
 import com.secman.domain.Norm
@@ -445,7 +446,8 @@ open class RequirementController(
             scope = if (releaseId != null) RequirementExportScope.RELEASE else RequirementExportScope.ALL,
             releaseId = releaseId,
             usecaseId = null,
-            authentication = authentication
+            authentication = authentication,
+            release = exportData.release
         )
     }
 
@@ -475,7 +477,8 @@ open class RequirementController(
             scope = if (releaseId != null) RequirementExportScope.RELEASE else RequirementExportScope.ALL,
             releaseId = releaseId,
             usecaseId = null,
-            authentication = authentication
+            authentication = authentication,
+            release = exportData.release
         )
     }
 
@@ -519,7 +522,9 @@ open class RequirementController(
             scope = RequirementExportScope.USE_CASE,
             releaseId = releaseId,
             usecaseId = usecaseId,
-            authentication = authentication
+            authentication = authentication,
+            release = releaseId?.let { releaseRepository.findById(it).orElse(null) },
+            useCase = useCase
         )
     }
 
@@ -559,7 +564,9 @@ open class RequirementController(
             scope = RequirementExportScope.USE_CASE,
             releaseId = releaseId,
             usecaseId = usecaseId,
-            authentication = authentication
+            authentication = authentication,
+            release = releaseId?.let { releaseRepository.findById(it).orElse(null) },
+            useCase = useCase
         )
     }
 
@@ -638,7 +645,14 @@ open class RequirementController(
     private data class RequirementExportData(
         val requirements: List<Requirement>,
         val filename: String,
-        val title: String
+        val title: String,
+        /**
+         * The release the export was frozen against, when one was selected. Carried as the entity
+         * rather than re-derived from [title] so the template placeholders bind to real metadata.
+         */
+        val release: Release? = null,
+        /** The use case the export was narrowed to, when one was selected. */
+        val useCase: UseCase? = null
     )
 
     private data class ResolvedTemplate(
@@ -663,7 +677,8 @@ open class RequirementController(
                 RequirementExportData(
                     requirements = requirements,
                     filename = "requirements_v${release.version}_$dateStr.docx",
-                    title = "Requirements - Release ${release.version}"
+                    title = "Requirements - Release ${release.version}",
+                    release = release
                 )
             }
         } else {
@@ -690,7 +705,9 @@ open class RequirementController(
         scope: RequirementExportScope,
         releaseId: Long?,
         usecaseId: Long?,
-        authentication: Authentication?
+        authentication: Authentication?,
+        release: Release? = null,
+        useCase: UseCase? = null
     ): HttpResponse<*> {
         val exportedBy = authentication?.name ?: "anonymous"
         val behavior = parseMissingPlaceholderBehavior(missingPlaceholderBehavior)
@@ -708,7 +725,9 @@ open class RequirementController(
                 title = title,
                 exportedBy = exportedBy,
                 language = language ?: "english",
-                classification = classification ?: "Internal"
+                classification = classification ?: "Internal",
+                release = release,
+                useCase = useCase
             )
         } else {
             createWordDocument(requirements, title)
@@ -794,25 +813,125 @@ open class RequirementController(
         title: String,
         exportedBy: String,
         language: String,
-        classification: String
+        classification: String,
+        release: Release?,
+        useCase: UseCase?
     ): XWPFDocument {
         val document = XWPFDocument(ByteArrayInputStream(templateBytes))
-        val replacements = mapOf(
-            "requirements" to "",
-            "documentTitle" to title,
-            "exportDate" to LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
-            "releaseVersion" to title.substringAfter("Release ", ""),
-            "releaseStatus" to "",
-            "useCaseName" to title.substringAfter("UseCase: ", ""),
-            "exportedBy" to exportedBy,
-            "language" to language,
-            "requirementCount" to requirements.size.toString(),
-            "classification" to classification
+        val replacements = buildPlaceholderValues(
+            requirements = requirements,
+            title = title,
+            exportedBy = exportedBy,
+            language = language,
+            classification = classification,
+            release = release,
+            useCase = useCase
         )
-        replacePlaceholders(document, replacements)
-        document.createParagraph().createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE)
-        appendRequirementContent(document, requirements)
+
+        // Locate the body-level ${requirements} paragraph *before* substituting anything, so the
+        // marker survives to act as the insertion anchor. Placeholders in headers, footers or table
+        // cells cannot host body-level content, so they are not eligible anchors — the validation
+        // service rejects/warns about those separately.
+        val anchor = findRequirementsAnchor(document)
+
+        // Everything except ${requirements}: that one is a position, not a value.
+        replacePlaceholders(document, replacements - REQUIREMENTS_PLACEHOLDER)
+
+        if (anchor != null) {
+            appendRequirementContent(document, requirements) { insertParagraphBefore(document, anchor) }
+            // Index into bodyElements, NOT XWPFDocument.getPosOfParagraph(): the latter counts
+            // paragraphs only, so on a template containing tables (a cover page usually does) the
+            // two disagree and removeBodyElement would delete the wrong element.
+            val anchorPosition = document.bodyElements.indexOf(anchor)
+            if (anchorPosition >= 0) {
+                document.removeBodyElement(anchorPosition)
+            }
+        } else {
+            // No insertion point in the template: fall back to appending after a page break.
+            document.createParagraph().createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE)
+            appendRequirementContent(document, requirements)
+        }
         return document
+    }
+
+    /**
+     * Values bound into a company template's `${...}` placeholders.
+     *
+     * Release fields come from the [Release] entity rather than being sliced back out of [title];
+     * they resolve to an empty string when the export is not pinned to a release, which is what a
+     * template renders for "live requirements, not a frozen collection".
+     */
+    private fun buildPlaceholderValues(
+        requirements: List<Requirement>,
+        title: String,
+        exportedBy: String,
+        language: String,
+        classification: String,
+        release: Release?,
+        useCase: UseCase?
+    ): Map<String, String> = mapOf(
+        REQUIREMENTS_PLACEHOLDER to "",
+        "documentTitle" to sanitizePlaceholderValue(title),
+        "exportDate" to LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
+        "releaseName" to sanitizePlaceholderValue(release?.name),
+        "releaseVersion" to sanitizePlaceholderValue(release?.version),
+        "releaseDate" to formatReleaseDate(release),
+        "releaseStatus" to sanitizePlaceholderValue(release?.status?.name),
+        "releaseDescription" to sanitizePlaceholderValue(release?.description),
+        "useCaseName" to sanitizePlaceholderValue(useCase?.name ?: title.substringAfter("UseCase: ", "")),
+        "exportedBy" to sanitizePlaceholderValue(exportedBy),
+        "language" to sanitizePlaceholderValue(language),
+        "requirementCount" to requirements.size.toString(),
+        "classification" to sanitizePlaceholderValue(classification)
+    )
+
+    /**
+     * The release date shown on a template cover page. Falls back to the creation timestamp for
+     * releases that were never given an explicit date, so the field is not blank on a real release.
+     */
+    private fun formatReleaseDate(release: Release?): String {
+        val instant = release?.releaseDate ?: release?.createdAt ?: return ""
+        return DateTimeFormatter.ofPattern("yyyy-MM-dd")
+            .withZone(java.time.ZoneId.systemDefault())
+            .format(instant)
+    }
+
+    /**
+     * Placeholder values land in a rendered document and in the export audit row, so strip control
+     * characters (CR/LF included, to keep them off a log line) and bound the length.
+     */
+    private fun sanitizePlaceholderValue(value: String?): String {
+        if (value.isNullOrBlank()) return ""
+        return value.replace(Regex("[\\p{Cntrl}]"), " ").trim().take(MAX_PLACEHOLDER_VALUE_LENGTH)
+    }
+
+    /**
+     * The body-level paragraph carrying `${requirements}`, or null when the template has none.
+     * Text is joined across runs first because Word routinely splits a typed placeholder into
+     * several runs (spell-check state, revision marks), which would defeat a per-run search.
+     */
+    private fun findRequirementsAnchor(document: XWPFDocument): XWPFParagraph? =
+        document.paragraphs.firstOrNull { paragraph ->
+            paragraph.runs.isNotEmpty() &&
+                paragraph.runs.joinToString(separator = "") { it.text() ?: "" }.contains(REQUIREMENTS_PLACEHOLDER_TOKEN)
+        }
+
+    /**
+     * Inserts a new paragraph immediately before [anchor].
+     *
+     * POI invalidates an [org.apache.xmlbeans.XmlCursor] on every insert, so a fresh cursor is taken
+     * from the (fixed) anchor each call. Successive calls therefore accumulate in order in front of
+     * the anchor, which is exactly the document order the caller emits content in.
+     */
+    private fun insertParagraphBefore(document: XWPFDocument, anchor: XWPFParagraph): XWPFParagraph {
+        val cursor = anchor.ctp.newCursor()
+        try {
+            // POI returns null when the cursor is not in the document body. The anchor always is
+            // (it came from document.paragraphs), but appending beats a 500 if that ever changes.
+            return document.insertNewParagraph(cursor) ?: document.createParagraph()
+        } finally {
+            cursor.dispose()
+        }
     }
 
     private fun replacePlaceholders(document: XWPFDocument, replacements: Map<String, String>) {
@@ -858,25 +977,37 @@ open class RequirementController(
             .header("Content-Disposition", "attachment; filename=\"${filename.replace("\"", "").replace("\r", "").replace("\n", "")}\"")
     }
 
-    private fun appendRequirementContent(document: XWPFDocument, requirements: List<Requirement>) {
+    /**
+     * Renders the requirement body into [document].
+     *
+     * [newParagraph] decides *where* each paragraph lands: the default appends at the end of the
+     * document (the historical behaviour), while a templated export passes a factory that inserts
+     * in front of the template's `${requirements}` anchor so content sits between a cover page and
+     * whatever the template puts after it.
+     */
+    private fun appendRequirementContent(
+        document: XWPFDocument,
+        requirements: List<Requirement>,
+        newParagraph: () -> XWPFParagraph = { document.createParagraph() }
+    ) {
         val requirementsByChapter = requirements.groupBy { it.chapter ?: "No Chapter" }
         var requirementNumber = 1
         var isFirstChapter = true
         for ((chapter, chapterRequirements) in requirementsByChapter) {
             if (!isFirstChapter) {
-                document.createParagraph().createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE)
+                newParagraph().createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE)
             }
             isFirstChapter = false
-            val chapterParagraph = document.createParagraph()
+            val chapterParagraph = newParagraph()
             chapterParagraph.style = "Heading1"
             val chapterRun = chapterParagraph.createRun()
             chapterRun.setText(chapter)
             chapterRun.fontSize = 16
             chapterRun.isBold = true
-            document.createParagraph()
+            newParagraph()
 
             for (requirement in chapterRequirements) {
-                val reqHeaderParagraph = document.createParagraph()
+                val reqHeaderParagraph = newParagraph()
                 val ctp = reqHeaderParagraph.ctp
                 val ppr = if (ctp.isSetPPr) ctp.pPr else ctp.addNewPPr()
                 val shd = if (ppr.isSetShd) ppr.shd else ppr.addNewShd()
@@ -885,19 +1016,19 @@ open class RequirementController(
                 reqHeaderRun.setText("REQ-$requirementNumber: ${requirement.shortreq}")
                 reqHeaderRun.fontSize = 12
                 reqHeaderRun.isBold = true
-                requirement.details?.let { document.createParagraph().createRun().setText(it) }
+                requirement.details?.let { newParagraph().createRun().setText(it) }
                 requirement.motivation?.let {
-                    val paragraph = document.createParagraph()
+                    val paragraph = newParagraph()
                     paragraph.createRun().apply { setText("Motivation: "); isBold = true }
                     paragraph.createRun().setText(it)
                 }
                 requirement.example?.let {
-                    val paragraph = document.createParagraph()
+                    val paragraph = newParagraph()
                     paragraph.createRun().apply { setText("Example: "); isBold = true }
                     paragraph.createRun().setText(it)
                 }
                 requirement.norm?.let {
-                    val paragraph = document.createParagraph()
+                    val paragraph = newParagraph()
                     paragraph.createRun().apply { setText("Norm Reference: "); isBold = true }
                     paragraph.createRun().setText(it)
                 }
@@ -911,13 +1042,13 @@ open class RequirementController(
                         append(it)
                     }
                 }
-                val idParagraph = document.createParagraph()
+                val idParagraph = newParagraph()
                 idParagraph.alignment = org.apache.poi.xwpf.usermodel.ParagraphAlignment.LEFT
                 val idRun = idParagraph.createRun()
                 idRun.setText("ID $idSuffix")
                 idRun.fontSize = 8
                 idRun.color = "999999"
-                document.createParagraph()
+                newParagraph()
                 requirementNumber++
             }
         }
@@ -1241,7 +1372,9 @@ open class RequirementController(
                     scope = RequirementExportScope.TRANSLATED,
                     releaseId = releaseId,
                     usecaseId = usecaseId,
-                    authentication = authentication
+                    authentication = authentication,
+                    release = releaseId?.let { releaseRepository.findById(it).orElse(null) },
+                    useCase = useCase
                 )
             }
         } catch (e: Exception) {
@@ -1638,5 +1771,16 @@ open class RequirementController(
      */
     private fun snapshotToRequirement(snapshot: RequirementSnapshot): Requirement {
         return releaseRequirementScopeService.snapshotToRequirement(snapshot)
+    }
+
+    companion object {
+        /** Placeholder key marking where requirement content is rendered. A position, not a value. */
+        const val REQUIREMENTS_PLACEHOLDER = "requirements"
+
+        /** The literal token as it appears in a template document. */
+        const val REQUIREMENTS_PLACEHOLDER_TOKEN = "\${$REQUIREMENTS_PLACEHOLDER}"
+
+        /** Upper bound on any single substituted placeholder value. */
+        const val MAX_PLACEHOLDER_VALUE_LENGTH = 512
     }
 }

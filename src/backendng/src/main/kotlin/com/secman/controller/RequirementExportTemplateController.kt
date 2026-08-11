@@ -4,6 +4,7 @@ import com.secman.domain.RequirementExportTemplate
 import com.secman.domain.RequirementExportTemplateStatus
 import com.secman.repository.RequirementExportTemplateRepository
 import com.secman.repository.RequirementExportTemplateUsageRepository
+import com.secman.service.ExampleRequirementExportTemplateBuilder
 import com.secman.service.RequirementExportTemplateValidationService
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.HttpResponse
@@ -27,7 +28,8 @@ import java.time.Instant
 open class RequirementExportTemplateController(
     private val templateRepository: RequirementExportTemplateRepository,
     private val usageRepository: RequirementExportTemplateUsageRepository,
-    private val validationService: RequirementExportTemplateValidationService
+    private val validationService: RequirementExportTemplateValidationService,
+    private val exampleBuilder: ExampleRequirementExportTemplateBuilder
 ) {
     @Serdeable
     data class TemplateSummary(
@@ -134,6 +136,20 @@ open class RequirementExportTemplateController(
         )
         val saved = templateRepository.save(template)
         return HttpResponse.created(saved.toSummary())
+    }
+
+    /**
+     * The example company template shipped with secman, for rebranding.
+     *
+     * Served from the shipped bytes rather than from the seeded row, so it stays available and
+     * pristine after an admin has replaced, deactivated or deleted the seeded copy.
+     */
+    @Get("/example")
+    @Secured("ADMIN", "REQADMIN")
+    open fun example(): HttpResponse<*> {
+        val bytes = exampleBuilder.loadOrBuild()
+        return HttpResponse.ok(StreamedFile(ByteArrayInputStream(bytes), MediaType.of(RequirementExportTemplateValidationService.DOCX_MEDIA_TYPE)))
+            .header("Content-Disposition", "attachment; filename=\"${ExampleRequirementExportTemplateBuilder.FILENAME}\"")
     }
 
     @Get("/{id}")
