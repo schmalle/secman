@@ -51,7 +51,11 @@ import jakarta.inject.Singleton
             "directly from an S3 bucket to a local path without touching the " +
             "secman backend. The 'print-s3' subcommand downloads a mapping " +
             "file from S3 and prints the parsed mappings to the console " +
-            "(no disk write, no backend; defaults to AWS account mappings)."
+            "(no disk write, no backend; defaults to AWS account mappings). " +
+            "The 'simulate-onboarding' subcommand runs the whole account-onboarding " +
+            "path against an AWS account id and email address you supply, so the " +
+            "welcome mail and the guided questionnaire can be exercised without " +
+            "waiting for a real account to appear in an import."
     ],
     mixinStandardHelpOptions = true,
     subcommands = [
@@ -61,6 +65,7 @@ import jakarta.inject.Singleton
         RemoveCommand::class,
         ImportCommand::class,
         ImportS3Command::class,
+        SimulateOnboardingCommand::class,
         ListBucketCommand::class,
         DownloadS3Command::class,
         PrintS3Command::class,

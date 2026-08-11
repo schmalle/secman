@@ -1,5 +1,6 @@
 package com.secman.dto
 
+import com.secman.domain.AccountOnboardingMode
 import com.secman.domain.IpRangeType
 import com.secman.domain.UserMapping
 import io.micronaut.serde.annotation.Serdeable
@@ -57,12 +58,40 @@ data class BulkUserMappingRequest(
      * When true, a risk assessment is started for the owner of every
      * brand-new (DB-wide) AWS account created by this import.
      * Requires [riskAssessmentUseCase]; deadline defaults to 7 days.
+     *
+     * Predates [onboardingMode] and is still what every existing client sends. On its own it
+     * resolves to [AccountOnboardingMode.DIRECT] with no welcome mail — byte-identical to the
+     * behaviour before onboarding modes existed. See [AccountOnboardingMode.resolve].
      */
     val startRiskAssessment: Boolean = false,
     /** Name of the use case the auto-started risk assessments are based on. */
     val riskAssessmentUseCase: String? = null,
     /** Days from today until the risk assessment deadline (endDate). Default 7. */
-    val riskAssessmentDeadlineDays: Int? = null
+    val riskAssessmentDeadlineDays: Int? = null,
+
+    /**
+     * What to do for the owner of every brand-new AWS account this import introduces.
+     *
+     * Null means "fall back to [startRiskAssessment]" — which is what keeps every existing
+     * caller working unchanged. Passing this explicitly opts into the welcome mail as well;
+     * see [sendWelcomeEmail].
+     */
+    val onboardingMode: AccountOnboardingMode? = null,
+
+    /**
+     * Override for the welcome mail.
+     *
+     * Null resolves to "true iff [onboardingMode] was passed explicitly". That asymmetry is
+     * the backward-compatibility contract: an existing caller sending only
+     * `startRiskAssessment=true` must not suddenly start sending owners a second mail.
+     */
+    val sendWelcomeEmail: Boolean? = null,
+
+    /**
+     * Days the [AccountOnboardingMode.GUIDED] questionnaire link stays valid.
+     * Default 14, range 1..90. Ignored in the other two modes.
+     */
+    val questionnaireExpiryDays: Int? = null
 )
 
 @Serdeable
@@ -89,8 +118,16 @@ data class AccountRiskAssessmentInfo(
     val riskAssessmentId: Long? = null,
     val assessor: String? = null,
     val endDate: String? = null,
-    /** Use case the assessment is scoped to. */
+    /**
+     * Use case(s) the assessment is scoped to, comma-joined.
+     *
+     * Kept singular in name and shape for the clients that already read it. Guided onboarding
+     * scopes an assessment to the *union* of every matching rule's use cases, so this can now
+     * carry several names; [useCases] is the structured form.
+     */
     val useCase: String? = null,
+    /** The same use cases, individually. Null for assessments started before this existed. */
+    val useCases: List<String>? = null,
     /** Version of the ACTIVE release the assessment is pinned to (the "standard"). */
     val releaseVersion: String? = null,
     /** Number of requirements the pinned release contributes for [useCase]. */
@@ -115,7 +152,77 @@ data class BulkUserMappingResponse(
     val notificationRecipient: String? = null,
     val notificationError: String? = null,
     /** Auto-started risk assessments (one entry per new account/owner pair). */
-    val riskAssessments: List<AccountRiskAssessmentInfo> = emptyList()
+    val riskAssessments: List<AccountRiskAssessmentInfo> = emptyList(),
+    /**
+     * What onboarding did for each new account/owner pair — welcome mails, questionnaire
+     * invites, and (in DIRECT mode) a pointer to the assessment also listed in
+     * [riskAssessments]. Empty when no onboarding mode was requested.
+     */
+    val onboarding: List<AccountOnboardingInfo> = emptyList()
+)
+
+/**
+ * Outcome of onboarding one (new AWS account, owner) pair.
+ *
+ * Deliberately the same three shapes as [AccountRiskAssessmentInfo], so every surface — the
+ * CLI printout, the MCP result, the admin UI — renders both lists by one rule:
+ *
+ * - **done**     — [error] null, [skipped] false. What was done depends on [mode]:
+ *                  a welcome mail ([welcomeEmailSent]), a questionnaire invite
+ *                  ([questionnaireInviteId] + [questionnaireExpiresAt]), and/or an
+ *                  assessment ([riskAssessmentId]).
+ * - **skipped**  — [skipped] true and [skipReason] set. A no-op, not a failure: the pair
+ *                  already has a live invite or assessment. Callers must not let these drive
+ *                  a non-zero exit status.
+ * - **failed**   — [error] set.
+ *
+ * [dryRun] entries describe what *would* have happened. Nothing was persisted or sent, and in
+ * GUIDED mode no token was minted — a token in a dry-run log would be a leaked credential.
+ */
+@Serdeable
+data class AccountOnboardingInfo(
+    val awsAccountId: String,
+    val ownerEmail: String,
+    val mode: String,
+    val welcomeEmailSent: Boolean = false,
+    val questionnaireInviteId: Long? = null,
+    val questionnaireExpiresAt: String? = null,
+    val riskAssessmentId: Long? = null,
+    val dryRun: Boolean = false,
+    val skipped: Boolean = false,
+    val skipReason: String? = null,
+    val error: String? = null
+)
+
+/** One active rule, rendered for a dry run, the CLI matrix and the MCP listing. */
+@Serdeable
+data class OnboardingRuleSummary(
+    val id: Long?,
+    val name: String,
+    val description: String? = null,
+    val isDefault: Boolean = false,
+    val active: Boolean = true,
+    /** `questionKey=choiceKey` per choice, sorted. Empty for the default rule. */
+    val combination: List<String> = emptyList(),
+    val useCases: List<String> = emptyList()
+)
+
+/**
+ * What a GUIDED dry run reports instead of minting anything: the questions that would be
+ * asked and the complete rule matrix that would apply.
+ */
+@Serdeable
+data class OnboardingRuleMatrix(
+    val questionCount: Int,
+    val choiceCount: Int,
+    val activeRuleCount: Int,
+    val hasDefaultRule: Boolean,
+    val rules: List<OnboardingRuleSummary> = emptyList(),
+    /** Every use case any active rule can resolve to. */
+    val reachableUseCases: List<String> = emptyList(),
+    /** Requirements the ACTIVE release contributes for [reachableUseCases]. */
+    val reachableRequirementCount: Int = 0,
+    val releaseVersion: String? = null
 )
 
 @Serdeable

@@ -1,0 +1,22 @@
+A few questions about AWS account {awsAccountId}
+================================================
+{ifSimulated}
+*** This is a test message sent by {simulatedBy} from SecMan. ***
+{/ifSimulated}
+Before we can start a risk assessment for AWS account {awsAccountId}, we need
+to know how you use it. Your answers decide which security requirements apply -
+answering takes about a minute.
+
+Answer the questions: {questionnaireUrl}
+
+Link valid until:      {expiresAt} ({expiryDays} days)
+Assessment deadline:   {deadlineDays} days after you answer
+{ifVersion}
+Requirements version:  {requirementsVersion}
+{/ifVersion}
+This link works once and only for you. Please do not forward it - anyone holding
+it can answer on your behalf.
+
+---
+You are receiving this because your email address is mapped to this AWS account
+in SecMan. If that is not correct, contact your SecMan administrator.

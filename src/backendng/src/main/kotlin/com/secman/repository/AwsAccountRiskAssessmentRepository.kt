@@ -12,6 +12,23 @@ interface AwsAccountRiskAssessmentRepository : JpaRepository<AwsAccountRiskAsses
     fun findByAwsAccountId(awsAccountId: String): List<AwsAccountRiskAssessment>
 
     /**
+     * Ids of still-open assessments already tracked for this (account, owner) pair.
+     *
+     * A projection, not entities, so the caller can apply the idempotency guard without
+     * navigating the LAZY `riskAssessment` association — which the onboarding path does
+     * outside a transaction, where a lazy proxy would throw rather than load.
+     */
+    @Query(
+        """
+        SELECT t.riskAssessment.id FROM AwsAccountRiskAssessment t
+        WHERE t.awsAccountId = :awsAccountId
+          AND LOWER(t.ownerEmail) = LOWER(:ownerEmail)
+          AND t.riskAssessment.status = 'STARTED'
+        """
+    )
+    fun findOpenAssessmentIds(awsAccountId: String, ownerEmail: String): List<Long>
+
+    /**
      * Tracked assessments whose deadline (risk_assessment.end_date) lies inside
      * (today, windowEnd] — i.e. 1 or 2 days away for windowEnd = today + 2 —
      * that are still open (status STARTED) and have at least one deadline

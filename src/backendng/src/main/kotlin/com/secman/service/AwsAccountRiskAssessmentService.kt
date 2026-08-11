@@ -15,6 +15,7 @@ import com.secman.repository.AwsAccountRiskAssessmentRepository
 import com.secman.repository.RiskAssessmentRepository
 import com.secman.repository.UseCaseRepository
 import com.secman.repository.UserRepository
+import com.secman.util.EmailAddressValidator
 import jakarta.inject.Provider
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
@@ -57,6 +58,7 @@ open class AwsAccountRiskAssessmentService(
     private val emailService: EmailService,
     private val appConfig: AppConfig,
     private val releaseRequirementScopeService: ReleaseRequirementScopeService,
+    private val templateRenderer: EmailTemplateRenderer,
     // Self-reference so [createAssessment]'s `@Transactional(REQUIRES_NEW)` runs through the AOP
     // proxy (a same-class call would bypass it). Each per-(account, owner) persist thus commits
     // in its own short transaction, letting the caller send the owner email AFTER the connection
@@ -87,11 +89,9 @@ open class AwsAccountRiskAssessmentService(
         // Owner mails are rendered from the shared email-templates/ resources rather than
         // inline HTML, so they carry the SecMan logo and the same layout as every other
         // notification (see AwsAccountSharingNotificationService for the same pattern).
-        private const val STARTED_HTML_TEMPLATE = "/email-templates/aws-account-risk-assessment-started.html"
-        private const val STARTED_TEXT_TEMPLATE = "/email-templates/aws-account-risk-assessment-started.txt"
-        private const val REMINDER_HTML_TEMPLATE = "/email-templates/aws-account-risk-assessment-reminder.html"
-        private const val REMINDER_TEXT_TEMPLATE = "/email-templates/aws-account-risk-assessment-reminder.txt"
-        private const val LOGO_PATH = "/email-templates/SecManLogo.png"
+        // Basenames, not paths: EmailTemplateRenderer owns the directory and the allowlist.
+        const val STARTED_TEMPLATE = "aws-account-risk-assessment-started"
+        const val REMINDER_TEMPLATE = "aws-account-risk-assessment-reminder"
         private const val ASSESSMENTS_PATH = "/risk-assessments"
     }
 
@@ -130,6 +130,39 @@ open class AwsAccountRiskAssessmentService(
                 "tagged with use case '${useCase.name}'"
         }
         return null
+    }
+
+    /**
+     * The same fail-fast checks over the *prerequisites* an assessment needs, without naming a
+     * use case: a SECCHAMPION to assess it and an ACTIVE release to measure it against.
+     *
+     * Guided onboarding cannot check a use case up front — which ones apply is precisely what
+     * the owner has not answered yet — but the two environmental preconditions are knowable
+     * before the first invite is mailed, and finding out later means the owner clicked a link
+     * that could never have worked.
+     */
+    open fun validateAssessmentPrerequisites(deadlineDays: Int?): String? {
+        if (deadlineDays != null && deadlineDays < 1) {
+            return "riskAssessmentDeadlineDays must be at least 1 (got $deadlineDays)"
+        }
+        if (deadlineDays != null && deadlineDays > MAX_DEADLINE_DAYS) {
+            return "riskAssessmentDeadlineDays must be at most $MAX_DEADLINE_DAYS (got $deadlineDays)"
+        }
+        if (userRepository.findByRolesContaining(User.Role.SECCHAMPION).isEmpty()) {
+            return "No user with SECCHAMPION role exists to act as assessor"
+        }
+        if (releaseRequirementScopeService.findActiveRelease() == null) {
+            return "No ACTIVE release exists to base the risk assessment on - " +
+                "activate a requirements release first"
+        }
+        return null
+    }
+
+    /** The next SECCHAMPION in the round-robin, or null when none exists. Shared with guided onboarding. */
+    open fun pickAssessor(rotation: Int): User? {
+        val secChampions = userRepository.findByRolesContaining(User.Role.SECCHAMPION).sortedBy { it.id }
+        if (secChampions.isEmpty()) return null
+        return secChampions[Math.floorMod(rotation, secChampions.size)]
     }
 
     /**
@@ -211,7 +244,7 @@ open class AwsAccountRiskAssessmentService(
                     selfProvider.get().createAssessment(
                         awsAccountId = account.awsAccountId,
                         ownerEmail = ownerEmail,
-                        useCase = useCase,
+                        useCases = setOf(useCase),
                         endDate = endDate,
                         assessor = assessor,
                         requestor = requestorUser ?: assessor,
@@ -240,7 +273,7 @@ open class AwsAccountRiskAssessmentService(
                 // undo the committed assessment.
                 if (info.error == null && !info.skipped && info.riskAssessmentId != null) {
                     try {
-                        sendStartNotification(
+                        notifyAssessmentStarted(
                             ownerEmail, account.awsAccountId, useCase.name, endDate, assessor, activeRelease,
                             info.riskAssessmentId
                         )
@@ -259,11 +292,16 @@ open class AwsAccountRiskAssessmentService(
     // never rolls back another pair. Must be `open` and invoked via selfProvider for the AOP
     // proxy to apply. Detached assessor/requestor/useCase are safe FK references here — those
     // associations declare no cascade (see RiskAssessment).
+    //
+    // Takes a SET of use cases, not one: guided onboarding
+    // ([com.secman.domain.AccountOnboardingMode.GUIDED]) scopes an assessment to the union of
+    // every matching rule's use cases, and RiskAssessment.useCases has always been a set.
+    // The DIRECT path passes a singleton and is unchanged in behaviour.
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     open fun createAssessment(
         awsAccountId: String,
         ownerEmail: String,
-        useCase: UseCase,
+        useCases: Set<UseCase>,
         endDate: LocalDate,
         assessor: User,
         requestor: User,
@@ -271,6 +309,11 @@ open class AwsAccountRiskAssessmentService(
         requirementCount: Int
     ): AccountRiskAssessmentInfo {
         val today = LocalDate.now()
+        require(useCases.isNotEmpty()) { "createAssessment requires at least one use case" }
+        // Sorted so the persisted name, the notes and the log line are stable across runs and
+        // two assessments over the same use cases compare equal by string.
+        val useCaseNames = useCases.map { it.name }.sorted()
+        val joinedUseCaseNames = useCaseNames.joinToString(", ")
 
         // Idempotency guard: re-running an import (or two overlapping imports) must not
         // create a second assessment + tracking row + reminder stream for the same
@@ -311,7 +354,7 @@ open class AwsAccountRiskAssessmentService(
             asset = asset
         )
         assessment.respondent = ownerUser
-        assessment.useCases = mutableSetOf(useCase)
+        assessment.useCases = useCases.toMutableSet()
         // Pin to the current version of the security requirements. The questionnaire is
         // then resolved from that release's frozen snapshots (see
         // ResponseController.getRequirementsForAssessment), so re-importing requirements
@@ -319,9 +362,14 @@ open class AwsAccountRiskAssessmentService(
         assessment.lockedRelease = activeRelease
         assessment.isReleaseLocked = true
         assessment.contentSnapshotTaken = true
-        assessment.notes = "Automatically started by AWS account mapping import for account " +
-            "$awsAccountId (owner: $ownerEmail, use case: ${useCase.name}, " +
-            "requirements version: ${activeRelease.version})"
+        // notes is capped at 1024 by the column, and the use case list is now unbounded in
+        // principle — truncate rather than fail the insert after the import already committed.
+        assessment.notes = EmailAddressValidator.sanitizeForEcho(
+            "Automatically started by AWS account mapping import for account " +
+                "$awsAccountId (owner: $ownerEmail, use case: $joinedUseCaseNames, " +
+                "requirements version: ${activeRelease.version})",
+            maxLength = 1024
+        )
 
         val saved = riskAssessmentRepository.save(assessment)
 
@@ -330,16 +378,17 @@ open class AwsAccountRiskAssessmentService(
                 awsAccountId = awsAccountId,
                 ownerEmail = ownerEmail,
                 riskAssessment = saved,
-                useCaseName = useCase.name
+                // Column widened to 1024 in V253 for exactly this: a union of names, not one.
+                useCaseName = joinedUseCaseNames.take(1024)
             )
         )
 
         // Owner notification is sent by the caller AFTER this transaction commits, so the
         // blocking SMTP send never holds this pooled DB connection.
         log.info(
-            "Started risk assessment {} for new AWS account {} (owner={}, assessor={}, useCase={}, " +
+            "Started risk assessment {} for new AWS account {} (owner={}, assessor={}, useCases={}, " +
                 "requirementsVersion={}, requirements={}, deadline={})",
-            saved.id, awsAccountId, ownerEmail, assessor.username, useCase.name,
+            saved.id, awsAccountId, ownerEmail, assessor.username, joinedUseCaseNames,
             activeRelease.version, requirementCount, endDate
         )
 
@@ -349,7 +398,8 @@ open class AwsAccountRiskAssessmentService(
             riskAssessmentId = saved.id,
             assessor = assessor.email.ifBlank { assessor.username },
             endDate = endDate.format(DATE_FORMAT),
-            useCase = useCase.name,
+            useCase = joinedUseCaseNames,
+            useCases = useCaseNames,
             releaseVersion = activeRelease.version,
             requirementCount = requirementCount
         )
@@ -459,8 +509,10 @@ open class AwsAccountRiskAssessmentService(
             "deadline" to endDate.format(DATE_FORMAT),
             "assessmentsUrl" to assessmentUrl(tracking.riskAssessment.id),
         )
-        val htmlTemplate = renderConditionalBlock(readResource(REMINDER_HTML_TEMPLATE), "ifVersion", lockedVersion != null)
-        val textTemplate = renderConditionalBlock(readResource(REMINDER_TEXT_TEMPLATE), "ifVersion", lockedVersion != null)
+        val htmlTemplate =
+            renderConditionalBlock(templateRenderer.readHtml(REMINDER_TEMPLATE), "ifVersion", lockedVersion != null)
+        val textTemplate =
+            renderConditionalBlock(templateRenderer.readText(REMINDER_TEMPLATE), "ifVersion", lockedVersion != null)
 
         return try {
             emailService.sendEmailWithInlineImages(
@@ -476,10 +528,20 @@ open class AwsAccountRiskAssessmentService(
         }
     }
 
-    private fun sendStartNotification(
+    /**
+     * The "your risk assessment has started" mail.
+     *
+     * Public and reused by [AccountOnboardingService] when a guided questionnaire submission
+     * creates an assessment, so both paths send the identical mail rather than growing a
+     * second near-copy. The subject line is asserted by the `/aws-account-owner-email` E2E
+     * skill — changing it breaks that gate, deliberately.
+     *
+     * @param useCaseNames one name, or several comma-joined for a guided union.
+     */
+    open fun notifyAssessmentStarted(
         ownerEmail: String,
         awsAccountId: String,
-        useCaseName: String,
+        useCaseNames: String,
         endDate: LocalDate,
         assessor: User,
         release: Release,
@@ -488,7 +550,7 @@ open class AwsAccountRiskAssessmentService(
         val subject = "Risk assessment started for your AWS account $awsAccountId"
         val values = mapOf(
             "awsAccountId" to awsAccountId,
-            "useCaseName" to useCaseName,
+            "useCaseName" to useCaseNames,
             "requirementsVersion" to "${release.version} (${release.name})",
             "assessor" to assessor.email.ifBlank { assessor.username },
             "deadline" to endDate.format(DATE_FORMAT),
@@ -498,8 +560,8 @@ open class AwsAccountRiskAssessmentService(
         emailService.sendEmailWithInlineImages(
             to = ownerEmail,
             subject = subject,
-            textContent = render(readResource(STARTED_TEXT_TEMPLATE), values, escape = false),
-            htmlContent = render(readResource(STARTED_HTML_TEMPLATE), values, escape = true),
+            textContent = render(templateRenderer.readText(STARTED_TEMPLATE), values, escape = false),
+            htmlContent = render(templateRenderer.readHtml(STARTED_TEMPLATE), values, escape = true),
             inlineImages = loadLogoInlineImage(),
         ).get()
     }
@@ -523,49 +585,16 @@ open class AwsAccountRiskAssessmentService(
         return if (assessmentId != null) "$base?assessmentId=$assessmentId" else base
     }
 
-    /**
-     * Substitutes `{placeholder}` tokens. [escape] applies HTML escaping to the *values*
-     * (never the template), so a use case named `<b>x</b>` cannot inject markup into the
-     * HTML part; the plain-text part must stay unescaped or readers see `&amp;`.
-     */
+    // Rendering, HTML escaping, the {ifVersion} conditional and the inline logo all moved to
+    // [EmailTemplateRenderer] when guided onboarding needed the same behaviour. Behaviour is
+    // unchanged — the mails this service sends must render byte-identically, which is what
+    // AwsAccountRiskAssessmentServiceTest asserts.
     private fun render(template: String, values: Map<String, String>, escape: Boolean): String =
-        values.entries.fold(template) { acc, (key, value) ->
-            acc.replace("{$key}", if (escape) escapeHtml(value) else value)
-        }
+        templateRenderer.render(template, values, escape)
 
-    /**
-     * Renders or strips a `{name}…{/name}` block, consuming one trailing newline so a
-     * stripped block leaves no blank hole. Non-greedy, so repeated blocks render
-     * independently. Same mechanism as [AwsAccountSharingNotificationService].
-     */
-    private fun renderConditionalBlock(template: String, name: String, include: Boolean): String {
-        val pattern = Regex(
-            Regex.escape("{$name}") + "(.*?)" + Regex.escape("{/$name}") + "\\n?",
-            setOf(RegexOption.DOT_MATCHES_ALL)
-        )
-        return pattern.replace(template) { match -> if (include) match.groupValues[1] else "" }
-    }
-
-    private fun readResource(path: String): String {
-        val stream = javaClass.getResourceAsStream(path)
-            ?: throw IllegalStateException("Email template not found on classpath: $path")
-        return stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-    }
+    private fun renderConditionalBlock(template: String, name: String, include: Boolean): String =
+        templateRenderer.renderConditionalBlock(template, name, include)
 
     private fun loadLogoInlineImage(): Map<String, Pair<ByteArray, String>> =
-        try {
-            javaClass.getResourceAsStream(LOGO_PATH)?.readAllBytes()
-                ?.let { mapOf("secman-logo" to (it to "image/png")) }
-                ?: emptyMap()
-        } catch (e: Exception) {
-            // A missing logo must not cost the recipient their notification.
-            log.warn("Failed to load SecManLogo.png: {}", e.message)
-            emptyMap()
-        }
-
-    private fun escapeHtml(text: String): String =
-        text.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;")
+        templateRenderer.loadLogoInlineImage()
 }

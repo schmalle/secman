@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tell us how you use your AWS account</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #222; max-width: 640px; margin: 0 auto; padding: 24px;">
+  <p style="text-align: center;">
+    <img src="cid:secman-logo" alt="SecMan" style="max-height: 64px;">
+  </p>
+
+  {ifSimulated}
+  <p style="background: #fff3cd; border: 1px solid #ffe08a; border-radius: 4px; padding: 10px 14px; color: #6b5200;">
+    <strong>This is a test message</strong> sent by {simulatedBy} from SecMan.
+  </p>
+  {/ifSimulated}
+  <h2 style="color: #1f4e79;">A few questions about AWS account {awsAccountId}</h2>
+
+  <p>Before we can start a risk assessment for AWS account
+     <strong style="font-family: monospace;">{awsAccountId}</strong>,
+     we need to know how you use it. Your answers decide which security requirements
+     apply — answering takes about a minute.</p>
+
+  <p>
+    <a href="{questionnaireUrl}"
+       style="background: #1f4e79; color: #fff; padding: 10px 18px; text-decoration: none; border-radius: 4px;">
+      Answer the questions
+    </a>
+  </p>
+
+  <p style="color: #555; font-size: 0.9em;">
+    If the button does not work, open
+    <a href="{questionnaireUrl}" style="color: #1f4e79;">{questionnaireUrl}</a>.
+  </p>
+
+  <table style="border-collapse: collapse; margin: 0 0 16px;">
+    <tr>
+      <td style="padding: 4px 16px 4px 0; color: #555;">Link valid until</td>
+      <td style="padding: 4px 0;"><strong>{expiresAt}</strong> ({expiryDays} days)</td>
+    </tr>
+    <tr>
+      <td style="padding: 4px 16px 4px 0; color: #555;">Assessment deadline</td>
+      <td style="padding: 4px 0;">{deadlineDays} days after you answer</td>
+    </tr>
+    {ifVersion}
+    <tr>
+      <td style="padding: 4px 16px 4px 0; color: #555;">Requirements version</td>
+      <td style="padding: 4px 0;">{requirementsVersion}</td>
+    </tr>
+    {/ifVersion}
+  </table>
+
+  <p style="color: #555; font-size: 0.9em;">
+    This link works once and only for you. Please do not forward it — anyone holding it can
+    answer on your behalf.
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 32px 0 16px;">
+
+  <p style="color: #777; font-size: 0.85em;">
+    You are receiving this because your email address is mapped to this AWS account in
+    SecMan. If that is not correct, contact your SecMan administrator.
+  </p>
+</body>
+</html>

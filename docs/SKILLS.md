@@ -1,6 +1,6 @@
 # Which secman skill to use when
 
-Thirteen skills live in `.claude/skills/` (Claude Code) and again in
+Fourteen skills live in `.claude/skills/` (Claude Code) and again in
 `.agents/skills/` (Codex). The two trees are one skill set: an edit to either
 side must be ported to the other in the same commit — see `CLAUDE.md`
 §"Tooling Conventions" and verify with `./scripts/check-skill-sync.sh`.
@@ -35,6 +35,7 @@ writes.
 | Compare SecMan against Falcon without changing anything | `/crowdstrike-vuln-match` | No |
 | Check a new AWS account starts a correctly scoped assessment | `/aws-account-risk-assessment` | Adds + removes a testbed |
 | Check the AWS account owner actually gets the email | `/aws-account-owner-email` | Adds + removes a testbed, **sends real mail** |
+| Test welcome mail + the guided questionnaire that scopes an assessment | `/account-onboarding` | Adds + removes a testbed |
 | Get a fixture to click around in | `/createtestdata` | Adds a fixture |
 
 **The three destructive ones are not safe against a shared instance.** Check what
@@ -106,6 +107,24 @@ Both involve CrowdStrike. Only one writes.
 
 If the question is *"is our data right?"* use the matcher. If the question is
 *"why does importing fail?"* use importtest.
+
+### `/account-onboarding` vs `/aws-account-risk-assessment`
+
+Both start from the same event — a mapping import introduces an AWS account SecMan
+has never seen — and diverge on who decides what the assessment covers.
+
+| | `/aws-account-risk-assessment` | `/account-onboarding` |
+|---|---|---|
+| Question | Does `--start-risk-assessment` create a correctly scoped assessment? | Do the three onboarding modes work, and does the *owner's* answer decide the scope? |
+| Use case | One, named on the command line | Resolved from the owner's answers, possibly several unioned |
+| Covers the welcome mail | No | Yes |
+| Covers the public questionnaire | No | Yes — token, masking, replay, rate limiting |
+| Covers `--start-risk-assessment` | Everything | Only that it still behaves **exactly** as before |
+
+That last row is the point of overlap: `/account-onboarding` includes one phase
+whose whole job is to prove the legacy flag was not changed by the new modes. If
+that phase fails, stop — it is a backward-compatibility regression affecting the
+`extensions/` clients, which nothing in this build compiles against.
 
 ### `/aws-account-risk-assessment` vs `/aws-account-owner-email`
 
@@ -305,6 +324,42 @@ recipient address** (usually a real account; the mail is sent with or without
 one), and **activate a release when one is already ACTIVE** (that would archive
 yours, terminally). Cleanup is scoped to `e2e-awsmail-` and the `884…`/`885…`
 accounts it generates.
+
+### `/account-onboarding` — welcome mail, direct and guided assessments
+Covers the three modes an import can run for the owner of a brand-new AWS account:
+`WELCOME_ONLY` (a mail), `DIRECT` (an assessment for a use case you name) and
+`GUIDED` (a one-time link whose answers decide the scope).
+
+The phases worth knowing, because they are the ones that catch real regressions:
+
+- **The compatibility gate.** One phase imports with a bare
+  `--start-risk-assessment` and asserts it behaves exactly as it did before
+  onboarding modes existed — one assessment, and **no welcome mail**. Every
+  `extensions/` client sends only that flag and nothing in this build compiles
+  against them, so this phase is the closest thing to a compiler for that
+  contract. If it fails, stop and fix it before anything else.
+- **The union.** Answers matching two rules must produce **one** assessment
+  covering both rules' use cases, with a questionnaire equal to the union of the
+  ACTIVE release's requirements for them.
+- **The token negatives.** Replay, an unknown 64-hex value and a malformed string
+  must all return a byte-identical 404, and a burst must hit 429. These assert the
+  absence of an enumeration oracle, which is easy to reintroduce by "improving"
+  an error message.
+- **Nothing matched.** The answers are recorded, the link still works, and the
+  response is 409 — a submission that resolves to nothing must not consume the
+  owner's one-time link.
+
+It never prints an invite token, and asserts that the CLI, the MCP result and
+every dry run do not either. Do not "fix" those assertions by exposing one.
+
+The owner-flow phases need `.e2e-logs/backend.log` to recover the token from the
+rendered mail (no API returns one, by design). Without it they report `[WARN]` and
+are **skipped** — say so in the report rather than counting them as passes; point
+`SECMAN_BACKEND_LOG` at the real path instead.
+
+Cleanup is scoped to `e2e-onb-` and the `87…000` accounts it mints, and deletes
+rules before questions because the API refuses to delete a question a rule still
+references.
 
 ### `/createtestdata` — seed a fixture
 Additive only, nothing is deleted, fixtures accumulate without bound. Do not run

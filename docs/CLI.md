@@ -549,11 +549,114 @@ every account in one run is measured against the same version. Full semantics:
 
 Inspect what an import produced with the MCP tool `list_aws_account_risk_assessments`.
 
+#### import --onboarding-mode (welcome mail, direct or guided assessment)
+
+`--start-risk-assessment` above asks the *operator* which use case applies.
+`--onboarding-mode` adds two alternatives, including one that asks the person who
+actually knows — the account owner. Full reference and worked examples for every
+combination: `docs/ACCOUNT_ONBOARDING.md`.
+
+```bash
+# Welcome mail only
+./scripts/secman manage-user-mappings import -f mappings.csv \
+    --onboarding-mode WELCOME_ONLY
+
+# Welcome mail + an assessment you scope yourself
+./scripts/secman manage-user-mappings import -f mappings.csv \
+    --onboarding-mode DIRECT --risk-usecase "Cloud Onboarding" --risk-deadline-days 14
+
+# Welcome mail + a one-time link; the owner's answers decide the scope
+./scripts/secman manage-user-mappings import -f mappings.csv \
+    --onboarding-mode GUIDED --questionnaire-expiry-days 21
+```
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--onboarding-mode <WELCOME_ONLY\|DIRECT\|GUIDED>` | none | Nothing is sent when omitted. |
+| `--welcome-email` / `--no-welcome-email` | on with a mode, off without | Forces the welcome mail either way. |
+| `--questionnaire-expiry-days <n>` | 14 | How long the GUIDED link stays valid. 1..90. Ignored (with a warning) in the other modes. |
+
+**`--start-risk-assessment` on its own is unchanged.** It resolves to `DIRECT` and
+sends **no** welcome mail — byte-identical to the behaviour before onboarding modes
+existed, which is what the `extensions/` clients and the existing E2E drivers rely
+on. Naming a mode explicitly is what opts into the welcome mail.
+
+Combining `--start-risk-assessment` with `--onboarding-mode WELCOME_ONLY` or
+`GUIDED` is **rejected** (exit 2) rather than guessed: honouring either half would
+silently do something you did not ask for.
+
+A GUIDED import mints a one-time link and sends it. It does **not** create an
+assessment — that happens when the owner submits, scoped to the union of the use
+cases every matching rule contributes. The link is never printed by the CLI, never
+returned by an API, and never minted by a dry run; it exists only in the mail.
+
+Sample output:
+
+```
+Onboarding: GUIDED (welcome mail + guided assessment)
+  Link expiry: 21 day(s)
+  Deadline:    7 day(s) after the owner submits
+  Welcome:     yes
+
+Onboarding (3):
+  ✉️  111111111111  alice@corp.com  ->  welcome mail sent
+  🔗  222222222222  bob@corp.com    ->  questionnaire invite #12, expires 2026-09-01 09:14
+  ⏭️   333333333333  dave@corp.com   ->  skipped — a pending questionnaire invite (id=9) already exists
+```
+
+`--dry-run` prints `DRY-RUN — nothing persisted, nothing sent, no invite token
+minted.` followed by the would-do lines and, for GUIDED, the full rule matrix:
+
+```
+Rule matrix that would apply:
+  [1] "Production workload"  environment=production AND customer-data=yes  ->  Cloud Baseline, Data Protection
+  [*] default fallback       (no rule matched)                             ->  Cloud Baseline
+Reachable use cases: 3  ->  9 requirement(s) in ACTIVE release 2.1.0
+```
+
+**Exit codes:** `0` OK / dry-run / pairs skipped as already onboarded · `1` mappings saved but ≥ 1 pair failed to onboard · `2` invalid arguments (an incompatible flag combination, `--risk-usecase` on a non-DIRECT mode, `--questionnaire-expiry-days` outside 1..90, or any of the `--start-risk-assessment` rejections above).
+
+#### `simulate-onboarding` — rehearse against an account that does not exist
+
+Runs the whole onboarding path against an AWS account id and email address you
+supply, calling *exactly* what a real import calls. Use it to see the welcome mail,
+or to walk the guided questionnaire yourself, without waiting for a real account to
+turn up. Requires ADMIN or SECCHAMPION.
+
+```bash
+# Preview without sending
+./scripts/secman manage-user-mappings simulate-onboarding \
+    --aws-account-id 999999999999 --owner-email you@example.com \
+    --mode GUIDED --dry-run
+
+# Actually mail yourself a questionnaire link and click it
+./scripts/secman manage-user-mappings simulate-onboarding \
+    --aws-account-id 999999999999 --owner-email you@example.com --mode GUIDED
+```
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--aws-account-id <12 digits>` | — | Required. May be fictitious. |
+| `--owner-email <address>` | — | Required. Without `--dry-run` this address really receives mail. |
+| `--mode <WELCOME_ONLY\|DIRECT\|GUIDED>` | — | Required. |
+| `--risk-usecase <name>` | — | Required for `DIRECT`, rejected otherwise. |
+| `--risk-deadline-days <n>` | 7 | 1..3650. |
+| `--questionnaire-expiry-days <n>` | 14 | 1..90. |
+| `--welcome-email` / `--no-welcome-email` | on | |
+| `--dry-run` | off | Persists nothing, sends nothing, mints no token. |
+
+Without `--dry-run` the command opens with a warning naming the recipient. Every
+simulated mail carries a line saying it is a test and naming the actor who sent it,
+and the invite is stamped `simulated` so the rows are identifiable. Rate limited to
+20 live simulations per actor per hour.
+
+**Exit codes:** `0` OK (a skip is not a failure) · `1` onboarding failed · `2` invalid arguments.
+
 #### S3 subcommands
 
 All three `*-s3` commands share AWS options: `--aws-region`, `--aws-profile`, `--aws-access-key-id`, `--aws-secret-access-key`, `--aws-session-token`, `--endpoint-url` (also `AWS_ENDPOINT_URL`, used for S3Mock/MinIO/LocalStack). 10 MB hard size limit. Default credential chain: env → `~/.aws/credentials` → IAM role → SSO.
 
-- **`import-s3`** — download AND POST to backend. Bucket/key from `--bucket`/`--key` or, when omitted, the `AWS_ACCOUNT_BUCKET_NAME` / `AWS_ACCOUNT_BUCKET_KEY_NAME` env vars (flags take priority). Needs `s3:GetObject` (+ `s3:HeadObject` for pre-download size check). Supports `--start-risk-assessment` / `--risk-usecase` / `--risk-deadline-days` exactly like `import` (see above). Exit codes: `0` ok / `1` partial / `2` fatal S3/config / `3` unexpected. Detailed flags: `docs/S3_USER_MAPPING_IMPORT.md`.
+- **`import-s3`** — download AND POST to backend. Bucket/key from `--bucket`/`--key` or, when omitted, the `AWS_ACCOUNT_BUCKET_NAME` / `AWS_ACCOUNT_BUCKET_KEY_NAME` env vars (flags take priority). Needs `s3:GetObject` (+ `s3:HeadObject` for pre-download size check). Supports `--start-risk-assessment` / `--risk-usecase` / `--risk-deadline-days` and the `--onboarding-mode` / `--welcome-email` / `--questionnaire-expiry-days` set exactly like `import` (see above). Exit codes: `0` ok / `1` partial / `2` fatal S3/config / `3` unexpected. Detailed flags: `docs/S3_USER_MAPPING_IMPORT.md`.
 - **`download-s3`** — download only, no backend contact. `--bucket -b`, `--key -k`, `--output -o` required; `--force -f` to overwrite; `--quiet -q` (success/error stays on stderr). Parent dir must exist; verbatim copy.
 - **`print-s3`** — download + parse + print to stdout (temp file deleted). `--type AWS|DOMAIN|ALL` (default `AWS`); `--format TABLE|JSON|CSV`; `--file-format CSV|JSON|AUTO`; `--show-errors` to print parse errors to stderr; `--quiet` suppresses banner+summary (still on stderr). **stdout = mappings only**, safe to pipe through `diff`/`jq`/`awk`.
 

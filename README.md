@@ -13,6 +13,7 @@ Security requirement, vulnerability and risk-assessment platform.
 - Vulnerability management: CrowdStrike Falcon import, GitHub App Dependabot alert tracking with 30-day non-decrease owner alerts, exception-request workflow, statistics, heatmap, materialized view for fast outdated-asset queries (<2s @ 10k assets).
 - Asset inventory: Nmap/Masscan import, AD/cloud metadata, criticality, workgroup-scoped access.
 - Risk register, demand classification, compliance-framework mapping (SOC2, ISO 27001, NIST), optional AI-assisted pre-fill of compliance answers (OpenRouter LLM, confidence scoring + citations, human review required).
+- AWS account onboarding: a newly discovered account's owner is welcomed and, optionally, given a risk assessment — either scoped by the operator or by the owner answering a short questionnaire whose answers resolve through admin-configured rules.
 - AuthN: local (BCrypt) + OAuth2/OIDC + Passkey/WebAuthn + optional MFA.
 - AuthZ: 9-role RBAC with row-level filtering on assets (workgroup, ownership, AWS account, AD domain, sharing rules).
 - AI integration: 80+ tool MCP server (Streamable HTTP) for Claude Desktop/Code and other MCP clients, with mandatory user delegation.
@@ -20,7 +21,7 @@ Security requirement, vulnerability and risk-assessment platform.
 
 ## Stack
 
-Kotlin 2.4.0 / Java 25 · Micronaut 5.0 · Hibernate JPA · Astro 7 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.6 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2.
+Kotlin 2.4.10 / Java 25 · Micronaut 5.1 · Hibernate JPA · Astro 7 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.7.0 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2 · Go 1.24 (mobile relay).
 
 ## Quick Start (development)
 
@@ -44,6 +45,8 @@ src/
   backendng/   Kotlin/Micronaut: domain → repository → service → controller, mcp/, dto/, filter/
   frontend/   Astro pages + React islands, services/ (Axios)
   cli/        Picocli commands + service/
+  relay/      Go: zero-dependency DMZ relay for the mobile app
+  clinotify/  stdlib-only Python monitoring helpers
 docs/         see below
 scripts/     ALL scripts live here (canonical — never invoke gradle/npm/etc. directly for dev start)
 specs/        historical implementation plans (frozen)
@@ -68,9 +71,10 @@ specs/        historical implementation plans (frozen)
 
 # Tests
 ./gradlew :backendng:test --tests "*ServiceTest*"      # unit
-./gradlew :backendng:test --tests "*IntegrationTest*"  # integration (Docker)
+./gradlew :backendng:test --tests "*IntegrationTest*"  # integration (external MariaDB, see docs/TESTING.md)
 ./gradlew :cli:test
 ./tests/e2e/run-e2e.sh                                 # Playwright (pass-cli secrets)
+./scripts/test/test-e2e-*.sh                           # feature E2E drivers (see docs/SKILLS.md)
 ```
 
 ## API reference
@@ -99,6 +103,8 @@ All endpoints under `/api/*` require `Authorization: Bearer <jwt>` unless noted.
 | `/api/user-dashboard` | GET | auth |
 | `/api/github-config[/{id}[/test]]`, `/api/github/import`, `.../repositories/{id}/alerts` | GET/POST/PUT/DELETE | ADMIN (import: ADMIN/VULN) |
 | `/api/risk-assessments/{id}/ai-suggestions/...` | GET/POST/DELETE | ADMIN/SECCHAMPION |
+| `/api/account-onboarding/{questions,rules,rules/coverage,rules/preview,simulate}` | GET/POST/PUT/DELETE | ADMIN/SECCHAMPION |
+| `/api/public/account-onboarding/{token}` | GET/POST | public (single-use token) |
 | `/oauth/{authorize,callback}` | GET | public |
 | `/mcp` | POST | MCP API key + delegation |
 | `/health`, `/memory` | GET | public |
@@ -152,6 +158,14 @@ Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings):
 | [docs/CROWDSTRIKE_IMPORT.md](docs/CROWDSTRIKE_IMPORT.md) | Transactional-replace pattern, JPA cascade trap |
 | [docs/GITHUB_REPOS.md](docs/GITHUB_REPOS.md) | GitHub App vulnerability import, Dependabot alerts, owner alerting |
 | [docs/AI_RISK_ASSESSMENT.md](docs/AI_RISK_ASSESSMENT.md) | AI-assisted risk-assessment answer pre-fill |
+| [docs/AWS_ACCOUNT_RISK_ASSESSMENT.md](docs/AWS_ACCOUNT_RISK_ASSESSMENT.md) | Auto risk assessment for newly discovered AWS accounts |
+| [docs/ACCOUNT_ONBOARDING.md](docs/ACCOUNT_ONBOARDING.md) | Welcome mail, direct and guided assessments, the owner questionnaire |
+| [docs/EOL.md](docs/EOL.md) | End-of-life catalogue, matching, owner mail, repository ranking |
+| [docs/RELAY.md](docs/RELAY.md) | Zero-trust mobile relay (Go, DMZ) and the iOS app |
+| [docs/AWS.md](docs/AWS.md) | AWS account mapping, sharing and access rules |
+| [docs/SKILLS.md](docs/SKILLS.md) | Which agent skill to use when, and what each one writes |
+| [docs/RACE_CONDITIONS.md](docs/RACE_CONDITIONS.md) | Known races and the guards that close them |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Full change history (archived from CLAUDE.md) |
 | [docs/TESTING.md](docs/TESTING.md) | JUnit/Mockk/Testcontainers stack and patterns |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Symptom → diagnosis → fix |
 | [docs/S3_USER_MAPPING_IMPORT.md](docs/S3_USER_MAPPING_IMPORT.md) | `import-s3` / `download-s3` / `print-s3` / `list-bucket` |
