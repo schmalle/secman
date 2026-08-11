@@ -111,6 +111,15 @@ after a page break at the end of the document. That is what
 `missingPlaceholderBehavior=APPEND` allows; the default, `REJECT`, refuses to
 store or use such a template so you find out before the document is circulated.
 
+**Above 750 requirements the export also falls back to appending**, and says so
+in the log. In-place insertion is quadratic — POI's `insertNewParagraph` walks
+every previous sibling to work out where the new element belongs, and a
+requirement emits about seven paragraphs — so an unbounded document would hand
+an unauthenticated caller of `GET /api/requirements/export/docx` a
+CPU-exhaustion primitive. The cap keeps that path bounded; the append path is
+O(1) per paragraph and stays available at any size. A real requirements
+document is far below the limit.
+
 ## 5. Validation, and what is rejected
 
 Every uploaded template — including the shipped example, which is not treated as
@@ -125,8 +134,18 @@ Rejected:
   template would run on every reader's machine)
 - A package declaring `macroEnabled` or containing `vbaProject.bin`,
   `/activex/`, `/embeddings/`, or an OLE object
-- A relationship with `TargetMode="External"` — remote images, remote
-  attached templates, anything that phones out when the document is opened
+- A relationship with an external target — remote images, remote attached
+  templates, anything that phones out when the document is opened. This one is a
+  real control, not hygiene: an external `attachedTemplate` is fetched by the
+  *recipient's* Word, so a UNC target leaks NetNTLM and a remote `.dotm` carries
+  macros, and these documents go to auditors and suppliers. The attribute is
+  matched with whitespace tolerance and after decoding character references
+  (`TargetMode = "External"` and `TargetMode="&#69;xternal"` are both legal XML
+  that Word resolves to External), and a `TargetMode` carrying any character
+  reference is rejected outright
+- A `${requirements}` marker split across two paragraphs — the renderer joins
+  runs within one paragraph, so it would never find it, and the export would
+  silently append instead of rendering at the marker
 - ZIP entries containing `../` or starting with `/` (zip slip)
 - More than `max-zip-entries` entries, or more than
   `max-uncompressed-size-bytes` inflated (zip bomb) — both checked while

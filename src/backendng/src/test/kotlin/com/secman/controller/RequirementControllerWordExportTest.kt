@@ -292,6 +292,46 @@ class RequirementControllerWordExportTest {
     }
 
     @Test
+    fun `an oversized export falls back to appending instead of quadratic in-place insertion`() {
+        // POI's insertNewParagraph is O(position), so in-place insertion is O(n^2) in emitted
+        // paragraphs. GET /api/requirements/export/docx is anonymous and renders the whole
+        // requirement table, so past the limit the export must take the O(1) append path.
+        val tooMany = (1..RequirementController.MAX_IN_PLACE_REQUIREMENTS + 1).map {
+            requirement(it.toLong(), "REQ-$it", "Requirement $it")
+        }
+
+        val document = createTemplatedWordDocument(
+            templateBytes = templateDocx("Cover", "\${requirements}", "Appendix: approval signatures"),
+            requirements = tooMany
+        )
+
+        val texts = document.paragraphs.map { it.text }
+        // The marker is still consumed — it must never surface as literal text.
+        assertThat(texts).noneMatch { it.contains("\${requirements}") }
+        // ...but content now lands after the template's back matter, not before it.
+        val appendixIndex = texts.indexOfFirst { it.contains("Appendix") }
+        val firstRequirementIndex = texts.indexOfFirst { it.contains("REQ-1:") }
+        assertThat(firstRequirementIndex).isGreaterThan(appendixIndex)
+    }
+
+    @Test
+    fun `an export at the in-place limit still renders at the insertion point`() {
+        val atLimit = (1..RequirementController.MAX_IN_PLACE_REQUIREMENTS).map {
+            requirement(it.toLong(), "REQ-$it", "Requirement $it")
+        }
+
+        val document = createTemplatedWordDocument(
+            templateBytes = templateDocx("Cover", "\${requirements}", "Appendix: approval signatures"),
+            requirements = atLimit
+        )
+
+        val texts = document.paragraphs.map { it.text }
+        val appendixIndex = texts.indexOfFirst { it.contains("Appendix") }
+        val firstRequirementIndex = texts.indexOfFirst { it.contains("REQ-1:") }
+        assertThat(firstRequirementIndex).isLessThan(appendixIndex)
+    }
+
+    @Test
     fun `templated export preserves a table that precedes the insertion point`() {
         // Regression guard: removing the placeholder by paragraph index rather than body-element
         // index deletes the wrong element once a template contains a table.

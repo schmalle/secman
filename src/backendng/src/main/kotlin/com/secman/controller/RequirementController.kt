@@ -76,6 +76,7 @@ open class RequirementController(
     private val exportTemplateValidationService: RequirementExportTemplateValidationService,
     private val releaseRequirementScopeService: ReleaseRequirementScopeService
 ) {
+    private val log = org.slf4j.LoggerFactory.getLogger(RequirementController::class.java)
 
     @Serdeable
     data class RequirementCreateRequest(
@@ -837,7 +838,14 @@ open class RequirementController(
         // Everything except ${requirements}: that one is a position, not a value.
         replacePlaceholders(document, replacements - REQUIREMENTS_PLACEHOLDER)
 
-        if (anchor != null) {
+        // In-place insertion is quadratic: XWPFDocument.insertNewParagraph walks every previous
+        // sibling to work out where the new element belongs in bodyElements, so inserting the
+        // ~7 paragraphs a requirement emits in front of a fixed anchor costs O(position) each.
+        // That is fine for a document a human reads and unacceptable for an unbounded one — and
+        // GET /api/requirements/export/docx is anonymous, defaults to templateMode=LATEST, and
+        // renders every requirement in the table. Past the threshold, fall back to the O(1)
+        // append path: the layout is less pretty, the endpoint stays bounded.
+        if (anchor != null && requirements.size <= MAX_IN_PLACE_REQUIREMENTS) {
             appendRequirementContent(document, requirements) { insertParagraphBefore(document, anchor) }
             // Index into bodyElements, NOT XWPFDocument.getPosOfParagraph(): the latter counts
             // paragraphs only, so on a template containing tables (a cover page usually does) the
@@ -846,6 +854,19 @@ open class RequirementController(
             if (anchorPosition >= 0) {
                 document.removeBodyElement(anchorPosition)
             }
+        } else if (anchor != null) {
+            log.warn(
+                "Requirement export has {} requirements, above the {} in-place limit — appending " +
+                    "after the template instead of rendering at the insertion point",
+                requirements.size, MAX_IN_PLACE_REQUIREMENTS
+            )
+            // Consume the marker so it does not appear as literal text in the document.
+            val anchorPosition = document.bodyElements.indexOf(anchor)
+            if (anchorPosition >= 0) {
+                document.removeBodyElement(anchorPosition)
+            }
+            document.createParagraph().createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE)
+            appendRequirementContent(document, requirements)
         } else {
             // No insertion point in the template: fall back to appending after a page break.
             document.createParagraph().createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE)
@@ -902,7 +923,7 @@ open class RequirementController(
      */
     private fun sanitizePlaceholderValue(value: String?): String {
         if (value.isNullOrBlank()) return ""
-        return value.replace(Regex("[\\p{Cntrl}]"), " ").trim().take(MAX_PLACEHOLDER_VALUE_LENGTH)
+        return value.replace(CONTROL_CHARACTERS, " ").trim().take(MAX_PLACEHOLDER_VALUE_LENGTH)
     }
 
     /**
@@ -1782,5 +1803,25 @@ open class RequirementController(
 
         /** Upper bound on any single substituted placeholder value. */
         const val MAX_PLACEHOLDER_VALUE_LENGTH = 512
+
+        /**
+         * Above this many requirements, render with the O(1) append path instead of inserting at
+         * the template's `${requirements}` marker.
+         *
+         * POI's `insertNewParagraph` is O(position), so in-place insertion is O(n²) in the number
+         * of emitted paragraphs. `GET /api/requirements/export/docx` is anonymous and renders the
+         * whole requirement table, so leaving that unbounded hands an unauthenticated caller a
+         * CPU-exhaustion primitive. A real requirements document is far below this.
+         */
+        const val MAX_IN_PLACE_REQUIREMENTS = 750
+
+        /**
+         * Characters stripped from a substituted placeholder value.
+         *
+         * Java's `\p{Cntrl}` is ASCII-only (`[\x00-\x1F\x7F]`) without `UNICODE_CHARACTER_CLASS`,
+         * so NEL (U+0085) and the Unicode line/paragraph separators survive it. They are line
+         * breaks to a log reader, which is the whole point of stripping CR/LF.
+         */
+        private val CONTROL_CHARACTERS = Regex("[\\p{Cntrl}\\u0085\\u2028\\u2029]")
     }
 }

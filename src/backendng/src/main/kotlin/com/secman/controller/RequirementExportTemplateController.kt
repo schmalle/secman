@@ -6,6 +6,7 @@ import com.secman.repository.RequirementExportTemplateRepository
 import com.secman.repository.RequirementExportTemplateUsageRepository
 import com.secman.service.ExampleRequirementExportTemplateBuilder
 import com.secman.service.RequirementExportTemplateValidationService
+import io.micronaut.context.annotation.Value
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.MediaType
@@ -19,6 +20,7 @@ import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.transaction.Transactional
+import org.slf4j.LoggerFactory
 import java.io.ByteArrayInputStream
 import java.time.Instant
 
@@ -29,8 +31,12 @@ open class RequirementExportTemplateController(
     private val templateRepository: RequirementExportTemplateRepository,
     private val usageRepository: RequirementExportTemplateUsageRepository,
     private val validationService: RequirementExportTemplateValidationService,
-    private val exampleBuilder: ExampleRequirementExportTemplateBuilder
+    private val exampleBuilder: ExampleRequirementExportTemplateBuilder,
+    @Value("\${secman.requirement-export-templates.max-file-size-bytes:5242880}")
+    private val maxFileSizeBytes: Long
 ) {
+    private val log = LoggerFactory.getLogger(RequirementExportTemplateController::class.java)
+
     @Serdeable
     data class TemplateSummary(
         val id: Long,
@@ -85,6 +91,7 @@ open class RequirementExportTemplateController(
         @Part templateFile: CompletedFileUpload,
         @Nullable @Part requireRequirementsPlaceholder: Boolean?
     ): HttpResponse<*> {
+        rejectOversized(templateFile)?.let { return it }
         val report = validationService.validate(
             bytes = templateFile.bytes,
             filename = templateFile.filename,
@@ -92,6 +99,25 @@ open class RequirementExportTemplateController(
             requireRequirementsPlaceholder = requireRequirementsPlaceholder ?: true
         )
         return if (report.valid) HttpResponse.ok(report) else HttpResponse.badRequest(report)
+    }
+
+    /**
+     * Rejects an oversized upload on the declared part size, **before** `.bytes` materialises it.
+     *
+     * The validator's own size check runs on the byte array, which means the array already exists;
+     * `micronaut.server.multipart.max-file-size` is 100 MB (it stays large for the XLSX importers),
+     * so without this the effective per-request heap bound is 100 MB rather than the 5 MB this
+     * feature configures.
+     */
+    private fun rejectOversized(file: CompletedFileUpload): HttpResponse<*>? {
+        if (file.size > maxFileSizeBytes) {
+            log.warn(
+                "Rejected requirement export template upload of {} bytes, above the {} byte limit",
+                file.size, maxFileSizeBytes
+            )
+            return HttpResponse.badRequest(ErrorResponse("Template exceeds the maximum allowed file size."))
+        }
+        return null
     }
 
     @Post
@@ -107,6 +133,7 @@ open class RequirementExportTemplateController(
         @Nullable @Part requireRequirementsPlaceholder: Boolean?,
         authentication: Authentication
     ): HttpResponse<*> {
+        rejectOversized(templateFile)?.let { return it }
         val bytes = templateFile.bytes
         val report = validationService.validate(
             bytes = bytes,
@@ -115,6 +142,11 @@ open class RequirementExportTemplateController(
             requireRequirementsPlaceholder = requireRequirementsPlaceholder ?: true
         )
         if (!report.valid) {
+            log.warn(
+                "Rejected requirement export template upload by={} filename={} sha256={} reasons={}",
+                authentication.name, sanitizeForLog(templateFile.filename), report.sha256,
+                report.errors.joinToString("; ")
+            )
             return HttpResponse.badRequest(report)
         }
 
@@ -135,6 +167,10 @@ open class RequirementExportTemplateController(
             activatedAt = if (activate != false) now else null
         )
         val saved = templateRepository.save(template)
+        log.info(
+            "Requirement export template uploaded by={} id={} name={} sha256={} status={} outcome=created",
+            authentication.name, saved.id, sanitizeForLog(saved.name), saved.sha256, saved.status
+        )
         return HttpResponse.created(saved.toSummary())
     }
 
@@ -178,7 +214,7 @@ open class RequirementExportTemplateController(
     @Post("/{id}/activate")
     @Secured("ADMIN", "REQADMIN")
     @Transactional
-    open fun activate(@PathVariable id: Long): HttpResponse<*> {
+    open fun activate(@PathVariable id: Long, authentication: Authentication): HttpResponse<*> {
         val template = templateRepository.findById(id)
         if (template.isEmpty) {
             return HttpResponse.notFound(ErrorResponse("Template not found"))
@@ -187,13 +223,19 @@ open class RequirementExportTemplateController(
         selected.status = RequirementExportTemplateStatus.ACTIVE
         selected.activatedAt = Instant.now()
         selected.deactivatedAt = null
+        // Activation changes the design and content of every subsequent export, including the
+        // anonymously reachable one. That is an admin action and belongs in the log (A09).
+        log.info(
+            "Requirement export template activated by={} id={} name={} sha256={} outcome=active",
+            authentication.name, selected.id, sanitizeForLog(selected.name), selected.sha256
+        )
         return HttpResponse.ok(templateRepository.update(selected).toSummary())
     }
 
     @Post("/{id}/deactivate")
     @Secured("ADMIN", "REQADMIN")
     @Transactional
-    open fun deactivate(@PathVariable id: Long): HttpResponse<*> {
+    open fun deactivate(@PathVariable id: Long, authentication: Authentication): HttpResponse<*> {
         val template = templateRepository.findById(id)
         if (template.isEmpty) {
             return HttpResponse.notFound(ErrorResponse("Template not found"))
@@ -201,13 +243,17 @@ open class RequirementExportTemplateController(
         val selected = template.get()
         selected.status = RequirementExportTemplateStatus.INACTIVE
         selected.deactivatedAt = Instant.now()
+        log.info(
+            "Requirement export template deactivated by={} id={} name={} outcome=inactive",
+            authentication.name, selected.id, sanitizeForLog(selected.name)
+        )
         return HttpResponse.ok(templateRepository.update(selected).toSummary())
     }
 
     @Delete("/{id}")
     @Secured("ADMIN", "REQADMIN")
     @Transactional
-    open fun delete(@PathVariable id: Long): HttpResponse<*> {
+    open fun delete(@PathVariable id: Long, authentication: Authentication): HttpResponse<*> {
         if (!templateRepository.existsById(id)) {
             return HttpResponse.notFound(ErrorResponse("Template not found"))
         }
@@ -217,9 +263,17 @@ open class RequirementExportTemplateController(
             template.status = RequirementExportTemplateStatus.RETIRED
             template.deactivatedAt = Instant.now()
             templateRepository.update(template)
+            log.info(
+                "Requirement export template retired by={} id={} name={} usageCount={} outcome=retired",
+                authentication.name, id, sanitizeForLog(template.name), usageCount
+            )
             return HttpResponse.ok(mapOf("message" to "Template has been retired because it was already used by exports."))
         }
         templateRepository.deleteById(id)
+        log.info(
+            "Requirement export template deleted by={} id={} outcome=deleted",
+            authentication.name, id
+        )
         return HttpResponse.noContent<Any>()
     }
 
@@ -248,6 +302,15 @@ open class RequirementExportTemplateController(
         lastUsedAt = lastUsedAt,
         usageCount = usageCount
     )
+
+    /**
+     * Strips line breaks and bounds the length of a value going into a log line (log forging).
+     * `\p{Cntrl}` is ASCII-only in Java, so the Unicode line separators are named explicitly.
+     */
+    private fun sanitizeForLog(value: String?): String {
+        if (value.isNullOrBlank()) return ""
+        return value.replace(Regex("[\\p{Cntrl}\\u0085\\u2028\\u2029]"), " ").trim().take(200)
+    }
 
     private fun sanitizeFilename(filename: String): String = filename
         .substringAfterLast('/')

