@@ -9,6 +9,17 @@ import java.util.Optional
 @Repository
 interface AccountOnboardingChoiceRepository : JpaRepository<AccountOnboardingChoice, Long> {
 
+    /**
+     * Explicit JPQL because the derived-name parser reads everything between OrderBy and the
+     * trailing Asc as one property, so a two-property ordering cannot be expressed in the name.
+     */
+    @Query(
+        """
+        SELECT c FROM AccountOnboardingChoice c
+        WHERE c.question.id = :questionId
+        ORDER BY c.displayOrder ASC, c.id ASC
+        """
+    )
     fun findByQuestionIdOrderByDisplayOrderAscIdAsc(questionId: Long): List<AccountOnboardingChoice>
 
     fun findByQuestionIdAndChoiceKeyIgnoreCase(questionId: Long, choiceKey: String): Optional<AccountOnboardingChoice>

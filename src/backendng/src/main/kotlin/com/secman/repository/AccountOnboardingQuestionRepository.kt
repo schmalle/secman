@@ -11,8 +11,26 @@ interface AccountOnboardingQuestionRepository : JpaRepository<AccountOnboardingQ
 
     fun findByQuestionKeyIgnoreCase(questionKey: String): Optional<AccountOnboardingQuestion>
 
+    /**
+     * Explicit JPQL because the derived-name parser reads everything between OrderBy and the
+     * trailing Asc as one property, so a two-property ordering cannot be expressed in the name.
+     */
+    @Query(
+        """
+        SELECT q FROM AccountOnboardingQuestion q
+        WHERE q.active = true
+        ORDER BY q.displayOrder ASC, q.id ASC
+        """
+    )
     fun findByActiveTrueOrderByDisplayOrderAscIdAsc(): List<AccountOnboardingQuestion>
 
+    /** Same two-property ordering as above, without the active filter. */
+    @Query(
+        """
+        SELECT q FROM AccountOnboardingQuestion q
+        ORDER BY q.displayOrder ASC, q.id ASC
+        """
+    )
     fun findAllByOrderByDisplayOrderAscIdAsc(): List<AccountOnboardingQuestion>
 
     /**

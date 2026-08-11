@@ -11,8 +11,26 @@ interface AccountOnboardingRuleRepository : JpaRepository<AccountOnboardingRule,
 
     fun findByNameIgnoreCase(name: String): Optional<AccountOnboardingRule>
 
+    /**
+     * Explicit JPQL because the derived-name parser reads everything between OrderBy and the
+     * trailing Asc as one property, so a two-property ordering cannot be expressed in the name.
+     */
+    @Query(
+        """
+        SELECT r FROM AccountOnboardingRule r
+        ORDER BY r.priorityOrder ASC, r.id ASC
+        """
+    )
     fun findAllByOrderByPriorityOrderAscIdAsc(): List<AccountOnboardingRule>
 
+    /** Same two-property ordering as above, restricted to active rules. */
+    @Query(
+        """
+        SELECT r FROM AccountOnboardingRule r
+        WHERE r.active = true
+        ORDER BY r.priorityOrder ASC, r.id ASC
+        """
+    )
     fun findByActiveTrueOrderByPriorityOrderAscIdAsc(): List<AccountOnboardingRule>
 
     fun findByActiveTrueAndIsDefaultTrue(): List<AccountOnboardingRule>

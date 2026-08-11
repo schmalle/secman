@@ -1,8 +1,8 @@
 package com.secman.service
 
 import jakarta.inject.Singleton
+import org.apache.poi.wp.usermodel.HeaderFooterType
 import org.apache.poi.xwpf.usermodel.BreakType
-import org.apache.poi.xwpf.usermodel.HeaderFooterType
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment
 import org.apache.poi.xwpf.usermodel.XWPFDocument
 import java.io.ByteArrayOutputStream
