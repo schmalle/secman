@@ -598,6 +598,12 @@ const Sidebar = () => {
                                     </a>
                                 </li>
                                 <li>
+                                    <a href="/admin/requirement-export-templates" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                        title="Company Word templates used by requirement exports">
+                                        <i className="bi bi-file-earmark-word me-2"></i> Export Templates
+                                    </a>
+                                </li>
+                                <li>
                                     <a href="/admin/classification-rules" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-funnel-fill me-2"></i> Classification Rules
                                     </a>

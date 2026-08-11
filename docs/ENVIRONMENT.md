@@ -148,6 +148,18 @@ limits weakens nothing but raising `max-source-*` raises the memory a single req
 | `SECMAN_PROFILE_PICTURE_MAX_SOURCE_PIXELS` | `40000000` | max total pixels, same header-only guard. A 2 MB PNG can otherwise decode to a multi-GB `BufferedImage`. |
 | `SECMAN_PROFILE_PICTURE_TARGET_EDGE` | `256` | edge length of the stored square thumbnail. Sources smaller than this are not upscaled. |
 
+### Requirement export templates
+An uploaded company Word template is an untrusted ZIP that Apache POI will parse, so the three caps
+below are decompression-bomb guards checked **before** any parse — not tuning knobs. See
+`docs/REQUIREMENT_EXPORT_TEMPLATES.md`.
+
+| Var | Default | Effect |
+|---|---|---|
+| `SECMAN_REQUIREMENT_TEMPLATE_MAX_UPLOAD_BYTES` | `5242880` (5 MiB) | hard cap on the uploaded `.docx`. Well below `micronaut.server.multipart.max-file-size`, which stays at 100 MB for the XLSX importers. |
+| `SECMAN_REQUIREMENT_TEMPLATE_MAX_UNCOMPRESSED_BYTES` | `20971520` (20 MiB) | max inflated size across all ZIP entries, accumulated while streaming so a bomb is never fully expanded. |
+| `SECMAN_REQUIREMENT_TEMPLATE_MAX_ZIP_ENTRIES` | `512` | max entries in the package (zip-bomb / entry-flood guard). |
+| `SECMAN_REQUIREMENT_TEMPLATE_SEED_EXAMPLE` | `true` | install the shipped example template on first start, so a fresh installation exports in a company design. Only ever seeds into a **completely empty** table, so retiring the example does not resurrect it. |
+
 ### Debug & logging
 | Var | Default | Effect |
 |---|---|---|

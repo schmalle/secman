@@ -230,7 +230,12 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
 
     // Handle export
     function handleExport(format: 'xlsx' | 'docx') {
-        const url = `/api/requirements/export/${format}?releaseId=${releaseId}`;
+        // Word exports render through the active company template, which is what binds the release
+        // name/version/date onto the cover page. APPEND rather than REJECT so a template without an
+        // ${requirements} insertion point still produces a document instead of a 400.
+        // Excel has no template concept.
+        const templateParams = format === 'docx' ? '&templateMode=LATEST&missingPlaceholderBehavior=APPEND' : '';
+        const url = `/api/requirements/export/${format}?releaseId=${releaseId}${templateParams}`;
         window.location.href = url;
     }
 

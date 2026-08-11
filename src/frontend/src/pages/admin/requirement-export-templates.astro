@@ -1,0 +1,12 @@
+---
+// src/pages/admin/requirement-export-templates.astro
+import Layout from '../../layouts/Layout.astro';
+import RequirementExportTemplateManagement from '../../components/RequirementExportTemplateManagement.tsx';
+---
+
+<Layout title="Requirement Export Templates - Secman Admin">
+    <RequirementExportTemplateManagement client:load />
+    <div class="mt-4">
+      <a href="/admin" class="btn btn-secondary">Back to Admin</a>
+    </div>
+</Layout>

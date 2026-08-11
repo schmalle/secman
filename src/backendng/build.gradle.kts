@@ -204,3 +204,25 @@ tasks.test {
 tasks.withType<Jar> {
     isZip64 = true
 }
+
+/**
+ * Regenerates the example company Word template committed under
+ * `src/main/resources/templates/`.
+ *
+ * The artefact is an opaque binary, so it is never hand-edited: change
+ * `ExampleRequirementExportTemplateBuilder`, run this task, and commit the result. Run it from the
+ * repository root with:
+ *
+ *     ./gradlew :backendng:generateExampleRequirementTemplate
+ */
+tasks.register<JavaExec>("generateExampleRequirementTemplate") {
+    group = "build"
+    description = "Regenerate the example company requirement-export Word template from its builder."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.secman.tools.GenerateExampleRequirementTemplateKt")
+    args(
+        layout.projectDirectory
+            .file("src/main/resources/templates/secman-company-requirements-template.docx")
+            .asFile.absolutePath
+    )
+}
