@@ -263,6 +263,28 @@ class RequirementExportTemplateValidationServiceTest {
     }
 
     @Test
+    fun `a document full of placeholder openers does not stall validation`() {
+        // Each split-placeholder probe copies a window and runs a regex over it. Unbounded, a
+        // document of repeated "${" turns one upload into tens of GB of work, so the probe count
+        // is capped. This asserts the cap holds: without it the call does not return promptly.
+        val hostile = docxTemplate("\${".repeat(200_000))
+
+        val start = System.nanoTime()
+        val report = service.validate(
+            bytes = hostile,
+            filename = "corporate-template.docx",
+            contentType = RequirementExportTemplateValidationService.DOCX_MEDIA_TYPE,
+            requireRequirementsPlaceholder = false
+        )
+        val elapsedMillis = (System.nanoTime() - start) / 1_000_000
+
+        assertThat(report.sha256).isNotEmpty()
+        assertThat(elapsedMillis)
+            .describedAs("validation must stay bounded on a placeholder-opener flood")
+            .isLessThan(10_000)
+    }
+
+    @Test
     fun `sha256 is stable for identical bytes and differs for different bytes`() {
         val bytes = docxTemplate("${'$'}{requirements}")
         assertThat(service.sha256(bytes)).isEqualTo(service.sha256(bytes.copyOf()))

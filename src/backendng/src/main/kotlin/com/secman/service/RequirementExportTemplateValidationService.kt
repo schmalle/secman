@@ -28,6 +28,18 @@ open class RequirementExportTemplateValidationService(
         /** How far past a `${` opener to look when the token was split across runs. */
         private const val SPLIT_PLACEHOLDER_WINDOW = 4096
 
+        /**
+         * Cap on split-placeholder probes. Bounds the work a hostile `word/document.xml` can
+         * demand; see [findRequirementsAnchorOffset].
+         */
+        private const val MAX_SPLIT_PLACEHOLDER_PROBES = 256
+
+        // Precompiled: these run over documents up to the uncompressed cap, and recompiling a
+        // pattern per call is the difference between one scan and one scan plus a parser.
+        private val XML_TAG = Regex("<[^>]*>")
+        private val TABLE_OPEN = Regex("<w:tbl(?=[ >/])")
+        private val TABLE_CLOSE = Regex("</w:tbl>")
+
         val ALLOWED_PLACEHOLDERS = setOf(
             "requirements",
             "documentTitle",
@@ -245,27 +257,34 @@ open class RequirementExportTemplateValidationService(
         val literal = xml.indexOf(REQUIREMENTS_TOKEN)
         if (literal >= 0) return literal
 
+        // Bounded on purpose. Each probe copies a window and runs a regex over it, so an
+        // unbounded loop turns a document.xml of repeated "${" into ~(uncompressed cap / 2)
+        // probes — tens of GB of work for one upload. A real template has a handful of
+        // placeholders; anything past the cap is not a template we need to accommodate.
         var searchFrom = 0
-        while (true) {
+        var probes = 0
+        while (probes < MAX_SPLIT_PLACEHOLDER_PROBES) {
             val opener = xml.indexOf("\${", searchFrom)
             if (opener < 0) return -1
+            probes++
             // Look ahead far enough to cover a placeholder shredded into several runs.
             val window = xml.substring(opener, minOf(xml.length, opener + SPLIT_PLACEHOLDER_WINDOW))
             if (stripXmlTags(window).startsWith(REQUIREMENTS_TOKEN)) return opener
             searchFrom = opener + 2
         }
+        return -1
     }
 
-    private fun stripXmlTags(xml: String): String = xml.replace(Regex("<[^>]*>"), "")
+    private fun stripXmlTags(xml: String): String = xml.replace(XML_TAG, "")
 
     /**
      * Whether [offset] falls inside a `<w:tbl>` element. Counts table open/close tags before the
      * offset rather than parsing, which is sufficient because the tags nest strictly.
      */
     private fun isInsideTable(xml: String, offset: Int): Boolean {
-        val before = xml.substring(0, offset)
-        val opened = Regex("<w:tbl(?=[ >/])").findAll(before).count()
-        val closed = Regex("</w:tbl>").findAll(before).count()
+        val before = xml.subSequence(0, offset)
+        val opened = TABLE_OPEN.findAll(before).count()
+        val closed = TABLE_CLOSE.findAll(before).count()
         return opened > closed
     }
 }
