@@ -18,6 +18,14 @@ echo ""
 
 cd "$PROJECT_ROOT"
 
+# Footer build stamp: the frontend image is built from src/frontend/ alone, so it
+# carries no git context of its own. Resolve it here, on the host, and pass it in.
+# A missing value is fine — the frontend then falls back to its own build
+# timestamp rather than to a hardcoded date.
+SECMAN_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+SECMAN_GIT_COMMIT="$(git log -1 --format=%h 2>/dev/null || true)"
+SECMAN_GIT_COMMIT_TIME="$(git log -1 --format=%cI 2>/dev/null || true)"
+
 # 1. Database
 echo "[1/3] Building secman-db..."
 docker build -t secman-db -f docker/database/Dockerfile docker/database/
@@ -39,7 +47,11 @@ echo ""
 
 # 3. Frontend
 echo "[3/3] Building secman-frontend..."
-docker build -t secman-frontend -f docker/frontend/Dockerfile .
+docker build -t secman-frontend -f docker/frontend/Dockerfile \
+  --build-arg "SECMAN_BUILD_TIME=$SECMAN_BUILD_TIME" \
+  --build-arg "SECMAN_GIT_COMMIT=$SECMAN_GIT_COMMIT" \
+  --build-arg "SECMAN_GIT_COMMIT_TIME=$SECMAN_GIT_COMMIT_TIME" \
+  .
 echo "  ✓ secman-frontend built"
 echo ""
 

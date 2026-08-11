@@ -1,16 +1,31 @@
 ---
-import { execSync } from 'child_process';
+import {
+  APP_NAME,
+  APP_VERSION,
+  formatBuildStamp,
+  formatCommitTooltip,
+  formatCopyrightRange,
+  normalizeBuildInfo,
+} from '../utils/buildInfo';
 
-let lastCommitDate = '2025-06-08'; // fallback
-try {
-  lastCommitDate = execSync('git log -1 --format="%cd" --date=short', { encoding: 'utf8' }).trim();
-} catch (error) {
-  console.warn('Could not get git commit date:', error);
-}
+// __SECMAN_BUILD_INFO__ is substituted at build time by Vite's `define`
+// (astro.config.mjs -> buildinfo.mjs). Do NOT shell out to git here: Astro runs
+// with output: "server", so this frontmatter executes on every request, and the
+// deployed container has neither a .git directory nor a git binary — the old
+// per-request `git log` failed there on every render and fell back to a
+// hardcoded date. The typeof guard keeps the page rendering if the injection is
+// ever missing; the stamp then reads "unknown" instead of a wrong date.
+const buildInfo = normalizeBuildInfo(
+  typeof __SECMAN_BUILD_INFO__ === 'string' ? __SECMAN_BUILD_INFO__ : null,
+);
+const buildStamp = formatBuildStamp(buildInfo);
+const commitTooltip = formatCommitTooltip(buildInfo);
 ---
 
 <footer class="footer fixed-bottom bg-light py-2 border-top">
   <div class="container text-center">
-    <span class="text-muted">&copy; 2017–2025 SecMan v1.0.0 | Last updated: {lastCommitDate}</span>
+    <span class="text-muted" title={commitTooltip}>
+      &copy; {formatCopyrightRange(buildInfo.buildTime)} {APP_NAME} v{APP_VERSION} | Built: {buildStamp}
+    </span>
   </div>
 </footer>

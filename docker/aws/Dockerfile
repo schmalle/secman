@@ -32,6 +32,17 @@ WORKDIR /build
 COPY src/frontend/package.json src/frontend/package-lock.json* ./
 RUN npm ci
 
+# Footer build stamp. The build context is src/frontend/ only — no .git, and no
+# git binary in the image — so the commit stamps must come from the host
+# (docker/build-all.sh passes them). Left unset, the footer still shows a
+# correct build time, just without the commit. Never a hardcoded date.
+ARG SECMAN_BUILD_TIME=""
+ARG SECMAN_GIT_COMMIT=""
+ARG SECMAN_GIT_COMMIT_TIME=""
+ENV SECMAN_BUILD_TIME=${SECMAN_BUILD_TIME} \
+    SECMAN_GIT_COMMIT=${SECMAN_GIT_COMMIT} \
+    SECMAN_GIT_COMMIT_TIME=${SECMAN_GIT_COMMIT_TIME}
+
 COPY src/frontend/ ./
 RUN npm run build \
  && npm prune --omit=dev
