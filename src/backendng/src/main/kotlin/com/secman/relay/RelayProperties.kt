@@ -9,8 +9,8 @@ import io.micronaut.serde.annotation.Serdeable
  * The whole feature is off unless [enabled] is explicitly true — set it with
  * `SECMAN_RELAY_ENABLED=true`. That single switch is the "force secman to
  * establish a connection to an external server" control: with it unset, no
- * outbound connection is ever attempted and none of the `/api/relay/*`
- * endpoints do anything but report that the relay is disabled.
+ * outbound connection is ever attempted and none of the `/api/relay` endpoints
+ * do anything but report that the relay is disabled.
  *
  * The direction is fixed and is the core of the design: secman dials the relay.
  * The relay never dials secman, is never told where secman is, and holds no

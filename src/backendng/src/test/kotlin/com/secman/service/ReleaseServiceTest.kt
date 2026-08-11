@@ -95,6 +95,9 @@ class ReleaseServiceTest {
 
         every { releaseRepository.findById(42L) } returns Optional.of(activeRelease)
         every { riskAssessmentRepository.findAll() } returns listOf(lockedHere, lockedElsewhere, unlocked)
+        // update() is the generic CrudRepository <S : E> update(S); a relaxed mock
+        // would answer with a bare Object that the generated bridge cannot cast.
+        every { riskAssessmentRepository.update(any<RiskAssessment>()) } answers { firstArg() }
 
         service.deleteRelease(42L, force = true)
 

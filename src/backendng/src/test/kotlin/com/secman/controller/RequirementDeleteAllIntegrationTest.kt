@@ -58,7 +58,7 @@ class RequirementDeleteAllIntegrationTest : BaseIntegrationTest() {
         val norm = normRepository.save(Norm(name = "ISO 27001-${System.nanoTime()}", version = "2022"))
         requirementRepository.save(
             Requirement(
-                internalId = "REQ-DELALL-${System.nanoTime()}",
+                internalId = "RD-${System.nanoTime() % 1_000_000_000_000L}",
                 shortreq = "Test requirement",
                 norms = mutableSetOf(norm)
             )
@@ -85,7 +85,7 @@ class RequirementDeleteAllIntegrationTest : BaseIntegrationTest() {
     fun `non-admin cannot delete all requirements`() {
         requirementRepository.save(
             Requirement(
-                internalId = "REQ-DELALL-${System.nanoTime()}",
+                internalId = "RD-${System.nanoTime() % 1_000_000_000_000L}",
                 shortreq = "Test requirement"
             )
         )

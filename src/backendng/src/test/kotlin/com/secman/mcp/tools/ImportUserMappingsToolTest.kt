@@ -38,7 +38,7 @@ class ImportUserMappingsToolTest {
     @BeforeEach
     fun setup() {
         every { bulkImportService.validate(any()) } returns null
-        every { bulkImportService.execute(any(), any()) } returns BulkUserMappingResponse(
+        every { bulkImportService.execute(any(), any(), any()) } returns BulkUserMappingResponse(
             totalProcessed = 1, created = 1, createdPending = 0, skipped = 0,
             errors = emptyList(),
             newAccounts = listOf(NewAccountImportInfo("111111111111", listOf("alice@corp.com"))),
@@ -62,7 +62,7 @@ class ImportUserMappingsToolTest {
         val result = tool.execute(mapOf("mappings" to listOf(mapping())), ctx(hasDelegation = false))
 
         assertThat((result as McpToolResult.Error).code).isEqualTo("DELEGATION_REQUIRED")
-        verify(exactly = 0) { bulkImportService.execute(any(), any()) }
+        verify(exactly = 0) { bulkImportService.execute(any(), any(), any()) }
     }
 
     @Test
@@ -70,7 +70,7 @@ class ImportUserMappingsToolTest {
         val result = tool.execute(mapOf("mappings" to listOf(mapping())), ctx(isAdmin = false))
 
         assertThat((result as McpToolResult.Error).code).isEqualTo("ADMIN_REQUIRED")
-        verify(exactly = 0) { bulkImportService.execute(any(), any()) }
+        verify(exactly = 0) { bulkImportService.execute(any(), any(), any()) }
     }
 
     @Test
@@ -104,7 +104,7 @@ class ImportUserMappingsToolTest {
 
         assertThat((result as McpToolResult.Error).code).isEqualTo("VALIDATION_ERROR")
         assertThat(result.message).contains("No ACTIVE release")
-        verify(exactly = 0) { bulkImportService.execute(any(), any()) }
+        verify(exactly = 0) { bulkImportService.execute(any(), any(), any()) }
     }
 
     // --- delegation to the shared service -------------------------------------
@@ -112,7 +112,7 @@ class ImportUserMappingsToolTest {
     @Test
     fun `risk assessment options are passed through to the shared import service`() = runBlocking<Unit> {
         val request = slot<BulkUserMappingRequest>()
-        every { bulkImportService.execute(capture(request), any()) } returns BulkUserMappingResponse(
+        every { bulkImportService.execute(capture(request), any(), any()) } returns BulkUserMappingResponse(
             totalProcessed = 1, created = 1, createdPending = 0, skipped = 0, errors = emptyList()
         )
 
@@ -137,13 +137,13 @@ class ImportUserMappingsToolTest {
     fun `the delegated user becomes the requestor of the assessments`() = runBlocking<Unit> {
         tool.execute(mapOf("mappings" to listOf(mapping())), ctx())
 
-        verify { bulkImportService.execute(any(), 9L) }
+        verify { bulkImportService.execute(any(), 9L, any()) }
     }
 
     @Test
     fun `blank optional fields become null rather than empty strings`() = runBlocking<Unit> {
         val request = slot<BulkUserMappingRequest>()
-        every { bulkImportService.execute(capture(request), any()) } returns BulkUserMappingResponse(
+        every { bulkImportService.execute(capture(request), any(), any()) } returns BulkUserMappingResponse(
             totalProcessed = 1, created = 0, createdPending = 0, skipped = 0, errors = emptyList()
         )
 
@@ -180,7 +180,7 @@ class ImportUserMappingsToolTest {
 
     @Test
     fun `unexpected failures become EXECUTION_ERROR`() = runBlocking<Unit> {
-        every { bulkImportService.execute(any(), any()) } throws RuntimeException("db down")
+        every { bulkImportService.execute(any(), any(), any()) } throws RuntimeException("db down")
 
         val result = tool.execute(mapOf("mappings" to listOf(mapping())), ctx())
 

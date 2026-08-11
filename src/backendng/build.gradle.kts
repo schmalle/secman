@@ -124,6 +124,9 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.2")
     testImplementation("io.micronaut.test:micronaut-test-junit5:5.1.0")
     testImplementation("io.mockk:mockk:1.14.11")
+    // Tests assert on log output via Logback's ListAppender; main code stays
+    // slf4j-only (logback-classic is runtimeOnly above).
+    testImplementation("ch.qos.logback:logback-classic:1.6.1")
     testImplementation("org.assertj:assertj-core:3.27.7")
 }
 

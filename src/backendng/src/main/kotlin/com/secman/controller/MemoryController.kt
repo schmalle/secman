@@ -16,7 +16,7 @@ import io.micronaut.security.annotation.Secured
  * Access: ADMIN only. Path: GET /memory
  *
  * Security (A01): this is a management `@Endpoint`, not a `@Controller`, so it
- * is routed outside `/api/**` and the `isAuthenticated()` catch-all in
+ * is routed outside the `/api` tree and the `isAuthenticated()` catch-all in
  * `application.yml`'s `intercept-url-map` does not reach it. Its protection
  * used to rest entirely on `endpoints.memory.sensitive: true` and Micronaut
  * Security's default `SensitiveEndpointRule` — which is real, but is a
