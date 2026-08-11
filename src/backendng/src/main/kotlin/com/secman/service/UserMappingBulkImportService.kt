@@ -1,7 +1,9 @@
 package com.secman.service
 
+import com.secman.domain.AccountOnboardingMode
 import com.secman.dto.BulkUserMappingRequest
 import com.secman.dto.BulkUserMappingResponse
+import com.secman.util.EmailAddressValidator
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 
@@ -21,15 +23,10 @@ import org.slf4j.LoggerFactory
 open class UserMappingBulkImportService(
     private val userMappingService: UserMappingService,
     private val newAccountNotificationService: NewAccountNotificationService,
-    private val awsAccountRiskAssessmentService: AwsAccountRiskAssessmentService,
+    private val accountOnboardingService: AccountOnboardingService,
     private val importCompletionNotifier: ImportCompletionNotifier
 ) {
     private val logger = LoggerFactory.getLogger(UserMappingBulkImportService::class.java)
-
-    // Same pattern UserMappingService applies to imported addresses, and for the same reason:
-    // notifyAddress is handed to InternetAddress.parse, where a comma would silently split one
-    // recipient into two and a CR/LF would reach a mail header. Kept in step with that copy.
-    private val emailRegex = Regex("^[^\\s@,;:<>\"\\\\]+@[^\\s@,;:<>\"\\\\]+\\.[^\\s@,;:<>\"\\\\]+$")
 
     /**
      * Fail-fast validation of the request's side-effect options. Returns a
@@ -41,18 +38,30 @@ open class UserMappingBulkImportService(
      */
     open fun validate(request: BulkUserMappingRequest): String? {
         if (request.notifyNewAccounts) {
-            val addr = request.notifyAddress?.trim()
-            if (addr.isNullOrBlank() || !emailRegex.matches(addr)) {
+            // notifyAddress is handed to InternetAddress.parse, where a comma would silently
+            // split one recipient into two and a CR/LF would reach a mail header. One shared
+            // boundary check — see EmailAddressValidator for what it rejects and why.
+            if (!EmailAddressValidator.isValidRecipient(request.notifyAddress)) {
                 return "notifyAddress must be a valid email when notifyNewAccounts is true"
             }
         }
-        if (request.startRiskAssessment) {
-            awsAccountRiskAssessmentService.validateStartRequest(
-                request.riskAssessmentUseCase,
-                request.riskAssessmentDeadlineDays
-            )?.let { return it }
-        }
-        return null
+        // Reject the one combination that cannot be honoured rather than guessing which half
+        // the caller meant.
+        AccountOnboardingMode.validateCompatibility(request.onboardingMode, request.startRiskAssessment)
+            ?.let { return it }
+
+        // planFrom returns null only when neither the mode nor the legacy flag was set, which
+        // is an ordinary import with no side effects to validate.
+        val plan = accountOnboardingService.planFrom(
+            explicitMode = request.onboardingMode,
+            startRiskAssessment = request.startRiskAssessment,
+            sendWelcomeEmail = request.sendWelcomeEmail,
+            useCaseName = request.riskAssessmentUseCase,
+            deadlineDays = request.riskAssessmentDeadlineDays,
+            expiryDays = request.questionnaireExpiryDays
+        ) ?: return null
+
+        return accountOnboardingService.validateRequest(plan)
     }
 
     /**
@@ -82,24 +91,39 @@ open class UserMappingBulkImportService(
             result
         }
 
-        // Auto-start risk assessments for owners of brand-new AWS accounts, also
-        // AFTER the import committed so a failure here never rolls back the
-        // persisted mappings.
-        if (request.startRiskAssessment && !request.dryRun && result.newAccounts.isNotEmpty()) {
-            val assessments = awsAccountRiskAssessmentService.startAssessmentsForNewAccounts(
+        // Onboard the owners of brand-new AWS accounts — welcome mail, and depending on the
+        // mode an immediate assessment or a questionnaire invite. Also AFTER the import
+        // committed so a failure here never rolls back the persisted mappings.
+        //
+        // Unlike the two side effects above this runs on a dry run too: it persists and sends
+        // nothing, but reports what it *would* do, which is the point of asking for a preview.
+        val plan = accountOnboardingService.planFrom(
+            explicitMode = request.onboardingMode,
+            startRiskAssessment = request.startRiskAssessment,
+            sendWelcomeEmail = request.sendWelcomeEmail,
+            useCaseName = request.riskAssessmentUseCase,
+            deadlineDays = request.riskAssessmentDeadlineDays,
+            expiryDays = request.questionnaireExpiryDays
+        )
+        if (plan != null && result.newAccounts.isNotEmpty()) {
+            val outcome = accountOnboardingService.onboardNewAccounts(
                 newAccounts = result.newAccounts,
-                useCaseName = request.riskAssessmentUseCase!!.trim(),
-                deadlineDays = request.riskAssessmentDeadlineDays
-                    ?: AwsAccountRiskAssessmentService.DEFAULT_DEADLINE_DAYS,
-                requestorUserId = requestorUserId
+                plan = plan,
+                requestorUserId = requestorUserId,
+                dryRun = request.dryRun
             )
-            finalResult = finalResult.copy(riskAssessments = assessments)
+            finalResult = finalResult.copy(
+                riskAssessments = outcome.riskAssessments,
+                onboarding = outcome.onboarding
+            )
         }
 
         logger.info(
-            "Bulk import complete: processed={}, created={}, pending={}, skipped={}, newAccounts={}, assessments={}",
+            "Bulk import complete: processed={}, created={}, pending={}, skipped={}, newAccounts={}, " +
+                "assessments={}, onboarded={}",
             finalResult.totalProcessed, finalResult.created, finalResult.createdPending,
-            finalResult.skipped, finalResult.newAccounts.size, finalResult.riskAssessments.size
+            finalResult.skipped, finalResult.newAccounts.size, finalResult.riskAssessments.size,
+            finalResult.onboarding.size
         )
 
         // Chat fan-out (Slack/Telegram), last and best-effort: a dry run changed nothing worth announcing,

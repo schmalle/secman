@@ -70,6 +70,11 @@ class AwsAccountRiskAssessmentServiceTest {
             emailService = emailService,
             appConfig = appConfig,
             releaseRequirementScopeService = releaseRequirementScopeService,
+            // Real renderer, not a mock. These helpers used to be private to the service and
+            // were extracted so guided onboarding could reuse them; the point of leaving this
+            // test untouched otherwise is that it proves the extraction changed no behaviour.
+            // A mock would render "" and hide exactly the break it exists to catch.
+            templateRenderer = EmailTemplateRenderer(),
             selfProvider = Provider { service }
         )
         every { releaseRequirementScopeService.findActiveRelease() } returns activeRelease

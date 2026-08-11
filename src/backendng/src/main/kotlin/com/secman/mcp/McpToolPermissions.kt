@@ -50,12 +50,17 @@ object McpToolPermissions {
         ),
         setOf(ASSESSMENTS_READ) to listOf(
             "list_aws_account_risk_assessments", // ADMIN role checked in execute()
+            // Read-only views of the onboarding rule set. ADMIN/SECCHAMPION checked in execute().
+            "list_account_onboarding_rules", "preview_account_onboarding_rules",
         ),
         setOf(USER_ACTIVITY) to listOf(
             // ADMIN role checked in execute() for all of these
             "list_users", "add_user", "delete_user",
             "import_user_mappings", "list_user_mappings",
             "list_aws_account_sharing", "create_aws_account_sharing", "delete_aws_account_sharing",
+            // Same group as import_user_mappings because it has the same side effect: it
+            // onboards an account owner, mail included. ADMIN/SECCHAMPION checked in execute().
+            "simulate_account_onboarding",
         ),
         setOf(ASSETS_READ) to listOf(
             "get_assets", "get_asset_profile", "get_all_assets_detail", "get_asset_complete_profile",
@@ -160,9 +165,11 @@ object McpToolPermissions {
                 "list_users", "add_user", "delete_user",
                 "import_user_mappings", "list_user_mappings",
                 "list_aws_account_sharing", "create_aws_account_sharing", "delete_aws_account_sharing",
+                "simulate_account_onboarding",
             ),
             setOf(ASSESSMENTS_READ) to listOf(
                 "list_aws_account_risk_assessments",
+                "list_account_onboarding_rules", "preview_account_onboarding_rules",
             ),
             setOf(WORKGROUPS_WRITE) to listOf(
                 "create_workgroup", "delete_workgroup",

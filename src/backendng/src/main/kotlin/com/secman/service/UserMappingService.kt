@@ -8,6 +8,7 @@ import com.secman.event.UserCreatedEvent
 import com.secman.repository.AssetRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
+import com.secman.util.EmailAddressValidator
 import io.micronaut.runtime.event.annotation.EventListener
 import io.micronaut.scheduling.annotation.Async
 import jakarta.inject.Singleton
@@ -238,12 +239,12 @@ open class UserMappingService(
     // The email pattern is deliberately stricter than "one @ somewhere". A mapped email is
     // not just a database value: it becomes an SMTP recipient (the AWS-account risk
     // assessment start mail and its reminders), it is interpolated into log lines, and it is
-    // written into the assessment's notes. The previous `[^@]+@[^@]+\.[^@]+` accepted
-    // control characters, spaces and commas anywhere outside the `@`, which is how CR/LF
-    // reaches a log line (forging) and how a comma turns one `InternetAddress.parse` argument
-    // into two recipients. Excluding the separator and quoting characters below closes both
-    // without rejecting any address a real mail system would route.
-    private val emailRegex = Regex("^[^\\s@,;:<>\"\\\\]+@[^\\s@,;:<>\"\\\\]+\\.[^\\s@,;:<>\"\\\\]+$")
+    // written into the assessment's notes. The older `[^@]+@[^@]+\.[^@]+` accepted control
+    // characters, spaces and commas anywhere outside the `@`, which is how CR/LF reaches a
+    // log line (forging) and how a comma turns one `InternetAddress.parse` argument into two
+    // recipients. The pattern lives in EmailAddressValidator — one copy, because two copies
+    // of a security control drift. `matchesPattern` rather than `isValidRecipient` so the
+    // over-length case keeps its own, more useful error message below.
     private val awsAccountIdRegex = Regex("^\\d{12}$")
     private val domainRegex = Regex("^[a-zA-Z0-9.-]+$")
 
@@ -297,7 +298,7 @@ open class UserMappingService(
         val validEntries = mutableListOf<BulkUserMappingEntry>()
         request.mappings.forEachIndexed { index, entry ->
             val trimmedEmail = entry.email.trim()
-            if (trimmedEmail.isBlank() || !emailRegex.matches(trimmedEmail)) {
+            if (!EmailAddressValidator.matchesPattern(trimmedEmail)) {
                 errors.add("Entry ${index + 1}: Invalid email format '${sanitizeForMessage(entry.email)}'")
                 return@forEachIndexed
             }

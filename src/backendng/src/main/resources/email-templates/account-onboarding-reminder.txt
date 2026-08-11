@@ -1,0 +1,16 @@
+Reminder: {daysLeft} left to answer - AWS account {awsAccountId}
+================================================================
+{ifSimulated}
+*** This is a test message sent by {simulatedBy} from SecMan. ***
+{/ifSimulated}
+We asked how you use AWS account {awsAccountId} so we can start the right risk
+assessment for it. We have not had an answer yet.
+
+Your link expires on {expiresAt}. After that a security champion will have to
+scope the assessment for you.
+
+Answer the questions: {questionnaireUrl}
+
+---
+You are receiving this because your email address is mapped to this AWS account
+in SecMan. If that is not correct, contact your SecMan administrator.

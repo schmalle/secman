@@ -46,7 +46,29 @@ import jakarta.inject.Singleton
 @Command(
     name = "import",
     description = ["Batch import user mappings from CSV or JSON file"],
-    mixinStandardHelpOptions = true
+    mixinStandardHelpOptions = true,
+    // Worked examples in --help, because that is the documentation operators actually read.
+    footer = [
+        "",
+        "Onboarding examples:",
+        "  # Welcome mail only, to the owner of every brand-new AWS account",
+        "  secman manage-user-mappings import -f m.csv --onboarding-mode WELCOME_ONLY",
+        "",
+        "  # Welcome mail + an assessment you scope yourself",
+        "  secman manage-user-mappings import -f m.csv --onboarding-mode DIRECT \\",
+        "      --risk-usecase 'Cloud Onboarding' --risk-deadline-days 14",
+        "",
+        "  # Welcome mail + let the owner scope it by answering a few questions",
+        "  secman manage-user-mappings import -f m.csv --onboarding-mode GUIDED \\",
+        "      --questionnaire-expiry-days 21",
+        "",
+        "  # Preview any of the above without sending or persisting anything",
+        "  secman manage-user-mappings import -f m.csv --onboarding-mode GUIDED --dry-run",
+        "",
+        "Exit codes: 0 success (skips are NOT failures) - 1 import or onboarding failure -",
+        "2 invalid options.",
+        ""
+    ]
 )
 class ImportCommand(
     private val userMappingCliService: UserMappingCliService
@@ -109,8 +131,48 @@ class ImportCommand(
     )
     var riskDeadlineDays: Int = 7
 
+    @Option(
+        names = ["--onboarding-mode"],
+        description = [
+            "What to do for the owner of every brand-new AWS account this import introduces. " +
+                "WELCOME_ONLY sends a welcome mail only. DIRECT also starts a risk assessment " +
+                "immediately for --risk-usecase (what --start-risk-assessment does). " +
+                "GUIDED mails the owner a one-time link; the assessment is created from the " +
+                "use cases their answers resolve to. " +
+                "Valid values: \${COMPLETION-CANDIDATES}. Default: none, nothing is sent."
+        ]
+    )
+    var onboardingMode: OnboardingMode? = null
+
+    @Option(
+        names = ["--welcome-email"],
+        negatable = true,
+        description = [
+            "Force the welcome mail on or off. On by default whenever --onboarding-mode is given; " +
+                "off for a bare --start-risk-assessment, which keeps that flag's behaviour unchanged."
+        ]
+    )
+    var welcomeEmail: Boolean? = null
+
+    @Option(
+        names = ["--questionnaire-expiry-days"],
+        description = [
+            "Days the GUIDED questionnaire link stays valid (default: \${DEFAULT-VALUE}, range 1-90)"
+        ],
+        defaultValue = "14"
+    )
+    var questionnaireExpiryDays: Int = 14
+
     @ParentCommand
     lateinit var parent: ManageUserMappingsCommand
+
+    /**
+     * The three onboarding modes, as a picocli enum so `--help` lists them and an unknown
+     * value is rejected by the parser rather than by the backend after a round trip.
+     * Mirrors `com.secman.domain.AccountOnboardingMode`; the CLI is a separate Gradle module
+     * with no dependency on backendng, so keep the two in step.
+     */
+    enum class OnboardingMode { WELCOME_ONLY, DIRECT, GUIDED }
 
     /**
      * Validate the notification options. Returns an error message if invalid,
@@ -145,6 +207,70 @@ class ImportCommand(
         return null
     }
 
+    /**
+     * Validate the onboarding options. Returns an error message if invalid, or null if OK.
+     *
+     * Mirrors the backend so the message names the *flag* rather than the JSON field — the same
+     * reason [validateRiskAssessmentOptions] exists. Everything here is also re-checked server
+     * side; nothing depends on this having run.
+     *
+     * The one combination that is rejected rather than guessed is `--start-risk-assessment`
+     * together with a non-DIRECT mode: picking either half would silently do something the
+     * operator did not ask for.
+     */
+    fun validateOnboardingOptions(): String? {
+        val mode = onboardingMode
+        if (startRiskAssessment && mode != null && mode != OnboardingMode.DIRECT) {
+            return "--start-risk-assessment only applies to --onboarding-mode DIRECT (got $mode)"
+        }
+        if (mode == OnboardingMode.DIRECT && riskUseCase.isNullOrBlank()) {
+            return "--risk-usecase is required when --onboarding-mode is DIRECT"
+        }
+        if (mode != null && mode != OnboardingMode.DIRECT && !riskUseCase.isNullOrBlank()) {
+            return "--risk-usecase only applies to --onboarding-mode DIRECT (got $mode)"
+        }
+        if (questionnaireExpiryDays < MIN_QUESTIONNAIRE_EXPIRY_DAYS ||
+            questionnaireExpiryDays > MAX_QUESTIONNAIRE_EXPIRY_DAYS
+        ) {
+            return "--questionnaire-expiry-days must be between $MIN_QUESTIONNAIRE_EXPIRY_DAYS " +
+                "and $MAX_QUESTIONNAIRE_EXPIRY_DAYS (got $questionnaireExpiryDays)"
+        }
+        if (welcomeEmail != null && mode == null && !startRiskAssessment) {
+            return "--welcome-email requires --onboarding-mode"
+        }
+        if (mode == OnboardingMode.DIRECT && riskDeadlineDays > UserMappingCliService.MAX_RISK_DEADLINE_DAYS) {
+            return "--risk-deadline-days must be at most " +
+                "${UserMappingCliService.MAX_RISK_DEADLINE_DAYS} (got $riskDeadlineDays)"
+        }
+        if (mode == OnboardingMode.DIRECT && riskDeadlineDays < 1) {
+            return "--risk-deadline-days must be at least 1 (got $riskDeadlineDays)"
+        }
+        return null
+    }
+
+    /** The mode actually in effect, applying the same fallback the backend applies. */
+    fun effectiveMode(): OnboardingMode? =
+        onboardingMode ?: if (startRiskAssessment) OnboardingMode.DIRECT else null
+
+    /** Marker for a dry-run line: what the pair *would* get. */
+    private fun marker(ob: com.secman.cli.service.CliAccountOnboarding): String = when (ob.mode) {
+        "GUIDED" -> "🔗"
+        "DIRECT" -> "✅"
+        else -> "✉️ "
+    }
+
+    private fun wouldDo(ob: com.secman.cli.service.CliAccountOnboarding): String = when (ob.mode) {
+        "GUIDED" -> "would mail a questionnaire link (valid $questionnaireExpiryDays days" +
+            (ob.questionnaireExpiresAt?.let { ", until $it" } ?: "") + ")"
+        "DIRECT" -> "would start an assessment for '$riskUseCase' (due in $riskDeadlineDays day(s))"
+        else -> "would send a welcome mail"
+    }
+
+    companion object {
+        const val MIN_QUESTIONNAIRE_EXPIRY_DAYS = 1
+        const val MAX_QUESTIONNAIRE_EXPIRY_DAYS = 90
+    }
+
     override fun run() {
         try {
             println("=" .repeat(60))
@@ -165,8 +291,18 @@ class ImportCommand(
                 System.exit(2)
                 return
             }
-            if (!startRiskAssessment && !riskUseCase.isNullOrBlank()) {
-                println("⚠️  --risk-usecase is ignored because --start-risk-assessment is not set")
+            if (!startRiskAssessment && onboardingMode == null && !riskUseCase.isNullOrBlank()) {
+                println("⚠️  --risk-usecase is ignored because neither --start-risk-assessment nor --onboarding-mode is set")
+            }
+            validateOnboardingOptions()?.let { msg ->
+                System.err.println("❌ Error: $msg")
+                System.exit(2)
+                return
+            }
+            // A warning, not an error: the flag is harmless in the other modes, and refusing the
+            // whole import over an unused value would be disproportionate.
+            if (effectiveMode() != OnboardingMode.GUIDED && questionnaireExpiryDays != 14) {
+                println("⚠️  --questionnaire-expiry-days is ignored because --onboarding-mode is not GUIDED")
             }
 
             // Authenticate with backend
@@ -180,8 +316,23 @@ class ImportCommand(
             println("Backend: $backendUrl")
             println("File: $filePath")
             println("Format: $format")
-            if (startRiskAssessment) {
-                println("Risk assessment: enabled (use case '$riskUseCase', deadline $riskDeadlineDays day(s))")
+            when (effectiveMode()) {
+                OnboardingMode.WELCOME_ONLY ->
+                    println("Onboarding: WELCOME_ONLY (welcome mail to each new account owner)")
+                OnboardingMode.DIRECT -> {
+                    val label = if (onboardingMode == null) "DIRECT (via --start-risk-assessment)" else "DIRECT"
+                    println("Onboarding: $label")
+                    println("  Use case:  $riskUseCase")
+                    println("  Deadline:  $riskDeadlineDays day(s)")
+                    println("  Welcome:   ${if (welcomeEmail ?: (onboardingMode != null)) "yes" else "no"}")
+                }
+                OnboardingMode.GUIDED -> {
+                    println("Onboarding: GUIDED (welcome mail + guided assessment)")
+                    println("  Link expiry: $questionnaireExpiryDays day(s)")
+                    println("  Deadline:    $riskDeadlineDays day(s) after the owner submits")
+                    println("  Welcome:     ${if (welcomeEmail ?: true) "yes" else "no"}")
+                }
+                null -> {}
             }
             if (dryRun) {
                 println("Mode: DRY-RUN (validation only, no changes will be made)")
@@ -199,7 +350,10 @@ class ImportCommand(
                 notifyAddress = notifyAddress,
                 startRiskAssessment = startRiskAssessment,
                 riskUseCase = riskUseCase,
-                riskDeadlineDays = if (startRiskAssessment) riskDeadlineDays else null
+                riskDeadlineDays = if (effectiveMode() == OnboardingMode.DIRECT) riskDeadlineDays else null,
+                onboardingMode = onboardingMode?.name,
+                sendWelcomeEmail = welcomeEmail,
+                questionnaireExpiryDays = if (effectiveMode() == OnboardingMode.GUIDED) questionnaireExpiryDays else null
             )
 
             // Display summary
@@ -262,8 +416,50 @@ class ImportCommand(
                 println("No brand-new AWS accounts in this import — no notification sent.")
             }
 
+            // Onboarding block. Printed for every mode including DIRECT, where it carries the
+            // welcome-mail outcome that the risk-assessment block below does not cover.
+            var onboardingFailures = 0
+            if (effectiveMode() != null) {
+                println()
+                if (result.onboarding.isEmpty()) {
+                    println("No brand-new AWS accounts in this import — nothing to onboard.")
+                } else {
+                    if (dryRun) {
+                        println("DRY-RUN — nothing persisted, nothing sent, no invite token minted.")
+                        println("Would onboard ${result.onboarding.size} account/owner pair(s) in ${effectiveMode()} mode:")
+                    } else {
+                        println("Onboarding (${result.onboarding.size}):")
+                    }
+                    result.onboarding.forEach { ob ->
+                        val where = "${ob.awsAccountId}  ${ob.ownerEmail}"
+                        when {
+                            ob.error != null -> {
+                                onboardingFailures++
+                                println("  ❌ $where  ->  ${ob.error}")
+                            }
+                            // A skip is an idempotent no-op, deliberately NOT a failure: the pair
+                            // already has a live invite or assessment, which is the intended
+                            // outcome of re-running an import.
+                            ob.skipped ->
+                                println("  ⏭️  $where  ->  skipped — ${ob.skipReason ?: "already onboarded"}")
+                            ob.dryRun -> println("  ${marker(ob)} $where  ->  ${wouldDo(ob)}")
+                            ob.questionnaireInviteId != null ->
+                                println(
+                                    "  🔗 $where  ->  questionnaire invite #${ob.questionnaireInviteId}" +
+                                        (ob.questionnaireExpiresAt?.let { ", expires $it" } ?: "")
+                                )
+                            ob.riskAssessmentId != null ->
+                                println("  ✅ $where  ->  assessment #${ob.riskAssessmentId}" +
+                                    (if (ob.welcomeEmailSent) ", welcome mail sent" else ""))
+                            ob.welcomeEmailSent -> println("  ✉️  $where  ->  welcome mail sent")
+                            else -> println("  ⚠️  $where  ->  nothing sent (check the email configuration)")
+                        }
+                    }
+                }
+            }
+
             var riskAssessmentFailures = 0
-            if (startRiskAssessment) {
+            if (startRiskAssessment || onboardingMode == OnboardingMode.DIRECT) {
                 println()
                 if (dryRun) {
                     if (result.newAccounts.isNotEmpty()) {
@@ -326,6 +522,12 @@ class ImportCommand(
                     }
                     if (riskAssessmentFailures > 0) {
                         println("⚠️  $riskAssessmentFailures risk assessment(s) could not be started")
+                        System.exit(1)
+                    }
+                    // Skips are excluded by construction — onboardingFailures only counts
+                    // entries carrying an `error`, never a `skipped`.
+                    if (onboardingFailures > 0) {
+                        println("⚠️  $onboardingFailures account(s) could not be onboarded")
                         System.exit(1)
                     }
                 }

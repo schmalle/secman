@@ -58,6 +58,42 @@ class McpToolPermissionsTest {
     }
 
     @Test
+    fun `the account onboarding tools resolve to the permissions they were placed under`() {
+        // The trap this guards: CALLING folds in ToolCategories.CATEGORY_PERMISSIONS *last*, so
+        // a tool name that also appears in a category list silently inherits that category's
+        // permission instead of its explicit entry. Asserting the resolved value catches a
+        // future rename into a category, which would otherwise fail open or closed silently.
+        assertThat(McpToolPermissions.CALLING["simulate_account_onboarding"])
+            .isEqualTo(setOf(McpPermission.USER_ACTIVITY))
+        assertThat(McpToolPermissions.CALLING["list_account_onboarding_rules"])
+            .isEqualTo(setOf(McpPermission.ASSESSMENTS_READ))
+        assertThat(McpToolPermissions.CALLING["preview_account_onboarding_rules"])
+            .isEqualTo(setOf(McpPermission.ASSESSMENTS_READ))
+    }
+
+    @Test
+    fun `the account onboarding tools are in BOTH tables`() {
+        // A missing CALLING entry fails closed and looks like a bug; a missing LISTING entry
+        // makes the tool vanish from tools/list while still being callable. Both maps, always.
+        for (tool in listOf(
+            "simulate_account_onboarding",
+            "list_account_onboarding_rules",
+            "preview_account_onboarding_rules"
+        )) {
+            assertThat(McpToolPermissions.LISTING).describedAs("LISTING/%s", tool).containsKey(tool)
+            assertThat(McpToolPermissions.CALLING).describedAs("CALLING/%s", tool).containsKey(tool)
+        }
+    }
+
+    @Test
+    fun `simulate_account_onboarding is gated exactly like import_user_mappings`() {
+        // Same side effect — it onboards an account owner and sends mail — so it must not be
+        // reachable with a narrower permission than the import it stands in for.
+        assertThat(McpToolPermissions.CALLING["simulate_account_onboarding"])
+            .isEqualTo(McpToolPermissions.CALLING["import_user_mappings"])
+    }
+
+    @Test
     fun `no tool is mapped to an empty permission set`() {
         val tables = mapOf("LISTING" to McpToolPermissions.LISTING, "CALLING" to McpToolPermissions.CALLING)
         tables.forEach { (name, table) ->

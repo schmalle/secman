@@ -331,7 +331,10 @@ class UserMappingCliService(
         notifyAddress: String? = null,
         startRiskAssessment: Boolean = false,
         riskUseCase: String? = null,
-        riskDeadlineDays: Int? = null
+        riskDeadlineDays: Int? = null,
+        onboardingMode: String? = null,
+        sendWelcomeEmail: Boolean? = null,
+        questionnaireExpiryDays: Int? = null
     ): MappingResult {
         val file = File(filePath)
         if (!file.exists()) {
@@ -375,7 +378,8 @@ class UserMappingCliService(
         // Send parsed entries to bulk endpoint
         val bulkResponse = postBulk(
             parseResult.entries, dryRun, backendUrl, authToken, notifyNewAccounts, notifyAddress,
-            startRiskAssessment, riskUseCase, riskDeadlineDays
+            startRiskAssessment, riskUseCase, riskDeadlineDays,
+            onboardingMode, sendWelcomeEmail, questionnaireExpiryDays
         )
 
         // Merge parse errors with backend errors
@@ -416,7 +420,8 @@ class UserMappingCliService(
             notificationSent = bulkResponse.notificationSent,
             notificationRecipient = bulkResponse.notificationRecipient,
             notificationError = bulkResponse.notificationError,
-            riskAssessments = bulkResponse.riskAssessments
+            riskAssessments = bulkResponse.riskAssessments,
+            onboarding = bulkResponse.onboarding
         )
     }
 
@@ -628,7 +633,10 @@ class UserMappingCliService(
         notifyAddress: String? = null,
         startRiskAssessment: Boolean = false,
         riskUseCase: String? = null,
-        riskDeadlineDays: Int? = null
+        riskDeadlineDays: Int? = null,
+        onboardingMode: String? = null,
+        sendWelcomeEmail: Boolean? = null,
+        questionnaireExpiryDays: Int? = null
     ): BulkResponse {
         val bodyMap = buildMap<String, Any> {
             put("mappings", entries.map { entry ->
@@ -644,6 +652,12 @@ class UserMappingCliService(
             put("startRiskAssessment", startRiskAssessment)
             riskUseCase?.let { put("riskAssessmentUseCase", it) }
             riskDeadlineDays?.let { put("riskAssessmentDeadlineDays", it) }
+            // Omitted entirely when null rather than sent as null: the backend distinguishes
+            // "no mode given" (fall back to startRiskAssessment, today's behaviour) from any
+            // explicit mode, and sendWelcomeEmail defaults differently in those two cases.
+            onboardingMode?.let { put("onboardingMode", it) }
+            sendWelcomeEmail?.let { put("sendWelcomeEmail", it) }
+            questionnaireExpiryDays?.let { put("questionnaireExpiryDays", it) }
         }
         val jsonBody = objectMapper.writeValueAsString(bodyMap)
 
@@ -704,6 +718,25 @@ class UserMappingCliService(
                         )
                     } ?: emptyList()
 
+                    @Suppress("UNCHECKED_CAST")
+                    val onboarding = (responseBody["onboarding"] as? List<Map<String, Any?>>)?.map {
+                        CliAccountOnboarding(
+                            awsAccountId = it["awsAccountId"]?.toString() ?: "",
+                            ownerEmail = it["ownerEmail"]?.toString() ?: "",
+                            mode = it["mode"]?.toString() ?: "",
+                            welcomeEmailSent = (it["welcomeEmailSent"] as? Boolean) ?: false,
+                            // The invite id, never the token — the CLI prints this and the
+                            // printout is routinely pasted into tickets and CI logs.
+                            questionnaireInviteId = (it["questionnaireInviteId"] as? Number)?.toLong(),
+                            questionnaireExpiresAt = it["questionnaireExpiresAt"]?.toString(),
+                            riskAssessmentId = (it["riskAssessmentId"] as? Number)?.toLong(),
+                            dryRun = (it["dryRun"] as? Boolean) ?: false,
+                            skipped = (it["skipped"] as? Boolean) ?: false,
+                            skipReason = it["skipReason"]?.toString(),
+                            error = it["error"]?.toString()
+                        )
+                    } ?: emptyList()
+
                     return BulkResponse(
                         totalProcessed = (responseBody["totalProcessed"] as? Number)?.toInt() ?: entries.size,
                         created = (responseBody["created"] as? Number)?.toInt() ?: 0,
@@ -715,15 +748,19 @@ class UserMappingCliService(
                         notificationSent = (responseBody["notificationSent"] as? Boolean) ?: false,
                         notificationRecipient = responseBody["notificationRecipient"]?.toString(),
                         notificationError = responseBody["notificationError"]?.toString(),
-                        riskAssessments = riskAssessments
+                        riskAssessments = riskAssessments,
+                        onboarding = onboarding
                     )
                 }
                 404 -> {
-                    if (startRiskAssessment) {
-                        // The per-row fallback endpoints cannot start risk assessments —
-                        // failing loudly beats silently importing without them.
+                    if (startRiskAssessment || onboardingMode != null) {
+                        // The per-row fallback endpoints do no onboarding at all — no welcome
+                        // mail, no assessment, no invite. Failing loudly beats silently
+                        // importing the mappings and leaving the operator to believe the
+                        // owners were contacted.
+                        val flag = if (onboardingMode != null) "--onboarding-mode" else "--start-risk-assessment"
                         throw IllegalArgumentException(
-                            "Backend does not support --start-risk-assessment " +
+                            "Backend does not support $flag " +
                                 "(bulk endpoint /api/user-mappings/bulk not available)"
                         )
                     }
@@ -955,7 +992,8 @@ class UserMappingCliService(
         val notificationSent: Boolean = false,
         val notificationRecipient: String? = null,
         val notificationError: String? = null,
-        val riskAssessments: List<CliAccountRiskAssessment> = emptyList()
+        val riskAssessments: List<CliAccountRiskAssessment> = emptyList(),
+        val onboarding: List<CliAccountOnboarding> = emptyList()
     )
 
     private data class BulkComparisonResponse(
@@ -1008,7 +1046,8 @@ data class MappingResult(
     val notificationSent: Boolean = false,
     val notificationRecipient: String? = null,
     val notificationError: String? = null,
-    val riskAssessments: List<CliAccountRiskAssessment> = emptyList()
+    val riskAssessments: List<CliAccountRiskAssessment> = emptyList(),
+    val onboarding: List<CliAccountOnboarding> = emptyList()
 )
 
 /**
@@ -1032,7 +1071,12 @@ data class CliAccountRiskAssessment(
     val riskAssessmentId: Long? = null,
     val assessor: String? = null,
     val endDate: String? = null,
-    /** Use case the assessment is scoped to. */
+    /**
+     * Use case(s) the assessment is scoped to, comma-joined.
+     *
+     * Several when guided onboarding resolved the owner's answers to more than one — the
+     * assessment is scoped to the union.
+     */
     val useCase: String? = null,
     /** Version of the ACTIVE requirements release the assessment is pinned to. */
     val releaseVersion: String? = null,
@@ -1041,6 +1085,27 @@ data class CliAccountRiskAssessment(
     /** An open assessment already existed for the pair — an idempotent no-op, not a failure. */
     val skipped: Boolean = false,
     /** Why the pair was skipped. Set iff [skipped]. */
+    val skipReason: String? = null,
+    val error: String? = null
+)
+
+/**
+ * Outcome of onboarding one (new AWS account, owner) pair.
+ *
+ * The same three shapes as [CliAccountRiskAssessment] — done / skipped+skipReason / error — so
+ * the printout renders both lists by one rule and a skip never drives a non-zero exit status.
+ * [dryRun] entries describe what *would* have happened; no token is ever minted for one.
+ */
+data class CliAccountOnboarding(
+    val awsAccountId: String,
+    val ownerEmail: String,
+    val mode: String,
+    val welcomeEmailSent: Boolean = false,
+    val questionnaireInviteId: Long? = null,
+    val questionnaireExpiresAt: String? = null,
+    val riskAssessmentId: Long? = null,
+    val dryRun: Boolean = false,
+    val skipped: Boolean = false,
     val skipReason: String? = null,
     val error: String? = null
 )

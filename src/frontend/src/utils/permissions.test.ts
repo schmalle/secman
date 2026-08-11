@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  canAccessAccountOnboarding,
   canAccessCompareReleases,
   canAccessNormManagement,
   canAccessReleases,
@@ -123,6 +124,20 @@ test('area access sets match the documented role lists', () => {
     assert.equal(canAccess(['RISK']), false);
     assert.equal(canAccess(['USER']), false);
   }
+});
+
+test('account onboarding is ADMIN or SECCHAMPION, for reads and writes alike', () => {
+  assert.equal(canAccessAccountOnboarding(['ADMIN']), true);
+  assert.equal(canAccessAccountOnboarding(['SECCHAMPION']), true);
+  // Deliberately wider than the admin-only screens and narrower than requirements
+  // access: deciding which requirements apply to a cloud account is a security
+  // champion's job, but RISK and REQ are not in it.
+  assert.equal(canAccessAccountOnboarding(['RISK']), false);
+  assert.equal(canAccessAccountOnboarding(['REQ']), false);
+  assert.equal(canAccessAccountOnboarding(['USER']), false);
+  assert.equal(canAccessAccountOnboarding([]), false);
+  assert.equal(canAccessAccountOnboarding(undefined), false);
+  assert.equal(canAccessAccountOnboarding(['USER', 'SECCHAMPION']), true);
 });
 
 test('release browsing follows requirements access', () => {
