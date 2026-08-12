@@ -28,17 +28,19 @@ const Export = () => {
     const [isLoadingUseCases, setIsLoadingUseCases] = useState<boolean>(false);
     const [selectedLanguage, setSelectedLanguage] = useState<string>('english');
     const [translationConfigured, setTranslationConfigured] = useState<boolean>(false);
-    const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(() => {
-        if (typeof window === 'undefined') {
-            return null;
-        }
+    // Restored after mount, not in the initializer: initializers run during the
+    // server render too, so a stored id would make the server HTML disagree with
+    // the first client render (hydration mismatch).
+    const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
+
+    useEffect(() => {
         const stored = sessionStorage.getItem('secman_selectedReleaseId');
         if (!stored) {
-            return null;
+            return;
         }
         const parsed = parseInt(stored, 10);
-        return isNaN(parsed) ? null : parsed;
-    });
+        setSelectedReleaseId(isNaN(parsed) ? null : parsed);
+    }, []);
     const [wordTemplateMode, setWordTemplateMode] = useState<WordTemplateMode>('LATEST');
     const [savedTemplates, setSavedTemplates] = useState<RequirementExportTemplate[]>([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);

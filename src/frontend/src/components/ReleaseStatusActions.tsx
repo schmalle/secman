@@ -19,7 +19,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { releaseService, type Release, type AlignmentStatus, type EligibleReviewer } from '../services/releaseService';
-import { hasRole } from '../utils/auth';
+import { useClientHasRole } from '../utils/useClientAuth';
 
 interface ReleaseStatusActionsProps {
     release: Release;
@@ -162,7 +162,7 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
     const [reviewersLoadError, setReviewersLoadError] = useState<string | null>(null);
 
     // Check user permissions
-    const canManageStatus = typeof window !== 'undefined' && hasRole(['ADMIN', 'RELEASE_MANAGER']);
+    const canManageStatus = useClientHasRole(['ADMIN', 'RELEASE_MANAGER']);
 
     // Check for changes when in PREPARATION status
     useEffect(() => {

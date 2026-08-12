@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { authenticatedFetch, hasRole } from '../utils/auth';
+import { authenticatedFetch } from '../utils/auth';
+import { useClientHasRole } from '../utils/useClientAuth';
 import {
   TEMPLATES_ENDPOINT,
   SUPPORTED_PLACEHOLDERS,
@@ -36,7 +37,7 @@ const RequirementExportTemplateManagement: React.FC = () => {
   const [activate, setActivate] = useState(true);
   const [requirePlaceholder, setRequirePlaceholder] = useState(true);
 
-  const canManage = hasRole(['ADMIN', 'REQADMIN']);
+  const canManage = useClientHasRole(['ADMIN', 'REQADMIN']);
 
   const loadTemplates = useCallback(async () => {
     setLoading(true);

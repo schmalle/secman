@@ -8,7 +8,8 @@ import {
   uploadOwnerEmailMappingsCsv,
   type GithubOwnerEmailMapping,
 } from '../services/githubReposService';
-import { hasVulnAccess, hasRole } from '../utils/auth';
+import { hasRole, hasVulnAccess } from '../utils/auth';
+import { useClientHasVulnAccess } from '../utils/useClientAuth';
 
 /**
  * Vulnerability Management → GitHub → "Owner email mappings" tab: default
@@ -27,7 +28,7 @@ const GithubOwnerEmailMappings: React.FC = () => {
   const [info, setInfo] = useState<string | null>(null);
 
   const [canManage, setCanManage] = useState(false);
-  const hasAccess = hasVulnAccess();
+  const hasAccess = useClientHasVulnAccess();
 
   const [newOwner, setNewOwner] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -53,7 +54,10 @@ const GithubOwnerEmailMappings: React.FC = () => {
 
   useEffect(() => {
     setCanManage(hasRole(['ADMIN', 'VULN']));
-    if (!hasAccess) {
+    // Calls hasVulnAccess() directly rather than reading the `hasAccess` state:
+    // that state is deliberately false on the first render (hydration-safety), and
+    // this effect runs once, so trusting it here would deny access to everyone.
+    if (!hasVulnAccess()) {
       setError('You do not have permission to view GitHub owner email mappings.');
       setLoading(false);
       return;

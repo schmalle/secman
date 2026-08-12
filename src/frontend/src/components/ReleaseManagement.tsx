@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { authenticatedFetch, hasRole } from '../utils/auth';
+import { authenticatedFetch } from '../utils/auth';
+import { useClientHasRole } from '../utils/useClientAuth';
 import { formatServerDate } from '../utils/dateUtils';
 
 interface Release {
@@ -32,7 +33,7 @@ const ReleaseManagement = () => {
     const [showEditModal, setShowEditModal] = useState(false);
 
     // RBAC: Only ADMIN or REQADMIN can create/delete releases
-    const canCreate = typeof window !== 'undefined' && (hasRole('ADMIN') || hasRole('REQADMIN'));
+    const canCreate = useClientHasRole(['ADMIN', 'REQADMIN']);
 
     // Form state
     const [formData, setFormData] = useState({

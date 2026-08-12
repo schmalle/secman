@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import passkeyService from '../services/passkeyService';
 import type { PasskeyCredentialInfo } from '../services/passkeyService';
 import { formatServerDate } from '../utils/dateUtils';
+import { useIsMounted } from '../utils/useClientAuth';
 
 /**
  * Passkey Management Component
@@ -94,9 +95,17 @@ export default function PasskeyManagement() {
     }
   };
 
-  // Check if WebAuthn is supported
-  const isWebAuthnSupported = typeof window !== 'undefined' &&
-    window.PublicKeyCredential !== undefined;
+  // Check if WebAuthn is supported. Gated on mount rather than `typeof window`:
+  // the server always reports "unsupported" while the client usually reports
+  // "supported", and that difference in the *first* render is a hydration
+  // mismatch. Rendering nothing until mounted also avoids flashing the
+  // "not supported" warning at browsers that do support it.
+  const mounted = useIsMounted();
+  const isWebAuthnSupported = mounted && window.PublicKeyCredential !== undefined;
+
+  if (!mounted) {
+    return null;
+  }
 
   if (!isWebAuthnSupported) {
     return (

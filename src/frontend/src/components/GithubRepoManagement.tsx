@@ -13,7 +13,8 @@ import {
   type GithubRepo,
   type GithubRepoAlert,
 } from '../services/githubReposService';
-import { hasVulnAccess, hasRole } from '../utils/auth';
+import { hasRole, hasVulnAccess } from '../utils/auth';
+import { useClientHasVulnAccess } from '../utils/useClientAuth';
 import Pagination from './Pagination';
 
 const PAGE_SIZE = 50;
@@ -68,7 +69,9 @@ const GithubRepoManagement: React.FC = () => {
   // (always false) than on the client (true for ADMIN/VULN), causing a React
   // hydration mismatch.
   const [canManage, setCanManage] = useState(false);
-  const hasAccess = hasVulnAccess();
+  // Same reason as canManage above — hasVulnAccess() reads sessionStorage, so it
+  // cannot be called during render either.
+  const hasAccess = useClientHasVulnAccess();
 
   const loadRepos = (targetPage: number, term: string) => {
     setLoading(true);
@@ -110,7 +113,10 @@ const GithubRepoManagement: React.FC = () => {
 
   useEffect(() => {
     setCanManage(hasRole(['ADMIN', 'VULN']));
-    if (!hasAccess) {
+    // Calls hasVulnAccess() directly rather than reading the `hasAccess` state:
+    // that state is deliberately false on the first render (hydration-safety), and
+    // these effects would otherwise deny access to everyone on mount.
+    if (!hasVulnAccess()) {
       setError('You do not have permission to view GitHub repositories.');
       setLoading(false);
       return;
@@ -119,7 +125,7 @@ const GithubRepoManagement: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!hasAccess) return;
+    if (!hasVulnAccess()) return;
     loadRepos(page, debouncedSearch);
   }, [page, debouncedSearch]);
 

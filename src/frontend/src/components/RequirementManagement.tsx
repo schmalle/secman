@@ -1,5 +1,6 @@
 import { Fragment, useState, useEffect } from 'react';
-import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete, getUser } from '../utils/auth';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
+import { useClientRoles } from '../utils/useClientAuth';
 import { isAdmin } from '../utils/permissions';
 import ReleaseIndicator from './ReleaseIndicator';
 import ReleaseSelector from './ReleaseSelector';
@@ -45,7 +46,7 @@ interface Release {
 }
 
 export default function RequirementManagement() {
-    const currentUserIsAdmin = isAdmin(getUser()?.roles);
+    const currentUserIsAdmin = isAdmin(useClientRoles());
     const [requirements, setRequirements] = useState<Requirement[]>([]);
     const [filteredRequirements, setFilteredRequirements] = useState<Requirement[]>([]);
     const [allUseCases, setAllUseCases] = useState<UseCase[]>([]); // To store all available use cases

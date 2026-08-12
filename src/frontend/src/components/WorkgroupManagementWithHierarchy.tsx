@@ -6,7 +6,7 @@ import DeleteWorkgroupConfirmation from './DeleteWorkgroupConfirmation';
 import WorkgroupBreadcrumb from './WorkgroupBreadcrumb';
 import WorkgroupManagement from './WorkgroupManagement';
 import type { WorkgroupResponse } from '../services/workgroupApi';
-import { isAdmin } from '../utils/auth';
+import { useClientHasRole } from '../utils/useClientAuth';
 import { formatServerDateTime } from '../utils/dateUtils';
 
 /**
@@ -40,7 +40,7 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
   // Backend POST /api/workgroups/{id}/children is @Secured("ADMIN") (deliberate per
   // commit 265a6c9: "child-create/move remain admin-only"). Mirror that gate in the UI
   // so non-admins don't see a "+" button that 403s on submit.
-  const canCreateChild = isAdmin();
+  const canCreateChild = useClientHasRole('ADMIN');
 
   const handleSelectWorkgroup = (workgroup: WorkgroupResponse) => {
     setSelectedWorkgroup(workgroup);

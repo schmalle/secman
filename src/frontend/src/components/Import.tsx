@@ -27,19 +27,17 @@ interface MasscanImportResponse {
 }
 
 const Import = () => {
-    // Initialize importType from URL parameter if present
-    const getInitialImportType = (): ImportType => {
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            const typeParam = params.get('type');
-            if (typeParam && ['requirements', 'nmap', 'masscan', 'vulnerabilities', 'assets', 'usermappings'].includes(typeParam)) {
-                return typeParam as ImportType;
-            }
-        }
-        return 'requirements';
-    };
+    // `?type=` is applied after mount, never during render: the server has no URL
+    // to read and would render the 'requirements' form while the client rendered
+    // the requested one, which is a hydration mismatch (React discards the island).
+    const [importType, setImportType] = useState<ImportType>('requirements');
 
-    const [importType, setImportType] = useState<ImportType>(getInitialImportType());
+    useEffect(() => {
+        const typeParam = new URLSearchParams(window.location.search).get('type');
+        if (typeParam && ['requirements', 'nmap', 'masscan', 'vulnerabilities', 'assets', 'usermappings'].includes(typeParam)) {
+            setImportType(typeParam as ImportType);
+        }
+    }, []);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [uploadStatus, setUploadStatus] = useState<string>('');
     const [isUploading, setIsUploading] = useState<boolean>(false);

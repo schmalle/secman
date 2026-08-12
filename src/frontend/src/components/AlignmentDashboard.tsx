@@ -16,7 +16,7 @@ import {
     type AlignmentReviewer,
     type AdminDecision,
 } from '../services/releaseService';
-import { hasRole } from '../utils/auth';
+import { useClientHasRole } from '../utils/useClientAuth';
 
 interface AlignmentDashboardProps {
     releaseId: number;
@@ -34,9 +34,10 @@ export const AlignmentDashboard: React.FC<AlignmentDashboardProps> = ({ releaseI
     const [error, setError] = useState<string | null>(null);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-    const canManage = typeof window !== 'undefined' && hasRole(['ADMIN', 'RELEASE_MANAGER']);
-    const canDecide = typeof window !== 'undefined' && hasRole(['ADMIN', 'REQADMIN']);
-    const canExportReviews = typeof window !== 'undefined' && hasRole(['ADMIN', 'RELEASE_MANAGER', 'REQADMIN']);
+    // Resolved after mount, never during render — see utils/useClientAuth.
+    const canManage = useClientHasRole(['ADMIN', 'RELEASE_MANAGER']);
+    const canDecide = useClientHasRole(['ADMIN', 'REQADMIN']);
+    const canExportReviews = useClientHasRole(['ADMIN', 'RELEASE_MANAGER', 'REQADMIN']);
     const [decisionComments, setDecisionComments] = useState<Record<number, string>>({});
     const [decisionLoading, setDecisionLoading] = useState<number | null>(null);
 

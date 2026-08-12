@@ -5,7 +5,7 @@ import PasskeyManagement from './PasskeyManagement';
 import ProfilePictureCard from './ProfilePictureCard';
 import { getDashboardPreferences, updateDashboardPreferences, toCardVisibility } from '../services/dashboardPreferenceService';
 import type { DashboardPreference, DashboardCardVisibility } from '../services/dashboardPreferenceService';
-import { hasRole } from '../utils/auth';
+import { matchesRole, useClientRoles } from '../utils/useClientAuth';
 
 /**
  * The home dashboard cards a user can show or hide, in dashboard display order.
@@ -45,6 +45,9 @@ const DASHBOARD_CARD_TOGGLES: Array<{
  * - Success: Shows profile data in card layout
  */
 export default function UserProfile() {
+  // Role-gated dashboard toggles are filtered per row, so this resolves the role
+  // list once after mount rather than calling hasRole() during render.
+  const clientRoles = useClientRoles();
   const [profile, setProfile] = useState<UserProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -423,7 +426,7 @@ export default function UserProfile() {
             </p>
 
             {DASHBOARD_CARD_TOGGLES
-              .filter((toggle) => !toggle.requiresRole || hasRole(toggle.requiresRole))
+              .filter((toggle) => !toggle.requiresRole || matchesRole(clientRoles, toggle.requiresRole))
               .map((toggle) => (
                 <div className="d-flex align-items-center justify-content-between mb-3" key={toggle.field}>
                   <div>

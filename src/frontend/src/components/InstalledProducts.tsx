@@ -6,7 +6,7 @@ import {
   getProductRecipientCount,
   type EmailBroadcastJob
 } from '../services/emailBroadcastService';
-import { getUser } from '../utils/auth';
+import { useClientRoles } from '../utils/useClientAuth';
 import { canNotifyProductUsers } from './productNotifyAccess';
 import { getEolFindings, type EolFinding } from '../services/eolService';
 import { assetComponentKey, describeDeadline, statusBadge } from './eolFormat';
@@ -26,7 +26,9 @@ const InstalledProducts: React.FC = () => {
   const [sendingNotification, setSendingNotification] = useState(false);
   const [notifyJob, setNotifyJob] = useState<EmailBroadcastJob | null>(null);
   const [notifyError, setNotifyError] = useState<string | null>(null);
-  const [canNotifyUsers] = useState(() => canNotifyProductUsers(getUser()?.roles));
+  // A useState initializer runs on the server too, so reading roles there would
+  // still produce a hydration mismatch — see utils/useClientAuth.
+  const canNotifyUsers = canNotifyProductUsers(useClientRoles());
   const [productNames, setProductNames] = useState<string[]>([]);
   // (assetId, product name) -> EOL finding, for the Lifecycle badge. Keyed the
   // same way on both sides via assetComponentKey, or the badge silently never

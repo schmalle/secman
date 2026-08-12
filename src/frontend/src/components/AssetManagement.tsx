@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete, getUser, hasVulnAccess } from '../utils/auth';
 import { isAdmin, isSecChampion } from '../utils/permissions';
+import { useClientRoles } from '../utils/useClientAuth';
 import PortHistory from './PortHistory';
 import VulnerabilityHistory from './VulnerabilityHistory';
 import { BulkDeleteConfirmModal } from './BulkDeleteConfirmModal';
@@ -85,7 +86,12 @@ const AssetManagement: React.FC = () => {
 
   // Owner candidates for select dropdown
   const [ownerCandidates, setOwnerCandidates] = useState<OwnerCandidate[]>([]);
-  const canAssignOwner = isAdmin(getUser()?.roles) || isSecChampion(getUser()?.roles);
+  // Read after mount, not during render: getUser() is null during SSR, so using it
+  // here directly would make the server and first client render disagree (see
+  // utils/useClientAuth). The mount effect below keeps calling getUser() directly —
+  // effects only ever run on the client, where it is already correct.
+  const roles = useClientRoles();
+  const canAssignOwner = isAdmin(roles) || isSecChampion(roles);
 
   // Domain validation state (Feature 043 - User Story 2)
   const [domainError, setDomainError] = useState<string | null>(null);
@@ -94,8 +100,6 @@ const AssetManagement: React.FC = () => {
     fetchAssets();
     if (isAdmin(getUser()?.roles) || isSecChampion(getUser()?.roles)) {
       fetchWorkgroups();
-    }
-    if (canAssignOwner) {
       fetchOwnerCandidates();
     }
   }, []);
@@ -517,7 +521,7 @@ const AssetManagement: React.FC = () => {
                 </>
               )}
               {/* Feature 029: Bulk Delete Button (ADMIN only, hidden when no assets) */}
-              {isAdmin(getUser()?.roles) && getFilteredAssets().length > 0 && (
+              {isAdmin(roles) && getFilteredAssets().length > 0 && (
                 <button
                   type="button"
                   className="btn btn-danger"
@@ -943,7 +947,7 @@ const AssetManagement: React.FC = () => {
                                 <i className="bi bi-shield-exclamation"></i> Vulns
                               </a>
                               {/* Delete button only visible to ADMIN users (Feature 033) */}
-                              {isAdmin(getUser()?.roles) && (
+                              {isAdmin(roles) && (
                                 <button
                                   type="button"
                                   onClick={() => handleDelete(asset.id!)}

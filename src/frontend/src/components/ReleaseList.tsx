@@ -16,7 +16,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { releaseService, type Release, type PaginatedResponse } from '../services/releaseService';
-import { hasRole, getUser } from '../utils/auth';
+import { useClientHasRole, useClientUser } from '../utils/useClientAuth';
 import { canDeleteRelease } from '../utils/permissions';
 import ReleaseCreateModal from './ReleaseCreateModal';
 import ReleaseDeleteConfirm from './ReleaseDeleteConfirm';
@@ -67,10 +67,12 @@ const ReleaseList: React.FC = () => {
     });
 
     // User/Role info
-    const user = typeof window !== 'undefined' ? getUser() : null;
+    // `typeof window` does not make this hydration-safe — it makes the code run on
+    // both sides while still producing different output. See utils/useClientAuth.
+    const user = useClientUser();
     const userRoles = user?.roles || [];
-    const canCreate = typeof window !== 'undefined' && (hasRole('ADMIN') || hasRole('REQADMIN'));
-    const isAdmin = typeof window !== 'undefined' && hasRole('ADMIN');
+    const canCreate = useClientHasRole(['ADMIN', 'REQADMIN']);
+    const isAdmin = useClientHasRole('ADMIN');
 
     // Debounce search query (300ms)
     useEffect(() => {

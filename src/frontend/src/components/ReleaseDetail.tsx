@@ -15,7 +15,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { releaseService, type Release, type RequirementSnapshot, type PaginatedResponse } from '../services/releaseService';
-import { hasRole, getUser } from '../utils/auth';
+import { useClientUser } from '../utils/useClientAuth';
 import { canDeleteRelease } from '../utils/permissions';
 import ReleaseStatusActions from './ReleaseStatusActions';
 import ReleaseDeleteConfirm from './ReleaseDeleteConfirm';
@@ -173,7 +173,8 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
     });
 
     // User info
-    const user = typeof window !== 'undefined' ? getUser() : null;
+    // Read after mount, not during render — see utils/useClientAuth.
+    const user = useClientUser();
     const userRoles = user?.roles || [];
 
     // Fetch release and snapshots
