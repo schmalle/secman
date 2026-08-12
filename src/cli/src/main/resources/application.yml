@@ -20,7 +20,9 @@ micronaut:
 
 secman:
   backend:
-    base-url: ${SECMAN_BACKEND_URL:http://localhost:8080}
+    # Backticks required — Micronaut splits ${VAR:default} on the colon, so an
+    # unescaped http:// default resolves to "//localhost:8080".
+    base-url: ${SECMAN_BACKEND_URL:`http://localhost:8080`}
   crowdstrike:
     batch-size: ${SECMAN_CROWDSTRIKE_BATCH_SIZE:25}
     # Raised default 4 -> 10. Falcon Spotlight rate-limit (~6000 req/min/token)

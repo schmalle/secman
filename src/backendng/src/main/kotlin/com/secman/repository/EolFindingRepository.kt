@@ -30,7 +30,8 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
                OR LOWER(f.componentName) LIKE LOWER(CONCAT('%', :search, '%'))
                OR LOWER(COALESCE(f.componentVendor, '')) LIKE LOWER(CONCAT('%', :search, '%'))
                OR LOWER(COALESCE(f.assetName, '')) LIKE LOWER(CONCAT('%', :search, '%')))
-          AND (:cloudAccountId IS NULL OR :cloudAccountId = '' OR f.cloudAccountId = :cloudAccountId)
+          AND (:cloudAccountId IS NULL OR :cloudAccountId = ''
+               OR COALESCE(NULLIF(f.cloudAccountId, ''), :unassignedAccountToken) = :cloudAccountId)
         ORDER BY f.eolDate ASC, f.assetName ASC, f.componentName ASC
         """
     )
@@ -39,6 +40,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
         statuses: Collection<EolStatus>,
         search: String?,
         cloudAccountId: String?,
+        unassignedAccountToken: String,
         pageable: Pageable
     ): List<EolFinding>
 
@@ -51,14 +53,16 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
                OR LOWER(f.componentName) LIKE LOWER(CONCAT('%', :search, '%'))
                OR LOWER(COALESCE(f.componentVendor, '')) LIKE LOWER(CONCAT('%', :search, '%'))
                OR LOWER(COALESCE(f.assetName, '')) LIKE LOWER(CONCAT('%', :search, '%')))
-          AND (:cloudAccountId IS NULL OR :cloudAccountId = '' OR f.cloudAccountId = :cloudAccountId)
+          AND (:cloudAccountId IS NULL OR :cloudAccountId = ''
+               OR COALESCE(NULLIF(f.cloudAccountId, ''), :unassignedAccountToken) = :cloudAccountId)
         """
     )
     fun countForAssets(
         assetIds: Collection<Long>,
         statuses: Collection<EolStatus>,
         search: String?,
-        cloudAccountId: String?
+        cloudAccountId: String?,
+        unassignedAccountToken: String
     ): Long
 
     @Query(

@@ -76,9 +76,12 @@ open class EolQueryService(
             statuses = statuses,
             search = normalizedSearch,
             cloudAccountId = normalizedAccount,
+            unassignedAccountToken = UNASSIGNED_ACCOUNT_LABEL,
             pageable = Pageable.from(effectivePage, effectiveSize)
         )
-        val total = eolFindingRepository.countForAssets(assetIds, statuses, normalizedSearch, normalizedAccount)
+        val total = eolFindingRepository.countForAssets(
+            assetIds, statuses, normalizedSearch, normalizedAccount, UNASSIGNED_ACCOUNT_LABEL
+        )
         return EolFindingListResponse(findings.map { it.toResponse() }, total, effectivePage, effectiveSize)
     }
 
@@ -112,7 +115,7 @@ open class EolQueryService(
             .groupBy { it.first }
             .map { (account, rows) ->
                 EolAccountSummary(
-                    cloudAccountId = account.ifEmpty { "(no account)" },
+                    cloudAccountId = account.ifEmpty { UNASSIGNED_ACCOUNT_LABEL },
                     eolCount = rows.filter { it.second == EolStatus.EOL }.sumOf { it.third },
                     approachingCount = rows.filter { it.second == EolStatus.APPROACHING_EOL }.sumOf { it.third }
                 )
@@ -215,6 +218,17 @@ open class EolQueryService(
     )
 
     companion object {
+        /**
+         * Label the per-account rollup uses for findings with no cloud account, and
+         * the value the findings filter accepts to mean "exactly those rows".
+         *
+         * One constant on purpose: the summary renders it as a clickable account and
+         * the filter has to understand what came back, or clicking the largest bucket
+         * silently returns every finding instead of the unassigned ones. Not a valid
+         * AWS account id (those are 12 digits), so it cannot collide with real data.
+         */
+        const val UNASSIGNED_ACCOUNT_LABEL = "(no account)"
+
         private const val DEFAULT_PAGE_SIZE = 100
         private const val MAX_PAGE_SIZE = 500
         private const val MAX_PAGE = 10_000

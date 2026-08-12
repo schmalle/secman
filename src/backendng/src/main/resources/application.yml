@@ -289,7 +289,10 @@ secman:
     # base-url and allowed-hosts are a PAIR. Changing base-url without adding the
     # new host to allowed-hosts fails closed by design (§A10) — that is the
     # SSRF guard doing its job, never something to relax.
-    base-url: ${SECMAN_EOL_BASE_URL:https://endoflife.date}
+    # Backticks are required: Micronaut splits ${VAR:default} on the colon, so an
+    # unescaped https:// default silently resolves to "//endoflife.date" and every
+    # fetch fails the absolute-URL check before a request is ever sent.
+    base-url: ${SECMAN_EOL_BASE_URL:`https://endoflife.date`}
     allowed-hosts: ${SECMAN_EOL_ALLOWED_HOSTS:endoflife.date}
     # How far ahead counts as "approaching EOL". Also the default look-ahead of
     # the owner notification, so lowering it below 12 shrinks what that mail can
@@ -342,12 +345,12 @@ secman:
     # Required prefix for a user-supplied incoming webhook URL. The backend performs the
     # outbound request, so this is the SSRF boundary: only change it to point at a
     # deliberately chosen Slack-compatible relay.
-    webhook-url-prefix: ${SECMAN_SLACK_WEBHOOK_URL_PREFIX:https://hooks.slack.com/}
-    api-base-url: ${SECMAN_SLACK_API_BASE_URL:https://slack.com/api}
+    webhook-url-prefix: ${SECMAN_SLACK_WEBHOOK_URL_PREFIX:`https://hooks.slack.com/`}
+    api-base-url: ${SECMAN_SLACK_API_BASE_URL:`https://slack.com/api`}
     timeout-seconds: ${SECMAN_SLACK_TIMEOUT_SECONDS:10}
   telegram:
     # Fixed API host — never user input, unlike Slack's per-user webhook URL.
-    api-base-url: ${SECMAN_TELEGRAM_API_BASE_URL:https://api.telegram.org}
+    api-base-url: ${SECMAN_TELEGRAM_API_BASE_URL:`https://api.telegram.org`}
     timeout-seconds: ${SECMAN_TELEGRAM_TIMEOUT_SECONDS:10}
   # MCP User Delegation Feature (Feature 050)
   mcp:
@@ -689,9 +692,9 @@ logger:
 
 app:
   backend:
-    base-url: ${SECMAN_BACKEND_URL:https://secman.schmall.io}
+    base-url: ${SECMAN_BACKEND_URL:`https://secman.schmall.io`}
   frontend:
-    base-url: ${FRONTEND_URL:http://localhost:4321}
+    base-url: ${FRONTEND_URL:`http://localhost:4321`}
 
 # Management endpoints (Feature 073: Memory Optimization)
 endpoints:

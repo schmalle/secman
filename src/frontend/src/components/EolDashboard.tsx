@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getEolCatalogStatus,
   getEolFindings,
@@ -28,7 +28,16 @@ type StatusFilter = 'ALL' | 'EOL' | 'APPROACHING_EOL';
  * 403 is the boundary.
  */
 const EolDashboard: React.FC = () => {
-  const roles = useMemo(() => getUser()?.roles ?? [], []);
+  // Roles live in sessionStorage, which does not exist during Astro's server
+  // render — getUser() returns null there. Reading them during the *first* render
+  // would make the server HTML (no role-gated UI) disagree with the client's, and
+  // React 19 answers a hydration mismatch by throwing and discarding the whole
+  // island. So both sides render role-free, and the gated UI appears on the first
+  // post-mount render instead.
+  const [roles, setRoles] = useState<string[]>([]);
+  useEffect(() => {
+    setRoles(getUser()?.roles ?? []);
+  }, []);
   const isAdmin = roles.includes('ADMIN');
   const canSeeRepositories = isAdmin || roles.includes('SECCHAMPION');
 
@@ -45,6 +54,7 @@ const EolDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const findingsRef = useRef<HTMLDivElement>(null);
 
   const loadSummary = useCallback(() => {
     Promise.all([getEolSummary(), getEolCatalogStatus()])
@@ -91,6 +101,17 @@ const EolDashboard: React.FC = () => {
     () => [...findings].sort((a, b) => urgencyRank(a.status, a.daysUntilEol) - urgencyRank(b.status, b.daysUntilEol)),
     [findings],
   );
+
+  /**
+   * The account rollup can run to 50 rows, so the findings table it filters is
+   * far below the fold: setting the filter alone changes nothing the user can
+   * see, which reads as a dead control. Scrolling the results into view is the
+   * feedback. Clicking the selected account again clears the filter.
+   */
+  const selectAccount = (cloudAccountId: string) => {
+    setAccountFilter((current) => (current === cloudAccountId ? '' : cloudAccountId));
+    findingsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const handleSync = async () => {
     setSyncing(true);
@@ -201,25 +222,26 @@ const EolDashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {summary.accounts.map((account) => (
-                  <tr key={account.cloudAccountId}>
+                {summary.accounts.map((account) => {
+                  const selected = accountFilter === account.cloudAccountId;
+                  return (
+                  <tr key={account.cloudAccountId} className={selected ? 'table-active' : undefined}>
                     <td>
                       <button
                         type="button"
-                        className="btn btn-link p-0"
-                        onClick={() =>
-                          setAccountFilter(
-                            account.cloudAccountId === '(no account)' ? '' : account.cloudAccountId,
-                          )
-                        }
+                        className={`btn btn-link p-0${selected ? ' fw-bold' : ''}`}
+                        aria-pressed={selected}
+                        onClick={() => selectAccount(account.cloudAccountId)}
                       >
                         {account.cloudAccountId}
                       </button>
+                      {selected && <i className="bi bi-funnel-fill text-primary ms-2"></i>}
                     </td>
                     <td className="text-end">{account.eolCount}</td>
                     <td className="text-end">{account.approachingCount}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -264,7 +286,18 @@ const EolDashboard: React.FC = () => {
         </div>
       )}
 
-      <div className="card">
+      <div className="card" ref={findingsRef}>
+        {accountFilter && (
+          <div className="card-header bg-primary-subtle d-flex align-items-center gap-2">
+            <i className="bi bi-funnel-fill"></i>
+            <span>
+              Showing account <strong>{accountFilter}</strong>
+            </span>
+            <button type="button" className="btn btn-sm btn-outline-secondary ms-auto" onClick={() => setAccountFilter('')}>
+              Clear filter
+            </button>
+          </div>
+        )}
         <div className="card-header d-flex flex-wrap gap-2 align-items-center">
           <div className="flex-grow-1">
             <input
