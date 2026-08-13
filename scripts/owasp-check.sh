@@ -82,6 +82,46 @@ SRC_RE='\.(kt|kts|java|ts|tsx|js|jsx|astro|py|sh|sql|ya?ml|json|gradle)$'
 SELF_RE='^scripts/(owasp-check\.sh|test/owasp-check-test\.sh)$'
 
 # ---------------------------------------------------------------------------
+# Passing a regex into awk
+# ---------------------------------------------------------------------------
+#
+# Every rule pattern in this file is written as an ERE for `grep -E`, then also
+# handed to awk via `-v`. That second path is not transparent: POSIX says an
+# assignment made with -v undergoes the same escape processing as a string
+# literal, so the value is unescaped ONCE before awk ever compiles it as a
+# dynamic regex. A lone backslash does not survive that pass.
+#
+# On the one-true-awk that ships with macOS (`awk version 20200816`) the effect
+# is fatal rather than cosmetic:
+#
+#     awk -v RE='\.findById\(' ...   # awk stores:  .findById(
+#                                    # then: "illegal primary in regular
+#                                    #        expression" on stderr, exit 2
+#
+# The unbalanced "(" aborts that awk invocation, so the rule produces no output
+# and the rule is silently reported as clean. 15 of owasp-check-test.sh's
+# fixtures failed this way — among them A03-sql-interp, A03-sql-concat,
+# A02-secret-lit, A02-weak-hash, A09-secret-log and A05-cors-wildcard, i.e. the
+# SQL-injection and hardcoded-credential detectors. Nothing in .github runs this
+# gate, so local execution is the only execution: those rules had never fired
+# anywhere. A gate that cannot fire is worse than no gate — it reports OK.
+#
+# awk_re doubles the backslashes so exactly one survives the -v pass. \t is
+# translated to a real tab FIRST, because doubling it would instead hand the
+# regex engine a literal "\t", which POSIX ERE does not define inside a bracket
+# expression — [ \t] would then match backslash and "t" rather than whitespace.
+#
+# Use awk_re for EVERY regex crossing into awk via -v. Patterns handed straight
+# to `grep -E` must NOT be wrapped: grep takes the ERE as-is.
+awk_re() {
+    local re="$1"
+    local tab=$'\t'
+    re="${re//\\t/$tab}"
+    re="${re//\\/\\\\}"
+    printf '%s' "$re"
+}
+
+# ---------------------------------------------------------------------------
 # Collect the scan surface
 # ---------------------------------------------------------------------------
 #
@@ -125,7 +165,8 @@ collect_diff() {
             print f "\t" ln "\t" substr($0, 2)
             ln++
         }
-    ' | awk -F'\t' -v RE="$SRC_RE" -v SELF="$SELF_RE" '$1 ~ RE && $1 !~ SELF' > "$TMP/added.lines"
+    ' | awk -F'\t' -v RE="$(awk_re "$SRC_RE")" -v SELF="$(awk_re "$SELF_RE")" \
+          '$1 ~ RE && $1 !~ SELF' > "$TMP/added.lines"
 
     # Every line of an untracked file is an added line.
     git ls-files --others --exclude-standard -- . | grep -E "$SRC_RE" | grep -Ev "$SELF_RE" | while IFS= read -r f; do
@@ -185,7 +226,8 @@ added_rule() {
     local rule="$1" sev="$2" cat="$3" path_re="$4" content_re="$5" excl="$6" msg="$7"
     local skip="$COMMENT_RE"
     fires_in_comments "$rule" && skip=""
-    awk -F'\t' -v PR="$path_re" -v CR="$content_re" -v EX="$excl" -v SK="$skip" \
+    awk -F'\t' -v PR="$(awk_re "$path_re")" -v CR="$(awk_re "$content_re")" \
+        -v EX="$(awk_re "$excl")" -v SK="$(awk_re "$skip")" \
         '$1 ~ PR && $3 ~ CR { if (SK != "" && $3 ~ SK) next; if (EX != "-" && $3 ~ EX) next; print }' "$TMP/added.lines" \
     | while IFS=$'\t' read -r p l t; do
         emit "$sev" "$cat" "$rule" "$p" "$l" "$msg" "$t"
@@ -200,7 +242,8 @@ added_rule_and() {
     local rule="$1" sev="$2" cat="$3" path_re="$4" re1="$5" re2="$6" excl="$7" msg="$8"
     local skip="$COMMENT_RE"
     fires_in_comments "$rule" && skip=""
-    awk -F'\t' -v PR="$path_re" -v R1="$re1" -v R2="$re2" -v EX="$excl" -v SK="$skip" \
+    awk -F'\t' -v PR="$(awk_re "$path_re")" -v R1="$(awk_re "$re1")" -v R2="$(awk_re "$re2")" \
+        -v EX="$(awk_re "$excl")" -v SK="$(awk_re "$skip")" \
         '$1 ~ PR && $3 ~ R1 && $3 ~ R2 { if (SK != "" && $3 ~ SK) next; if (EX != "-" && $3 ~ EX) next; print }' "$TMP/added.lines" \
     | while IFS=$'\t' read -r p l t; do
         emit "$sev" "$cat" "$rule" "$p" "$l" "$msg" "$t"
@@ -224,7 +267,8 @@ file_rule() {
         grep -Eq "$req" "$f" && continue
         local line sev
         line=$(grep -nE "$trig" "$f" | head -1 | cut -d: -f1)
-        if awk -F'\t' -v F="$f" -v T="$trig" '$1 == F && $3 ~ T { found=1 } END { exit !found }' "$TMP/added.lines"; then
+        if awk -F'\t' -v F="$f" -v T="$(awk_re "$trig")" \
+            '$1 == F && $3 ~ T { found=1 } END { exit !found }' "$TMP/added.lines"; then
             sev="BLOCK"
         else
             sev="REVIEW"
@@ -470,10 +514,23 @@ if [ -f "$PERMS_FILE" ]; then
             emit BLOCK A01 A01-mcp-perms "$f" "${line:-1}" \
                 "MCP tool '$tool' is missing from McpToolPermissions $missing — absent from CALLING means tools/call is denied for delegated callers" ""
         fi
-        # McpToolGuards helpers are the preferred form, but a hand-written
-        # `context.isAdmin` / `hasDelegation()` check in execute() is the same
-        # boundary and predates the helpers — accept both, flag neither-of.
-        if ! grep -Eq '(requireDelegation|requireAnyRole|requireDelegatedRole|requireAdmin|context\.isAdmin|hasDelegation\(\)|delegatedUserRoles)' "$f"; then
+        # An MCP tool is allowed to enforce its boundary in either of two ways,
+        # and this rule accepts both — flagging only a tool that does neither.
+        #
+        #  1. Role gate: McpToolGuards helpers are the preferred form, but a
+        #     hand-written `context.isAdmin` / `hasDelegation()` check in
+        #     execute() is the same boundary and predates the helpers.
+        #  2. Row scope: `getFilterableAssetIds()` / `canAccessAsset()` bind the
+        #     delegated user's accessible assets into the query. For a read tool
+        #     over asset-owned rows this is the *correct* control and a role gate
+        #     would be the wrong one — every such tool is meant to be callable by
+        #     an ordinary user, just not to answer beyond their own scope.
+        #
+        # Omitting (2) made this rule fire on ~20 correctly-scoped tools at once,
+        # which is how the genuinely unscoped get_asset_scan_results/search_products/
+        # get_scans sat unnoticed in the same output. A rule that cannot be
+        # satisfied by the right fix trains people to ignore it.
+        if ! grep -Eq '(requireDelegation|requireAnyRole|requireDelegatedRole|requireAdmin|context\.isAdmin|hasDelegation\(\)|delegatedUserRoles|getFilterableAssetIds\(\)|canAccessAsset\(|getAccessibleAssetIds\()' "$f"; then
             line=$(grep -nE 'fun execute' "$f" | head -1 | cut -d: -f1)
             emit BLOCK A01 A01-mcp-guard "$f" "${line:-1}" \
                 "MCP tool '$tool' calls no McpToolGuards check — a missing guard fails OPEN and looks like nothing" ""

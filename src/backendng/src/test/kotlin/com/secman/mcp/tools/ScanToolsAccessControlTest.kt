@@ -77,7 +77,8 @@ class ScanToolsAccessControlTest {
         every { it.getFilterableAssetIds() } returns accessibleIds
     }
 
-    private fun <T> pageOf(vararg items: T) = Page.of(items.toList(), Pageable.from(0, 100), items.size.toLong())
+    private fun <T : Any> pageOf(vararg items: T): Page<T> =
+        Page.of(items.toList(), Pageable.from(0, 100), items.size.toLong())
 
     /**
      * Stub the unscoped reads so vulnerable code still returns something. The leak has to be
@@ -115,7 +116,7 @@ class ScanToolsAccessControlTest {
     // ---------------------------------------------------------------- get_asset_scan_results
 
     @Test
-    fun `get_asset_scan_results binds the accessible asset ids instead of reading every port`() = runBlocking {
+    fun `get_asset_scan_results binds the accessible asset ids instead of reading every port`(): Unit = runBlocking {
         stubUnscopedPortReads()
         every { scanPortRepository.findByScanResultAssetIdIn(setOf(1L), any()) } returns
             pageOf(portOn(accessibleAsset, 1L))
@@ -127,7 +128,7 @@ class ScanToolsAccessControlTest {
     }
 
     @Test
-    fun `get_asset_scan_results scopes the service-filtered branch too`() = runBlocking {
+    fun `get_asset_scan_results scopes the service-filtered branch too`(): Unit = runBlocking {
         stubUnscopedPortReads()
         every {
             scanPortRepository.findByScanResultAssetIdInAndServiceContainingIgnoreCase(setOf(1L), "https", any())
@@ -142,7 +143,7 @@ class ScanToolsAccessControlTest {
     }
 
     @Test
-    fun `get_asset_scan_results never exposes an asset outside the caller's scope`() = runBlocking {
+    fun `get_asset_scan_results never exposes an asset outside the caller's scope`(): Unit = runBlocking {
         stubUnscopedPortReads()
         every { scanPortRepository.findByScanResultAssetIdIn(setOf(1L), any()) } returns
             pageOf(portOn(accessibleAsset, 1L))
@@ -156,7 +157,7 @@ class ScanToolsAccessControlTest {
     }
 
     @Test
-    fun `get_asset_scan_results returns nothing for a user with no accessible assets`() = runBlocking {
+    fun `get_asset_scan_results returns nothing for a user with no accessible assets`(): Unit = runBlocking {
         stubUnscopedPortReads()
 
         val result = scanResultsTool.execute(emptyMap(), ctx(emptySet()))
@@ -167,7 +168,7 @@ class ScanToolsAccessControlTest {
     }
 
     @Test
-    fun `get_asset_scan_results still reads unscoped for an admin`() = runBlocking {
+    fun `get_asset_scan_results still reads unscoped for an admin`(): Unit = runBlocking {
         stubUnscopedPortReads()
 
         scanResultsTool.execute(emptyMap(), ctx(null))
@@ -179,7 +180,7 @@ class ScanToolsAccessControlTest {
     // ---------------------------------------------------------------------- search_products
 
     @Test
-    fun `search_products scopes the service branch`() = runBlocking {
+    fun `search_products scopes the service branch`(): Unit = runBlocking {
         stubUnscopedPortReads()
         every {
             scanPortRepository.findByScanResultAssetIdInAndServiceContainingIgnoreCase(setOf(1L), "https", any())
@@ -192,7 +193,7 @@ class ScanToolsAccessControlTest {
     }
 
     @Test
-    fun `search_products scopes the state-only branch`() = runBlocking {
+    fun `search_products scopes the state-only branch`(): Unit = runBlocking {
         stubUnscopedPortReads()
         every {
             scanPortRepository.findByScanResultAssetIdInAndStateAndServiceNotNull(setOf(1L), "open", any())
@@ -209,7 +210,7 @@ class ScanToolsAccessControlTest {
     // --------------------------------------------------------------------------- get_scans
 
     @Test
-    fun `get_scans binds the accessible asset ids instead of listing every scan`() = runBlocking {
+    fun `get_scans binds the accessible asset ids instead of listing every scan`(): Unit = runBlocking {
         stubUnscopedScanReads()
         every { scanRepository.findAccessibleScans(setOf(1L), any()) } returns pageOf(scan)
 
@@ -220,7 +221,7 @@ class ScanToolsAccessControlTest {
     }
 
     @Test
-    fun `get_scans scopes the uploadedBy branch`() = runBlocking {
+    fun `get_scans scopes the uploadedBy branch`(): Unit = runBlocking {
         stubUnscopedScanReads()
         every { scanRepository.findAccessibleScansByUploadedBy(setOf(1L), "bob", any()) } returns pageOf(scan)
 
@@ -231,7 +232,7 @@ class ScanToolsAccessControlTest {
     }
 
     @Test
-    fun `get_scans returns nothing for a user with no accessible assets`() = runBlocking {
+    fun `get_scans returns nothing for a user with no accessible assets`(): Unit = runBlocking {
         stubUnscopedScanReads()
 
         val result = getScansTool.execute(emptyMap(), ctx(emptySet()))
