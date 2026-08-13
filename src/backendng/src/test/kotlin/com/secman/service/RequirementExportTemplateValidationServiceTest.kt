@@ -413,7 +413,7 @@ class RequirementExportTemplateValidationServiceTest {
     private fun docxWithPlaceholderInHeaderOnly(): ByteArray {
         val document = XWPFDocument()
         document.createParagraph().createRun().setText("Cover ${'$'}{documentTitle}")
-        val header = document.createHeader(org.apache.poi.xwpf.usermodel.HeaderFooterType.DEFAULT)
+        val header = document.createHeader(org.apache.poi.wp.usermodel.HeaderFooterType.DEFAULT)
         header.createParagraph().createRun().setText("${'$'}{requirements}")
         return writeDocument(document)
     }

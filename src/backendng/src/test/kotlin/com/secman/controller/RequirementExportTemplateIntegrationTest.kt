@@ -16,6 +16,7 @@ import io.micronaut.http.client.annotation.Client
 import io.micronaut.http.client.exceptions.HttpClientResponseException
 import io.micronaut.http.client.multipart.MultipartBody
 import jakarta.inject.Inject
+import jakarta.persistence.EntityManager
 import org.apache.poi.xwpf.usermodel.XWPFDocument
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -46,6 +47,23 @@ class RequirementExportTemplateIntegrationTest : BaseIntegrationTest() {
 
     @Inject
     lateinit var seeder: RequirementExportTemplateSeeder
+
+    @Inject
+    lateinit var entityManager: EntityManager
+
+    /**
+     * Re-read persisted state after an HTTP call.
+     *
+     * `@MicronautTest` wraps each test in a transaction, so the injected repository keeps one
+     * persistence context for the whole method while the controller commits in its own. Without
+     * the clear, a second `findById` on an entity already loaded here returns the cached instance
+     * and never sees the controller's write — the first read passes and only the second lies,
+     * which reads exactly like a broken endpoint.
+     */
+    private fun <T> rereadFromDb(block: () -> T): T {
+        entityManager.clear()
+        return block()
+    }
 
     private lateinit var adminUser: String
     private lateinit var regularUser: String
@@ -168,7 +186,7 @@ class RequirementExportTemplateIntegrationTest : BaseIntegrationTest() {
                 .header("Authorization", authHeader(adminUser)),
             String::class.java
         )
-        assertThat(templateRepository.findById(id).get().status)
+        assertThat(rereadFromDb { templateRepository.findById(id).get().status })
             .isEqualTo(RequirementExportTemplateStatus.INACTIVE)
 
         client.toBlocking().exchange(
@@ -176,7 +194,7 @@ class RequirementExportTemplateIntegrationTest : BaseIntegrationTest() {
                 .header("Authorization", authHeader(adminUser)),
             String::class.java
         )
-        assertThat(templateRepository.findById(id).get().status)
+        assertThat(rereadFromDb { templateRepository.findById(id).get().status })
             .isEqualTo(RequirementExportTemplateStatus.ACTIVE)
     }
 

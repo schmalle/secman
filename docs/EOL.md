@@ -97,6 +97,92 @@ Two consequences worth knowing:
   but never counted into "EOL within N months" — the owner mail promises a window
   and must not put undated cycles in it.
 
+### Distribution-packaged builds are rejected, not matched
+
+A version carrying a packaging revision — `1.18.0-6ubuntu14.4`,
+`2026c-1.el8_10`, `3.4.1-11.amzn2`, `23.01+dfsg-11ubuntu0.1~esm1` — is supported
+by the *distribution*, not by upstream. Canonical still supports nginx 1.18 long
+after upstream dropped it, so an upstream cycle table says nothing about that
+build. `EolVersionMatcher.hasDistroRevision` rejects those outright on the
+component path.
+
+This costs coverage on Linux hosts and is the right trade: the alternative is
+reporting supported production software as end of life, which is the one failure
+this matcher exists to avoid. The OS path is unaffected — `Ubuntu 22.04.3` is a
+point release, not a packaging revision.
+
+The **vendor** is checked too (`hasDistroVendor`). A `.deb`'s vendor field is its
+maintainer, so `Ubuntu Developers <ubuntu-devel-discuss@…>` proves the component
+is distribution-packaged even when the version carries no visible revision:
+`node-arrify 2.0.1-2` looks like a plain version but is an Ubuntu npm-library
+package, and matching it against the Node.js *runtime* lifecycle reported
+"Node.js 2, end of life" for a library with no relation to the runtime's support
+window. Red Hat and Amazon Linux are deliberately **not** vendor-blocked — their
+packages carry `.el8` / `.amzn2` in the version and are caught by the revision
+rule, and blocking those vendors would make `redhat-build-of-openjdk`
+unmatchable.
+
+### Labelled cycles are never matched from a bare version
+
+A cycle carrying an edition or channel label — `10-1507`, `11-ltsc`,
+`11-24h2-e-lts`, `2026c` — is skipped (`isNumericCycle`).
+
+Cycle comparison keeps only the leading numeric run, so every labelled cycle
+collapses to its major version: `10-1507` becomes `10`. A Windows Server 2022
+build reports itself as `10.0.20348.3451`, which then prefix-matches `10-1507`
+and is reported as **Windows 10 version 1507, end of life since 2017** — chosen
+by nothing more than release list order. Which edition a bare build number
+belongs to cannot be recovered without a build-to-release table the catalogue
+does not publish.
+
+This is why the `windows` product yields no findings from a build number, and
+why Windows Server still does: its cycles (`2019`, `2022`) are plain numbers.
+
+### Product names that collide with a shorter alias
+
+Microsoft ships the .NET desktop runtime as **"Microsoft Windows Desktop Runtime
+- 8.0.21"**. Resolution is longest-alias-first, but without an entry for the full
+name the shorter `microsoft windows` alias wins and .NET 8 is reported as Windows
+8, end of life since 2016. Curated entries for `microsoft windows desktop
+runtime` and `windows desktop runtime` resolve it to `dotnet`.
+
+The general lesson: when a vendor's product name *starts with* another product's
+name, the longer form must be curated explicitly or the shorter one silently
+captures it.
+
+### Java is nine products, not one
+
+endoflife.date publishes no generic `java` product. It publishes `oracle-jdk`,
+`amazon-corretto`, `eclipse-temurin`, `azul-zulu`, `microsoft-build-of-openjdk`,
+`redhat-build-of-openjdk`, `openjdk-builds-from-oracle`, `graalvm-ce` and
+`oracle-graalvm`, because their support windows genuinely differ — Oracle JDK 8,
+Corretto 8 and Temurin 8 all end on different dates.
+
+Two rules follow, both in `EolVersionMatcher`:
+
+- **Each observed spelling maps to the distribution that ships it.** A build
+  whose distribution cannot be identified (a bare `OpenJDK Platform` with no
+  recognised vendor) produces **no finding** rather than borrowing another
+  vendor's date. Where the name alone is ambiguous the vendor decides, via the
+  vendor-widened candidate the matcher already builds.
+- **Legacy `1.x` versions are normalized.** Java numbered releases `1.x` up to
+  Java 8 and plainly `x` from Java 9 on: `1.8.0_371` *is* Java 8. Catalogue
+  cycles use the modern form, so `1.8.0.392` is rewritten to `8.0.392` before
+  cycle resolution. Applied only to the Java distributions and only when the
+  leading segment is exactly `1`; `1.4` becomes `4`, which no cycle carries, so
+  it fails closed.
+
+A curated alias whose target product key does not exist upstream is dropped
+silently at index build time. That is deliberate — it lets speculative entries
+be harmless — but it also means **a typo'd or non-existent target disables the
+alias with no error**. Aliases pointing at a `java` key behaved exactly that way
+and made Java unmatchable; check a new target against `eol_product.product_key`
+before relying on it.
+
+`ASP .Net Core` maps to `dotnet`: it has no product of its own upstream and its
+versions track .NET exactly (ASP.NET Core 8.0.29 ships with .NET 8.0). Note the
+alias is `asp net core` — tokenization strips the leading dot.
+
 ### Repository dependencies are an under-approximation
 
 A Dependabot alert names the vulnerable *range*, never the version resolved in
@@ -209,7 +295,13 @@ closed — that is the SSRF guard working, not a bug.
 
 ## 8. Testing
 
-- `EolVersionMatcherTest` — matching and classification rules (pure, no DB)
+- `EolVersionMatcherTest` — matching and classification rules (pure, no DB).
+  EVM-015..018 cover the application path (Java distributions, the legacy `1.x`
+  scheme, the .NET family); EVM-019 pins the distro-revision rejection in both
+  directions; EVM-020 pins that the OS path is unchanged by those guards;
+  EVM-021 pins the labelled-cycle refusal with the real Windows Server 2022 build
+  number; EVM-022 the maintainer-vendor refusal; EVM-023 the .NET desktop runtime
+  not resolving to Windows
 - `EolCatalogClientTest` — SSRF URL validation and product-key sanitization
 - `EolNotificationBoundaryTest` — recipient address boundary
 - `EolScanUpperBoundTest` — Dependabot range upper-bound selection

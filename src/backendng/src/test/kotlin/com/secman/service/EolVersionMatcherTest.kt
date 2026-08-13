@@ -91,7 +91,77 @@ class EolVersionMatcherTest {
         )
     )
 
-    private val index = EolVersionMatcher.Index.build(listOf(ubuntu, windowsServer, rhel, chrome))
+    // Java is nine separate products upstream, never a generic "java" — the cycles
+    // below are the real shape (plain integers, no 1.x form).
+    private val oracleJdk = product(
+        5, "oracle-jdk", "Oracle JDK",
+        aliases = setOf("oracle-java"),
+        releases = listOf(
+            release(51, "8", "2030-12-31"),
+            release(52, "11", "2032-01-31"),
+            release(53, "17", "2029-09-30")
+        )
+    )
+
+    private val corretto = product(
+        6, "amazon-corretto", "Amazon Corretto",
+        aliases = setOf("corretto"),
+        releases = listOf(
+            release(61, "8", "2026-05-31"),
+            release(62, "11", "2032-01-31"),
+            release(63, "17", "2029-10-31")
+        )
+    )
+
+    private val temurin = product(
+        7, "eclipse-temurin", "Eclipse Temurin",
+        aliases = setOf("temurin"),
+        releases = listOf(
+            release(71, "8", "2026-11-01"),
+            release(72, "11", "2027-10-01")
+        )
+    )
+
+    private val oracleOpenJdk = product(
+        8, "openjdk-builds-from-oracle", "OpenJDK builds from Oracle",
+        releases = listOf(
+            release(81, "11", "2019-09-17"),
+            release(82, "17", "2023-03-21")
+        )
+    )
+
+    private val dotnet = product(
+        9, "dotnet", "Microsoft .NET",
+        aliases = setOf("dotnetcore"),
+        releases = listOf(
+            release(91, "6.0", "2024-11-12"),
+            release(92, "8.0", "2026-11-10")
+        )
+    )
+
+    private val dotnetFx = product(
+        10, "dotnetfx", "Microsoft .NET Framework",
+        releases = listOf(
+            release(101, "4.5", "2022-04-26"),
+            release(102, "4.8", "2031-01-14")
+        )
+    )
+
+    // Present so the distro-revision cases have a product they *would* otherwise hit.
+    private val nginx = product(
+        11, "nginx", "nginx",
+        releases = listOf(
+            release(111, "1.18", "2021-04-20"),
+            release(112, "1.24", "2027-04-01")
+        )
+    )
+
+    private val index = EolVersionMatcher.Index.build(
+        listOf(
+            ubuntu, windowsServer, rhel, chrome,
+            oracleJdk, corretto, temurin, oracleOpenJdk, dotnet, dotnetFx, nginx
+        )
+    )
 
     // ------------------------------------------------------------------- OS path
 
@@ -277,5 +347,220 @@ class EolVersionMatcherTest {
 
         assertThat(forward.lookup("shared label")?.productKey).isEqualTo("first")
         assertThat(reverse.lookup("shared label")?.productKey).isEqualTo("second")
+    }
+
+    // ------------------------------------------------------- applications: Java
+
+    @Test
+    @DisplayName("EVM-015: legacy 1.x Java versions resolve to the modern cycle")
+    fun legacyJavaVersionSchemeResolves() {
+        // Java numbered releases 1.x up to Java 8: 1.8.0_371 IS Java 8. Without the
+        // normalization [1,8,0] has no cycle prefix and every Java 8 install — the
+        // most common end-of-life runtime in any estate — is silently invisible.
+        val correttoEight = matcher.matchComponent(
+            index, "Amazon Corretto 8 (x64)", "Amazon", "1.8.0.392", today, 12
+        )
+        assertThat(correttoEight).isNotNull
+        assertThat(correttoEight!!.product.productKey).isEqualTo("amazon-corretto")
+        assertThat(correttoEight.release.cycle).isEqualTo("8")
+
+        assertThat(EolVersionMatcher.normalizeJavaVersion("oracle-jdk", "1.8.0_371".substringBefore('_')))
+            .isEqualTo("8.0")
+        assertThat(EolVersionMatcher.normalizeJavaVersion("amazon-corretto", "1.8.0.392")).isEqualTo("8.0.392")
+
+        // Only for Java, and only when the leading segment is exactly 1.
+        assertThat(EolVersionMatcher.normalizeJavaVersion("ubuntu", "1.8.0.392")).isEqualTo("1.8.0.392")
+        assertThat(EolVersionMatcher.normalizeJavaVersion("oracle-jdk", "11.0.20")).isEqualTo("11.0.20")
+        assertThat(EolVersionMatcher.normalizeJavaVersion("oracle-jdk", "1")).isEqualTo("1")
+    }
+
+    @Test
+    @DisplayName("EVM-016: each Java distribution resolves to its own product, never a shared one")
+    fun javaDistributionsResolveSeparately() {
+        // Oracle JDK 8, Corretto 8 and Temurin 8 end on different dates, so mapping
+        // them all to one product would report the wrong date for two of the three.
+        val cases = listOf(
+            Triple("Amazon Corretto 8 (x64)", "Amazon", "amazon-corretto"),
+            Triple("Amazon Corretto JRE 8 (x64)", "Amazon", "amazon-corretto"),
+            Triple("Eclipse Temurin JDK with Hotspot 11.0.13+8 (x64)", "Eclipse Adoptium", "eclipse-temurin"),
+            Triple("Java SE Development Kit 8", "Oracle", "oracle-jdk"),
+            Triple("OpenJDK Platform 11", "Oracle Corporation", "openjdk-builds-from-oracle"),
+            Triple("OpenJDK Platform 11", "Amazon.com Inc.", "amazon-corretto")
+        )
+        for ((name, vendor, expectedKey) in cases) {
+            val match = matcher.matchComponent(index, name, vendor, "11.0.13", today, 12)
+            assertThat(match).describedAs("%s / %s", name, vendor).isNotNull
+            assertThat(match!!.product.productKey).describedAs("%s / %s", name, vendor).isEqualTo(expectedKey)
+        }
+    }
+
+    @Test
+    @DisplayName("EVM-017: an unidentifiable Java build produces no finding")
+    fun unknownJavaDistributionIsNotGuessed() {
+        // A bare "OpenJDK" names no distribution, and its support window depends
+        // entirely on who built it. Borrowing another vendor's date would be a guess.
+        assertThat(matcher.matchComponent(index, "OpenJDK Platform 11", null, "11.0.13", today, 12)).isNull()
+        assertThat(matcher.matchComponent(index, "OpenJDK Platform 8", "Some Reseller", "8.0.392", today, 12)).isNull()
+    }
+
+    // ------------------------------------------------------- applications: .NET
+
+    @Test
+    @DisplayName("EVM-018: .NET runtimes, SDKs, ASP.NET Core and the Framework resolve")
+    fun dotnetFamilyResolves() {
+        val cases = listOf(
+            Triple(".Net Framework", "4.8.0.528049", "dotnetfx" to "4.8"),
+            Triple(".Net Framework", "4.5.51209", "dotnetfx" to "4.5"),
+            Triple("Microsoft .NET Runtime - 6.0.36 (x64)", "6.0.36.34214", "dotnet" to "6.0"),
+            Triple("Microsoft .NET SDK 8.0.423 (x86)", "8.4.2326.32602", "dotnet" to "8.0"),
+            // Tokenization strips the leading dot, so the alias is "asp net core".
+            Triple("ASP .Net Core", "8.0.29.26325", "dotnet" to "8.0"),
+            Triple(".net desktop runtime", "6.0.36", "dotnet" to "6.0")
+        )
+        for ((name, version, expected) in cases) {
+            val match = matcher.matchComponent(index, name, "Microsoft", version, today, 12)
+            assertThat(match).describedAs("%s %s", name, version).isNotNull
+            assertThat(match!!.product.productKey to match.release.cycle)
+                .describedAs("%s %s", name, version).isEqualTo(expected)
+        }
+    }
+
+    // --------------------------------------------- distribution-packaged builds
+
+    @Test
+    @DisplayName("EVM-019: a distribution packaging revision is never matched to an upstream cycle")
+    fun distroPackagedBuildsAreRejected() {
+        // Canonical still supports nginx 1.18 long after upstream dropped it, so an
+        // upstream cycle says nothing about a distro build. Reporting these would
+        // put supported production software on an owner's remediation list.
+        val distroVersions = listOf(
+            "1.18.0-6ubuntu14.4",
+            "3.0.2-0ubuntu1.15",
+            "23.01+dfsg-11ubuntu0.1~esm1",
+            "2.52.3-0ubuntu0.24.04.1",
+            "2026c-1.el8_10",
+            "3.4.1-11.amzn2",
+            "1.8.0.482.b08-1.amzn2.0.1",
+            "11+nmu1"
+        )
+        for (version in distroVersions) {
+            assertThat(EolVersionMatcher.hasDistroRevision(version)).describedAs(version).isTrue()
+            assertThat(matcher.matchComponent(index, "nginx", null, version, today, 12))
+                .describedAs(version).isNull()
+        }
+
+        // Vendor-shipped versions must stay matchable — the guard must not overreach.
+        val vendorVersions = listOf("4.8.0.528049", "1.8.0.392", "11.0.13.8", "120.0.6099.109", "6.0.36.34214")
+        for (version in vendorVersions) {
+            assertThat(EolVersionMatcher.hasDistroRevision(version)).describedAs(version).isFalse()
+        }
+        assertThat(matcher.matchComponent(index, "nginx", null, "1.18.0", today, 12)?.release?.cycle)
+            .isEqualTo("1.18")
+    }
+
+    @Test
+    @DisplayName("EVM-022: a package-maintainer vendor is never matched to an upstream cycle")
+    fun distroMaintainerVendorsAreRejected() {
+        // The vendor field on a .deb is its maintainer, which proves the component
+        // is distribution-packaged even when the version looks plain. Without this,
+        // the Ubuntu npm library node-arrify 2.0.1-2 is reported as "Node.js 2, end
+        // of life" — a library judged against the runtime's support window.
+        val nodejs = product(
+            13, "nodejs", "Node.js",
+            releases = listOf(
+                release(131, "2", "2016-06-30"),
+                release(132, "4", "2018-04-30"),
+                release(133, "20", "2026-04-30")
+            )
+        )
+        val nodeIndex = EolVersionMatcher.Index.build(listOf(nodejs))
+
+        val maintainers = listOf(
+            "Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>",
+            "Ubuntu Kernel Team <kernel-team@lists.ubuntu.com>",
+            "Debian Python Team <team+python@tracker.debian.org>"
+        )
+        for (vendor in maintainers) {
+            assertThat(EolVersionMatcher.hasDistroVendor(vendor)).describedAs(vendor).isTrue()
+            assertThat(matcher.matchComponent(nodeIndex, "node-arrify", vendor, "2.0.1-2", today, 12))
+                .describedAs(vendor).isNull()
+        }
+
+        // The actual Node.js runtime from its own vendor still reports.
+        val runtime = matcher.matchComponent(nodeIndex, "Node.js", "Node.js", "4.6.0", today, 12)
+        assertThat(runtime?.release?.cycle).isEqualTo("4")
+
+        // Red Hat and Amazon Linux are deliberately not vendor-blocked: their
+        // packages carry .el8/.amzn2 in the version instead, and blocking the
+        // vendor would make redhat-build-of-openjdk unmatchable.
+        assertThat(EolVersionMatcher.hasDistroVendor("Red Hat, Inc.")).isFalse()
+        assertThat(EolVersionMatcher.hasDistroRevision("2026c-1.el8_10")).isTrue()
+    }
+
+    @Test
+    @DisplayName("EVM-023: the .NET desktop runtime is not mistaken for Windows")
+    fun windowsDesktopRuntimeResolvesToDotnet() {
+        // Microsoft ships the .NET desktop runtime as "Microsoft Windows Desktop
+        // Runtime - 8.0.21". The shorter "microsoft windows" alias would otherwise
+        // win and report .NET 8 as Windows 8, end of life since 2016.
+        val windows = product(
+            14, "windows", "Microsoft Windows",
+            releases = listOf(release(141, "8", "2016-01-12"))
+        )
+        val mixed = EolVersionMatcher.Index.build(listOf(windows, dotnet))
+
+        val match = matcher.matchComponent(
+            mixed, "Microsoft Windows Desktop Runtime - 8.0.21 (x64)", "Microsoft Corporation",
+            "8.0.21.35325", today, 12
+        )
+        assertThat(match).isNotNull
+        assertThat(match!!.product.productKey).isEqualTo("dotnet")
+        assertThat(match.release.cycle).isEqualTo("8.0")
+    }
+
+    @Test
+    @DisplayName("EVM-021: a labelled cycle is never matched from a bare version")
+    fun labelledCyclesAreNotMatched() {
+        // Every `windows` cycle upstream carries an edition/channel label. segments()
+        // keeps only the leading numeric run, so "10-1507" collapses to [10] and the
+        // Windows Server 2022 build 10.0.20348.3451 prefix-matches it — reporting a
+        // supported server as end of life since 2017, decided by release list order.
+        val windowsClient = product(
+            12, "windows", "Microsoft Windows",
+            releases = listOf(
+                release(121, "10-1507", "2017-05-09"),
+                release(122, "11-24h2-e-lts", "2029-10-09"),
+                release(123, "10-22h2", "2025-10-14")
+            )
+        )
+        val labelledIndex = EolVersionMatcher.Index.build(listOf(windowsClient))
+
+        assertThat(matcher.matchComponent(labelledIndex, "Windows", "Microsoft", "10.0.20348.3451", today, 12))
+            .describedAs("Windows Server 2022 build must not match Windows 10 1507")
+            .isNull()
+        assertThat(matcher.matchComponent(labelledIndex, "Windows", "Microsoft", "10.0.17763.1728", today, 12))
+            .isNull()
+        assertThat(matcher.matchOs(labelledIndex, "Windows 10 Pro 22H2", today, 12)).isNull()
+
+        assertThat(EolVersionMatcher.isNumericCycle("10-1507")).isFalse()
+        assertThat(EolVersionMatcher.isNumericCycle("11-ltsc")).isFalse()
+        assertThat(EolVersionMatcher.isNumericCycle("2026c")).isFalse()
+
+        // Plain numeric cycles keep working — this must not become a blanket refusal.
+        for (cycle in listOf("8", "11", "22.04", "4.8", "2019", "1.0")) {
+            assertThat(EolVersionMatcher.isNumericCycle(cycle)).describedAs(cycle).isTrue()
+        }
+        assertThat(matcher.matchOs(index, "Ubuntu 20.04.6 LTS", today, 12)?.release?.cycle).isEqualTo("20.04")
+    }
+
+    @Test
+    @DisplayName("EVM-020: the OS path is unaffected by the component-path guards")
+    fun osPathIsUnchanged() {
+        // matchOs must keep working exactly as before: the distro guard lives on the
+        // component path only, and an OS version legitimately carries a distro build
+        // number ("Ubuntu 22.04.3"), which is not a packaging revision.
+        assertThat(matcher.matchOs(index, "Ubuntu 22.04.3 LTS", today, 12)?.release?.cycle).isEqualTo("22.04")
+        assertThat(matcher.matchOs(index, "Red Hat Enterprise Linux 8.6", today, 12)?.release?.cycle).isEqualTo("8")
+        assertThat(matcher.matchOs(index, "Windows Server 2019", today, 12)?.release?.cycle).isEqualTo("2019")
     }
 }
