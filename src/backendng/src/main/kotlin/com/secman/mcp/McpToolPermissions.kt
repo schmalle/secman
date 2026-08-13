@@ -128,7 +128,7 @@ object McpToolPermissions {
         putAll(table(
             setOf(ASSETS_READ) to listOf(
                 "get_assets", "get_asset_profile", "search_assets",
-                "get_all_assets_detail", "get_asset_scan_results", "get_asset_complete_profile",
+                "get_all_assets_detail", "get_asset_complete_profile",
                 "delete_all_assets", "delete_asset",
             ),
             setOf(ASSETS_WRITE) to listOf(
@@ -149,8 +149,12 @@ object McpToolPermissions {
                 "create_github_owner_email_mapping", "delete_github_owner_email_mapping",
                 "discover_github_owner_email_mappings",
             ),
+            // get_asset_scan_results moved here from ASSETS_READ so CALLING agrees with
+            // LISTING. While they disagreed the tool was invisible in tools/list to a
+            // caller holding only ASSETS_READ (a bare USER) yet fully callable by them —
+            // a permission a reviewer reading tools/list would never think to check.
             setOf(SCANS_READ) to listOf(
-                "get_scans", "get_scan_results", "search_products",
+                "get_scans", "get_scan_results", "search_products", "get_asset_scan_results",
             ),
             setOf(AUDIT_READ) to listOf(
                 "get_audit_log", "search_audit_logs",

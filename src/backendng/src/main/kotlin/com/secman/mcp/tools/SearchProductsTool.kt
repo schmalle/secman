@@ -72,22 +72,47 @@ class SearchProductsTool(
         try {
             val pageable = Pageable.from(page, pageSize)
 
-            // Query based on filters
+            // SECURITY (OWASP A01): the response names the assets running each product
+            // (id, name, IP) plus the ports it listens on, so it must be scoped to the
+            // delegated user's accessible assets. Unscoped, this tool reported the whole
+            // estate's software inventory to any caller holding SCANS_READ.
+            //
+            // null  -> ADMIN, universal access. empty -> no accessible assets.
+            val accessibleIds = context.getFilterableAssetIds()
+            if (accessibleIds != null && accessibleIds.isEmpty()) {
+                return McpToolResult.success(
+                    mapOf(
+                        "products" to emptyList<Map<String, Any?>>(),
+                        "total" to 0,
+                        "page" to page,
+                        "pageSize" to pageSize
+                    )
+                )
+            }
+
+            // Query based on filters, scoped in SQL
             val resultPage = when {
                 // Service name filter
                 serviceFilter != null -> {
-                    if (stateFilter == "all") {
-                        scanPortRepository.findByServiceContainingIgnoreCase(serviceFilter, pageable)
+                    if (accessibleIds != null) {
+                        scanPortRepository.findByScanResultAssetIdInAndServiceContainingIgnoreCase(
+                            accessibleIds, serviceFilter, pageable
+                        )
                     } else {
-                        // For specific state + service, we need to filter manually
-                        val allResults = scanPortRepository.findByServiceContainingIgnoreCase(serviceFilter, pageable)
-                        // Filter in-memory for state (not ideal but repository doesn't have combined method)
-                        allResults
+                        scanPortRepository.findByServiceContainingIgnoreCase(serviceFilter, pageable)
                     }
                 }
 
                 // State filter only (e.g., all open ports with services)
-                stateFilter != "all" -> scanPortRepository.findByStateAndServiceNotNull(stateFilter, pageable)
+                stateFilter != "all" -> {
+                    if (accessibleIds != null) {
+                        scanPortRepository.findByScanResultAssetIdInAndStateAndServiceNotNull(
+                            accessibleIds, stateFilter, pageable
+                        )
+                    } else {
+                        scanPortRepository.findByStateAndServiceNotNull(stateFilter, pageable)
+                    }
+                }
 
                 // No filters - return error, too broad
                 else -> return McpToolResult.error(

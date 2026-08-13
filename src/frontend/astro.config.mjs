@@ -37,6 +37,16 @@ export default defineConfig({
   },
   vite: {
     plugins: [suppressDevWarnings],
+    optimizeDeps: {
+      // exceljs is reached only through `await import('exceljs')` inside React
+      // islands, which the dev-time dep scan (entered from .astro pages) never
+      // walks into. The resolver still rewrites the specifier to
+      // node_modules/.vite/deps/exceljs.js, so without this the file is never
+      // prebundled and every Excel export dies with "Importing a module script
+      // failed". Production builds are unaffected — Rollup follows dynamic
+      // imports.
+      include: ["exceljs"],
+    },
     build: {
       // exceljs minified is ~916 KB intrinsically; raise the threshold so the
       // warning fires only on chunks that are actually fixable.

@@ -119,14 +119,40 @@ class GetAssetScanResultsTool(
 
             val pageable = Pageable.from(page, pageSize)
 
-            // Query based on filters
+            // SECURITY (OWASP A01): a port row exposes its asset's name, IP, open port,
+            // service and service version — infrastructure reconnaissance data. It must be
+            // filtered to the delegated user's accessible assets, exactly as every other
+            // asset-bearing MCP tool does. This tool previously read the whole ScanPort
+            // table, so any caller holding the coarse permission saw the entire estate.
+            //
+            // null  -> ADMIN, universal access, no filter needed.
+            // empty -> delegated user with no accessible assets: nothing to return.
+            val accessibleIds = context.getFilterableAssetIds()
+            if (accessibleIds != null && accessibleIds.isEmpty()) {
+                return McpToolResult.success(
+                    mapOf(
+                        "scanResults" to emptyList<Map<String, Any?>>(),
+                        "total" to 0,
+                        "page" to page,
+                        "pageSize" to pageSize,
+                        "totalPages" to 0,
+                        "hasMore" to false
+                    )
+                )
+            }
+
+            // Query based on filters, scoped in SQL
             val resultPage = when {
-                serviceFilter != null -> {
+                accessibleIds != null && serviceFilter != null ->
+                    scanPortRepository.findByScanResultAssetIdInAndServiceContainingIgnoreCase(
+                        accessibleIds, serviceFilter, pageable
+                    )
+                accessibleIds != null ->
+                    scanPortRepository.findByScanResultAssetIdIn(accessibleIds, pageable)
+                serviceFilter != null ->
                     scanPortRepository.findByServiceContainingIgnoreCase(serviceFilter, pageable)
-                }
-                else -> {
+                else ->
                     scanPortRepository.findAll(pageable)
-                }
             }
 
             // Apply filters (post-query filtering for simplicity)

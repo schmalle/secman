@@ -20,6 +20,7 @@ import { getRequestById, cancelRequest, deleteRequest, type VulnerabilityExcepti
 import ExceptionStatusBadge from './ExceptionStatusBadge';
 import { formatServerDate, formatServerDateTime } from '../utils/dateUtils';
 import ExceptionRequestScopeBadge from './ExceptionRequestScopeBadge';
+import { formatExceptionRequestSubject } from '../services/exceptionRequestSubjectFormatter';
 
 interface ExceptionRequestDetailModalProps {
     isOpen: boolean;
@@ -122,6 +123,11 @@ const ExceptionRequestDetailModal: React.FC<ExceptionRequestDetailModalProps> = 
         return null;
     }
 
+    // WHAT is excepted. Feature 196 moved this out of the vulnerability association, so
+    // `vulnerabilityCve` alone is null for every rule-style request (PRODUCT, ALL_VULNS,
+    // multi-CVE) and used to render as the literal string "Unknown".
+    const subjectDisplay = request ? formatExceptionRequestSubject(request) : null;
+
     return (
         <>
             {/* Backdrop */}
@@ -196,14 +202,23 @@ const ExceptionRequestDetailModal: React.FC<ExceptionRequestDetailModalProps> = 
                                         <h6 className="text-muted mb-3">Vulnerability Information</h6>
                                         <div className="row">
                                             <div className="col-md-6 mb-2">
-                                                <strong>CVE ID:</strong>
+                                                <strong>{subjectDisplay!.label}:</strong>
                                                 <br />
-                                                <code>{request.vulnerabilityCve || 'Unknown'}</code>
+                                                {subjectDisplay!.isCode ? (
+                                                    <code title={subjectDisplay!.title}>{subjectDisplay!.value}</code>
+                                                ) : (
+                                                    <span
+                                                        className={subjectDisplay!.muted ? 'text-muted' : undefined}
+                                                        title={subjectDisplay!.title}
+                                                    >
+                                                        {subjectDisplay!.value}
+                                                    </span>
+                                                )}
                                             </div>
                                             <div className="col-md-6 mb-2">
                                                 <strong>Asset:</strong>
                                                 <br />
-                                                {request.assetName}
+                                                {request.assetName ?? <span className="text-muted">N/A</span>}
                                                 {request.assetIp && (
                                                     <span className="text-muted ms-2">({request.assetIp})</span>
                                                 )}

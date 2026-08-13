@@ -83,12 +83,51 @@ class GetScansTool(
             val startDate = startDateStr?.let { LocalDateTime.parse(it, DateTimeFormatter.ISO_DATE_TIME) }
             val endDate = endDateStr?.let { LocalDateTime.parse(it, DateTimeFormatter.ISO_DATE_TIME) }
 
-            // Query based on filters
+            // SECURITY (OWASP A01): a scan row names the uploader and the original scan
+            // filename, and its existence discloses that a scan of some host took place.
+            // A caller may only see scans that discovered at least one asset they can
+            // access. Unscoped, this listed every scan ever uploaded, by anyone.
+            //
+            // null  -> ADMIN, universal access. empty -> no accessible assets.
+            val accessibleIds = context.getFilterableAssetIds()
+            if (accessibleIds != null && accessibleIds.isEmpty()) {
+                return McpToolResult.success(
+                    mapOf(
+                        "scans" to emptyList<Map<String, Any?>>(),
+                        "total" to 0,
+                        "page" to page,
+                        "pageSize" to pageSize,
+                        "totalPages" to 0
+                    )
+                )
+            }
+
+            // Query based on filters, scoped in SQL
             val resultPage = when {
-                startDate != null && endDate != null -> scanRepository.findByScanDateBetween(startDate, endDate, pageable)
-                scanTypeFilter != null -> scanRepository.findByScanType(scanTypeFilter, pageable)
-                uploadedByFilter != null -> scanRepository.findByUploadedByOrderByScanDateDesc(uploadedByFilter, pageable)
-                else -> scanRepository.findAllOrderByScanDateDesc(pageable)
+                startDate != null && endDate != null ->
+                    if (accessibleIds != null) {
+                        scanRepository.findAccessibleScansByScanDateBetween(accessibleIds, startDate, endDate, pageable)
+                    } else {
+                        scanRepository.findByScanDateBetween(startDate, endDate, pageable)
+                    }
+                scanTypeFilter != null ->
+                    if (accessibleIds != null) {
+                        scanRepository.findAccessibleScansByScanType(accessibleIds, scanTypeFilter, pageable)
+                    } else {
+                        scanRepository.findByScanType(scanTypeFilter, pageable)
+                    }
+                uploadedByFilter != null ->
+                    if (accessibleIds != null) {
+                        scanRepository.findAccessibleScansByUploadedBy(accessibleIds, uploadedByFilter, pageable)
+                    } else {
+                        scanRepository.findByUploadedByOrderByScanDateDesc(uploadedByFilter, pageable)
+                    }
+                else ->
+                    if (accessibleIds != null) {
+                        scanRepository.findAccessibleScans(accessibleIds, pageable)
+                    } else {
+                        scanRepository.findAllOrderByScanDateDesc(pageable)
+                    }
             }
 
             // Check total results limit

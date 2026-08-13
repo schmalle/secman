@@ -34,4 +34,40 @@ interface ScanPortRepository : JpaRepository<ScanPort, Long> {
      * Related to: Feature 006 (MCP Tools for Security Data)
      */
     fun findByStateAndServiceNotNull(state: String, pageable: Pageable): Page<ScanPort>
+
+    // Access-controlled variants (OWASP A01)
+    //
+    // The unscoped methods above answer "every port in the estate" and are correct only
+    // for an ADMIN caller. Every other caller must go through one of these, binding the
+    // delegated user's accessible asset ids. The filter runs in SQL on purpose: reading
+    // the unscoped page and dropping rows in Kotlin would still leak the total count and
+    // return short pages, and cost would grow with the table rather than the page.
+    //
+    // ScanPort -> scanResult -> asset is the only path from a port to its owning asset.
+
+    /**
+     * Find ports on the caller's accessible assets.
+     * Used for: MCP get_asset_scan_results with no service filter.
+     */
+    fun findByScanResultAssetIdIn(assetIds: Collection<Long>, pageable: Pageable): Page<ScanPort>
+
+    /**
+     * Find ports on the caller's accessible assets, filtered by service name.
+     * Used for: MCP get_asset_scan_results / search_products with a service filter.
+     */
+    fun findByScanResultAssetIdInAndServiceContainingIgnoreCase(
+        assetIds: Collection<Long>,
+        service: String,
+        pageable: Pageable
+    ): Page<ScanPort>
+
+    /**
+     * Find ports on the caller's accessible assets, filtered by state, service present.
+     * Used for: MCP search_products with a state filter only.
+     */
+    fun findByScanResultAssetIdInAndStateAndServiceNotNull(
+        assetIds: Collection<Long>,
+        state: String,
+        pageable: Pageable
+    ): Page<ScanPort>
 }

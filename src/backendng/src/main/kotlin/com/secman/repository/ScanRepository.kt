@@ -1,6 +1,7 @@
 package com.secman.repository
 
 import com.secman.domain.Scan
+import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
 import io.micronaut.data.model.Page
@@ -52,4 +53,91 @@ interface ScanRepository : JpaRepository<Scan, Long> {
     // Workgroup-Based Access Control - Feature 008
     // Note: Scan filtering requires service-level logic since uploadedBy is a username String,
     // not a User FK. Methods moved to ScanFilteringService.
+
+    // Access-controlled variants (OWASP A01)
+    //
+    // A scan is visible to a caller when it discovered at least one asset that caller can
+    // access. DISTINCT is required, not cosmetic: a scan normally produces many ScanResult
+    // rows and the join would otherwise repeat the scan once per accessible host, which
+    // corrupts both the page contents and the total. Filtering in SQL rather than in
+    // Kotlin keeps paging honest and cost proportional to the page, not to the table.
+
+    @Query(
+        value = """
+            SELECT DISTINCT s FROM Scan s
+            JOIN s.results r
+            WHERE r.asset.id IN :accessibleAssetIds
+            ORDER BY s.scanDate DESC
+        """,
+        countQuery = """
+            SELECT COUNT(DISTINCT s.id) FROM Scan s
+            JOIN s.results r
+            WHERE r.asset.id IN :accessibleAssetIds
+        """
+    )
+    fun findAccessibleScans(accessibleAssetIds: Collection<Long>, pageable: Pageable): Page<Scan>
+
+    @Query(
+        value = """
+            SELECT DISTINCT s FROM Scan s
+            JOIN s.results r
+            WHERE r.asset.id IN :accessibleAssetIds
+            AND s.scanType = :scanType
+            ORDER BY s.scanDate DESC
+        """,
+        countQuery = """
+            SELECT COUNT(DISTINCT s.id) FROM Scan s
+            JOIN s.results r
+            WHERE r.asset.id IN :accessibleAssetIds
+            AND s.scanType = :scanType
+        """
+    )
+    fun findAccessibleScansByScanType(
+        accessibleAssetIds: Collection<Long>,
+        scanType: String,
+        pageable: Pageable
+    ): Page<Scan>
+
+    @Query(
+        value = """
+            SELECT DISTINCT s FROM Scan s
+            JOIN s.results r
+            WHERE r.asset.id IN :accessibleAssetIds
+            AND s.uploadedBy = :uploadedBy
+            ORDER BY s.scanDate DESC
+        """,
+        countQuery = """
+            SELECT COUNT(DISTINCT s.id) FROM Scan s
+            JOIN s.results r
+            WHERE r.asset.id IN :accessibleAssetIds
+            AND s.uploadedBy = :uploadedBy
+        """
+    )
+    fun findAccessibleScansByUploadedBy(
+        accessibleAssetIds: Collection<Long>,
+        uploadedBy: String,
+        pageable: Pageable
+    ): Page<Scan>
+
+    @Query(
+        value = """
+            SELECT DISTINCT s FROM Scan s
+            JOIN s.results r
+            WHERE r.asset.id IN :accessibleAssetIds
+            AND s.scanDate BETWEEN :start AND :end
+            ORDER BY s.scanDate DESC
+        """,
+        countQuery = """
+            SELECT COUNT(DISTINCT s.id) FROM Scan s
+            JOIN s.results r
+            WHERE r.asset.id IN :accessibleAssetIds
+            AND s.scanDate BETWEEN :start AND :end
+        """
+    )
+    fun findAccessibleScansByScanDateBetween(
+        accessibleAssetIds: Collection<Long>,
+        start: LocalDateTime,
+        end: LocalDateTime,
+        pageable: Pageable
+    ): Page<Scan>
 }
