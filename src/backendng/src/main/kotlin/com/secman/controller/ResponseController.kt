@@ -108,6 +108,11 @@ open class ResponseController(
     }
 
     @Get("/assessment/{token:[a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9]}")
+    // Capability URL: the recipient of the assessment-request email holds no SecMan account, so
+    // this route must be reachable without login. The 32-hex token IS the authorization — see
+    // AccountOnboardingPublicController for the identical pattern. Explicit per A01: a public
+    // endpoint is a declared exception, never an omission.
+    @Secured(SecurityRule.IS_ANONYMOUS)
     @Transactional(readOnly = true)
     open fun getAssessmentByToken(token: String): HttpResponse<*> {
         return try {
@@ -153,6 +158,8 @@ open class ResponseController(
     }
 
     @Post("/{token}/save")
+    // Same capability-URL rationale as getAssessmentByToken above.
+    @Secured(SecurityRule.IS_ANONYMOUS)
     @Transactional
     open fun saveResponse(token: String, @Valid @Body request: SaveResponseRequest): HttpResponse<*> {
         return try {
@@ -203,6 +210,8 @@ open class ResponseController(
     }
 
     @Post("/{token}/submit")
+    // Same capability-URL rationale as getAssessmentByToken above.
+    @Secured(SecurityRule.IS_ANONYMOUS)
     @Transactional
     open fun submitAssessment(token: String, @Valid @Body request: SubmitAssessmentRequest): HttpResponse<*> {
         return try {
