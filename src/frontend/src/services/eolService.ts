@@ -154,7 +154,23 @@ export async function getEolCatalogStatus(): Promise<EolCatalogStatus | null> {
   return response.json();
 }
 
-/** ADMIN only. Kicks off the catalogue download plus the matching scan. */
+const SYNC_POLL_INTERVAL_MS = 5000;
+
+/** Matches the backend's own stale-run threshold — past it, waiting cannot help. */
+const SYNC_MAX_WAIT_MS = 60 * 60 * 1000;
+
+const SYNC_STATUS_RUNNING = 'RUNNING';
+
+/**
+ * ADMIN only. Kicks off the catalogue download plus the matching scan and
+ * resolves with the finished counts.
+ *
+ * The endpoint answers 202 as soon as the run is recorded and does the work on
+ * a background thread: a full run takes minutes, which is longer than the 60s
+ * read timeout Apache and nginx both apply by default, so a synchronous reply
+ * was being severed by the proxy as a 504. Polling here keeps that detail out
+ * of the caller — it still awaits one promise and gets the terminal result.
+ */
 export async function triggerEolSync(scanOnly = false): Promise<Record<string, unknown>> {
   const response = await authenticatedPost('/api/eol/catalog/sync', {
     products: [],
@@ -164,5 +180,22 @@ export async function triggerEolSync(scanOnly = false): Promise<Record<string, u
   if (!response.ok) {
     throw new Error(`EOL sync failed: ${response.status}`);
   }
-  return response.json();
+
+  let latest: Record<string, unknown> = await response.json();
+  const runId = String(latest.runId ?? '');
+  if (!runId) return latest;
+
+  const deadline = Date.now() + SYNC_MAX_WAIT_MS;
+  while (String(latest.status ?? '') === SYNC_STATUS_RUNNING) {
+    if (Date.now() > deadline) {
+      throw new Error(`EOL sync is still running after 60 minutes (run ${runId})`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, SYNC_POLL_INTERVAL_MS));
+    const poll = await authenticatedGet(`/api/eol/catalog/sync/${encodeURIComponent(runId)}`);
+    if (!poll.ok) {
+      throw new Error(`EOL sync status check failed: ${poll.status}`);
+    }
+    latest = await poll.json();
+  }
+  return latest;
 }

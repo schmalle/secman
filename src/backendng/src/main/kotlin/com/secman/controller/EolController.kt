@@ -98,8 +98,14 @@ open class EolController(
     // ------------------------------------------------------------------- admin
 
     /**
-     * Download the EOL catalogue from the configured source and re-match the
-     * inventory. Backs CLI `secman eol-sync`.
+     * Start an EOL catalogue download plus matching scan. Backs CLI
+     * `secman eol-sync`.
+     *
+     * Returns **202 Accepted** with the run's handle as soon as the run is
+     * recorded; the work continues on a background thread. A full run takes
+     * minutes, which is longer than the 60s read timeout both Apache and nginx
+     * apply by default, so answering synchronously produced a 504 at the proxy
+     * while the work completed unseen. Poll [syncStatus] for the outcome.
      */
     @Post("/catalog/sync")
     @Secured("ADMIN")
@@ -122,12 +128,38 @@ open class EolController(
             return HttpResponse.badRequest(mapOf("error" to "horizonMonths must be between 1 and 120"))
         }
         return try {
-            HttpResponse.ok(eolAdminService.runSync(request, authentication.name))
+            HttpResponse.accepted<Any>().body(eolAdminService.startSync(request, authentication.name))
         } catch (e: Exception) {
             // Generic message to the client, detail to the server log (§A05).
             logger.error("EOL catalogue sync failed", e)
             HttpResponse.serverError(mapOf("error" to "EOL catalogue sync failed"))
         }
+    }
+
+    /**
+     * Current state of one sync run, for polling after [sync] returns 202.
+     *
+     * ADMIN only, matching the verb that creates the run: the response carries
+     * estate-wide counts and the triggering actor, which is not user-scoped
+     * data. Every EOL sync run is visible to every ADMIN by design — this is an
+     * admin audit record, not an owner-scoped entity, so there is no per-row
+     * ownership check to apply here.
+     *
+     * An unknown *and* a malformed handle both return the same generic 404, so
+     * the endpoint is not an existence oracle. Validating the shape first also
+     * keeps an attacker-supplied path value out of the log entirely, rather
+     * than relying on sanitizing it at each call site (§A09 log forging).
+     */
+    @Get("/catalog/sync/{runId}")
+    @Secured("ADMIN")
+    @Produces(MediaType.APPLICATION_JSON)
+    open fun syncStatus(@PathVariable runId: String): HttpResponse<*> {
+        if (!RUN_ID_PATTERN.matches(runId)) {
+            return HttpResponse.notFound(mapOf("error" to "Unknown sync run"))
+        }
+        val run = eolAdminService.findRun(runId)
+            ?: return HttpResponse.notFound(mapOf("error" to "Unknown sync run"))
+        return HttpResponse.ok(run)
     }
 
     /**
@@ -169,5 +201,12 @@ open class EolController(
 
     companion object {
         private const val MAX_EXPLICIT_PRODUCTS = 200
+
+        /**
+         * Run handles are server-generated UUIDs. Anything else is rejected
+         * before it reaches the database or a log line.
+         */
+        private val RUN_ID_PATTERN =
+            Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
     }
 }

@@ -110,8 +110,37 @@ class EolSyncCommand : Runnable {
                 "horizonMonths" to horizon
             )
 
-            val result = cliHttpClient.postMap("$effectiveUrl/api/eol/catalog/sync", requestBody, authToken)
+            val accepted = cliHttpClient.postMap("$effectiveUrl/api/eol/catalog/sync", requestBody, authToken)
                 ?: throw RuntimeException("EOL sync failed - no response from server")
+
+            val runId = accepted["runId"]?.toString()
+                ?: throw RuntimeException("EOL sync failed - server returned no run id")
+            println("Run id:    $runId")
+            println()
+
+            // The server answers 202 the moment the run is recorded and does the
+            // work on a background thread, so a multi-minute sync no longer holds
+            // an HTTP request open past the reverse proxy's read timeout (both
+            // Apache and nginx default to 60s, which this run exceeds). Poll the
+            // run until it reaches a terminal status.
+            var result: Map<*, *> = accepted
+            var waitedSeconds = 0L
+            while (result["status"]?.toString() == STATUS_RUNNING) {
+                if (waitedSeconds >= MAX_WAIT_SECONDS) {
+                    System.err.println(
+                        "Error: run $runId is still going after ${MAX_WAIT_SECONDS / 60} minutes - no longer waiting."
+                    )
+                    System.err.println("It continues on the server; re-check it with the run id above.")
+                    System.exit(1)
+                    return
+                }
+                Thread.sleep(POLL_INTERVAL_SECONDS * 1000)
+                waitedSeconds += POLL_INTERVAL_SECONDS
+                if (verbose) println("   ... still running (${waitedSeconds}s elapsed)")
+                result = cliHttpClient.getMap("$effectiveUrl/api/eol/catalog/sync/$runId", authToken)
+                    ?: throw RuntimeException("EOL sync failed - could not read status of run $runId")
+            }
+            if (verbose) println()
 
             val status = result["status"]?.toString() ?: "UNKNOWN"
             val productsSynced = intOf(result["productsSynced"])
@@ -175,5 +204,18 @@ class EolSyncCommand : Runnable {
     private fun getEffectiveBackendUrl(): String {
         val url = backendUrl ?: System.getenv("SECMAN_HOST") ?: System.getenv("SECMAN_BACKEND_URL") ?: "http://localhost:8080"
         return if (url.startsWith("http://") || url.startsWith("https://")) url else "https://$url"
+    }
+
+    companion object {
+        /** The one non-terminal status a run can report. */
+        const val STATUS_RUNNING = "RUNNING"
+
+        private const val POLL_INTERVAL_SECONDS = 5L
+
+        /**
+         * Matches the server's own stale-run threshold: past this point the
+         * backend reclaims the run itself, so waiting longer cannot help.
+         */
+        private const val MAX_WAIT_SECONDS = 3600L
     }
 }
