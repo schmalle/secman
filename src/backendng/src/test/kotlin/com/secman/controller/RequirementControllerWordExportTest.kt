@@ -13,13 +13,18 @@ import com.secman.repository.UseCaseRepository
 import com.secman.service.InputValidationService
 import com.secman.service.ReleaseRequirementScopeService
 import com.secman.service.RequirementExportTemplateValidationService
+import com.secman.domain.MissingPlaceholderBehavior
+import com.secman.domain.RequirementExportTemplateMode
 import com.secman.service.RequirementIdService
 import com.secman.service.RequirementService
 import com.secman.service.TranslationService
+import io.micronaut.http.multipart.CompletedFileUpload
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.apache.poi.xwpf.usermodel.XWPFDocument
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayOutputStream
 import java.time.LocalDate
@@ -48,7 +53,8 @@ class RequirementControllerWordExportTest {
         exportTemplateRepository = mockk<RequirementExportTemplateRepository>(relaxed = true),
         exportTemplateUsageRepository = mockk<RequirementExportTemplateUsageRepository>(relaxed = true),
         exportTemplateValidationService = mockk<RequirementExportTemplateValidationService>(relaxed = true),
-        releaseRequirementScopeService = mockk<ReleaseRequirementScopeService>(relaxed = true)
+        releaseRequirementScopeService = mockk<ReleaseRequirementScopeService>(relaxed = true),
+        maxAdHocTemplateSizeBytes = 5_242_880L
     )
     private val publicController = PublicRequirementDownloadController(
         requirementRepository = mockk<RequirementRepository>(relaxed = true),
@@ -343,6 +349,44 @@ class RequirementControllerWordExportTest {
         assertThat(document.tables).describedAs("the template's release table must survive").isNotEmpty()
         assertThat(document.paragraphs.map { it.text }).anyMatch { it.contains("Appendix") }
         assertThat(document.paragraphs.map { it.text }).noneMatch { it.contains("\${requirements}") }
+    }
+
+    @Test
+    fun `an oversized ad-hoc template is rejected before its bytes are materialised`() {
+        // Regression guard for the HIGH finding: RequirementExportTemplateController's own
+        // upload/validate endpoints reject on the declared part size via rejectOversized()
+        // before touching .bytes; this path (ad-hoc templates on the export endpoints) must do
+        // the same rather than reading a 100 MB multipart body into heap first.
+        val oversized = mockk<CompletedFileUpload> {
+            every { size } returns 5_242_880L + 1
+        }
+        // Sanity: the fixture really is oversized, mirroring resolveTemplate's own
+        // `adHocTemplate.size > maxAdHocTemplateSizeBytes` guard.
+        check(oversized.size > 5_242_880L)
+
+        assertThatThrownBy { resolveAdHocTemplate(oversized) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("exceeds the maximum allowed file size")
+
+        verify(exactly = 0) { oversized.bytes }
+    }
+
+    private fun resolveAdHocTemplate(file: CompletedFileUpload): Any? {
+        val method = RequirementController::class.java.getDeclaredMethod(
+            "resolveTemplate",
+            String::class.java,
+            java.lang.Long::class.java,
+            CompletedFileUpload::class.java,
+            MissingPlaceholderBehavior::class.java
+        )
+        method.isAccessible = true
+        return try {
+            method.invoke(
+                controller, RequirementExportTemplateMode.ADHOC.name, null, file, MissingPlaceholderBehavior.APPEND
+            )
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            throw e.targetException
+        }
     }
 
     private fun requirement(id: Long, internalId: String, shortreq: String): Requirement =

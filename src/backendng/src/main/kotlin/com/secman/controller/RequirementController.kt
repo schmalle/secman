@@ -25,6 +25,7 @@ import com.secman.service.RequirementService
 import com.secman.service.RequirementIdService
 import com.secman.service.RequirementExportTemplateValidationService
 import com.secman.service.ReleaseRequirementScopeService
+import io.micronaut.context.annotation.Value
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.data.model.Pageable
 import io.micronaut.http.HttpResponse
@@ -74,7 +75,9 @@ open class RequirementController(
     private val exportTemplateRepository: RequirementExportTemplateRepository,
     private val exportTemplateUsageRepository: RequirementExportTemplateUsageRepository,
     private val exportTemplateValidationService: RequirementExportTemplateValidationService,
-    private val releaseRequirementScopeService: ReleaseRequirementScopeService
+    private val releaseRequirementScopeService: ReleaseRequirementScopeService,
+    @Value("\${secman.requirement-export-templates.max-file-size-bytes:5242880}")
+    private val maxAdHocTemplateSizeBytes: Long
 ) {
     private val log = org.slf4j.LoggerFactory.getLogger(RequirementController::class.java)
 
@@ -780,6 +783,18 @@ open class RequirementController(
             }
             RequirementExportTemplateMode.ADHOC -> {
                 if (adHocTemplate == null) return null
+                // Reject on the declared part size before .bytes materialises it — the same
+                // rejectOversized() guard RequirementExportTemplateController applies to its
+                // own upload/validate endpoints, reused here rather than re-implemented. Without
+                // it the effective bound is micronaut.server.multipart.max-file-size (100 MB,
+                // kept large for the XLSX importers), not the 5 MB this feature configures.
+                if (adHocTemplate.size > maxAdHocTemplateSizeBytes) {
+                    log.warn(
+                        "Rejected ad-hoc requirement export template upload of {} bytes, above the {} byte limit",
+                        adHocTemplate.size, maxAdHocTemplateSizeBytes
+                    )
+                    throw IllegalArgumentException("Template exceeds the maximum allowed file size.")
+                }
                 val bytes = adHocTemplate.bytes
                 val report = exportTemplateValidationService.validate(
                     bytes = bytes,

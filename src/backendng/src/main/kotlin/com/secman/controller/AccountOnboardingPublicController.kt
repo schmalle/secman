@@ -10,6 +10,7 @@ import com.secman.dto.SubmitAnswersResponse
 import com.secman.repository.AccountOnboardingQuestionRepository
 import com.secman.service.AccountOnboardingRateLimiter
 import com.secman.service.AccountOnboardingService
+import com.secman.service.TrustedProxyResolver
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
@@ -59,7 +60,8 @@ import java.time.format.DateTimeFormatter
 open class AccountOnboardingPublicController(
     private val onboardingService: AccountOnboardingService,
     private val questionRepository: AccountOnboardingQuestionRepository,
-    private val rateLimiter: AccountOnboardingRateLimiter
+    private val rateLimiter: AccountOnboardingRateLimiter,
+    private val trustedProxyResolver: TrustedProxyResolver
 ) {
     private val log = LoggerFactory.getLogger(AccountOnboardingPublicController::class.java)
 
@@ -213,16 +215,16 @@ open class AccountOnboardingPublicController(
     /**
      * What the limiter counts against.
      *
-     * `X-Forwarded-For` is trusted only for its first hop and only because SecMan is deployed
-     * behind nginx, which overwrites it. It is spoofable if the app is ever exposed directly —
-     * hence the fallback to the socket address, and hence keying on it *only* for rate
-     * limiting, never for authorization.
+     * `X-Forwarded-For` is trusted only when the immediate TCP peer is a configured trusted
+     * proxy (`secman.account-onboarding.trusted-proxy-cidrs`, loopback by default — see
+     * [TrustedProxyResolver]), and even then only its right-most, non-proxy hop is used —
+     * never the first, since that is exactly the entry an unauthenticated caller controls.
+     * Without a trusted peer, the header is ignored entirely and the socket address is used,
+     * so this is spoofable only if a caller can reach the app directly, bypassing the proxy.
+     * Used *only* for rate limiting, never for authorization.
      */
     private fun clientKey(request: HttpRequest<*>): String {
-        val forwarded = request.headers.get("X-Forwarded-For")
-            ?.substringBefore(',')
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() && it.length <= 64 }
-        return forwarded ?: request.remoteAddress?.address?.hostAddress ?: "unknown"
+        val forwarded = request.headers.get("X-Forwarded-For")?.takeIf { it.length <= 256 }
+        return trustedProxyResolver.resolveClientAddress(request.remoteAddress?.address, forwarded)
     }
 }
