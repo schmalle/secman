@@ -24,6 +24,7 @@ import com.secman.service.InputValidationService
 import com.secman.service.RequirementService
 import com.secman.service.RequirementIdService
 import com.secman.service.RequirementExportTemplateValidationService
+import com.secman.service.RequirementRichTextRenderer
 import com.secman.service.ReleaseRequirementScopeService
 import io.micronaut.context.annotation.Value
 import io.micronaut.core.annotation.Nullable
@@ -237,10 +238,17 @@ open class RequirementController(
         try {
             val requirement = Requirement(
                 shortreq = inputValidationService.sanitizeForDisplay(request.shortreq),
-                details = request.details?.let { inputValidationService.sanitizeForDisplay(it) },
+                // details/example/motivation are rich text authored via the HtmlEditor component
+                // and rendered via RichContent + DOMPurify on read, per the sanitize-at-render
+                // pattern (see CLAUDE.md §A03). sanitizeForDisplay() strips all HTML tags with no
+                // regard for block/list boundaries, which destroyed paragraph and bullet-list
+                // structure on every newly created requirement; validateDescription() above
+                // already rejects script/iframe/on*=/javascript: content, and update() (below)
+                // already stores these fields unstripped, so create() is aligned with that.
+                details = request.details,
                 language = request.language,
-                example = request.example?.let { inputValidationService.sanitizeForDisplay(it) },
-                motivation = request.motivation?.let { inputValidationService.sanitizeForDisplay(it) },
+                example = request.example,
+                motivation = request.motivation,
                 usecase = request.usecase?.let { inputValidationService.sanitizeForDisplay(it) },
                 norm = request.norm?.let { inputValidationService.sanitizeForDisplay(it) },
                 chapter = request.chapter?.let { inputValidationService.sanitizeForDisplay(it) }
@@ -1052,16 +1060,14 @@ open class RequirementController(
                 reqHeaderRun.setText("REQ-$requirementNumber: ${requirement.shortreq}")
                 reqHeaderRun.fontSize = 12
                 reqHeaderRun.isBold = true
-                requirement.details?.let { newParagraph().createRun().setText(it) }
+                requirement.details?.let { RequirementRichTextRenderer.write(it, newParagraph) }
                 requirement.motivation?.let {
-                    val paragraph = newParagraph()
-                    paragraph.createRun().apply { setText("Motivation: "); isBold = true }
-                    paragraph.createRun().setText(it)
+                    newParagraph().createRun().apply { setText("Motivation:"); isBold = true }
+                    RequirementRichTextRenderer.write(it, newParagraph)
                 }
                 requirement.example?.let {
-                    val paragraph = newParagraph()
-                    paragraph.createRun().apply { setText("Example: "); isBold = true }
-                    paragraph.createRun().setText(it)
+                    newParagraph().createRun().apply { setText("Example:"); isBold = true }
+                    RequirementRichTextRenderer.write(it, newParagraph)
                 }
                 requirement.norm?.let {
                     val paragraph = newParagraph()
@@ -1162,29 +1168,19 @@ open class RequirementController(
                 
                 // Details - no label, content follows directly after header
                 requirement.details?.let { details ->
-                    val detailsParagraph = document.createParagraph()
-                    val detailsRun = detailsParagraph.createRun()
-                    detailsRun.setText(details)
+                    RequirementRichTextRenderer.write(details) { document.createParagraph() }
                 }
 
                 // Motivation - label bold, content regular
                 requirement.motivation?.let { motivation ->
-                    val motivationParagraph = document.createParagraph()
-                    val motivationLabelRun = motivationParagraph.createRun()
-                    motivationLabelRun.setText("Motivation: ")
-                    motivationLabelRun.isBold = true
-                    val motivationValueRun = motivationParagraph.createRun()
-                    motivationValueRun.setText(motivation)
+                    document.createParagraph().createRun().apply { setText("Motivation:"); isBold = true }
+                    RequirementRichTextRenderer.write(motivation) { document.createParagraph() }
                 }
 
                 // Example - label bold, content regular
                 requirement.example?.let { example ->
-                    val exampleParagraph = document.createParagraph()
-                    val exampleLabelRun = exampleParagraph.createRun()
-                    exampleLabelRun.setText("Example: ")
-                    exampleLabelRun.isBold = true
-                    val exampleValueRun = exampleParagraph.createRun()
-                    exampleValueRun.setText(example)
+                    document.createParagraph().createRun().apply { setText("Example:"); isBold = true }
+                    RequirementRichTextRenderer.write(example) { document.createParagraph() }
                 }
 
                 // Norm reference - label bold, content regular
@@ -1541,41 +1537,23 @@ open class RequirementController(
 
                 // Details (use batch-translated value)
                 if (!requirement.details.isNullOrBlank()) {
-                    val detailsParagraph = document.createParagraph()
-                    val detailsRun = detailsParagraph.createRun()
-                    detailsRun.setText("Details: ")
-                    detailsRun.isBold = true
-
+                    document.createParagraph().createRun().apply { setText("Details:"); isBold = true }
                     val detailsTranslated = translationMap[requirement.details] ?: requirement.details!!
-
-                    val detailsValueRun = detailsParagraph.createRun()
-                    detailsValueRun.setText(detailsTranslated)
+                    RequirementRichTextRenderer.write(detailsTranslated) { document.createParagraph() }
                 }
 
                 // Motivation (use batch-translated value)
                 if (!requirement.motivation.isNullOrBlank()) {
-                    val motivationParagraph = document.createParagraph()
-                    val motivationRun = motivationParagraph.createRun()
-                    motivationRun.setText("Motivation: ")
-                    motivationRun.isBold = true
-
+                    document.createParagraph().createRun().apply { setText("Motivation:"); isBold = true }
                     val motivationTranslated = translationMap[requirement.motivation] ?: requirement.motivation!!
-
-                    val motivationValueRun = motivationParagraph.createRun()
-                    motivationValueRun.setText(motivationTranslated)
+                    RequirementRichTextRenderer.write(motivationTranslated) { document.createParagraph() }
                 }
 
                 // Example (use batch-translated value)
                 if (!requirement.example.isNullOrBlank()) {
-                    val exampleParagraph = document.createParagraph()
-                    val exampleRun = exampleParagraph.createRun()
-                    exampleRun.setText("Example: ")
-                    exampleRun.isBold = true
-
+                    document.createParagraph().createRun().apply { setText("Example:"); isBold = true }
                     val exampleTranslated = translationMap[requirement.example] ?: requirement.example!!
-
-                    val exampleValueRun = exampleParagraph.createRun()
-                    exampleValueRun.setText(exampleTranslated)
+                    RequirementRichTextRenderer.write(exampleTranslated) { document.createParagraph() }
                 }
 
                 // Use cases (use batch-translated label)
