@@ -3,6 +3,7 @@ package com.secman.controller
 import com.secman.domain.Requirement
 import com.secman.repository.RequirementRepository
 import com.secman.repository.UseCaseRepository
+import com.secman.service.RequirementRichTextRenderer
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.MediaType
@@ -170,29 +171,19 @@ open class PublicRequirementDownloadController(
 
                 // Details
                 requirement.details?.let { details ->
-                    val detailsParagraph = document.createParagraph()
-                    val detailsRun = detailsParagraph.createRun()
-                    detailsRun.setText(details)
+                    RequirementRichTextRenderer.write(details) { document.createParagraph() }
                 }
 
                 // Motivation
                 requirement.motivation?.let { motivation ->
-                    val motivationParagraph = document.createParagraph()
-                    val motivationLabelRun = motivationParagraph.createRun()
-                    motivationLabelRun.setText("Motivation: ")
-                    motivationLabelRun.isBold = true
-                    val motivationValueRun = motivationParagraph.createRun()
-                    motivationValueRun.setText(motivation)
+                    document.createParagraph().createRun().apply { setText("Motivation:"); isBold = true }
+                    RequirementRichTextRenderer.write(motivation) { document.createParagraph() }
                 }
 
                 // Example
                 requirement.example?.let { example ->
-                    val exampleParagraph = document.createParagraph()
-                    val exampleLabelRun = exampleParagraph.createRun()
-                    exampleLabelRun.setText("Example: ")
-                    exampleLabelRun.isBold = true
-                    val exampleValueRun = exampleParagraph.createRun()
-                    exampleValueRun.setText(example)
+                    document.createParagraph().createRun().apply { setText("Example:"); isBold = true }
+                    RequirementRichTextRenderer.write(example) { document.createParagraph() }
                 }
 
                 // Norm reference
