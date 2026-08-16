@@ -12,6 +12,7 @@ import com.secman.repository.RequirementSnapshotRepository
 import com.secman.repository.UseCaseRepository
 import com.secman.service.InputValidationService
 import com.secman.service.ReleaseRequirementScopeService
+import com.secman.service.StandardExportScopeService
 import com.secman.service.RequirementExportTemplateValidationService
 import com.secman.domain.MissingPlaceholderBehavior
 import com.secman.domain.RequirementExportTemplateMode
@@ -54,6 +55,7 @@ class RequirementControllerWordExportTest {
         exportTemplateUsageRepository = mockk<RequirementExportTemplateUsageRepository>(relaxed = true),
         exportTemplateValidationService = mockk<RequirementExportTemplateValidationService>(relaxed = true),
         releaseRequirementScopeService = mockk<ReleaseRequirementScopeService>(relaxed = true),
+        standardExportScopeService = mockk<StandardExportScopeService>(relaxed = true),
         maxAdHocTemplateSizeBytes = 5_242_880L
     )
     private val publicController = PublicRequirementDownloadController(

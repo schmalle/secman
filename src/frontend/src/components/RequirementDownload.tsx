@@ -2,8 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { authenticatedFetch, authenticatedGet } from '../utils/auth';
 import ReleaseIndicator from './ReleaseIndicator';
 import ReleaseSelector from './ReleaseSelector';
+import { buildPublicStandardUrl, buildRequirementDownloadUrl } from './requirementDownloadUrl';
 
 interface UseCase {
+    id: number;
+    name: string;
+}
+
+interface Standard {
     id: number;
     name: string;
 }
@@ -17,11 +23,19 @@ interface Release {
     requirementCount: number;
 }
 
-type DownloadTarget = 'all-docx' | 'all-xlsx' | 'usecase-docx' | 'usecase-xlsx';
+type DownloadTarget =
+    | 'all-docx'
+    | 'all-xlsx'
+    | 'usecase-docx'
+    | 'usecase-xlsx'
+    | 'standard-docx'
+    | 'standard-xlsx';
 
 export default function RequirementDownload() {
     const [useCases, setUseCases] = useState<UseCase[]>([]);
     const [selectedUseCaseId, setSelectedUseCaseId] = useState<number | null>(null);
+    const [standards, setStandards] = useState<Standard[]>([]);
+    const [selectedStandardId, setSelectedStandardId] = useState<number | null>(null);
     const [downloading, setDownloading] = useState<DownloadTarget | null>(null);
     const [error, setError] = useState<string | null>(null);
 
@@ -54,6 +68,21 @@ export default function RequirementDownload() {
         fetchUseCases();
     }, []);
 
+    // Standards come from the slim public endpoint, so the picker also works logged out.
+    useEffect(() => {
+        const fetchStandards = async () => {
+            try {
+                const response = await authenticatedGet('/api/standards/public');
+                if (response.ok) {
+                    setStandards(await response.json());
+                }
+            } catch (err) {
+                console.error('Error fetching standards:', err);
+            }
+        };
+        fetchStandards();
+    }, []);
+
     // Fetch release details for the indicator when the selection changes
     useEffect(() => {
         if (selectedReleaseId === null) {
@@ -84,14 +113,20 @@ export default function RequirementDownload() {
     const handleDownload = useCallback(async (target: DownloadTarget) => {
         const format = target.endsWith('docx') ? 'docx' : 'xlsx';
         const useCaseId = target.startsWith('usecase') ? selectedUseCaseId : null;
+        const standardId = target.startsWith('standard') ? selectedStandardId : null;
         if (target.startsWith('usecase') && useCaseId === null) {
             return;
         }
+        if (target.startsWith('standard') && standardId === null) {
+            return;
+        }
 
-        const base = useCaseId !== null
-            ? `/api/requirements/export/${format}/usecase/${useCaseId}`
-            : `/api/requirements/export/${format}`;
-        const downloadUrl = selectedReleaseId !== null ? `${base}?releaseId=${selectedReleaseId}` : base;
+        const downloadUrl = buildRequirementDownloadUrl({
+            format,
+            useCaseId,
+            standardId,
+            releaseId: selectedReleaseId,
+        });
 
         setDownloading(target);
         setError(null);
@@ -134,7 +169,20 @@ export default function RequirementDownload() {
         } finally {
             setDownloading(null);
         }
-    }, [selectedUseCaseId, selectedReleaseId]);
+    }, [selectedUseCaseId, selectedStandardId, selectedReleaseId]);
+
+    // The equivalent name-based URL for the current selection, so the page doubles as the
+    // documentation for scripting the download. Origin is read lazily: this island is server
+    // rendered first, where `window` does not exist.
+    const selectedStandard = standards.find(std => std.id === selectedStandardId) ?? null;
+    const directStandardLink = selectedStandard === null
+        ? ''
+        : buildPublicStandardUrl(
+            typeof window === 'undefined' ? '' : window.location.origin,
+            selectedStandard.name,
+            'docx',
+            selectedRelease?.version ?? null,
+        );
 
     const renderButton = (target: DownloadTarget, format: 'docx' | 'xlsx', disabled: boolean) => (
         <button
@@ -200,7 +248,7 @@ export default function RequirementDownload() {
             )}
 
             <div className="row">
-                <div className="col-md-6 mb-4">
+                <div className="col-xl-4 col-md-6 mb-4">
                     <div className="card h-100">
                         <div className="card-header">
                             <h5 className="card-title mb-0">
@@ -222,7 +270,7 @@ export default function RequirementDownload() {
                     </div>
                 </div>
 
-                <div className="col-md-6 mb-4">
+                <div className="col-xl-4 col-md-6 mb-4">
                     <div className="card h-100">
                         <div className="card-header">
                             <h5 className="card-title mb-0">
@@ -253,6 +301,52 @@ export default function RequirementDownload() {
                                 <small className="text-muted d-block mt-2">
                                     Select a use case to enable the download.
                                 </small>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="col-xl-4 col-md-6 mb-4">
+                    <div className="card h-100">
+                        <div className="card-header">
+                            <h5 className="card-title mb-0">
+                                <i className="bi bi-journal-text me-2"></i>
+                                Complete Standard
+                            </h5>
+                        </div>
+                        <div className="card-body">
+                            <div className="mb-3">
+                                <label htmlFor="standard-select" className="form-label">Select Standard:</label>
+                                <select
+                                    id="standard-select"
+                                    className="form-select"
+                                    data-testid="standard-selector"
+                                    value={selectedStandardId === null ? '' : selectedStandardId.toString()}
+                                    onChange={(e) => setSelectedStandardId(e.target.value === '' ? null : parseInt(e.target.value, 10))}
+                                >
+                                    <option value="">Select a standard...</option>
+                                    {standards.map(std => (
+                                        <option key={std.id} value={std.id}>{std.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="d-flex gap-2">
+                                {renderButton('standard-docx', 'docx', selectedStandardId === null)}
+                                {renderButton('standard-xlsx', 'xlsx', selectedStandardId === null)}
+                            </div>
+                            {selectedStandardId === null ? (
+                                <small className="text-muted d-block mt-2">
+                                    Select a standard to enable the download.
+                                </small>
+                            ) : (
+                                <div className="mt-3">
+                                    <small className="text-muted d-block mb-1">
+                                        Direct link (no login required):
+                                    </small>
+                                    <code className="d-block small text-break bg-light p-2 rounded">
+                                        {directStandardLink}
+                                    </code>
+                                </div>
                             )}
                         </div>
                     </div>

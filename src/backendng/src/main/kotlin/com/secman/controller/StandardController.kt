@@ -52,6 +52,40 @@ open class StandardController(
         val message: String
     )
 
+    /**
+     * Name and id only — the minimum the unauthenticated `/requirements/download` page needs
+     * to offer a standard picker.
+     *
+     * Deliberately NOT the `Standard` entity: descriptions, use-case mappings and timestamps
+     * stay behind [listStandards], which remains IS_AUTHENTICATED. The requirement *content*
+     * of a standard is already public through the `/api/requirements/export` endpoints, so the
+     * standard's name adds no disclosure beyond what those endpoints imply.
+     */
+    @Serdeable
+    data class PublicStandardResponse(
+        val id: Long,
+        val name: String
+    )
+
+    @Get("/public")
+    @Secured(SecurityRule.IS_ANONYMOUS) // Public: powers the unauthenticated /requirements/download page
+    @Transactional(readOnly = true)
+    open fun listPublicStandards(): HttpResponse<List<PublicStandardResponse>> {
+        return try {
+            // findAll is bounded in practice: `standard` is a small operator-maintained
+            // catalogue (single digits), not a growing transactional table.
+            val standards = standardRepository.findAll()
+                .mapNotNull { standard -> standard.id?.let { PublicStandardResponse(it, standard.name) } }
+                .sortedBy { it.name.lowercase() }
+
+            log.debug("Public standard list requested, returning {} standards", standards.size)
+            HttpResponse.ok(standards)
+        } catch (e: Exception) {
+            log.error("Error fetching public standard list", e)
+            HttpResponse.serverError()
+        }
+    }
+
     @Get
     @Transactional(readOnly = true)
     open fun listStandards(): HttpResponse<List<Standard>> {

@@ -9,6 +9,7 @@ import com.secman.domain.RequirementExportTemplateStatus
 import com.secman.domain.RequirementExportTemplateUsage
 import com.secman.domain.RequirementSnapshot
 import com.secman.domain.Release
+import com.secman.domain.Standard
 import com.secman.util.ExcelSanitizer
 import com.secman.domain.UseCase
 import com.secman.domain.Norm
@@ -25,6 +26,7 @@ import com.secman.service.RequirementService
 import com.secman.service.RequirementIdService
 import com.secman.service.RequirementExportTemplateValidationService
 import com.secman.service.ReleaseRequirementScopeService
+import com.secman.service.StandardExportScopeService
 import io.micronaut.context.annotation.Value
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.data.model.Pageable
@@ -76,6 +78,7 @@ open class RequirementController(
     private val exportTemplateUsageRepository: RequirementExportTemplateUsageRepository,
     private val exportTemplateValidationService: RequirementExportTemplateValidationService,
     private val releaseRequirementScopeService: ReleaseRequirementScopeService,
+    private val standardExportScopeService: StandardExportScopeService,
     @Value("\${secman.requirement-export-templates.max-file-size-bytes:5242880}")
     private val maxAdHocTemplateSizeBytes: Long
 ) {
@@ -424,18 +427,45 @@ open class RequirementController(
         }
     }
 
+    /**
+     * Public requirement export as Word.
+     *
+     * Scope is chosen by four optional query parameters, all of which also apply to
+     * `/export/xlsx`:
+     * - `standardId` / `standard` — narrow to one standard's use cases (id wins if both given)
+     * - `releaseId` / `release` — freeze to a release; `release=latest` means the ACTIVE one
+     *
+     * With none of them the response is unchanged: every live requirement.
+     * See `docs/PUBLIC_STANDARD_DOWNLOAD.md`.
+     */
     @Get("/export/docx")
     @Secured(SecurityRule.IS_ANONYMOUS) // Public: powers the unauthenticated /requirements/download page
     fun exportToDocx(
         @Nullable @QueryValue("releaseId") releaseId: Long?,
+        @Nullable @QueryValue("release") release: String?,
+        @Nullable @QueryValue("standardId") standardId: Long?,
+        @Nullable @QueryValue("standard") standard: String?,
         @QueryValue(defaultValue = "LATEST") templateMode: String,
         @Nullable @QueryValue("templateId") templateId: Long?,
         @QueryValue(defaultValue = "REJECT") missingPlaceholderBehavior: String,
         @Nullable @QueryValue("classification") classification: String?,
         @Nullable authentication: Authentication?
     ): HttpResponse<*> {
-        val exportData = resolveRequirementExportData(releaseId)
-            ?: return HttpResponse.notFound(mapOf("error" to "Release not found"))
+        val scope = when (val resolution =
+            standardExportScopeService.resolve(standardId, standard, releaseId, release)) {
+            is StandardExportScopeService.Resolution.Invalid ->
+                return HttpResponse.badRequest(mapOf("error" to resolution.message))
+            is StandardExportScopeService.Resolution.Missing ->
+                return HttpResponse.notFound(mapOf("error" to resolution.message))
+            is StandardExportScopeService.Resolution.Resolved -> resolution
+        }
+
+        val exportData = buildRequirementExportData(scope.release, scope.standard, "docx")
+        if (scope.standard != null && exportData.requirements.isEmpty()) {
+            return HttpResponse.ok(mapOf("message" to "No requirements found for this standard"))
+        }
+
+        logPublicExport("docx", scope, exportData.requirements.size, authentication)
 
         return exportWordDocument(
             requirements = exportData.requirements,
@@ -447,8 +477,8 @@ open class RequirementController(
             missingPlaceholderBehavior = missingPlaceholderBehavior,
             classification = classification,
             language = null,
-            scope = if (releaseId != null) RequirementExportScope.RELEASE else RequirementExportScope.ALL,
-            releaseId = releaseId,
+            scope = exportScopeOf(scope),
+            releaseId = scope.release?.id,
             usecaseId = null,
             authentication = authentication,
             release = exportData.release
@@ -574,43 +604,40 @@ open class RequirementController(
         )
     }
 
+    /** Public requirement export as Excel. Same scope parameters as [exportToDocx]. */
     @Get("/export/xlsx")
     @Secured(SecurityRule.IS_ANONYMOUS) // Public: powers the unauthenticated /requirements/download page
-    fun exportToExcel(@Nullable @QueryValue("releaseId") releaseId: Long?): HttpResponse<*> {
-        val requirements: List<Requirement>
-        val filename: String
-
-        if (releaseId != null) {
-            // Export from release snapshot
-            val releaseOpt = releaseRepository.findById(releaseId)
-            if (releaseOpt.isEmpty) {
-                return HttpResponse.notFound(mapOf("error" to "Release not found"))
-            }
-
-            val release = releaseOpt.get()
-            val snapshots = snapshotRepository.findByReleaseId(releaseId)
-
-            // Convert snapshots to Requirements for export
-            requirements = snapshots.map { snapshotToRequirement(it) }.sortedWith(
-                compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
-            )
-
-            val dateStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-            filename = "requirements_v${release.version}_$dateStr.xlsx"
-        } else {
-            // Export current requirements (default behavior)
-            requirements = requirementRepository.findAll().sortedWith(
-                compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
-            )
-            filename = "requirements_export.xlsx"
+    fun exportToExcel(
+        @Nullable @QueryValue("releaseId") releaseId: Long?,
+        @Nullable @QueryValue("release") release: String?,
+        @Nullable @QueryValue("standardId") standardId: Long?,
+        @Nullable @QueryValue("standard") standard: String?,
+        @Nullable authentication: Authentication?
+    ): HttpResponse<*> {
+        val scope = when (val resolution =
+            standardExportScopeService.resolve(standardId, standard, releaseId, release)) {
+            is StandardExportScopeService.Resolution.Invalid ->
+                return HttpResponse.badRequest(mapOf("error" to resolution.message))
+            is StandardExportScopeService.Resolution.Missing ->
+                return HttpResponse.notFound(mapOf("error" to resolution.message))
+            is StandardExportScopeService.Resolution.Resolved -> resolution
         }
 
-        val workbook = createExcelWorkbook(requirements)
+        val exportData = buildRequirementExportData(scope.release, scope.standard, "xlsx")
+        if (scope.standard != null && exportData.requirements.isEmpty()) {
+            return HttpResponse.ok(mapOf("message" to "No requirements found for this standard"))
+        }
+
+        logPublicExport("xlsx", scope, exportData.requirements.size, authentication)
+
+        val workbook = createExcelWorkbook(exportData.requirements)
         val outputStream = ByteArrayOutputStream()
         workbook.write(outputStream)
         workbook.close()
 
         val inputStream = ByteArrayInputStream(outputStream.toByteArray())
+        // Same header hygiene as streamWordDocument: the release version reaches this name.
+        val filename = exportData.filename.replace("\"", "").replace("\r", "").replace("\n", "")
 
         return HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")))
             .header("Content-Disposition", "attachment; filename=\"$filename\"")
@@ -666,35 +693,94 @@ open class RequirementController(
         val sha256: String?
     )
 
+    /** Resolve by release id alone — the shape the multipart (ad-hoc template) exports use. */
     private fun resolveRequirementExportData(releaseId: Long?): RequirementExportData? {
-        return if (releaseId != null) {
-            val releaseOpt = releaseRepository.findById(releaseId)
-            if (releaseOpt.isEmpty) {
-                null
-            } else {
-                val release = releaseOpt.get()
-                val snapshots = snapshotRepository.findByReleaseId(releaseId)
-                val requirements = snapshots.map { snapshotToRequirement(it) }.sortedWith(
-                    compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
-                )
-                val dateStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-                RequirementExportData(
-                    requirements = requirements,
-                    filename = "requirements_v${release.version}_$dateStr.docx",
-                    title = "Requirements - Release ${release.version}",
-                    release = release
-                )
-            }
+        val release = if (releaseId != null) {
+            releaseRepository.findById(releaseId).orElse(null) ?: return null
         } else {
-            RequirementExportData(
-                requirements = requirementRepository.findAll().sortedWith(
-                    compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
-                ),
-                filename = "requirements_export.docx",
-                title = "All Requirements"
+            null
+        }
+        return buildRequirementExportData(release, null, "docx")
+    }
+
+    /**
+     * Select the requirements for an already-resolved (release, standard) pair.
+     *
+     * Four combinations, all reachable from the public endpoints:
+     * - neither → every live requirement (the original behaviour)
+     * - release only → every requirement frozen into that release
+     * - standard only → live requirements tagged with that standard's use cases
+     * - both → that standard's requirements as frozen into that release
+     */
+    private fun buildRequirementExportData(
+        release: Release?,
+        standard: Standard?,
+        extension: String
+    ): RequirementExportData {
+        if (standard != null) {
+            return RequirementExportData(
+                requirements = standardExportScopeService.requirementsFor(standard, release),
+                filename = standardExportScopeService.exportFilename(standard, release, extension),
+                title = standardExportScopeService.exportTitle(standard, release),
+                release = release
             )
         }
+
+        if (release != null) {
+            val requirements = snapshotRepository.findByReleaseId(release.id!!)
+                .map { snapshotToRequirement(it) }
+                .sortedWith(compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 })
+            val dateStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+            return RequirementExportData(
+                requirements = requirements,
+                filename = "requirements_v${release.version}_$dateStr.$extension",
+                title = "Requirements - Release ${release.version}",
+                release = release
+            )
+        }
+
+        return RequirementExportData(
+            requirements = requirementRepository.findAll().sortedWith(
+                compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
+            ),
+            filename = "requirements_export.$extension",
+            title = "All Requirements"
+        )
     }
+
+    /** STANDARD outranks RELEASE in the template usage audit: it is the narrower fact. */
+    private fun exportScopeOf(scope: StandardExportScopeService.Resolution.Resolved): RequirementExportScope =
+        when {
+            scope.standard != null -> RequirementExportScope.STANDARD
+            scope.release != null -> RequirementExportScope.RELEASE
+            else -> RequirementExportScope.ALL
+        }
+
+    /**
+     * A09: one line per public export with actor, target and outcome.
+     *
+     * The standard name and release version are resolved database rows rather than raw query
+     * string, but they are still operator-supplied text, so CR/LF is stripped before either
+     * reaches a log line.
+     */
+    private fun logPublicExport(
+        format: String,
+        scope: StandardExportScopeService.Resolution.Resolved,
+        requirementCount: Int,
+        authentication: Authentication?
+    ) {
+        log.info(
+            "Requirement export: actor={} format={} standard={} release={} requirements={}",
+            stripControlCharacters(authentication?.name ?: "anonymous"),
+            format,
+            scope.standard?.name?.let { stripControlCharacters(it) } ?: "-",
+            scope.release?.version?.let { stripControlCharacters(it) } ?: "live",
+            requirementCount
+        )
+    }
+
+    private fun stripControlCharacters(value: String): String =
+        value.replace(CONTROL_CHARACTERS, "").take(120)
 
     private fun exportWordDocument(
         requirements: List<Requirement>,

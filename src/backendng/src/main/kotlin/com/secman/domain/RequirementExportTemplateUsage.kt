@@ -59,7 +59,8 @@ enum class RequirementExportScope {
     RELEASE,
     TRANSLATED,
     MCP,
-    CLI
+    CLI,
+    STANDARD
 }
 
 enum class RequirementExportTemplateMode {
