@@ -36,8 +36,9 @@ import java.time.format.DateTimeFormatter
  * - **`@Secured(SecurityRule.IS_ANONYMOUS)` is declared explicitly, on the class and on every
  *   method.** Not inherited, not omitted. `ResponseController`'s token routes carry the same
  *   explicit annotation (plus matching `intercept-url-map` entries in `application.yml`) for
- *   the identical reason — an undeclared reliance on the `/api/**` catch-all is an A01 gap,
- *   not a pattern to copy.
+ *   the identical reason — an undeclared reliance on the catch-all `**` mapping under `/api` is
+ *   an A01 gap, not a pattern to copy. (Spelling that pattern out in full here would open a
+ *   nested block comment: Kotlin nests them, so a slash-star inside a KDoc swallows the file.)
  * - **Every token failure returns the same bytes.** Unknown, malformed, expired, already used
  *   and cancelled all produce [notFoundBody]. A response that distinguished them would turn
  *   this endpoint into an oracle for "does this token exist".

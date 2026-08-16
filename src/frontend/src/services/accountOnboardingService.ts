@@ -222,7 +222,11 @@ export async function deleteRule(id: number): Promise<void> {
 }
 
 export async function getCoverage(): Promise<CoverageResponse> {
-    return json(await authenticatedGet(`${API_BASE}/rules/coverage`));
+    // Micronaut Serde omits an empty `rows` from the payload entirely, so a configuration with no
+    // questions or no rules arrives without the key. Normalise here rather than in each consumer:
+    // both the warning banner and the matrix index into `rows` unguarded.
+    const coverage = await json<CoverageResponse>(await authenticatedGet(`${API_BASE}/rules/coverage`));
+    return { ...coverage, rows: coverage.rows ?? [] };
 }
 
 /** Resolve a set of answers without writing anything — the admin twin of a dry run. */

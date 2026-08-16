@@ -140,8 +140,9 @@ open class EolController(
      * Current state of one sync run, for polling after [sync] returns 202.
      *
      * ADMIN only, matching the verb that creates the run: the response carries
-     * estate-wide counts and the triggering actor, which is not user-scoped
-     * data. Every EOL sync run is visible to every ADMIN by design — this is an
+     * estate-wide counts, which are not user-scoped data. The triggering actor
+     * is deliberately *not* in the response — it stays in the audit row and the
+     * log. Every EOL sync run is visible to every ADMIN by design: this is an
      * admin audit record, not an owner-scoped entity, so there is no per-row
      * ownership check to apply here.
      *

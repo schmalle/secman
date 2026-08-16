@@ -1,10 +1,29 @@
 package com.secman.dto
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.secman.domain.AccountOnboardingMode
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
+
+// ---------------------------------------------------------------------------
+// A note on @JsonInclude(ALWAYS) below
+//
+// Micronaut Serde's default inclusion is NON_EMPTY: an empty list is dropped
+// from the payload entirely, so the client sees `undefined` rather than `[]`.
+// Every response list here is consumed by the admin onboarding UI with a direct
+// `.join()` / `.map()` / `.length` / `for..of`, all of which throw on undefined
+// — and they throw *before* the `|| '(no use case)'`-style fallbacks next to
+// them can run, so the guard that looks present is unreachable exactly when it
+// is needed. Pinning the wire shape here fixes every consumer at once, present
+// and future, instead of asking each one to remember. Same reasoning and same
+// annotation as UserDashboardDto.riskAssessments; asserted by
+// AccountOnboardingSerializationTest.
+//
+// Request DTOs are deliberately left unannotated — inbound bodies are parsed
+// into a Kotlin default, so the wire shape does not matter there.
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Public questionnaire (unauthenticated, token-scoped)
@@ -23,6 +42,7 @@ data class PublicQuestionnaireResponse(
     /** `****6789`. Enough for the owner to recognise their own account, useless to anyone else. */
     val maskedAccountId: String,
     val expiresAt: String,
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val questions: List<PublicQuestionResponse>
 )
 
@@ -34,6 +54,7 @@ data class PublicQuestionResponse(
     /** SINGLE_SELECT | MULTI_SELECT | BOOLEAN */
     val inputType: String,
     val required: Boolean,
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val choices: List<PublicChoiceResponse>
 )
 
@@ -59,6 +80,7 @@ data class SubmittedAnswer(
 data class SubmitAnswersResponse(
     val status: String,
     val riskAssessmentId: Long? = null,
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val useCases: List<String> = emptyList(),
     val requirementCount: Int = 0,
     val deadline: String? = null
@@ -111,6 +133,7 @@ data class OnboardingQuestionResponse(
     val displayOrder: Int,
     val required: Boolean,
     val active: Boolean,
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val choices: List<OnboardingChoiceResponse> = emptyList(),
     /** How many rules reference any of this question's choices — what blocks a delete. */
     val referencedByRules: Long = 0
@@ -151,10 +174,14 @@ data class OnboardingRuleResponse(
     val active: Boolean,
     val priorityOrder: Int,
     val isDefault: Boolean,
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val choiceIds: List<Long> = emptyList(),
     /** `questionKey=choiceKey`, sorted — the human-readable form of [choiceIds]. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val combination: List<String> = emptyList(),
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val useCaseIds: List<Long> = emptyList(),
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val useCases: List<String> = emptyList(),
     val createdBy: String? = null
 )
@@ -167,8 +194,11 @@ data class ReorderRequest(
 /** One row of the coverage matrix — what a given set of answers would produce. */
 @Serdeable
 data class OnboardingCoverageRow(
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val combination: List<String>,
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val matchedRules: List<String>,
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val useCases: List<String>,
     val requirementCount: Int,
     val usedDefault: Boolean,
@@ -178,6 +208,7 @@ data class OnboardingCoverageRow(
 
 @Serdeable
 data class OnboardingCoverageResponse(
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val rows: List<OnboardingCoverageRow> = emptyList(),
     /** True when the combination space exceeded the cap and [rows] is a prefix, not the whole. */
     val truncated: Boolean = false,
@@ -193,7 +224,9 @@ data class OnboardingPreviewRequest(
 
 @Serdeable
 data class OnboardingPreviewResponse(
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val matchedRules: List<String> = emptyList(),
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val useCases: List<String> = emptyList(),
     val requirementCount: Int = 0,
     val usedDefault: Boolean = false,
@@ -232,7 +265,9 @@ data class SimulateOnboardingResponse(
     val ownerEmail: String,
     val mode: String,
     val dryRun: Boolean,
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val onboarding: List<AccountOnboardingInfo> = emptyList(),
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val riskAssessments: List<AccountRiskAssessmentInfo> = emptyList(),
     /** Present for GUIDED, so a dry run shows what the owner's answers could resolve to. */
     val ruleMatrix: OnboardingRuleMatrix? = null

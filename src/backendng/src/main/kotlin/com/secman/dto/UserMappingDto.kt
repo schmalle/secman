@@ -1,5 +1,6 @@
 package com.secman.dto
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.secman.domain.AccountOnboardingMode
 import com.secman.domain.IpRangeType
 import com.secman.domain.UserMapping
@@ -217,8 +218,13 @@ data class OnboardingRuleMatrix(
     val choiceCount: Int,
     val activeRuleCount: Int,
     val hasDefaultRule: Boolean,
+    // Serde's default NON_EMPTY inclusion drops an empty list from the payload,
+    // and AccountOnboardingSimulator.tsx reads `.length` on both of these
+    // directly. See the note in AccountOnboardingDto.kt.
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val rules: List<OnboardingRuleSummary> = emptyList(),
     /** Every use case any active rule can resolve to. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val reachableUseCases: List<String> = emptyList(),
     /** Requirements the ACTIVE release contributes for [reachableUseCases]. */
     val reachableRequirementCount: Int = 0,
