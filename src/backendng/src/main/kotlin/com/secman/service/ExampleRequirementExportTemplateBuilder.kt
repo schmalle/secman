@@ -65,6 +65,7 @@ class ExampleRequirementExportTemplateBuilder {
     /** Renders the example template to a `.docx` byte array. */
     fun build(): ByteArray {
         XWPFDocument().use { document ->
+            WordExportStyle.setStandardMargins(document)
             buildHeaderAndFooter(document)
             buildCoverPage(document)
             buildReleaseMetadataBlock(document)
@@ -83,11 +84,10 @@ class ExampleRequirementExportTemplateBuilder {
         val header = document.createHeader(HeaderFooterType.DEFAULT)
         val headerParagraph = header.createParagraph()
         headerParagraph.alignment = ParagraphAlignment.RIGHT
-        headerParagraph.createRun().apply {
-            setText("$COMPANY_NAME  |  \${classification}")
-            fontSize = 8
-            color = "808080"
-        }
+        WordExportStyle.run(
+            headerParagraph, "$COMPANY_NAME  |  \${classification}",
+            size = WordExportStyle.SIZE_META, color = WordExportStyle.COLOR_SECONDARY
+        )
 
         val footer = document.createFooter(HeaderFooterType.DEFAULT)
         val footerParagraph = footer.createParagraph()
@@ -95,62 +95,50 @@ class ExampleRequirementExportTemplateBuilder {
         // Page numbering is deliberately left out: a PAGE field is one click to add in Word when
         // rebranding, and hand-writing the field-code XML here would couple this builder to schema
         // classes that the trimmed poi-ooxml-lite jar does not guarantee.
-        footerParagraph.createRun().apply {
-            setText("\${documentTitle}  |  Exported \${exportDate} by \${exportedBy}")
-            fontSize = 8
-            color = "808080"
-        }
+        WordExportStyle.run(
+            footerParagraph, "\${documentTitle}  |  Exported \${exportDate} by \${exportedBy}",
+            size = WordExportStyle.SIZE_META, color = WordExportStyle.COLOR_SECONDARY
+        )
     }
 
     private fun buildCoverPage(document: XWPFDocument) {
         val spacer = document.createParagraph()
         spacer.createRun().addBreak()
 
-        val company = document.createParagraph()
-        company.alignment = ParagraphAlignment.CENTER
-        company.createRun().apply {
-            setText(COMPANY_NAME)
-            fontSize = 14
-            isBold = true
-            color = "1F4E79"
-        }
+        val kicker = document.createParagraph()
+        kicker.alignment = ParagraphAlignment.CENTER
+        WordExportStyle.run(
+            kicker, COMPANY_NAME.uppercase(),
+            size = WordExportStyle.SIZE_KICKER, bold = true, color = WordExportStyle.COLOR_ACCENT
+        )
 
         val logoHint = document.createParagraph()
         logoHint.alignment = ParagraphAlignment.CENTER
-        logoHint.createRun().apply {
-            setText("[ Replace this line with your company logo ]")
-            fontSize = 9
-            isItalic = true
-            color = "A0A0A0"
-        }
+        WordExportStyle.run(
+            logoHint, "[ Replace this line with your company logo ]",
+            size = 9, italic = true, color = WordExportStyle.COLOR_SECONDARY
+        )
 
         document.createParagraph()
 
         val title = document.createParagraph()
         title.alignment = ParagraphAlignment.CENTER
-        title.createRun().apply {
-            setText("\${documentTitle}")
-            fontSize = 26
-            isBold = true
-            color = "1F4E79"
-        }
+        title.spacingAfter = 120
+        WordExportStyle.run(title, "\${documentTitle}", size = WordExportStyle.SIZE_DOCUMENT_TITLE, bold = true)
 
         val classification = document.createParagraph()
         classification.alignment = ParagraphAlignment.CENTER
-        classification.createRun().apply {
-            setText("Classification: \${classification}")
-            fontSize = 11
-            isBold = true
-            color = "C00000"
-        }
+        WordExportStyle.run(
+            classification, "Classification: \${classification}",
+            size = 11, bold = true, color = WordExportStyle.COLOR_CLASSIFICATION
+        )
 
         val counts = document.createParagraph()
         counts.alignment = ParagraphAlignment.CENTER
-        counts.createRun().apply {
-            setText("\${requirementCount} requirements  |  Language: \${language}")
-            fontSize = 10
-            color = "606060"
-        }
+        WordExportStyle.run(
+            counts, "\${requirementCount} requirements  |  Language: \${language}",
+            color = WordExportStyle.COLOR_SECONDARY
+        )
     }
 
     /**
@@ -163,14 +151,11 @@ class ExampleRequirementExportTemplateBuilder {
 
         val heading = document.createParagraph()
         heading.alignment = ParagraphAlignment.CENTER
-        heading.createRun().apply {
-            setText("Requirements release")
-            fontSize = 12
-            isBold = true
-        }
+        WordExportStyle.run(heading, "Requirements release", size = 12, bold = true)
 
         val table = document.createTable(4, 2)
         table.setWidth("60%")
+        WordExportStyle.applyHairlineBorders(table)
 
         val rows = listOf(
             "Release name" to "\${releaseName}",
@@ -180,38 +165,22 @@ class ExampleRequirementExportTemplateBuilder {
         )
         rows.forEachIndexed { index, (label, placeholder) ->
             val row = table.getRow(index)
-            row.getCell(0).paragraphs.first().createRun().apply {
-                setText(label)
-                isBold = true
-                fontSize = 10
-            }
-            row.getCell(1).paragraphs.first().createRun().apply {
-                setText(placeholder)
-                fontSize = 10
-            }
+            WordExportStyle.run(row.getCell(0).paragraphs.first(), label, bold = true)
+            WordExportStyle.run(row.getCell(1).paragraphs.first(), placeholder)
         }
 
         val description = document.createParagraph()
-        description.createRun().apply {
-            setText("\${releaseDescription}")
-            fontSize = 10
-            isItalic = true
-        }
+        WordExportStyle.run(description, "\${releaseDescription}", italic = true, color = WordExportStyle.COLOR_SECONDARY)
 
         document.createParagraph().createRun().addBreak(BreakType.PAGE)
     }
 
     private fun buildIntroduction(document: XWPFDocument) {
-        val heading = document.createParagraph()
-        heading.style = "Heading1"
-        heading.createRun().apply {
-            setText("1. Purpose and scope")
-            fontSize = 16
-            isBold = true
-        }
+        WordExportStyle.sectionHeading(document, "1. Purpose and scope")
 
         val body = document.createParagraph()
-        body.createRun().setText(
+        WordExportStyle.run(
+            body,
             "This document lists the security requirements that apply to systems operated by " +
                 "$COMPANY_NAME. Replace this introduction with your own scope, applicability and " +
                 "review statements. Everything before the requirements section is yours to design; " +
@@ -219,11 +188,7 @@ class ExampleRequirementExportTemplateBuilder {
         )
 
         val useCaseNote = document.createParagraph()
-        useCaseNote.createRun().apply {
-            setText("Use case in scope: \${useCaseName}")
-            fontSize = 10
-            isItalic = true
-        }
+        WordExportStyle.run(useCaseNote, "Use case in scope: \${useCaseName}", italic = true, color = WordExportStyle.COLOR_SECONDARY)
 
         document.createParagraph()
     }
@@ -236,13 +201,7 @@ class ExampleRequirementExportTemplateBuilder {
      * enforces exactly that.
      */
     private fun buildRequirementsInsertionPoint(document: XWPFDocument) {
-        val heading = document.createParagraph()
-        heading.style = "Heading1"
-        heading.createRun().apply {
-            setText("2. Requirements")
-            fontSize = 16
-            isBold = true
-        }
+        WordExportStyle.sectionHeading(document, "2. Requirements")
 
         val marker = document.createParagraph()
         marker.createRun().setText("\${requirements}")
@@ -251,16 +210,11 @@ class ExampleRequirementExportTemplateBuilder {
     private fun buildClosingSection(document: XWPFDocument) {
         document.createParagraph().createRun().addBreak(BreakType.PAGE)
 
-        val heading = document.createParagraph()
-        heading.style = "Heading1"
-        heading.createRun().apply {
-            setText("3. Approval")
-            fontSize = 16
-            isBold = true
-        }
+        WordExportStyle.sectionHeading(document, "3. Approval")
 
         val body = document.createParagraph()
-        body.createRun().setText(
+        WordExportStyle.run(
+            body,
             "This section is rendered after the requirements, which is what the \${requirements} " +
                 "insertion point is for. Use it for sign-off, revision history or an appendix."
         )
@@ -269,18 +223,13 @@ class ExampleRequirementExportTemplateBuilder {
 
         val approvalTable = document.createTable(2, 3)
         approvalTable.setWidth("100%")
+        WordExportStyle.applyHairlineBorders(approvalTable)
         listOf("Role", "Name", "Date").forEachIndexed { column, label ->
-            approvalTable.getRow(0).getCell(column).paragraphs.first().createRun().apply {
-                setText(label)
-                isBold = true
-                fontSize = 10
-            }
+            WordExportStyle.run(approvalTable.getRow(0).getCell(column).paragraphs.first(), label, bold = true)
         }
+        WordExportStyle.shadeHeaderRow(approvalTable)
         listOf("Document owner", "", "").forEachIndexed { column, value ->
-            approvalTable.getRow(1).getCell(column).paragraphs.first().createRun().apply {
-                setText(value)
-                fontSize = 10
-            }
+            WordExportStyle.run(approvalTable.getRow(1).getCell(column).paragraphs.first(), value)
         }
     }
 }

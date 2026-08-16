@@ -26,6 +26,8 @@ import com.secman.service.RequirementService
 import com.secman.service.RequirementIdService
 import com.secman.service.RequirementExportTemplateValidationService
 import com.secman.service.RequirementRichTextRenderer
+import com.secman.service.RequirementWordContentRenderer
+import com.secman.service.WordExportStyle
 import com.secman.service.ReleaseRequirementScopeService
 import com.secman.service.StandardExportScopeService
 import io.micronaut.context.annotation.Value
@@ -1120,193 +1122,52 @@ open class RequirementController(
         requirements: List<Requirement>,
         newParagraph: () -> XWPFParagraph = { document.createParagraph() }
     ) {
-        val requirementsByChapter = requirements.groupBy { it.chapter ?: "No Chapter" }
-        var requirementNumber = 1
-        var isFirstChapter = true
-        for ((chapter, chapterRequirements) in requirementsByChapter) {
-            if (!isFirstChapter) {
-                newParagraph().createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE)
-            }
-            isFirstChapter = false
-            val chapterParagraph = newParagraph()
-            chapterParagraph.style = "Heading1"
-            val chapterRun = chapterParagraph.createRun()
-            chapterRun.setText(chapter)
-            chapterRun.fontSize = 16
-            chapterRun.isBold = true
-            newParagraph()
-
-            for (requirement in chapterRequirements) {
-                val reqHeaderParagraph = newParagraph()
-                val ctp = reqHeaderParagraph.ctp
-                val ppr = if (ctp.isSetPPr) ctp.pPr else ctp.addNewPPr()
-                val shd = if (ppr.isSetShd) ppr.shd else ppr.addNewShd()
-                shd.fill = "C1D5C0"
-                val reqHeaderRun = reqHeaderParagraph.createRun()
-                reqHeaderRun.setText("REQ-$requirementNumber: ${requirement.shortreq}")
-                reqHeaderRun.fontSize = 12
-                reqHeaderRun.isBold = true
-                requirement.details?.let { RequirementRichTextRenderer.write(it, newParagraph) }
-                requirement.motivation?.let {
-                    newParagraph().createRun().apply { setText("Motivation:"); isBold = true }
-                    RequirementRichTextRenderer.write(it, newParagraph)
-                }
-                requirement.example?.let {
-                    newParagraph().createRun().apply { setText("Example:"); isBold = true }
-                    RequirementRichTextRenderer.write(it, newParagraph)
-                }
-                requirement.norm?.let {
-                    val paragraph = newParagraph()
-                    paragraph.createRun().apply { setText("Norm Reference: "); isBold = true }
-                    paragraph.createRun().setText(it)
-                }
-                val canonicalUseCases = setOf("IT", "OT", "NT")
-                val idSuffix = buildString {
-                    append(requirementNumber)
-                    append(".")
-                    append(requirement.versionNumber)
-                    requirement.usecases.map { it.name }.filter { it in canonicalUseCases }.sorted().forEach {
-                        append(".")
-                        append(it)
-                    }
-                }
-                val idParagraph = newParagraph()
-                idParagraph.alignment = org.apache.poi.xwpf.usermodel.ParagraphAlignment.LEFT
-                val idRun = idParagraph.createRun()
-                idRun.setText("ID $idSuffix")
-                idRun.fontSize = 8
-                idRun.color = "999999"
-                newParagraph()
-                requirementNumber++
-            }
-        }
+        RequirementWordContentRenderer.append(document, requirements, newParagraph)
     }
 
     private fun createWordDocument(requirements: List<Requirement>, title: String): XWPFDocument {
         val document = XWPFDocument()
-        
+        WordExportStyle.setStandardMargins(document)
+        WordExportStyle.addStandardHeaderFooter(document, title)
+
         // Title page
+        val kicker = document.createParagraph()
+        kicker.alignment = org.apache.poi.xwpf.usermodel.ParagraphAlignment.CENTER
+        WordExportStyle.run(kicker, "SECURITY REQUIREMENTS", size = WordExportStyle.SIZE_KICKER, bold = true, color = WordExportStyle.COLOR_ACCENT)
+
         val titleParagraph = document.createParagraph()
         titleParagraph.alignment = org.apache.poi.xwpf.usermodel.ParagraphAlignment.CENTER
-        val titleRun = titleParagraph.createRun()
-        titleRun.setText(title)
-        titleRun.fontSize = 18
-        titleRun.isBold = true
-        
+        titleParagraph.spacingAfter = 120
+        WordExportStyle.run(titleParagraph, title, size = WordExportStyle.SIZE_DOCUMENT_TITLE, bold = true)
+
         // Generation date
         val dateParagraph = document.createParagraph()
         dateParagraph.alignment = org.apache.poi.xwpf.usermodel.ParagraphAlignment.CENTER
-        val dateRun = dateParagraph.createRun()
-        dateRun.setText("Generated on: ${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))}")
-        
+        WordExportStyle.run(
+            dateParagraph,
+            "Generated on ${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))}",
+            color = WordExportStyle.COLOR_SECONDARY
+        )
+
         // Add empty line
         document.createParagraph()
-        
+
         // Table of Contents placeholder
         val tocParagraph = document.createParagraph()
-        val tocRun = tocParagraph.createRun()
-        tocRun.setText("Table of Contents")
-        tocRun.fontSize = 14
-        tocRun.isBold = true
-        
+        WordExportStyle.run(tocParagraph, "Table of Contents", size = WordExportStyle.SIZE_SECTION_HEADING, bold = true)
+
         val tocFieldParagraph = document.createParagraph()
-        val tocFieldRun = tocFieldParagraph.createRun()
-        tocFieldRun.setText("(Please update this field manually in Word: right-click → Update Field)")
-        
+        WordExportStyle.run(
+            tocFieldParagraph,
+            "(Please update this field manually in Word: right-click → Update Field)",
+            size = WordExportStyle.SIZE_META, italic = true, color = WordExportStyle.COLOR_SECONDARY
+        )
+
         // Add page break
         document.createParagraph().createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE)
-        
-        // Group requirements by chapter
-        val requirementsByChapter = requirements.groupBy { it.chapter ?: "No Chapter" }
-        var requirementNumber = 1
 
-        var isFirstChapter = true
-        for ((chapter, chapterRequirements) in requirementsByChapter) {
-            // Page break before each chapter (first chapter already has one from TOC)
-            if (!isFirstChapter) {
-                document.createParagraph().createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE)
-            }
-            isFirstChapter = false
+        RequirementWordContentRenderer.append(document, requirements)
 
-            // Chapter heading with Heading 1 style for TOC
-            val chapterParagraph = document.createParagraph()
-            chapterParagraph.style = "Heading1"
-            val chapterRun = chapterParagraph.createRun()
-            chapterRun.setText(chapter)
-            chapterRun.fontSize = 16
-            chapterRun.isBold = true
-
-            document.createParagraph() // Empty line
-            
-            for (requirement in chapterRequirements) {
-                // Requirement header with light green background
-                val reqHeaderParagraph = document.createParagraph()
-                // Set light green background shading
-                val ctp = reqHeaderParagraph.ctp
-                val ppr = if (ctp.isSetPPr) ctp.pPr else ctp.addNewPPr()
-                val shd = if (ppr.isSetShd) ppr.shd else ppr.addNewShd()
-                shd.fill = "C1D5C0"  // Soft sage green (Scandinavian style)
-
-                val reqHeaderRun = reqHeaderParagraph.createRun()
-                reqHeaderRun.setText("REQ-$requirementNumber: ${requirement.shortreq}")
-                reqHeaderRun.fontSize = 12
-                reqHeaderRun.isBold = true
-                
-                // Details - no label, content follows directly after header
-                requirement.details?.let { details ->
-                    RequirementRichTextRenderer.write(details) { document.createParagraph() }
-                }
-
-                // Motivation - label bold, content regular
-                requirement.motivation?.let { motivation ->
-                    document.createParagraph().createRun().apply { setText("Motivation:"); isBold = true }
-                    RequirementRichTextRenderer.write(motivation) { document.createParagraph() }
-                }
-
-                // Example - label bold, content regular
-                requirement.example?.let { example ->
-                    document.createParagraph().createRun().apply { setText("Example:"); isBold = true }
-                    RequirementRichTextRenderer.write(example) { document.createParagraph() }
-                }
-
-                // Norm reference - label bold, content regular
-                requirement.norm?.let { norm ->
-                    val normParagraph = document.createParagraph()
-                    val normLabelRun = normParagraph.createRun()
-                    normLabelRun.setText("Norm Reference: ")
-                    normLabelRun.isBold = true
-                    val normValueRun = normParagraph.createRun()
-                    normValueRun.setText(norm)
-                }
-
-                // Internal ID with use cases - small, non-dominant font
-                // Only include the canonical use case IDs: IT, OT, NT
-                val canonicalUseCases = setOf("IT", "OT", "NT")
-                val idSuffix = buildString {
-                    append(requirementNumber)
-                    append(".")
-                    append(requirement.versionNumber)
-                    val usecaseNames = requirement.usecases
-                        .map { it.name }
-                        .filter { it in canonicalUseCases }
-                        .sorted()
-                    for (uc in usecaseNames) {
-                        append(".")
-                        append(uc)
-                    }
-                }
-                val idParagraph = document.createParagraph()
-                idParagraph.alignment = org.apache.poi.xwpf.usermodel.ParagraphAlignment.LEFT
-                val idRun = idParagraph.createRun()
-                idRun.setText("ID $idSuffix")
-                idRun.fontSize = 8
-                idRun.color = "999999"
-
-                document.createParagraph() // Empty line between requirements
-                requirementNumber++
-            }
-        }
-        
         return document
     }
 
@@ -1551,39 +1412,40 @@ open class RequirementController(
     private fun createTranslatedWordDocument(requirements: List<Requirement>, title: String, targetLanguage: String): XWPFDocument {
         val document = XWPFDocument()
         val languageName = translationService.getSupportedLanguages()[targetLanguage] ?: targetLanguage
-        
+        WordExportStyle.setStandardMargins(document)
+        WordExportStyle.addStandardHeaderFooter(document, title)
+
         // Title page with translation info
         val titleParagraph = document.createParagraph()
         titleParagraph.alignment = org.apache.poi.xwpf.usermodel.ParagraphAlignment.CENTER
-        val titleRun = titleParagraph.createRun()
-        titleRun.setText(title)
-        titleRun.fontSize = 18
-        titleRun.isBold = true
-        
+        titleParagraph.spacingAfter = 120
+        WordExportStyle.run(titleParagraph, title, size = WordExportStyle.SIZE_DOCUMENT_TITLE, bold = true)
+
         // Translation info
         val translationInfoParagraph = document.createParagraph()
         translationInfoParagraph.alignment = org.apache.poi.xwpf.usermodel.ParagraphAlignment.CENTER
-        val translationInfoRun = translationInfoParagraph.createRun()
-        translationInfoRun.setText("Translated to: $languageName")
-        translationInfoRun.fontSize = 12
-        translationInfoRun.isItalic = true
-        
+        WordExportStyle.run(translationInfoParagraph, "Translated to: $languageName", size = 12, italic = true, color = WordExportStyle.COLOR_ACCENT)
+
         // Generation date
         val dateParagraph = document.createParagraph()
         dateParagraph.alignment = org.apache.poi.xwpf.usermodel.ParagraphAlignment.CENTER
-        val dateRun = dateParagraph.createRun()
-        dateRun.setText("Generated on: ${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))}")
-        
+        WordExportStyle.run(
+            dateParagraph,
+            "Generated on ${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))}",
+            color = WordExportStyle.COLOR_SECONDARY
+        )
+
         // Add empty line
         document.createParagraph()
-        
+
         // Note about translation
         val noteParagraph = document.createParagraph()
-        val noteRun = noteParagraph.createRun()
-        noteRun.setText("Note: This document contains AI-translated content. Please review for accuracy and context.")
-        noteRun.fontSize = 10
-        noteRun.isItalic = true
-        
+        WordExportStyle.run(
+            noteParagraph,
+            "Note: This document contains AI-translated content. Please review for accuracy and context.",
+            italic = true, color = WordExportStyle.COLOR_SECONDARY
+        )
+
         // Add page break
         document.createParagraph().createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE)
 
@@ -1598,11 +1460,7 @@ open class RequirementController(
 
         for ((chapter, chapterRequirements) in requirementsByChapter) {
             if (chapter != null) {
-                val chapterParagraph = document.createParagraph()
-                val chapterRun = chapterParagraph.createRun()
-                chapterRun.setText("Chapter: $chapter")
-                chapterRun.fontSize = 14
-                chapterRun.isBold = true
+                WordExportStyle.sectionHeading(document, chapter)
                 document.createParagraph()
             }
 
@@ -1611,33 +1469,35 @@ open class RequirementController(
                 val shortReqTranslated = translationMap[requirement.shortreq] ?: requirement.shortreq
 
                 val shortReqParagraph = document.createParagraph()
-                val ctp = shortReqParagraph.ctp
-                val ppr = if (ctp.isSetPPr) ctp.pPr else ctp.addNewPPr()
-                val shd = if (ppr.isSetShd) ppr.shd else ppr.addNewShd()
-                shd.fill = "C1D5C0"
-
-                val shortReqRun = shortReqParagraph.createRun()
-                shortReqRun.setText("REQ-$requirementNumber: $shortReqTranslated")
-                shortReqRun.fontSize = 12
-                shortReqRun.isBold = true
+                WordExportStyle.shadeParagraph(shortReqParagraph)
+                shortReqParagraph.spacingBefore = 80
+                shortReqParagraph.spacingAfter = 80
+                WordExportStyle.run(
+                    shortReqParagraph, "REQ-$requirementNumber:",
+                    size = WordExportStyle.SIZE_REQUIREMENT_ID, bold = true, color = WordExportStyle.COLOR_ACCENT
+                )
+                WordExportStyle.run(
+                    shortReqParagraph, " $shortReqTranslated",
+                    size = WordExportStyle.SIZE_REQUIREMENT_ID, bold = true
+                )
 
                 // Details (use batch-translated value)
                 if (!requirement.details.isNullOrBlank()) {
-                    document.createParagraph().createRun().apply { setText("Details:"); isBold = true }
+                    document.createParagraph().let { WordExportStyle.run(it, "Details", bold = true, color = WordExportStyle.COLOR_SECONDARY) }
                     val detailsTranslated = translationMap[requirement.details] ?: requirement.details!!
                     RequirementRichTextRenderer.write(detailsTranslated) { document.createParagraph() }
                 }
 
                 // Motivation (use batch-translated value)
                 if (!requirement.motivation.isNullOrBlank()) {
-                    document.createParagraph().createRun().apply { setText("Motivation:"); isBold = true }
+                    document.createParagraph().let { WordExportStyle.run(it, "Motivation", bold = true, color = WordExportStyle.COLOR_SECONDARY) }
                     val motivationTranslated = translationMap[requirement.motivation] ?: requirement.motivation!!
                     RequirementRichTextRenderer.write(motivationTranslated) { document.createParagraph() }
                 }
 
                 // Example (use batch-translated value)
                 if (!requirement.example.isNullOrBlank()) {
-                    document.createParagraph().createRun().apply { setText("Example:"); isBold = true }
+                    document.createParagraph().let { WordExportStyle.run(it, "Example", bold = true, color = WordExportStyle.COLOR_SECONDARY) }
                     val exampleTranslated = translationMap[requirement.example] ?: requirement.example!!
                     RequirementRichTextRenderer.write(exampleTranslated) { document.createParagraph() }
                 }
@@ -1645,25 +1505,17 @@ open class RequirementController(
                 // Use cases (use batch-translated label)
                 if (requirement.usecases.isNotEmpty()) {
                     val usecaseParagraph = document.createParagraph()
-                    val usecaseRun = usecaseParagraph.createRun()
                     val usecaseLabel = translationMap["Use Cases"] ?: "Use Cases"
-                    usecaseRun.setText("$usecaseLabel: ")
-                    usecaseRun.isBold = true
-
-                    val usecaseValueRun = usecaseParagraph.createRun()
-                    usecaseValueRun.setText(requirement.usecases.joinToString(", ") { it.name })
+                    WordExportStyle.run(usecaseParagraph, "$usecaseLabel: ", bold = true, color = WordExportStyle.COLOR_SECONDARY)
+                    WordExportStyle.run(usecaseParagraph, requirement.usecases.joinToString(", ") { it.name })
                 }
 
                 // Norms (use batch-translated label)
                 if (requirement.norms.isNotEmpty()) {
                     val normParagraph = document.createParagraph()
-                    val normRun = normParagraph.createRun()
                     val normLabel = translationMap["Standards/Norms"] ?: "Standards/Norms"
-                    normRun.setText("$normLabel: ")
-                    normRun.isBold = true
-
-                    val normValueRun = normParagraph.createRun()
-                    normValueRun.setText(requirement.norms.joinToString(", ") { it.name })
+                    WordExportStyle.run(normParagraph, "$normLabel: ", bold = true, color = WordExportStyle.COLOR_SECONDARY)
+                    WordExportStyle.run(normParagraph, requirement.norms.joinToString(", ") { it.name })
                 }
 
                 // Internal ID with use cases - small, non-dominant font
@@ -1674,10 +1526,7 @@ open class RequirementController(
                 }
                 val idParagraph = document.createParagraph()
                 idParagraph.alignment = org.apache.poi.xwpf.usermodel.ParagraphAlignment.LEFT
-                val idRun = idParagraph.createRun()
-                idRun.setText("ID $idSuffix")
-                idRun.fontSize = 8
-                idRun.color = "999999"
+                WordExportStyle.run(idParagraph, "ID $idSuffix", size = WordExportStyle.SIZE_META, color = WordExportStyle.COLOR_SECONDARY)
 
                 // Add space between requirements
                 document.createParagraph()

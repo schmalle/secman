@@ -19,6 +19,7 @@ import com.secman.domain.RequirementExportTemplateMode
 import com.secman.service.RequirementIdService
 import com.secman.service.RequirementService
 import com.secman.service.TranslationService
+import com.secman.service.WordExportStyle
 import io.micronaut.http.multipart.CompletedFileUpload
 import io.mockk.every
 import io.mockk.mockk
@@ -137,7 +138,7 @@ class RequirementControllerWordExportTest {
     }
 
     @Test
-    fun `translated word export applies green background to requirement headers`() {
+    fun `translated word export applies the surface tint to requirement headers`() {
         val requirements = listOf(
             requirement(id = 285L, internalId = "REQ-285", shortreq = "Use SSM for EC2 console access")
         )
@@ -145,7 +146,7 @@ class RequirementControllerWordExportTest {
         val document = createTranslatedWordDocument(requirements)
         val headerParagraph = document.paragraphs.first { it.text == "REQ-1: Use SSM for EC2 console access" }
 
-        assertThat(shadingFillToHex(headerParagraph.ctp.pPr.shd.fill)).isEqualTo("C1D5C0")
+        assertThat(shadingFillToHex(headerParagraph.ctp.pPr.shd.fill)).isEqualTo(WordExportStyle.COLOR_SURFACE)
     }
 
     @Test
