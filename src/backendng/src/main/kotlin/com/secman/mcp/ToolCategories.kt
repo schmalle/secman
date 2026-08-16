@@ -13,7 +13,7 @@ import com.secman.domain.McpPermission
 object ToolCategories {
     val READ_ONLY_TOOLS = setOf(
         "get_requirements", "search_requirements", "get_assessments",
-        "search_assessments", "get_tags", "search_all"
+        "search_assessments", "get_tags", "search_all", "export_requirements"
     )
     val WRITE_TOOLS = setOf(
         "create_requirement", "update_requirement", "delete_requirement",

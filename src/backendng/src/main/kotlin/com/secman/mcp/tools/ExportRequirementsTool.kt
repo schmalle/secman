@@ -5,9 +5,12 @@ import com.secman.util.ExcelSanitizer
 import com.secman.domain.Requirement
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.RequirementRepository
+import com.secman.service.RequirementWordContentRenderer
+import com.secman.service.WordExportStyle
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
+import org.apache.poi.xwpf.usermodel.ParagraphAlignment
 import org.apache.poi.xwpf.usermodel.XWPFDocument
 import java.io.ByteArrayOutputStream
 import java.time.LocalDateTime
@@ -42,6 +45,15 @@ class ExportRequirementsTool(
     )
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
+        // Mirrors RequirementController's own @Secured("ADMIN", "REQ", "SECCHAMPION") boundary —
+        // the requirement corpus is not asset/owner-scoped, so a role gate is the right control
+        // here rather than a row-scope check.
+        requireAnyRole(
+            context, "ADMIN", "REQ", "SECCHAMPION",
+            code = "ROLE_REQUIRED",
+            message = "ADMIN, REQ or SECCHAMPION role required to export requirements"
+        )?.let { return it }
+
         val format = arguments["format"] as? String
             ?: return McpToolResult.error("VALIDATION_ERROR", "Format parameter is required")
 
@@ -167,74 +179,29 @@ class ExportRequirementsTool(
     }
 
     /**
-     * Create Word document with requirements data.
-     * Uses same format as RequirementController for consistency.
+     * Create Word document with requirements data, styled with [WordExportStyle] and rendered
+     * through [RequirementWordContentRenderer] — the same design and body-rendering logic as
+     * every other requirement export, so a document fetched via MCP looks identical to one
+     * downloaded through the UI.
      */
     private fun createWordDocument(requirements: List<Requirement>): XWPFDocument {
         val document = XWPFDocument()
+        val title = "Security Requirements Export"
+        WordExportStyle.setStandardMargins(document)
+        WordExportStyle.addStandardHeaderFooter(document, title)
 
-        // Title
+        val kicker = document.createParagraph()
+        kicker.alignment = ParagraphAlignment.CENTER
+        WordExportStyle.run(kicker, "SECURITY REQUIREMENTS", size = WordExportStyle.SIZE_KICKER, bold = true, color = WordExportStyle.COLOR_ACCENT)
+
         val titleParagraph = document.createParagraph()
-        val titleRun = titleParagraph.createRun()
-        titleRun.setText("Security Requirements Export")
-        titleRun.isBold = true
-        titleRun.fontSize = 18
+        titleParagraph.alignment = ParagraphAlignment.CENTER
+        titleParagraph.spacingAfter = 120
+        WordExportStyle.run(titleParagraph, title, size = WordExportStyle.SIZE_DOCUMENT_TITLE, bold = true)
 
         document.createParagraph()
 
-        // Group by chapter
-        val groupedByChapter = requirements.groupBy { it.chapter ?: "Uncategorized" }
-
-        for ((chapter, chapterRequirements) in groupedByChapter) {
-            // Chapter header
-            val chapterParagraph = document.createParagraph()
-            val chapterRun = chapterParagraph.createRun()
-            chapterRun.setText("Chapter: $chapter")
-            chapterRun.isBold = true
-            chapterRun.fontSize = 14
-
-            document.createParagraph()
-
-            var requirementNumber = 1
-            for (requirement in chapterRequirements) {
-                // Requirement header
-                val reqParagraph = document.createParagraph()
-                val reqRun = reqParagraph.createRun()
-                reqRun.setText("${requirementNumber}. ${requirement.shortreq}")
-                reqRun.isBold = true
-
-                // Details
-                requirement.details?.let { details ->
-                    val detailsParagraph = document.createParagraph()
-                    val detailsRun = detailsParagraph.createRun()
-                    detailsRun.setText(details)
-                }
-
-                // Motivation
-                requirement.motivation?.let { motivation ->
-                    val motivationParagraph = document.createParagraph()
-                    val motivationRun = motivationParagraph.createRun()
-                    motivationRun.setText("Motivation: $motivation")
-                }
-
-                // Example
-                requirement.example?.let { example ->
-                    val exampleParagraph = document.createParagraph()
-                    val exampleRun = exampleParagraph.createRun()
-                    exampleRun.setText("Example: $example")
-                }
-
-                // Norm reference
-                requirement.norm?.let { norm ->
-                    val normParagraph = document.createParagraph()
-                    val normRun = normParagraph.createRun()
-                    normRun.setText("Norm Reference: $norm")
-                }
-
-                document.createParagraph()
-                requirementNumber++
-            }
-        }
+        RequirementWordContentRenderer.append(document, requirements)
 
         return document
     }

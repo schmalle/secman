@@ -150,7 +150,7 @@ Within a map, a tool is authorized when the caller holds **any** of the permissi
 | Tool | Arguments | Roles | Deleg. |
 |---|---|---|---|
 | `get_requirements` | `search`, `usecase`, `norm`, `chapter`, `detailed`, `limit` (default 50), `offset` | any | — |
-| `export_requirements` | `format`* (`xlsx\|docx`) | any | — |
+| `export_requirements` | `format`* (`xlsx\|docx`) | ADMIN, REQ, SECCHAMPION | — |
 | `add_requirement` | `shortreq`*, `details`, `motivation`, `example`, `norm`, `usecase`, `chapter` | any | — |
 | `delete_all_requirements` | `confirm`* (boolean `true`) | ADMIN | — |
 

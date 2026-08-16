@@ -3,7 +3,8 @@ package com.secman.controller
 import com.secman.domain.Requirement
 import com.secman.repository.RequirementRepository
 import com.secman.repository.UseCaseRepository
-import com.secman.service.RequirementRichTextRenderer
+import com.secman.service.RequirementWordContentRenderer
+import com.secman.service.WordExportStyle
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.MediaType
@@ -104,124 +105,45 @@ open class PublicRequirementDownloadController(
 
     private fun createWordDocument(requirements: List<Requirement>, title: String): XWPFDocument {
         val document = XWPFDocument()
+        WordExportStyle.setStandardMargins(document)
+        WordExportStyle.addStandardHeaderFooter(document, title)
 
         // Title
+        val kicker = document.createParagraph()
+        kicker.alignment = ParagraphAlignment.CENTER
+        WordExportStyle.run(kicker, "SECURITY REQUIREMENTS", size = WordExportStyle.SIZE_KICKER, bold = true, color = WordExportStyle.COLOR_ACCENT)
+
         val titleParagraph = document.createParagraph()
         titleParagraph.alignment = ParagraphAlignment.CENTER
-        val titleRun = titleParagraph.createRun()
-        titleRun.setText(title)
-        titleRun.fontSize = 18
-        titleRun.isBold = true
+        titleParagraph.spacingAfter = 120
+        WordExportStyle.run(titleParagraph, title, size = WordExportStyle.SIZE_DOCUMENT_TITLE, bold = true)
 
         // Generation date
         val dateParagraph = document.createParagraph()
         dateParagraph.alignment = ParagraphAlignment.CENTER
-        val dateRun = dateParagraph.createRun()
-        dateRun.setText("Generated on: ${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))}")
+        WordExportStyle.run(
+            dateParagraph,
+            "Generated on ${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))}",
+            color = WordExportStyle.COLOR_SECONDARY
+        )
 
         document.createParagraph()
 
         // Table of Contents placeholder
         val tocParagraph = document.createParagraph()
-        val tocRun = tocParagraph.createRun()
-        tocRun.setText("Table of Contents")
-        tocRun.fontSize = 14
-        tocRun.isBold = true
+        WordExportStyle.run(tocParagraph, "Table of Contents", size = WordExportStyle.SIZE_SECTION_HEADING, bold = true)
 
         val tocFieldParagraph = document.createParagraph()
-        val tocFieldRun = tocFieldParagraph.createRun()
-        tocFieldRun.setText("(Please update this field manually in Word: right-click → Update Field)")
+        WordExportStyle.run(
+            tocFieldParagraph,
+            "(Please update this field manually in Word: right-click → Update Field)",
+            size = WordExportStyle.SIZE_META, italic = true, color = WordExportStyle.COLOR_SECONDARY
+        )
 
         // Page break
         document.createParagraph().createRun().addBreak(BreakType.PAGE)
 
-        // Group requirements by chapter
-        val requirementsByChapter = requirements.groupBy { it.chapter ?: "No Chapter" }
-        var requirementNumber = 1
-
-        var isFirstChapter = true
-        for ((chapter, chapterRequirements) in requirementsByChapter) {
-            if (!isFirstChapter) {
-                document.createParagraph().createRun().addBreak(BreakType.PAGE)
-            }
-            isFirstChapter = false
-
-            // Chapter heading
-            val chapterParagraph = document.createParagraph()
-            chapterParagraph.style = "Heading1"
-            val chapterRun = chapterParagraph.createRun()
-            chapterRun.setText(chapter)
-            chapterRun.fontSize = 16
-            chapterRun.isBold = true
-
-            document.createParagraph()
-
-            for (requirement in chapterRequirements) {
-                // Requirement header with light green background
-                val reqHeaderParagraph = document.createParagraph()
-                val ctp = reqHeaderParagraph.ctp
-                val ppr = if (ctp.isSetPPr) ctp.pPr else ctp.addNewPPr()
-                val shd = if (ppr.isSetShd) ppr.shd else ppr.addNewShd()
-                shd.fill = "C1D5C0"
-
-                val reqHeaderRun = reqHeaderParagraph.createRun()
-                reqHeaderRun.setText("REQ-$requirementNumber: ${requirement.shortreq}")
-                reqHeaderRun.fontSize = 12
-                reqHeaderRun.isBold = true
-
-                // Details
-                requirement.details?.let { details ->
-                    RequirementRichTextRenderer.write(details) { document.createParagraph() }
-                }
-
-                // Motivation
-                requirement.motivation?.let { motivation ->
-                    document.createParagraph().createRun().apply { setText("Motivation:"); isBold = true }
-                    RequirementRichTextRenderer.write(motivation) { document.createParagraph() }
-                }
-
-                // Example
-                requirement.example?.let { example ->
-                    document.createParagraph().createRun().apply { setText("Example:"); isBold = true }
-                    RequirementRichTextRenderer.write(example) { document.createParagraph() }
-                }
-
-                // Norm reference
-                requirement.norm?.let { norm ->
-                    val normParagraph = document.createParagraph()
-                    val normLabelRun = normParagraph.createRun()
-                    normLabelRun.setText("Norm Reference: ")
-                    normLabelRun.isBold = true
-                    val normValueRun = normParagraph.createRun()
-                    normValueRun.setText(norm)
-                }
-
-                // Internal ID with use cases
-                val canonicalUseCases = setOf("IT", "OT", "NT")
-                val idSuffix = buildString {
-                    append(requirementNumber)
-                    append(".")
-                    append(requirement.versionNumber)
-                    val usecaseNames = requirement.usecases
-                        .map { it.name }
-                        .filter { it in canonicalUseCases }
-                        .sorted()
-                    for (uc in usecaseNames) {
-                        append(".")
-                        append(uc)
-                    }
-                }
-                val idParagraph = document.createParagraph()
-                idParagraph.alignment = ParagraphAlignment.LEFT
-                val idRun = idParagraph.createRun()
-                idRun.setText("ID $idSuffix")
-                idRun.fontSize = 8
-                idRun.color = "999999"
-
-                document.createParagraph()
-                requirementNumber++
-            }
-        }
+        RequirementWordContentRenderer.append(document, requirements)
 
         return document
     }

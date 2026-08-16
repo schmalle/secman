@@ -65,12 +65,13 @@ object RequirementRichTextRenderer {
     fun write(text: String, newParagraph: () -> XWPFParagraph) {
         for (line in toLines(text)) {
             val paragraph = newParagraph()
+            paragraph.spacingAfter = 60
             val bulletMatch = BULLET_LINE_RE.matchEntire(line)
             if (bulletMatch != null) {
                 paragraph.indentationLeft = 360
-                paragraph.createRun().setText("• ${bulletMatch.groupValues[1]}")
+                WordExportStyle.run(paragraph, "• ${bulletMatch.groupValues[1]}")
             } else {
-                paragraph.createRun().setText(line)
+                WordExportStyle.run(paragraph, line)
             }
         }
     }
