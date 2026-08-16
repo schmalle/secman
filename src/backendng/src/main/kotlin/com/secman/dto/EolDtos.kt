@@ -128,8 +128,15 @@ data class EolSyncResponse(
 data class EolNotificationRequest(
     /** Notify about components going EOL within this many months (default 12). */
     val months: Long = 12,
+    /** Resolve recipients and findings as usual but send no mail; see [EolNotificationRecipientResult.sent]. */
     val dryRun: Boolean = false,
-    /** Restrict the run to one recipient address (case-insensitive). */
+    /**
+     * Restrict delivery to one recipient address (case-insensitive), e.g. to test
+     * a specific account owner's notification without mailing the whole run.
+     * Findings are still resolved for every recipient; every other recipient is
+     * simply dropped before send, so [EolNotificationResponse.recipientsResolved]
+     * reflects only the restricted set.
+     */
     val onlyEmail: String? = null,
     /** Include components already past EOL alongside the upcoming ones. */
     val includeAlreadyEol: Boolean = false

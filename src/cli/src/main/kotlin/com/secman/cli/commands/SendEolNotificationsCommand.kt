@@ -16,6 +16,15 @@ import picocli.CommandLine.Spec
  * account's owners, workgroup members and sharing targets, falling back to the
  * asset's own owner. Run `eol-sync` first — this command reads stored findings
  * and performs no matching of its own.
+ *
+ * Two safety valves before a real run touches every owner's inbox:
+ *  - `--dry-run` resolves the full recipient list and prints it, sending no mail
+ *    (`EolNotificationService.sendEolNotifications` short-circuits the send).
+ *  - `--only-email` narrows delivery to one address — e.g. to verify a single
+ *    account owner receives their notification, or to re-notify just that
+ *    person after a delivery failure — without touching every other resolved
+ *    recipient. Findings are still resolved for everyone; every other
+ *    recipient is dropped before send.
  */
 @Singleton
 @Command(
@@ -28,13 +37,17 @@ class SendEolNotificationsCommand : Runnable {
     @Option(names = ["--months"], description = ["Look-ahead window in months, 1-60 (default: 12)"])
     var months: Int = 12
 
-    @Option(names = ["--dry-run"], description = ["Preview planned recipients without sending emails"])
+    @Option(names = ["--dry-run"], description = ["Resolve and print the recipient list without sending any email"])
     var dryRun: Boolean = false
 
     @Option(names = ["--include-already-eol"], description = ["Also report components that are already past EOL"])
     var includeAlreadyEol: Boolean = false
 
-    @Option(names = ["--only-email"], description = ["Only notify this address (case-insensitive)"])
+    @Option(
+        names = ["--only-email"],
+        description = ["Send only to this recipient address (case-insensitive); every other resolved recipient is skipped"],
+        paramLabel = "<address>"
+    )
     var onlyEmail: String? = null
 
     @Option(names = ["--verbose", "-v"], description = ["Per-recipient delivery status"])

@@ -227,6 +227,20 @@ distinguishable from a missing one.
 findings whose EOL date falls in the next `--months` months (default 12) by
 recipient and sends one consolidated mail each.
 
+Two safety valves, both ADMIN-only like the rest of this endpoint:
+
+- **`--dry-run`** resolves every recipient and their findings exactly as a real
+  run would, but sends no mail — `EolNotificationResponse.dryRun` is echoed
+  back and every `EolNotificationRecipientResult.sent` is `false`. Use it to
+  preview who is about to be mailed before committing to a real run.
+- **`--only-email <address>`** restricts *delivery* to one address
+  (case-insensitive); every other resolved recipient is dropped before send
+  and does not appear in the response at all. This is how one account owner
+  can be notified — or re-notified after a delivery failure — without mailing
+  the rest of the estate. It composes with `--dry-run`: `--only-email` alone
+  narrows who is *mailed*, `--dry-run` alone narrows to *nobody*, and both
+  together preview exactly what that one recipient would receive.
+
 Recipients reuse `AwsAccountRecipientResolver` — the single source of truth for
 "who owns this AWS account", already shared by the vulnerability and
 outdated-asset mails: the account's `UserMapping` owners, members of workgroups
@@ -269,7 +283,13 @@ secman eol-sync --scan-only
 # Who would be notified, without sending anything
 secman send-eol-notifications --dry-run --verbose
 
-# Send
+# Preview exactly what one owner would receive, without sending
+secman send-eol-notifications --dry-run --only-email owner@example.com --verbose
+
+# Notify (or re-notify) just that one owner, e.g. after a delivery failure
+secman send-eol-notifications --only-email owner@example.com --verbose
+
+# Send to everyone
 secman send-eol-notifications --months 12
 ```
 
