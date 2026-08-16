@@ -185,6 +185,27 @@ micronaut:
       - pattern: /api/public/account-onboarding/**
         access:
           - isAnonymous()
+      # Risk-assessment respondent links (ResponseController): the recipient of the assessment
+      # email holds no SecMan account, and the token in the path is the sole capability — the
+      # same shape as /api/public/account-onboarding above. Listed explicitly for the same
+      # reason: without it the /api/** catch-all forces isAuthenticated() first, so a respondent
+      # with no session (or a stale one) gets 401 instead of the form.
+      # Scoped to exactly the three token routes: `/api/responses/assessment/*` is a single path
+      # segment, so it does not reach `/api/responses/assessment/{id}/email/{email}` or any other
+      # multi-segment authenticated sub-route; `/api/responses/*/save` and `/api/responses/*/submit`
+      # do not match the authenticated `/api/responses/assessment/{id}/save`, which has an extra
+      # "assessment" segment. Every authenticated route under /api/responses/** keeps its own
+      # explicit @Secured(IS_AUTHENTICATED), which still rejects an unauthenticated caller even
+      # where these broader patterns also match (any REJECTED verdict wins over an ALLOWED one).
+      - pattern: /api/responses/assessment/*
+        access:
+          - isAnonymous()
+      - pattern: /api/responses/*/save
+        access:
+          - isAnonymous()
+      - pattern: /api/responses/*/submit
+        access:
+          - isAnonymous()
       - pattern: "/api/**"
         http-method: OPTIONS
         access:

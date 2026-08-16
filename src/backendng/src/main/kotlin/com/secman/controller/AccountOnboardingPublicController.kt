@@ -33,8 +33,10 @@ import java.time.format.DateTimeFormatter
  * no header involved, which shapes every decision here:
  *
  * - **`@Secured(SecurityRule.IS_ANONYMOUS)` is declared explicitly, on the class and on every
- *   method.** Not inherited, not omitted. `ResponseController`'s token route omits the
- *   annotation entirely; that is a pre-existing A01 gap, not a pattern to copy.
+ *   method.** Not inherited, not omitted. `ResponseController`'s token routes carry the same
+ *   explicit annotation (plus matching `intercept-url-map` entries in `application.yml`) for
+ *   the identical reason — an undeclared reliance on the `/api/**` catch-all is an A01 gap,
+ *   not a pattern to copy.
  * - **Every token failure returns the same bytes.** Unknown, malformed, expired, already used
  *   and cancelled all produce [notFoundBody]. A response that distinguished them would turn
  *   this endpoint into an oracle for "does this token exist".
