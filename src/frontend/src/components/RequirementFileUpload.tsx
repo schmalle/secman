@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { csrfPost, csrfDelete } from '../utils/csrf';
 import { authenticatedFetch } from '../utils/auth';
 import { formatServerDate } from '../utils/dateUtils';
+import { downloadBlob } from '../utils/download';
 
 interface RequirementFile {
     id: number;
@@ -152,15 +153,7 @@ const RequirementFileUpload: React.FC<RequirementFileUploadProps> = ({
             } as RequestInit);
             
             if (response.ok) {
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
+                downloadBlob(await response.blob(), filename);
             } else {
                 setError('Failed to download file');
             }

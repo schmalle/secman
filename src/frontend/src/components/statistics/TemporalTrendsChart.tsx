@@ -15,7 +15,7 @@
  * User Story: US4 - View Temporal Trends (P4)
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -29,6 +29,8 @@ import {
 import { Line } from 'react-chartjs-2';
 import { vulnerabilityStatisticsApi, type TemporalTrendsDto } from '../../services/api/vulnerabilityStatisticsApi';
 import { severityHex, severityHexAlpha } from '../../utils/severityColors';
+import { ChartCardEmpty, ChartCardError, ChartCardLoading } from './ChartCardStates';
+import { useChartData } from './useChartData';
 
 // Register Chart.js components
 ChartJS.register(
@@ -44,79 +46,27 @@ ChartJS.register(
 type TimeRange = 30 | 60 | 90;
 
 export default function TemporalTrendsChart() {
-  const [data, setData] = useState<TemporalTrendsDto | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedRange, setSelectedRange] = useState<TimeRange>(30);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await vulnerabilityStatisticsApi.getTemporalTrends(selectedRange);
-        setData(result);
-      } catch (err) {
-        console.error('Error fetching temporal trends:', err);
-        setError('Failed to load temporal trends. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [selectedRange]);
+  const { data, loading, error } = useChartData<TemporalTrendsDto>(
+    () => vulnerabilityStatisticsApi.getTemporalTrends(selectedRange),
+    [selectedRange],
+    'Failed to load temporal trends. Please try again later.',
+    'temporal trends',
+  );
 
   const handleRangeChange = (range: TimeRange) => {
     setSelectedRange(range);
   };
 
-  // Loading state
-  if (loading) {
-    return (
-      <div className="card">
-        <div className="card-body text-center py-5">
-          <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Loading...</span>
-          </div>
-          <p className="mt-3 text-muted">Loading temporal trends...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="card">
-        <div className="card-body">
-          <div className="alert alert-danger" role="alert">
-            <i className="bi bi-exclamation-triangle me-2"></i>
-            {error}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Empty state
+  if (loading) return <ChartCardLoading label="Loading temporal trends..." />;
+  if (error) return <ChartCardError message={error} />;
   if (!data || !data.dataPoints || data.dataPoints.length === 0) {
     return (
-      <div className="card">
-        <div className="card-header d-flex justify-content-between align-items-center">
-          <h5 className="mb-0">
-            <i className="bi bi-graph-up me-2"></i>
-            Temporal Trends
-          </h5>
-        </div>
-        <div className="card-body text-center py-5">
-          <i className="bi bi-inbox display-4 text-muted"></i>
-          <p className="mt-3 text-muted">No temporal trend data available.</p>
-          <small className="text-muted">
-            Import vulnerability scans with scan timestamps to view trends over time.
-          </small>
-        </div>
-      </div>
+      <ChartCardEmpty
+        heading={{ icon: 'bi-graph-up', title: 'Temporal Trends' }}
+        message="No temporal trend data available."
+        hint="Import vulnerability scans with scan timestamps to view trends over time."
+      />
     );
   }
 

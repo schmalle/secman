@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { downloadBlob } from '../utils/download';
 
 // API base URL - always use relative URLs to go through Astro's proxy and avoid CORS issues
 const API_BASE_URL = import.meta.env.PUBLIC_API_URL || '';
@@ -97,18 +98,6 @@ export async function exportNotificationLogs(params: {
     responseType: 'blob' // Important: handle binary data
   });
 
-  // Create blob from response data
   const blob = new Blob([response.data], { type: 'text/csv' });
-  const url = window.URL.createObjectURL(blob);
-
-  // Trigger download
-  const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', `notification-logs-${Date.now()}.csv`);
-  document.body.appendChild(link);
-  link.click();
-
-  // Cleanup
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(url);
+  downloadBlob(blob, `notification-logs-${Date.now()}.csv`);
 }

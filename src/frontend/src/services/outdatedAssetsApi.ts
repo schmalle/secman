@@ -11,6 +11,7 @@
  */
 
 import { authenticatedGet, authenticatedPost } from '../utils/auth';
+import { downloadResponse } from '../utils/download';
 
 export interface OutdatedAsset {
   id: number;
@@ -186,26 +187,7 @@ export async function exportOutdatedAssets(
     throw new Error(errorMessage);
   }
 
-  // Get filename from Content-Disposition header or use default
-  const contentDisposition = response.headers.get('Content-Disposition');
-  let filename = 'outdated_assets_export.xlsx';
-  if (contentDisposition) {
-    const match = contentDisposition.match(/filename="([^"]+)"/);
-    if (match) {
-      filename = match[1];
-    }
-  }
-
-  // Create blob and trigger download
-  const blob = await response.blob();
-  const downloadUrl = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = downloadUrl;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(downloadUrl);
+  await downloadResponse(response, 'outdated_assets_export.xlsx');
 }
 
 // ============================================================================

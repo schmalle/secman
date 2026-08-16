@@ -10,6 +10,7 @@
 import { authenticatedGet, authenticatedPost, authenticatedDelete } from '../utils/auth';
 import type { ExceptionSubject, ExceptionScope, ExceptionKind } from './vulnerabilityManagementService';
 import { createReviewExceptionRequestDto } from './exceptionReviewDto';
+import { downloadResponse } from '../utils/download';
 
 export type { ExceptionSubject, ExceptionScope, ExceptionKind };
 
@@ -636,26 +637,7 @@ export async function exportToExcel(filters?: ExportFilters): Promise<void> {
   const response = await authenticatedGet(url);
 
   if (response.ok) {
-    // Extract filename from Content-Disposition header if available
-    const contentDisposition = response.headers.get('Content-Disposition');
-    let filename = 'exception-requests.xlsx';
-    if (contentDisposition) {
-      const filenameMatch = contentDisposition.match(/filename="(.+)"/);
-      if (filenameMatch) {
-        filename = filenameMatch[1];
-      }
-    }
-
-    // Download the blob
-    const blob = await response.blob();
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(downloadUrl);
+    await downloadResponse(response, 'exception-requests.xlsx');
     return;
   }
 

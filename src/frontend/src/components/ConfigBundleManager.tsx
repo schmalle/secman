@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../services/api';
+import { downloadBlob, filenameFromContentDisposition } from '../utils/download';
 
 interface ImportResult {
   success: boolean;
@@ -81,21 +82,11 @@ const ConfigBundleManager: React.FC = () => {
         }
       });
 
-      // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-
-      // Get filename from content-disposition header if available
-      const contentDisposition = response.headers['content-disposition'];
-      const filenameMatch = contentDisposition?.match(/filename="(.+)"/);
-      const filename = filenameMatch ? filenameMatch[1] : `secman_config_bundle_${new Date().toISOString().slice(0, 10)}.json`;
-
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      const filename = filenameFromContentDisposition(
+        response.headers['content-disposition'],
+        `secman_config_bundle_${new Date().toISOString().slice(0, 10)}.json`,
+      );
+      downloadBlob(new Blob([response.data]), filename);
 
       setExportSuccess(true);
       setTimeout(() => setExportSuccess(false), 5000);
@@ -216,15 +207,7 @@ const ConfigBundleManager: React.FC = () => {
       `Name: ${key.name}\nUser: ${key.userEmail}\nKey ID: ${key.keyId}\nSecret: ${key.keySecret}\n---\n`
     ).join('\n');
 
-    const blob = new Blob([keysText], { type: 'text/plain' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'mcp_api_keys.txt');
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
+    downloadBlob(new Blob([keysText], { type: 'text/plain' }), 'mcp_api_keys.txt');
   };
 
   return (

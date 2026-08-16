@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import { getUserMappings, createMapping, updateMapping, deleteMapping, type UserMapping, type CreateMappingRequest, type UpdateMappingRequest } from '../api/userMappings';
 import { formatServerDate, formatServerDateTime, parseServerDateMs } from '../utils/dateUtils';
+import { downloadResponse } from '../utils/download';
 
 type SortField = 'username' | 'email' | 'roles' | 'lastLogin' | 'workgroups';
 type SortDirection = 'asc' | 'desc';
@@ -312,21 +313,10 @@ const UserManagement = () => {
                 return;
             }
 
-            // Derive filename from Content-Disposition, fall back to a dated default
-            const disposition = response.headers.get('Content-Disposition') ?? '';
-            const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
-            const filename = filenameMatch?.[1]
-                ?? `secman-user-emails-${new Date().toISOString().slice(0, 10)}.csv`;
-
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
+            await downloadResponse(
+                response,
+                `secman-user-emails-${new Date().toISOString().slice(0, 10)}.csv`,
+            );
         } catch (err: any) {
             console.error('Export emails request failed:', err);
             alert(err?.message || 'An error occurred while exporting user emails.');

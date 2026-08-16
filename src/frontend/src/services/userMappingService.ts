@@ -1,4 +1,5 @@
 import { authenticatedPost, authenticatedGet, authenticatedPut, authenticatedDelete } from '../utils/auth';
+import { downloadBlob } from '../utils/download';
 
 /**
  * Service for User Mapping API operations
@@ -156,20 +157,7 @@ export async function downloadCSVTemplate(): Promise<void> {
       }
     }
 
-    // Get the blob from response
-    const blob = await response.blob();
-
-    // Create download link and trigger download
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'user-mapping-template.csv';
-    document.body.appendChild(link);
-    link.click();
-
-    // Cleanup
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    downloadBlob(await response.blob(), 'user-mapping-template.csv');
   } catch (error) {
     if (error instanceof Error) {
       throw error;

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { authenticatedFetch } from '../utils/auth';
 import { useClientHasRole } from '../utils/useClientAuth';
+import { downloadResponse } from '../utils/download';
 import {
   TEMPLATES_ENDPOINT,
   SUPPORTED_PLACEHOLDERS,
@@ -205,17 +206,7 @@ const RequirementExportTemplateManagement: React.FC = () => {
         setError(await errorMessageFrom(response, 'Download failed.'));
         return;
       }
-      const blob = await response.blob();
-      const objectUrl = window.URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = objectUrl;
-      const disposition = response.headers.get('Content-Disposition');
-      const match = disposition?.match(/filename="?([^"]+)"?/);
-      anchor.download = match ? match[1] : fallbackFilename;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.URL.revokeObjectURL(objectUrl);
+      await downloadResponse(response, fallbackFilename);
     } catch (e) {
       setError('Download failed.');
     }

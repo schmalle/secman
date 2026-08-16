@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { csrfPost } from '../utils/csrf';
+import { downloadBlob } from '../utils/download';
 
 // Define an interface for the user data expected from the backend
 interface User {
@@ -252,15 +253,7 @@ const ClassificationRuleManager: React.FC = () => {
       });
 
       if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'classification-rules.json';
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+        downloadBlob(await response.blob(), 'classification-rules.json');
       } else {
         setError('Failed to export rules');
       }

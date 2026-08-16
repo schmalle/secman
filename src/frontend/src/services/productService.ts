@@ -7,6 +7,7 @@
  */
 
 import { authenticatedGet } from '../utils/auth';
+import { downloadResponse } from '../utils/download';
 
 export interface ProductListResponse {
     products: string[];
@@ -158,24 +159,5 @@ export async function exportProductSystems(product: string): Promise<void> {
         throw new Error(errorMessage);
     }
 
-    // Get filename from Content-Disposition header or use default
-    const contentDisposition = response.headers.get('Content-Disposition');
-    let filename = 'product_systems_export.xlsx';
-    if (contentDisposition) {
-        const match = contentDisposition.match(/filename="([^"]+)"/);
-        if (match) {
-            filename = match[1];
-        }
-    }
-
-    // Create blob and trigger download
-    const blob = await response.blob();
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(downloadUrl);
+    await downloadResponse(response, 'product_systems_export.xlsx');
 }
