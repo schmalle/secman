@@ -80,6 +80,28 @@ class RequirementControllerWordExportTest {
     }
 
     @Test
+    fun `word export renders bulleted details as separate paragraphs instead of one flattened line`() {
+        val bulletedRequirement = Requirement(
+            id = 51L,
+            internalId = "REQ-51",
+            shortreq = "All assets must be registered in the asset inventory",
+            details = "<ul><li>identification of the asset</li><li>criticality of the asset</li></ul>",
+            chapter = "Asset Management"
+        )
+
+        val document = createWordDocument(listOf(bulletedRequirement))
+        val texts = document.paragraphs.map { it.text }
+
+        assertThat(texts).contains("• identification of the asset", "• criticality of the asset")
+        // Regression guard for the historical bug: both bullets must NOT be joined into one
+        // paragraph by a single XWPFRun.setText() call on the raw (still-tagged) details string.
+        assertThat(texts).noneMatch { it.contains("<li>") || it.contains("<ul>") }
+        assertThat(texts).noneMatch {
+            it.contains("identification of the asset") && it.contains("criticality of the asset")
+        }
+    }
+
+    @Test
     fun `word export rebases visible requirement numbering to one`() {
         val requirements = listOf(
             requirement(id = 285L, internalId = "REQ-285", shortreq = "Use SSM for EC2 console access"),
