@@ -1,7 +1,11 @@
 package com.secman.controller
 
+import com.secman.domain.RequirementExportScope
+import com.secman.domain.RequirementExportTemplateMode
 import com.secman.domain.RequirementExportTemplateStatus
+import com.secman.domain.RequirementExportTemplateUsage
 import com.secman.repository.RequirementExportTemplateRepository
+import com.secman.repository.RequirementExportTemplateUsageRepository
 import com.secman.repository.UserRepository
 import com.secman.service.ExampleRequirementExportTemplateBuilder
 import com.secman.service.RequirementExportTemplateSeeder
@@ -15,8 +19,8 @@ import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
 import io.micronaut.http.client.exceptions.HttpClientResponseException
 import io.micronaut.http.client.multipart.MultipartBody
+import io.micronaut.test.extensions.junit5.annotation.MicronautTest
 import jakarta.inject.Inject
-import jakarta.persistence.EntityManager
 import org.apache.poi.xwpf.usermodel.XWPFDocument
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -32,7 +36,14 @@ import java.io.ByteArrayOutputStream
  *    installation export in a company design instead of the built-in layout, and
  *  - the ADMIN/REQADMIN gate on every write verb is enforced at the controller, not just hidden
  *    in the UI.
+ *
+ * `transactional = false` because every assertion here drives the controller over HTTP, on its own
+ * connection. Under the default wrapping transaction, a row this test writes stays uncommitted for
+ * the length of the method — and inserting a usage row takes an InnoDB **shared lock on the parent
+ * template row** for the FK check, so the controller's DELETE blocks on it until the lock wait
+ * times out. Same trap documented in `ExceptedFlagSqlAgreementIntegrationTest`.
  */
+@MicronautTest(environments = ["test"], transactional = false)
 class RequirementExportTemplateIntegrationTest : BaseIntegrationTest() {
 
     @Inject
@@ -46,24 +57,20 @@ class RequirementExportTemplateIntegrationTest : BaseIntegrationTest() {
     lateinit var templateRepository: RequirementExportTemplateRepository
 
     @Inject
-    lateinit var seeder: RequirementExportTemplateSeeder
+    lateinit var usageRepository: RequirementExportTemplateUsageRepository
 
     @Inject
-    lateinit var entityManager: EntityManager
+    lateinit var seeder: RequirementExportTemplateSeeder
 
     /**
      * Re-read persisted state after an HTTP call.
      *
-     * `@MicronautTest` wraps each test in a transaction, so the injected repository keeps one
-     * persistence context for the whole method while the controller commits in its own. Without
-     * the clear, a second `findById` on an entity already loaded here returns the cached instance
-     * and never sees the controller's write — the first read passes and only the second lies,
-     * which reads exactly like a broken endpoint.
+     * Reads the database, not a cached entity: with no ambient transaction each repository call
+     * opens its own session, so nothing survives from an earlier read to mask the controller's
+     * write. Kept as a named helper so the intent stays explicit at the call sites — a read that
+     * silently returned a stale instance would look exactly like a broken endpoint.
      */
-    private fun <T> rereadFromDb(block: () -> T): T {
-        entityManager.clear()
-        return block()
-    }
+    private fun <T> rereadFromDb(block: () -> T): T = block()
 
     private lateinit var adminUser: String
     private lateinit var regularUser: String
@@ -196,6 +203,111 @@ class RequirementExportTemplateIntegrationTest : BaseIntegrationTest() {
         )
         assertThat(rereadFromDb { templateRepository.findById(id).get().status })
             .isEqualTo(RequirementExportTemplateStatus.ACTIVE)
+    }
+
+    @Test
+    fun `an unused template is deleted outright`() {
+        val id = uploadAsAdmin()
+
+        val response = client.toBlocking().exchange(
+            HttpRequest.DELETE<Any>("/api/requirement-export-templates/$id")
+                .header("Authorization", authHeader(adminUser)),
+            String::class.java
+        )
+
+        assertThat(response.status).isEqualTo(HttpStatus.NO_CONTENT)
+        assertThat(rereadFromDb { templateRepository.findById(id) }).isEmpty()
+    }
+
+    /**
+     * Regression: delete used to degrade to "retire" for any template with an export behind it, and
+     * because the usage count only ever grows, a retired template could never be removed — a second
+     * Delete simply re-ran the same branch. The audit row has to outlive the template, so the fix
+     * detaches rather than cascades.
+     */
+    @Test
+    fun `a template that has been used is deleted and its usage history survives detached`() {
+        val id = uploadAsAdmin()
+        val digest = "b".repeat(64)
+        usageRepository.save(
+            RequirementExportTemplateUsage(
+                template = templateRepository.findById(id).get(),
+                templateSha256 = digest,
+                exportedBy = adminUser,
+                exportScope = RequirementExportScope.RELEASE,
+                templateMode = RequirementExportTemplateMode.SAVED
+            )
+        )
+        assertThat(usageRepository.countByTemplateId(id)).isEqualTo(1)
+
+        val response = client.toBlocking().exchange(
+            HttpRequest.DELETE<Any>("/api/requirement-export-templates/$id")
+                .header("Authorization", authHeader(adminUser)),
+            String::class.java
+        )
+
+        assertThat(response.status)
+            .describedAs("a used template must be deleted, not silently retired")
+            .isEqualTo(HttpStatus.NO_CONTENT)
+        assertThat(rereadFromDb { templateRepository.findById(id) })
+            .describedAs("the row must actually be gone from the list")
+            .isEmpty()
+
+        val history = rereadFromDb { usageRepository.findAll().filter { it.templateSha256 == digest } }
+        assertThat(history)
+            .describedAs("who exported what must remain auditable after the template is deleted")
+            .hasSize(1)
+        assertThat(history.first().template).isNull()
+        assertThat(history.first().exportedBy).isEqualTo(adminUser)
+    }
+
+    /**
+     * Regression: the endpoint handed the usage entities straight to the serializer. Their
+     * `template` is a LAZY `@ManyToOne`, and serialization runs after the session is gone, so every
+     * call answered 500 "could not initialize proxy … no session". It was easy to miss because the
+     * export itself succeeded and `lastUsedAt` still advanced — only the audit history looked empty.
+     */
+    @Test
+    fun `the usage history of a used template is readable`() {
+        val id = uploadAsAdmin()
+        val digest = "c".repeat(64)
+        usageRepository.save(
+            RequirementExportTemplateUsage(
+                template = templateRepository.findById(id).get(),
+                templateSha256 = digest,
+                exportedBy = adminUser,
+                exportScope = RequirementExportScope.RELEASE,
+                templateMode = RequirementExportTemplateMode.SAVED
+            )
+        )
+
+        val response = client.toBlocking().exchange(
+            HttpRequest.GET<Any>("/api/requirement-export-templates/$id/usage")
+                .header("Authorization", authHeader(adminUser)),
+            String::class.java
+        )
+
+        assertThat(response.status).isEqualTo(HttpStatus.OK)
+        val body = response.body()!!
+        assertThat(body).contains("\"templateId\":$id")
+        assertThat(body).contains("\"exportedBy\":\"$adminUser\"")
+        assertThat(body).contains(digest)
+        assertThat(body)
+            .describedAs("the template's .docx bytes must never be inlined into a usage response")
+            .doesNotContain("\"template\":")
+    }
+
+    @Test
+    fun `deleting an unknown template is a 404`() {
+        val exception = assertThrows<HttpClientResponseException> {
+            client.toBlocking().exchange(
+                HttpRequest.DELETE<Any>("/api/requirement-export-templates/9999999")
+                    .header("Authorization", authHeader(adminUser)),
+                String::class.java
+            )
+        }
+
+        assertThat(exception.status).isEqualTo(HttpStatus.NOT_FOUND)
     }
 
     @Test

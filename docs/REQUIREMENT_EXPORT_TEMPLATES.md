@@ -46,12 +46,28 @@ requirement_export_template          requirement_export_template_usage
   deactivated_at, last_used_at
 ```
 
-Statuses: `ACTIVE` (usable), `INACTIVE` (kept, not used), `RETIRED` (was used by
-an export, so it is kept for the audit trail instead of being deleted),
-`REJECTED`. Only `ACTIVE` templates are ever rendered with.
+Statuses: `ACTIVE` (usable), `INACTIVE` (kept, not used), `RETIRED`, `REJECTED`.
+Only `ACTIVE` templates are ever rendered with. `RETIRED` is legacy: `DELETE`
+used to set it on any template that had been used, which made such a template
+impossible to remove — the usage count only grows, so every later `DELETE` took
+the same branch. Nothing writes `RETIRED` any more; the enum value stays so
+pre-existing rows still load, and those rows can now simply be deleted.
 
-`template_sha256` is recorded on the *usage* row as well as on the template, so
-"which bytes produced this document" survives the template being replaced.
+`DELETE /{id}` therefore always deletes. Its usage rows are **detached, not
+cascade-deleted**: `RequirementExportTemplateUsageRepository.nullifyTemplateForTemplate`
+sets `template_id` to NULL first, which clears the FK without touching the audit
+trail. The migration's FK already declares `ON DELETE SET NULL`, so the explicit
+update looks redundant — it is not. That clause exists only in the Flyway
+migration, and the `test` profile builds the schema with Hibernate `create-drop`
+and Flyway off, where the generated FK carries no `ON DELETE` action and the
+delete would fail. Nullifying in code makes both schema paths behave the same,
+the way `nullifyCreatedByForUser` and its siblings already do elsewhere.
+`template_sha256` is recorded on the *usage* row as well as on the
+template, so "which bytes produced this document" survives both the template
+being replaced and the template being deleted — along with `exported_by`,
+`export_scope` and `created_at`. `GET .../{id}/usage` is keyed on `template_id`,
+so a deleted template's rows are no longer reachable through it; they remain in
+the table, queryable by digest.
 
 Schema lives in `V231__requirement_export_templates.sql`. This feature adds no
 new columns and therefore **no new migration**.
@@ -210,7 +226,7 @@ It is deliberately conservative:
 
 - **It seeds only into a completely empty table.** Not "when no ACTIVE template
   exists" — that would resurrect the example on every restart after an admin
-  deliberately retired it.
+  deliberately deactivated or deleted it.
 - The shipped bytes are validated through the normal path. A build that ships a
   broken artefact says so in the log at startup rather than at the first export.
 - Any failure is logged and swallowed. A missing company template degrades an

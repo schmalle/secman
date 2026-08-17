@@ -1,6 +1,8 @@
 package com.secman.controller
 
+import com.secman.domain.RequirementExportScope
 import com.secman.domain.RequirementExportTemplate
+import com.secman.domain.RequirementExportTemplateMode
 import com.secman.domain.RequirementExportTemplateStatus
 import com.secman.repository.RequirementExportTemplateRepository
 import com.secman.repository.RequirementExportTemplateUsageRepository
@@ -59,6 +61,29 @@ open class RequirementExportTemplateController(
     data class TemplateDetail(
         val summary: TemplateSummary,
         val validationReportJson: String?
+    )
+
+    /**
+     * One export-usage row as the API returns it.
+     *
+     * The entity is deliberately not serialized directly. Its `template` is a LAZY `@ManyToOne`,
+     * and by the time the response is written the session is gone, so Jackson hit
+     * "could not initialize proxy … no session" and the endpoint returned 500. Initializing it
+     * instead would be worse: the template carries the `.docx` bytes in a LONGBLOB `content`
+     * column, which would then be inlined into every usage response.
+     */
+    @Serdeable
+    data class UsageEntry(
+        val id: Long?,
+        val templateId: Long,
+        val templateSha256: String?,
+        val exportedBy: String,
+        val exportScope: RequirementExportScope,
+        val releaseId: Long?,
+        val usecaseId: Long?,
+        val language: String?,
+        val templateMode: RequirementExportTemplateMode,
+        val createdAt: Instant
     )
 
     @Serdeable
@@ -250,29 +275,31 @@ open class RequirementExportTemplateController(
         return HttpResponse.ok(templateRepository.update(selected).toSummary())
     }
 
+    /**
+     * Deletes a template, detaching its export usage history first.
+     *
+     * A template that has ever been used is still deleted. This previously degraded to a status
+     * change (RETIRED) whenever a usage row existed, which made deletion unreachable in practice:
+     * the usage count only ever grows, so a retired template's Delete button re-ran the same branch
+     * forever and the row never left the list.
+     *
+     * The usage rows are the audit record of who exported what, so they are detached rather than
+     * cascade-deleted — each keeps its `templateSha256`, `exportedBy`, `exportScope` and timestamp
+     * and stays readable after the template itself is gone (A09).
+     */
     @Delete("/{id}")
     @Secured("ADMIN", "REQADMIN")
     @Transactional
     open fun delete(@PathVariable id: Long, authentication: Authentication): HttpResponse<*> {
-        if (!templateRepository.existsById(id)) {
+        val template = templateRepository.findById(id)
+        if (template.isEmpty) {
             return HttpResponse.notFound(ErrorResponse("Template not found"))
         }
-        val usageCount = usageRepository.countByTemplateId(id)
-        if (usageCount > 0) {
-            val template = templateRepository.findById(id).get()
-            template.status = RequirementExportTemplateStatus.RETIRED
-            template.deactivatedAt = Instant.now()
-            templateRepository.update(template)
-            log.info(
-                "Requirement export template retired by={} id={} name={} usageCount={} outcome=retired",
-                authentication.name, id, sanitizeForLog(template.name), usageCount
-            )
-            return HttpResponse.ok(mapOf("message" to "Template has been retired because it was already used by exports."))
-        }
+        val detachedUsageRows = usageRepository.nullifyTemplateForTemplate(id)
         templateRepository.deleteById(id)
         log.info(
-            "Requirement export template deleted by={} id={} outcome=deleted",
-            authentication.name, id
+            "Requirement export template deleted by={} id={} name={} detachedUsageRows={} outcome=deleted",
+            authentication.name, id, sanitizeForLog(template.get().name), detachedUsageRows
         )
         return HttpResponse.noContent<Any>()
     }
@@ -283,7 +310,23 @@ open class RequirementExportTemplateController(
         if (!templateRepository.existsById(id)) {
             return HttpResponse.notFound(ErrorResponse("Template not found"))
         }
-        return HttpResponse.ok(usageRepository.findByTemplateIdOrderByCreatedAtDesc(id))
+        // templateId comes from the path, not from usage.template: the query already filtered on it,
+        // and reading it off the lazy proxy is what broke this endpoint in the first place.
+        val entries = usageRepository.findByTemplateIdOrderByCreatedAtDesc(id).map { usage ->
+            UsageEntry(
+                id = usage.id,
+                templateId = id,
+                templateSha256 = usage.templateSha256,
+                exportedBy = usage.exportedBy,
+                exportScope = usage.exportScope,
+                releaseId = usage.releaseId,
+                usecaseId = usage.usecaseId,
+                language = usage.language,
+                templateMode = usage.templateMode,
+                createdAt = usage.createdAt
+            )
+        }
+        return HttpResponse.ok(entries)
     }
 
     private fun RequirementExportTemplate.toSummary(usageCount: Long? = null): TemplateSummary = TemplateSummary(

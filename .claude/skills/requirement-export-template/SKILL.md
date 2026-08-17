@@ -7,7 +7,7 @@ description: >
   rejections), a release export that renders the release name / version / date /
   status onto the cover page, in-place placement of requirement content between
   the template's front and back matter, the usage audit row, the
-  activate/deactivate/retire lifecycle, and the authorization negatives proving a
+  activate/deactivate/delete lifecycle, and the authorization negatives proving a
   plain user reaches none of the write verbs. Starts backend and frontend cold,
   runs the driver, and iteratively fixes failures in both layers. Use this skill
   when the user says "requirement export template", "company template", "test the
@@ -64,7 +64,7 @@ installation exports in a company design rather than the built-in layout.
 | 5 | `GET /api/requirements/export/docx?releaseId=…` | the release **name, version, date and status** all appear in the rendered document |
 | 6 | Placement | requirement content sits **between** the template's front matter and its back matter, and the `${requirements}` marker is gone |
 | 7 | Usage audit | `GET .../{id}/usage` is non-empty and `lastUsedAt` advanced |
-| 8 | Lifecycle | deactivate → INACTIVE, activate → ACTIVE, delete → RETIRED (used) or 404 (unused) |
+| 8 | Lifecycle | deactivate → INACTIVE, activate → ACTIVE, delete → 204 and the row is gone — for a used template too — while its usage row survives with `template_id` NULL |
 | 9 | Authorization | a plain USER is denied upload, example download, activate and delete — all 403 |
 
 ### The three assertions that matter most
@@ -132,7 +132,9 @@ Required credentials (all from `pass-cli`): `SECMAN_ADMIN_NAME`,
 | Row 6: marker still present | backend | the anchor paragraph was not removed. Check that removal indexes into `document.bodyElements`, **not** `getPosOfParagraph` — the latter counts paragraphs only and deletes the wrong element once the template contains a table |
 | Row 6: template front/back matter vanished | backend | `replacePlaceholdersInParagraph` is dropping runs it should keep, or `removeBodyElement` removed the wrong index |
 | Row 7: no usage row | backend | `exportTemplateUsageRepository.save` is not reached — usually an early return in `exportWordDocument` |
-| Row 8: delete returns 404 for a used template | backend | the retire-instead-of-delete branch in `RequirementExportTemplateController.delete` is not seeing the usage count |
+| Row 8: delete leaves a used template in the list | backend | `RequirementExportTemplateController.delete` is not calling `nullifyTemplateForTemplate` before `deleteById`, so the usage FK blocks the row (or an old retire-instead-of-delete branch is back) |
+| Row 8: delete returns 500 for a used template | backend | the usage rows were not detached first — `requirement_export_template_usage.template_id` FK violation |
+| Row 8: usage history disappeared with the template | backend | the usage rows were cascade-deleted instead of detached. The audit trail must outlive the template (A09) |
 | Row 9: any 200 or 404 instead of 403 | **backend, security** | a missing or widened `@Secured` on `RequirementExportTemplateController`. A01 finding, fix before anything else |
 | Frontend page blank at `/admin/requirement-export-templates` | frontend | check the browser console; usually a bad import in `RequirementExportTemplateManagement.tsx` or a missing export in `services/requirementExportTemplates.ts` |
 

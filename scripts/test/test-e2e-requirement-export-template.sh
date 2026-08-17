@@ -15,7 +15,7 @@
 #   6. Placement      — requirement content lands *between* the template's front
 #                       matter and its back matter, not appended after everything
 #   7. Usage audit    — the export writes a usage row and advances lastUsedAt
-#   8. Lifecycle      — deactivate, reactivate, delete-or-retire
+#   8. Lifecycle      — deactivate, reactivate, delete (even when already used)
 #   9. AuthZ negatives — a plain user reaches none of the write verbs
 #
 # ## Why the assertions look the way they do
@@ -76,7 +76,8 @@ E2E_PREFIX="e2e-reqtpl-"
 
 TEMPLATE_NAME="${E2E_PREFIX}template-${SUFFIX}"
 RELEASE_NAME="${E2E_PREFIX}release-${SUFFIX}"
-RELEASE_VERSION="99.${SUFFIX}"
+# MAJOR.MINOR.PATCH — ReleaseService.SEMANTIC_VERSION_REGEX rejects anything else.
+RELEASE_VERSION="99.0.${SUFFIX}"
 
 # Distinctive strings so a grep of the rendered document cannot match by accident.
 FRONT_MATTER="E2EFRONTMATTER${SUFFIX}"
@@ -154,31 +155,40 @@ login() {
     [[ "$status" == "200" ]]
 }
 
-# Prints the body; sets HTTP_STATUS. Callers assert on both.
+# The status of the last api_* call. It is kept in a file rather than a variable
+# because most callers wrap these helpers in $( ), and a command substitution
+# runs in a subshell — a plain assignment there is discarded, which under
+# `set -u` aborts the run on the first read.
+http_status() { cat "$WORK_DIR/http_status" 2>/dev/null || echo "000"; }
+
+# Prints the body; records the status for http_status. Callers assert on both.
 api_get() {
     local jar="$1" path="$2"
-    HTTP_STATUS=$(curl -sS -o "$WORK_DIR/resp.json" -w '%{http_code}' -b "$jar" "$BASE_URL$path")
+    curl -sS -o "$WORK_DIR/resp.json" -w '%{http_code}' -b "$jar" "$BASE_URL$path" \
+        > "$WORK_DIR/http_status"
     cat "$WORK_DIR/resp.json"
 }
 
 api_post() {
     local jar="$1" path="$2" body="$3"
-    HTTP_STATUS=$(curl -sS -o "$WORK_DIR/resp.json" -w '%{http_code}' -b "$jar" \
-        -X POST "$BASE_URL$path" -H 'Content-Type: application/json' -d "$body")
+    curl -sS -o "$WORK_DIR/resp.json" -w '%{http_code}' -b "$jar" \
+        -X POST "$BASE_URL$path" -H 'Content-Type: application/json' -d "$body" \
+        > "$WORK_DIR/http_status"
     cat "$WORK_DIR/resp.json"
 }
 
 api_delete() {
     local jar="$1" path="$2"
-    HTTP_STATUS=$(curl -sS -o "$WORK_DIR/resp.json" -w '%{http_code}' -b "$jar" \
-        -X DELETE "$BASE_URL$path")
+    curl -sS -o "$WORK_DIR/resp.json" -w '%{http_code}' -b "$jar" \
+        -X DELETE "$BASE_URL$path" > "$WORK_DIR/http_status"
     cat "$WORK_DIR/resp.json"
 }
 
-# Downloads a binary body to $WORK_DIR/$2; sets HTTP_STATUS.
+# Downloads a binary body to $WORK_DIR/$2; records the status for http_status.
 api_download() {
     local jar="$1" outfile="$2" path="$3"
-    HTTP_STATUS=$(curl -sS -o "$WORK_DIR/$outfile" -w '%{http_code}' -b "$jar" "$BASE_URL$path")
+    curl -sS -o "$WORK_DIR/$outfile" -w '%{http_code}' -b "$jar" "$BASE_URL$path" \
+        > "$WORK_DIR/http_status"
 }
 
 # =============================================================================
@@ -295,14 +305,28 @@ phase_seeded_example() {
     local body
     body=$(api_get "$ADMIN_COOKIE" "/api/requirement-export-templates/latest")
 
-    if [[ "$HTTP_STATUS" == "200" ]]; then
+    if [[ "$(http_status)" == "200" ]]; then
         local name
         name=$(echo "$body" | jq -r '.name // empty')
         log_pass "An ACTIVE template exists, so templateMode=LATEST resolves (name: $name)"
-    elif [[ "$HTTP_STATUS" == "204" ]]; then
-        log_fail "No ACTIVE template — the seeder did not install the shipped example"
+        return
+    fi
+    if [[ "$(http_status)" != "204" ]]; then
+        log_fail "GET /latest returned $(http_status)"
+        return
+    fi
+
+    # 204 alone does not distinguish a broken seeder from a long-lived instance
+    # whose admin removed the example. The seeder installs only into a completely
+    # empty table (docs/REQUIREMENT_EXPORT_TEMPLATES.md §7), so the table's own
+    # contents are what separates the two.
+    local existing count
+    existing=$(api_get "$ADMIN_COOKIE" "/api/requirement-export-templates?includeInactive=true")
+    count=$(echo "$existing" | jq 'if type=="array" then length else 0 end' 2>/dev/null || echo 0)
+    if [[ "$count" -eq 0 ]]; then
+        log_fail "No ACTIVE template and the table is empty — the seeder did not install the shipped example"
     else
-        log_fail "GET /latest returned $HTTP_STATUS"
+        log_skip "No ACTIVE template, but $count template(s) exist — the seeder correctly skipped a non-empty table, so seeding cannot be asserted on this instance"
     fi
 }
 
@@ -310,8 +334,8 @@ phase_example_download() {
     phase "2. Example template download"
 
     api_download "$ADMIN_COOKIE" "example.docx" "/api/requirement-export-templates/example"
-    if [[ "$HTTP_STATUS" != "200" ]]; then
-        log_fail "GET /example returned $HTTP_STATUS"
+    if [[ "$(http_status)" != "200" ]]; then
+        log_fail "GET /example returned $(http_status)"
         return
     fi
 
@@ -422,8 +446,8 @@ phase_release_export() {
         --arg v "$RELEASE_VERSION" --arg n "$RELEASE_NAME" \
         '{version:$v,name:$n,description:"E2E release for template export"}')")
 
-    if [[ "$HTTP_STATUS" != "200" && "$HTTP_STATUS" != "201" ]]; then
-        log_fail "Could not create a release ($HTTP_STATUS): $body"
+    if [[ "$(http_status)" != "200" && "$(http_status)" != "201" ]]; then
+        log_fail "Could not create a release ($(http_status)): $body"
         return
     fi
     CREATED_RELEASE_ID=$(echo "$body" | jq -r '.id')
@@ -432,8 +456,8 @@ phase_release_export() {
     api_download "$ADMIN_COOKIE" "export.docx" \
         "/api/requirements/export/docx?releaseId=$CREATED_RELEASE_ID&templateMode=SAVED&templateId=$CREATED_TEMPLATE_ID&classification=Internal"
 
-    if [[ "$HTTP_STATUS" != "200" ]]; then
-        log_fail "Release export returned $HTTP_STATUS"
+    if [[ "$(http_status)" != "200" ]]; then
+        log_fail "Release export returned $(http_status)"
         return
     fi
     if ! unzip -l "$WORK_DIR/export.docx" >/dev/null 2>&1; then
@@ -493,7 +517,7 @@ phase_release_export() {
     # 7. Usage audit.
     local usage
     usage=$(api_get "$ADMIN_COOKIE" "/api/requirement-export-templates/$CREATED_TEMPLATE_ID/usage")
-    if [[ "$HTTP_STATUS" == "200" ]] && [[ "$(echo "$usage" | jq 'length')" -gt 0 ]]; then
+    if [[ "$(http_status)" == "200" ]] && [[ "$(echo "$usage" | jq 'length')" -gt 0 ]]; then
         log_pass "Export recorded a usage row"
     else
         log_fail "No usage row recorded for the export"
@@ -533,19 +557,27 @@ phase_lifecycle() {
         log_fail "Activate did not take effect"
     fi
 
-    # A template that has been used is retired rather than deleted, so its usage
-    # history keeps resolving.
+    # This template has been used by now (phase 7 asserted its usage row), and it is still
+    # deleted. Delete used to degrade to a RETIRED status change for any used template, which
+    # made removal unreachable: the usage count only grows, so every later delete took the same
+    # branch and the row never left the list. The usage rows are detached, not cascade-deleted.
     api_delete "$ADMIN_COOKIE" "/api/requirement-export-templates/$CREATED_TEMPLATE_ID" >/dev/null
+    local delete_status="$(http_status)"
     detail=$(api_get "$ADMIN_COOKIE" "/api/requirement-export-templates/$CREATED_TEMPLATE_ID")
-    if [[ "$HTTP_STATUS" == "200" ]] && [[ "$(echo "$detail" | jq -r '.summary.status')" == "RETIRED" ]]; then
-        log_pass "A used template is retired, not deleted (usage history preserved)"
-        CREATED_TEMPLATE_ID=""
-    elif [[ "$HTTP_STATUS" == "404" ]]; then
-        log_pass "Unused template deleted outright"
-        CREATED_TEMPLATE_ID=""
+    if [[ "$delete_status" == "204" ]] && [[ "$(http_status)" == "404" ]]; then
+        log_pass "A used template is deleted outright and is gone"
     else
-        log_fail "Delete left the template in an unexpected state ($HTTP_STATUS)"
+        log_fail "Delete left the template in an unexpected state (delete=$delete_status, read-back=$(http_status))"
     fi
+
+    local listed
+    listed=$(api_get "$ADMIN_COOKIE" "/api/requirement-export-templates?includeInactive=true")
+    if [[ "$(echo "$listed" | jq --arg id "$CREATED_TEMPLATE_ID" '[.[] | select(.id == ($id | tonumber))] | length')" == "0" ]]; then
+        log_pass "The deleted template no longer appears in the admin list"
+    else
+        log_fail "The deleted template is still listed"
+    fi
+    CREATED_TEMPLATE_ID=""
 }
 
 phase_authz_negatives() {
@@ -571,24 +603,24 @@ phase_authz_negatives() {
     fi
 
     api_get "$USER_COOKIE" "/api/requirement-export-templates/example" >/dev/null
-    if [[ "$HTTP_STATUS" == "403" ]]; then
+    if [[ "$(http_status)" == "403" ]]; then
         log_pass "Plain user cannot download the example template"
     else
-        log_fail "Plain user example download returned $HTTP_STATUS, expected 403"
+        log_fail "Plain user example download returned $(http_status), expected 403"
     fi
 
     api_post "$USER_COOKIE" "/api/requirement-export-templates/1/activate" '{}' >/dev/null
-    if [[ "$HTTP_STATUS" == "403" ]]; then
+    if [[ "$(http_status)" == "403" ]]; then
         log_pass "Plain user cannot activate a template"
     else
-        log_fail "Plain user activate returned $HTTP_STATUS, expected 403"
+        log_fail "Plain user activate returned $(http_status), expected 403"
     fi
 
     api_delete "$USER_COOKIE" "/api/requirement-export-templates/1" >/dev/null
-    if [[ "$HTTP_STATUS" == "403" ]]; then
+    if [[ "$(http_status)" == "403" ]]; then
         log_pass "Plain user cannot delete a template"
     else
-        log_fail "Plain user delete returned $HTTP_STATUS, expected 403"
+        log_fail "Plain user delete returned $(http_status), expected 403"
     fi
 }
 

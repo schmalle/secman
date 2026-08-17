@@ -170,7 +170,9 @@ const RequirementExportTemplateManagement: React.FC = () => {
   };
 
   const handleDelete = async (template: RequirementExportTemplateSummary) => {
-    if (!window.confirm(`Delete template "${template.name}"? Templates already used by an export are retired instead.`)) {
+    // Past exports keep working — they embed their own copy — and the export history rows survive
+    // the template, so the only thing lost is the template itself.
+    if (!window.confirm(`Delete template "${template.name}"? This cannot be undone. Its export history is kept.`)) {
       return;
     }
     setBusy(true);
@@ -182,13 +184,7 @@ const RequirementExportTemplateManagement: React.FC = () => {
         setError(await errorMessageFrom(response, 'Could not delete the template.'));
         return;
       }
-      // 200 carries the "retired because already used" explanation; 204 is a real delete.
-      if (response.status === 200) {
-        const body = await response.json().catch(() => null);
-        setNotice(body?.message ?? 'Template retired.');
-      } else {
-        setNotice('Template deleted.');
-      }
+      setNotice(`Template "${template.name}" deleted.`);
       await loadTemplates();
     } catch (e) {
       setError('Could not delete the template.');
