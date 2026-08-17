@@ -14,9 +14,12 @@
  * User Story: US1 - View Most Common Vulnerabilities (P1/MVP)
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { vulnerabilityStatisticsApi, type MostCommonVulnerabilityDto, type AffectedAssetsByCveDto } from '../../services/api/vulnerabilityStatisticsApi';
 import CveLink from '../CveLink';
+import { downloadSingleSheetWorkbook, sanitizeFilenamePart, todayStamp } from '../../utils/excelExport';
+import { ChartCardEmpty, ChartCardError, ChartCardLoading } from './ChartCardStates';
+import { useChartData } from './useChartData';
 
 /**
  * Map severity levels to Scandinavian design system badge classes
@@ -51,9 +54,13 @@ interface MostCommonVulnerabilitiesProps {
 }
 
 export default function MostCommonVulnerabilities({ domain, awsHosted }: MostCommonVulnerabilitiesProps = {}) {
-  const [data, setData] = useState<MostCommonVulnerabilityDto[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: fetched, loading, error } = useChartData<MostCommonVulnerabilityDto[]>(
+    () => vulnerabilityStatisticsApi.getMostCommonVulnerabilities(domain, awsHosted),
+    [domain, awsHosted],
+    'Failed to load vulnerability statistics. Please try again later.',
+    'most common vulnerabilities',
+  );
+  const data = fetched ?? [];
 
   // Modal state for CVE drilldown
   const [showModal, setShowModal] = useState<boolean>(false);
@@ -98,52 +105,25 @@ export default function MostCommonVulnerabilities({ domain, awsHosted }: MostCom
 
     setExporting(true);
     try {
-      const ExcelJS = (await import('exceljs')).default;
-      const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'Secman';
-      workbook.created = new Date();
-
-      const sheet = workbook.addWorksheet('Affected Systems');
-      sheet.columns = [
-        { header: 'System Name', key: 'name', width: 30 },
-        { header: 'IP Address', key: 'ip', width: 18 },
-        { header: 'Instance ID', key: 'instanceId', width: 22 },
-        { header: 'Domain', key: 'domain', width: 20 },
-        { header: 'Type', key: 'type', width: 15 },
-      ];
-
-      modalData.affectedAssets.forEach((asset) => {
-        sheet.addRow({
+      await downloadSingleSheetWorkbook({
+        filename: `Affected_Systems_${sanitizeFilenamePart(modalData.cveId)}_${todayStamp()}.xlsx`,
+        sheetName: 'Affected Systems',
+        headerColor: 'FF3D4F4F',
+        columns: [
+          { header: 'System Name', key: 'name', width: 30 },
+          { header: 'IP Address', key: 'ip', width: 18 },
+          { header: 'Instance ID', key: 'instanceId', width: 22 },
+          { header: 'Domain', key: 'domain', width: 20 },
+          { header: 'Type', key: 'type', width: 15 },
+        ],
+        rows: modalData.affectedAssets.map((asset) => ({
           name: asset.assetName,
           ip: asset.assetIp || '-',
           instanceId: asset.cloudInstanceId || '-',
           domain: asset.adDomain || '-',
           type: asset.assetType || '-',
-        });
+        })),
       });
-
-      // Style header
-      const headerRow = sheet.getRow(1);
-      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3D4F4F' } };
-      headerRow.height = 22;
-
-      // Generate and download
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      });
-
-      const safeCveId = modalData.cveId.replace(/[^a-zA-Z0-9-]/g, '_');
-      const dateStr = new Date().toISOString().split('T')[0];
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Affected_Systems_${safeCveId}_${dateStr}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Export failed:', err);
     } finally {
@@ -151,64 +131,14 @@ export default function MostCommonVulnerabilities({ domain, awsHosted }: MostCom
     }
   };
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await vulnerabilityStatisticsApi.getMostCommonVulnerabilities(domain, awsHosted);
-        setData(result);
-      } catch (err) {
-        console.error('Error fetching most common vulnerabilities:', err);
-        setError('Failed to load vulnerability statistics. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [domain, awsHosted]); // Re-fetch when domain or awsHosted changes
-
-  // Loading state
-  if (loading) {
-    return (
-      <div className="card">
-        <div className="card-body text-center py-5">
-          <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Loading...</span>
-          </div>
-          <p className="mt-3 text-muted">Loading vulnerability statistics...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="card">
-        <div className="card-body">
-          <div className="alert alert-danger" role="alert">
-            <i className="bi bi-exclamation-triangle me-2"></i>
-            {error}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Empty state
+  if (loading) return <ChartCardLoading label="Loading vulnerability statistics..." />;
+  if (error) return <ChartCardError message={error} />;
   if (data.length === 0) {
     return (
-      <div className="card">
-        <div className="card-body text-center py-5">
-          <i className="bi bi-inbox display-4 text-muted"></i>
-          <p className="mt-3 text-muted">No vulnerability data available.</p>
-          <small className="text-muted">
-            This could mean no vulnerabilities have been imported yet, or you don't have access to any workgroups with vulnerabilities.
-          </small>
-        </div>
-      </div>
+      <ChartCardEmpty
+        message="No vulnerability data available."
+        hint="This could mean no vulnerabilities have been imported yet, or you don't have access to any workgroups with vulnerabilities."
+      />
     );
   }
 

@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { csrfPost } from '../utils/csrf'; // Import the CSRF-enhanced POST helper
 import { authenticatedFetch } from '../utils/auth';
 import ReleaseSelector from './ReleaseSelector';
+import { downloadResponse } from '../utils/download';
 
 interface UseCase {
     id: number;
@@ -193,26 +194,7 @@ const ImportExport = () => {
                 throw new Error(errorMsg);
             }
 
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            
-            // Get filename from response headers or generate default
-            const contentDisposition = response.headers.get('Content-Disposition');
-            let filename = 'requirements.docx';
-            if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-                if (filenameMatch) {
-                    filename = filenameMatch[1];
-                }
-            }
-            
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
+            await downloadResponse(response, 'requirements.docx');
             
             const successMsg = isTranslated 
                 ? `Requirements exported and translated to ${selectedLanguage} successfully`
@@ -261,26 +243,7 @@ const ImportExport = () => {
                 throw new Error(errorMsg);
             }
 
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            
-            // Get the filename from Content-Disposition header if available
-            const contentDisposition = response.headers.get('Content-Disposition');
-            let filename = 'requirements_usecase.docx';
-            if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-                if (filenameMatch) {
-                    filename = filenameMatch[1];
-                }
-            }
-            
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
+            await downloadResponse(response, 'requirements_usecase.docx');
             
             const successMsg = isTranslated 
                 ? `Requirements exported and translated to ${selectedLanguage} successfully for selected use case`
@@ -320,26 +283,7 @@ const ImportExport = () => {
                 throw new Error(errorMsg);
             }
 
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            
-            // Get filename from response headers or generate default
-            const contentDisposition = response.headers.get('Content-Disposition');
-            let filename = 'requirements_export.xlsx';
-            if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-                if (filenameMatch) {
-                    filename = filenameMatch[1];
-                }
-            }
-            
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
+            await downloadResponse(response, 'requirements_export.xlsx');
             
             setExportStatus('Requirements exported to Excel successfully');
         } catch (error: any) {
@@ -381,26 +325,7 @@ const ImportExport = () => {
                 throw new Error(errorMsg);
             }
 
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            
-            // Get the filename from Content-Disposition header if available
-            const contentDisposition = response.headers.get('Content-Disposition');
-            let filename = 'requirements_usecase.xlsx';
-            if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-                if (filenameMatch) {
-                    filename = filenameMatch[1];
-                }
-            }
-            
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
+            await downloadResponse(response, 'requirements_usecase.xlsx');
             
             setExportStatus('Requirements exported to Excel successfully for selected use case');
         } catch (error: any) {

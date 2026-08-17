@@ -3,6 +3,7 @@ import { authenticatedFetch, authenticatedGet } from '../utils/auth';
 import ReleaseIndicator from './ReleaseIndicator';
 import ReleaseSelector from './ReleaseSelector';
 import { buildPublicStandardUrl, buildRequirementDownloadUrl } from './requirementDownloadUrl';
+import { downloadResponse } from '../utils/download';
 
 interface UseCase {
     id: number;
@@ -148,21 +149,7 @@ export default function RequirementDownload() {
                 return;
             }
 
-            const blob = await response.blob();
-            const blobUrl = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = blobUrl;
-            const contentDisposition = response.headers.get('Content-Disposition');
-            let filename = `requirements.${format}`;
-            if (contentDisposition) {
-                const match = contentDisposition.match(/filename="?([^"]+)"?/);
-                if (match) filename = match[1];
-            }
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(blobUrl);
+            await downloadResponse(response, `requirements.${format}`);
         } catch (err) {
             console.error('Download failed:', err);
             setError('Download failed. Please try again.');

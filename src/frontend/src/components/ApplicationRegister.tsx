@@ -16,6 +16,7 @@ import {
   type ApplicationRegisterSummary,
 } from '../services/applicationRegisterService';
 import { authenticatedGet } from '../utils/auth';
+import { downloadBlob } from '../utils/download';
 
 type TabKey = 'operation' | 'technical' | 'organization' | 'relations' | 'compliance' | 'dates';
 
@@ -376,14 +377,7 @@ const ApplicationRegister: React.FC = () => {
         })),
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `secman-applications-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, `secman-applications-${new Date().toISOString().slice(0, 10)}.json`);
       setSuccess(`Exported ${details.length} applications.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to export applications');

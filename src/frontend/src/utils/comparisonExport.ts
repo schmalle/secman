@@ -16,6 +16,7 @@
 
 import type ExcelJS from 'exceljs';
 import { formatServerDateTime } from './dateUtils';
+import { downloadBlob } from './download';
 
 export interface ReleaseInfo {
     id: number;
@@ -127,14 +128,7 @@ export async function exportComparisonToExcel(comparison: ComparisonResult): Pro
     const toVersion = comparison.toRelease.version.replace(/[^a-zA-Z0-9._-]/g, '');
     const dateStr = new Date().toISOString().split('T')[0];
 
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Release_Comparison_${fromVersion}_vs_${toVersion}_${dateStr}.xlsx`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    downloadBlob(blob, `Release_Comparison_${fromVersion}_vs_${toVersion}_${dateStr}.xlsx`);
 }
 
 function createSummarySheet(workbook: ExcelJS.Workbook, comparison: ComparisonResult): void {

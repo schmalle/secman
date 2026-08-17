@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { downloadResponse } from '../utils/download';
 
 interface UseCase {
     id: number;
@@ -60,22 +61,7 @@ export default function ReqDownload() {
                 return;
             }
 
-            const blob = await response.blob();
-            const contentDisposition = response.headers.get('Content-Disposition');
-            let filename = 'requirements.docx';
-            if (contentDisposition) {
-                const match = contentDisposition.match(/filename="?([^"]+)"?/);
-                if (match) filename = match[1];
-            }
-
-            const blobUrl = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = blobUrl;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(blobUrl);
+            await downloadResponse(response, 'requirements.docx');
         } catch {
             setError('Download failed. Please try again.');
         } finally {

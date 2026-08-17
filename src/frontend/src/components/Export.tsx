@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { authenticatedFetch } from '../utils/auth';
 import ReleaseSelector from './ReleaseSelector';
 import { exportApplications, exportAssets } from '../services/assetService';
+import { downloadBlob, downloadResponse } from '../utils/download';
 
 interface UseCase {
     id: number;
@@ -116,26 +117,6 @@ const Export = () => {
         return `${endpoint}${separator}${params.toString()}`;
     };
 
-    const downloadBlobResponse = async (response: Response, defaultFilename: string) => {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const contentDisposition = response.headers.get('Content-Disposition');
-        let filename = defaultFilename;
-        if (contentDisposition) {
-            const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-            if (filenameMatch) {
-                filename = filenameMatch[1];
-            }
-        }
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-    };
-
     const saveReusableTemplateIfRequested = async () => {
         if (wordTemplateMode !== 'ADHOC' || !saveAdHocAsTemplate || !adHocTemplateFile) {
             return;
@@ -230,7 +211,7 @@ const Export = () => {
                 throw new Error(errorMsg);
             }
 
-            await downloadBlobResponse(response, 'requirements.docx');
+            await downloadResponse(response, 'requirements.docx');
             
             const successMsg = isTranslated 
                 ? `Requirements exported and translated to ${selectedLanguage} successfully`
@@ -287,7 +268,7 @@ const Export = () => {
                 throw new Error(errorMsg);
             }
 
-            await downloadBlobResponse(response, 'requirements_usecase.docx');
+            await downloadResponse(response, 'requirements_usecase.docx');
             
             const successMsg = isTranslated 
                 ? `Requirements exported and translated to ${selectedLanguage} successfully for selected use case`
@@ -332,25 +313,7 @@ const Export = () => {
                 throw new Error(errorMsg);
             }
 
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            
-            const contentDisposition = response.headers.get('Content-Disposition');
-            let filename = 'requirements_export.xlsx';
-            if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-                if (filenameMatch) {
-                    filename = filenameMatch[1];
-                }
-            }
-            
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
+            await downloadResponse(response, 'requirements_export.xlsx');
             
             const successMsg = isTranslated 
                 ? `Requirements exported and translated to ${selectedLanguage} in Excel successfully`
@@ -403,25 +366,7 @@ const Export = () => {
                 throw new Error(errorMsg);
             }
 
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            
-            const contentDisposition = response.headers.get('Content-Disposition');
-            let filename = 'requirements_usecase.xlsx';
-            if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-                if (filenameMatch) {
-                    filename = filenameMatch[1];
-                }
-            }
-            
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
+            await downloadResponse(response, 'requirements_usecase.xlsx');
             
             const successMsg = isTranslated 
                 ? `Requirements exported and translated to ${selectedLanguage} in Excel successfully for selected use case`
@@ -450,16 +395,7 @@ const Export = () => {
             const dateStr = new Date().toISOString().split('T')[0];
             const filename = `assets_export_${dateStr}.xlsx`;
 
-            // Trigger download
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
+            downloadBlob(blob, filename);
 
             setExportStatus('Assets exported to Excel successfully');
         } catch (error: any) {
@@ -479,15 +415,7 @@ const Export = () => {
             const dateStr = new Date().toISOString().split('T')[0];
             const filename = `applications_export_${dateStr}.xlsx`;
 
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
+            downloadBlob(blob, filename);
 
             setExportStatus('Applications exported to Excel successfully');
         } catch (error: any) {

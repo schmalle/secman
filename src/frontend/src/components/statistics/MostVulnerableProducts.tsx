@@ -12,8 +12,11 @@
  * Feature: 036-vuln-stats-lense
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { vulnerabilityStatisticsApi, type MostVulnerableProductDto, type AssetsByProductDto } from '../../services/api/vulnerabilityStatisticsApi';
+import { downloadSingleSheetWorkbook, sanitizeFilenamePart, todayStamp } from '../../utils/excelExport';
+import { ChartCardEmpty, ChartCardError, ChartCardLoading } from './ChartCardStates';
+import { useChartData } from './useChartData';
 
 /**
  * Props for MostVulnerableProducts component
@@ -29,9 +32,13 @@ interface MostVulnerableProductsProps {
 }
 
 export default function MostVulnerableProducts({ domain, awsHosted }: MostVulnerableProductsProps = {}) {
-  const [data, setData] = useState<MostVulnerableProductDto[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: fetched, loading, error } = useChartData<MostVulnerableProductDto[]>(
+    () => vulnerabilityStatisticsApi.getMostVulnerableProducts(domain, awsHosted),
+    [domain, awsHosted],
+    'Failed to load product statistics. Please try again later.',
+    'most vulnerable products',
+  );
+  const data = fetched ?? [];
 
   // Modal state for product drilldown
   const [showModal, setShowModal] = useState<boolean>(false);
@@ -76,52 +83,25 @@ export default function MostVulnerableProducts({ domain, awsHosted }: MostVulner
 
     setExporting(true);
     try {
-      const ExcelJS = (await import('exceljs')).default;
-      const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'Secman';
-      workbook.created = new Date();
-
-      const sheet = workbook.addWorksheet('Systems with Product');
-      sheet.columns = [
-        { header: 'System Name', key: 'name', width: 30 },
-        { header: 'IP Address', key: 'ip', width: 18 },
-        { header: 'Domain', key: 'domain', width: 20 },
-        { header: 'Type', key: 'type', width: 15 },
-        { header: 'Vulnerabilities', key: 'vulns', width: 15 },
-      ];
-
-      modalData.assets.forEach((asset) => {
-        sheet.addRow({
+      await downloadSingleSheetWorkbook({
+        filename: `Systems_${sanitizeFilenamePart(modalData.product)}_${todayStamp()}.xlsx`,
+        sheetName: 'Systems with Product',
+        headerColor: 'FF3D4F4F',
+        columns: [
+          { header: 'System Name', key: 'name', width: 30 },
+          { header: 'IP Address', key: 'ip', width: 18 },
+          { header: 'Domain', key: 'domain', width: 20 },
+          { header: 'Type', key: 'type', width: 15 },
+          { header: 'Vulnerabilities', key: 'vulns', width: 15 },
+        ],
+        rows: modalData.assets.map((asset) => ({
           name: asset.assetName,
           ip: asset.assetIp || '-',
           domain: asset.adDomain || '-',
           type: asset.assetType || '-',
           vulns: asset.vulnerabilityCount,
-        });
+        })),
       });
-
-      // Style header
-      const headerRow = sheet.getRow(1);
-      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3D4F4F' } };
-      headerRow.height = 22;
-
-      // Generate and download
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      });
-
-      const safeProduct = modalData.product.replace(/[^a-zA-Z0-9-]/g, '_').substring(0, 50);
-      const dateStr = new Date().toISOString().split('T')[0];
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Systems_${safeProduct}_${dateStr}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Export failed:', err);
     } finally {
@@ -129,64 +109,14 @@ export default function MostVulnerableProducts({ domain, awsHosted }: MostVulner
     }
   };
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await vulnerabilityStatisticsApi.getMostVulnerableProducts(domain, awsHosted);
-        setData(result);
-      } catch (err) {
-        console.error('Error fetching most vulnerable products:', err);
-        setError('Failed to load product statistics. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [domain, awsHosted]); // Re-fetch when domain or awsHosted changes
-
-  // Loading state
-  if (loading) {
-    return (
-      <div className="card">
-        <div className="card-body text-center py-5">
-          <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Loading...</span>
-          </div>
-          <p className="mt-3 text-muted">Loading product statistics...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="card">
-        <div className="card-body">
-          <div className="alert alert-danger" role="alert">
-            <i className="bi bi-exclamation-triangle me-2"></i>
-            {error}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Empty state
+  if (loading) return <ChartCardLoading label="Loading product statistics..." />;
+  if (error) return <ChartCardError message={error} />;
   if (data.length === 0) {
     return (
-      <div className="card">
-        <div className="card-body text-center py-5">
-          <i className="bi bi-inbox display-4 text-muted"></i>
-          <p className="mt-3 text-muted">No product vulnerability data available.</p>
-          <small className="text-muted">
-            This could mean no vulnerabilities with product information have been imported yet.
-          </small>
-        </div>
-      </div>
+      <ChartCardEmpty
+        message="No product vulnerability data available."
+        hint="This could mean no vulnerabilities with product information have been imported yet."
+      />
     );
   }
 

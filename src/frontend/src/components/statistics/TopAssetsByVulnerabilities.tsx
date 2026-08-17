@@ -15,8 +15,11 @@
  * User Story: US3 - View Asset Vulnerability Statistics (P3)
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { vulnerabilityStatisticsApi, type TopAssetByVulnerabilitiesDto } from '../../services/api/vulnerabilityStatisticsApi';
+import { downloadSingleSheetWorkbook, todayStamp } from '../../utils/excelExport';
+import { ChartCardEmpty, ChartCardError, ChartCardLoading } from './ChartCardStates';
+import { useChartData } from './useChartData';
 
 /**
  * Handle row click - navigate to system vulnerabilities page
@@ -29,29 +32,25 @@ const handleRowClick = (assetName: string) => {
  * Export data to Excel file
  */
 async function exportToExcel(data: TopAssetByVulnerabilitiesDto[]): Promise<void> {
-  const ExcelJS = (await import('exceljs')).default;
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'Secman';
-  workbook.created = new Date();
-
-  const sheet = workbook.addWorksheet('Top Assets by Vulnerabilities');
-
-  // Define columns
-  sheet.columns = [
-    { header: '#', key: 'rank', width: 5 },
-    { header: 'Asset Name', key: 'assetName', width: 40 },
-    { header: 'IP Address', key: 'assetIp', width: 18 },
-    { header: 'Type', key: 'assetType', width: 15 },
-    { header: 'Total', key: 'total', width: 10 },
-    { header: 'Critical', key: 'critical', width: 10 },
-    { header: 'High', key: 'high', width: 10 },
-    { header: 'Medium', key: 'medium', width: 10 },
-    { header: 'Low', key: 'low', width: 10 },
-  ];
-
-  // Add data rows
-  data.forEach((asset, index) => {
-    sheet.addRow({
+  await downloadSingleSheetWorkbook({
+    filename: `Top_50_Assets_by_Vulnerabilities_${todayStamp()}.xlsx`,
+    sheetName: 'Top Assets by Vulnerabilities',
+    headerColor: 'FF4472C4',
+    headerHeight: 20,
+    centerHeader: true,
+    bordered: true,
+    columns: [
+      { header: '#', key: 'rank', width: 5 },
+      { header: 'Asset Name', key: 'assetName', width: 40 },
+      { header: 'IP Address', key: 'assetIp', width: 18 },
+      { header: 'Type', key: 'assetType', width: 15 },
+      { header: 'Total', key: 'total', width: 10 },
+      { header: 'Critical', key: 'critical', width: 10 },
+      { header: 'High', key: 'high', width: 10 },
+      { header: 'Medium', key: 'medium', width: 10 },
+      { header: 'Low', key: 'low', width: 10 },
+    ],
+    rows: data.map((asset, index) => ({
       rank: index + 1,
       assetName: asset.assetName,
       assetIp: asset.assetIp || '',
@@ -61,46 +60,8 @@ async function exportToExcel(data: TopAssetByVulnerabilitiesDto[]): Promise<void
       high: asset.highCount,
       medium: asset.mediumCount,
       low: asset.lowCount,
-    });
+    })),
   });
-
-  // Style header row
-  const headerRow = sheet.getRow(1);
-  headerRow.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
-  headerRow.fill = {
-    type: 'pattern',
-    pattern: 'solid',
-    fgColor: { argb: 'FF4472C4' },
-  };
-  headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
-  headerRow.height = 20;
-
-  // Add borders to all cells
-  sheet.eachRow((row) => {
-    row.eachCell((cell) => {
-      cell.border = {
-        top: { style: 'thin' },
-        left: { style: 'thin' },
-        bottom: { style: 'thin' },
-        right: { style: 'thin' },
-      };
-    });
-  });
-
-  // Generate and download
-  const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
-
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `Top_50_Assets_by_Vulnerabilities_${new Date().toISOString().split('T')[0]}.xlsx`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(url);
 }
 
 interface TopAssetsByVulnerabilitiesProps {
@@ -109,28 +70,14 @@ interface TopAssetsByVulnerabilitiesProps {
 }
 
 export default function TopAssetsByVulnerabilities({ domain, awsHosted }: TopAssetsByVulnerabilitiesProps) {
-  const [data, setData] = useState<TopAssetByVulnerabilitiesDto[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState<boolean>(false);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await vulnerabilityStatisticsApi.getTopAssetsByVulnerabilities(domain, awsHosted);
-        setData(result);
-      } catch (err) {
-        console.error('Error fetching top assets by vulnerabilities:', err);
-        setError('Failed to load asset statistics. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [domain, awsHosted]);
+  const { data: fetched, loading, error } = useChartData<TopAssetByVulnerabilitiesDto[]>(
+    () => vulnerabilityStatisticsApi.getTopAssetsByVulnerabilities(domain, awsHosted),
+    [domain, awsHosted],
+    'Failed to load asset statistics. Please try again later.',
+    'top assets by vulnerabilities',
+  );
+  const data = fetched ?? [];
 
   const handleExport = async () => {
     try {
@@ -143,49 +90,14 @@ export default function TopAssetsByVulnerabilities({ domain, awsHosted }: TopAss
     }
   };
 
-  // Loading state
-  if (loading) {
-    return (
-      <div className="card">
-        <div className="card-body text-center py-5">
-          <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Loading...</span>
-          </div>
-          <p className="mt-3 text-muted">Loading asset statistics...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="card">
-        <div className="card-body">
-          <div className="alert alert-danger" role="alert">
-            <i className="bi bi-exclamation-triangle me-2"></i>
-            {error}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Empty state
+  if (loading) return <ChartCardLoading label="Loading asset statistics..." />;
+  if (error) return <ChartCardError message={error} />;
   if (data.length === 0) {
     return (
-      <div className="card">
-        <div className="card-header">
-          <h5 className="mb-0">
-            <i className="bi bi-server me-2"></i>
-            Top 50 Assets by Vulnerability Count
-          </h5>
-        </div>
-        <div className="card-body text-center py-5">
-          <i className="bi bi-inbox display-4 text-muted"></i>
-          <p className="mt-3 text-muted">No asset data available.</p>
-        </div>
-      </div>
+      <ChartCardEmpty
+        heading={{ icon: 'bi-server', title: 'Top 50 Assets by Vulnerability Count' }}
+        message="No asset data available."
+      />
     );
   }
 

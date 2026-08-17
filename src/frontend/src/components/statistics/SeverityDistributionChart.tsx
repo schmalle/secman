@@ -15,11 +15,13 @@
  * User Story: US2 - View Severity Distribution (P2)
  */
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
 import { vulnerabilityStatisticsApi, type SeverityDistributionDto } from '../../services/api/vulnerabilityStatisticsApi';
 import { SEVERITY_HEX as SEVERITY_COLORS } from '../../utils/severityColors';
+import { ChartCardEmpty, ChartCardError, ChartCardLoading } from './ChartCardStates';
+import { useChartData } from './useChartData';
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -48,74 +50,22 @@ interface SeverityDistributionChartProps {
 }
 
 export default function SeverityDistributionChart({ domain, awsHosted }: SeverityDistributionChartProps = {}) {
-  const [data, setData] = useState<SeverityDistributionDto | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error } = useChartData<SeverityDistributionDto>(
+    () => vulnerabilityStatisticsApi.getSeverityDistribution(domain, awsHosted),
+    [domain, awsHosted],
+    'Failed to load severity distribution. Please try again later.',
+    'severity distribution',
+  );
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await vulnerabilityStatisticsApi.getSeverityDistribution(domain, awsHosted);
-        setData(result);
-      } catch (err) {
-        console.error('Error fetching severity distribution:', err);
-        setError('Failed to load severity distribution. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [domain, awsHosted]); // Re-fetch when domain or awsHosted changes
-
-  // Loading state
-  if (loading) {
-    return (
-      <div className="card">
-        <div className="card-body text-center py-5">
-          <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Loading...</span>
-          </div>
-          <p className="mt-3 text-muted">Loading severity distribution...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="card">
-        <div className="card-body">
-          <div className="alert alert-danger" role="alert">
-            <i className="bi bi-exclamation-triangle me-2"></i>
-            {error}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Empty state
+  if (loading) return <ChartCardLoading label="Loading severity distribution..." />;
+  if (error) return <ChartCardError message={error} />;
   if (!data || data.total === 0) {
     return (
-      <div className="card">
-        <div className="card-header">
-          <h5 className="mb-0">
-            <i className="bi bi-pie-chart me-2"></i>
-            Severity Distribution
-          </h5>
-        </div>
-        <div className="card-body text-center py-5">
-          <i className="bi bi-inbox display-4 text-muted"></i>
-          <p className="mt-3 text-muted">No vulnerability data available.</p>
-          <small className="text-muted">
-            Import vulnerability data to see severity distribution.
-          </small>
-        </div>
-      </div>
+      <ChartCardEmpty
+        heading={{ icon: 'bi-pie-chart', title: 'Severity Distribution' }}
+        message="No vulnerability data available."
+        hint="Import vulnerability data to see severity distribution."
+      />
     );
   }
 
