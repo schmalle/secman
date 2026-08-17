@@ -7,6 +7,7 @@ import org.apache.poi.xwpf.usermodel.XWPFParagraph
 import org.apache.poi.xwpf.usermodel.XWPFRun
 import org.apache.poi.xwpf.usermodel.XWPFTable
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STBorder
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STOnOff
 import java.math.BigInteger
 
 /**
@@ -110,8 +111,33 @@ object WordExportStyle {
         paragraph.style = "Heading1"
         paragraph.spacingAfter = 120
         run(paragraph, text, size = SIZE_SECTION_HEADING, bold = true)
+        styleParagraphMark(paragraph, size = SIZE_SECTION_HEADING, bold = true, color = COLOR_TEXT)
         addBottomRule(paragraph)
         return paragraph
+    }
+
+    /**
+     * Formats the paragraph mark's own run properties (`w:pPr/w:rPr`) to match a heading's visible
+     * run. This is what an auto-generated outline/list number renders with when a "Heading1"-styled
+     * paragraph sits inside a template that links its own multilevel-list numbering to that style
+     * (common in company-uploaded Word templates) — without it, the auto-number falls back to the
+     * template's base style size while the heading text renders at [SIZE_SECTION_HEADING], producing
+     * a visibly mismatched "small number, big title" heading.
+     */
+    private fun styleParagraphMark(paragraph: XWPFParagraph, size: Int, bold: Boolean, color: String) {
+        val ctp = paragraph.ctp
+        val ppr = if (ctp.isSetPPr) ctp.pPr else ctp.addNewPPr()
+        val rpr = if (ppr.isSetRPr) ppr.rPr else ppr.addNewRPr()
+        val rFonts = if (rpr.isSetRFonts) rpr.rFonts else rpr.addNewRFonts()
+        rFonts.ascii = FONT_FAMILY
+        rFonts.hAnsi = FONT_FAMILY
+        if (bold) {
+            (if (rpr.isSetB) rpr.b else rpr.addNewB()).`val` = STOnOff.TRUE
+        }
+        val sz = if (rpr.isSetSz) rpr.sz else rpr.addNewSz()
+        sz.`val` = BigInteger.valueOf((size * 2).toLong())
+        val col = if (rpr.isSetColor) rpr.color else rpr.addNewColor()
+        col.`val` = color
     }
 
     /** 1-inch margins on every side, set explicitly rather than left to whatever default applies. */
