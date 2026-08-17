@@ -70,11 +70,20 @@ open class DefaultAdminBootstrapper(
             )
 
             userRepository.save(admin)
-            log.warn("==========================================================")
-            log.warn("  DEFAULT ADMIN USER CREATED")
-            log.warn("  Username: {}", DEFAULT_ADMIN_USERNAME)
-            log.warn("  Password: {} (CHANGE IMMEDIATELY!)", generatedPassword)
-            log.warn("==========================================================")
+            log.warn("Default admin user created (username={}); generated credential printed to console only, never logged", DEFAULT_ADMIN_USERNAME)
+            // The generated credential is written straight to stdout, bypassing SLF4J/Logback
+            // entirely, so it never reaches a log file, log appender or centralized log
+            // aggregator. See CLAUDE.md A09: never log a password, token, cookie value or API
+            // key. The banner text is assembled first and emitted with a single stdout write.
+            val divider = "=".repeat(58)
+            val firstBootBanner = buildString {
+                appendLine(divider)
+                appendLine("  DEFAULT ADMIN USER CREATED")
+                appendLine("  Username: $DEFAULT_ADMIN_USERNAME")
+                appendLine("  Password: $generatedPassword (CHANGE IMMEDIATELY!)")
+                append(divider)
+            }
+            println(firstBootBanner)
         } catch (e: Exception) {
             log.error("Failed to bootstrap default admin user: {}", e.message, e)
         }
