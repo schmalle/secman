@@ -4,6 +4,7 @@ import ReleaseIndicator from './ReleaseIndicator';
 import ReleaseSelector from './ReleaseSelector';
 import { buildPublicStandardUrl, buildRequirementDownloadUrl } from './requirementDownloadUrl';
 import { downloadResponse } from '../utils/download';
+import { clearSelectedReleaseId, readSelectedReleaseId } from '../utils/selectedRelease';
 
 interface UseCase {
     id: number;
@@ -46,13 +47,7 @@ export default function RequirementDownload() {
     const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
 
     useEffect(() => {
-        const stored = sessionStorage.getItem('secman_selectedReleaseId');
-        if (stored) {
-            const parsed = parseInt(stored, 10);
-            if (!isNaN(parsed)) {
-                setSelectedReleaseId(parsed);
-            }
-        }
+        setSelectedReleaseId(readSelectedReleaseId());
     }, []);
 
     useEffect(() => {
@@ -95,6 +90,16 @@ export default function RequirementDownload() {
                 const response = await authenticatedGet(`/api/releases/${selectedReleaseId}`);
                 if (response.ok) {
                     setSelectedRelease(await response.json());
+                    return;
+                }
+                // 404 only: the release was deleted from another session, so forget it and fall
+                // back to the current requirement set. A 401 is left alone — it means "not signed
+                // in", which is a normal state on this public page and says nothing about whether
+                // the release still exists.
+                if (response.status === 404) {
+                    clearSelectedReleaseId();
+                    setSelectedReleaseId(null);
+                    setSelectedRelease(null);
                 }
             } catch (err) {
                 console.error('Error fetching release details:', err);

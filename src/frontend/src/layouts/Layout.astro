@@ -15,8 +15,15 @@ interface Props {
 
 const { title = "SecMan" } = Astro.props; // Updated default title
 
-// Define public paths that don't require login
+// Paths reachable without a login. This is an AUTH POLICY list: it controls the redirect and the
+// 401 interception below, nothing else.
 const publicPaths = ['/login', '/requirements/download']; // Add other public paths if needed
+
+// Paths that never get app chrome, signed in or not. This is a LAYOUT list, deliberately separate
+// from `publicPaths`: the two coincided while /login was the only public page, and collapsing them
+// into one flag is what hid the sidebar from signed-in users on /requirements/download. A page can
+// be public *and* still deserve the sidebar for someone who is logged in.
+const chromelessPaths = ['/login'];
 
 // Check auth status on the server-side for initial load
 let user = null;
@@ -32,7 +39,8 @@ try {
 }
 
 const isPublicPage = publicPaths.includes(Astro.url.pathname);
-const requiresRedirect = !user && !isPublicPage; 
+const isChromeless = chromelessPaths.includes(Astro.url.pathname);
+const requiresRedirect = !user && !isPublicPage;
 ---
 
 <!doctype html>
@@ -47,6 +55,29 @@ const requiresRedirect = !user && !isPublicPage;
 		    the Astro middleware (frontend) and SecurityHeadersFilter (backend API responses). */}
 		<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net; font-src 'self' cdn.jsdelivr.net; img-src 'self' data: blob:; connect-src 'self' cdn.jsdelivr.net; form-action 'self'; base-uri 'self'; object-src 'none';" />
 		<title>{title}</title>
+        {/*
+          Decide the app chrome BEFORE first paint.
+
+          `sessionStorage` is synchronous, so this runs and stamps the class while the head is
+          still parsing — the very first paint is already correct. Doing it after hydration
+          instead would show the anonymous layout first and then jump, which is worse than the
+          missing sidebar it fixes.
+
+          It reads the same `sessionStorage['user']` that Sidebar.tsx sources its roles from (via
+          utils/permissions), so visibility and contents can never disagree — there is no state
+          where the sidebar appears but renders empty. It holds no token; the JWT stays in the
+          HttpOnly secman_auth cookie. This is presentation only: every destination behind these
+          links is RBAC-enforced at the controller.
+        */}
+        <script is:inline>
+            try {
+                if (sessionStorage.getItem('user')) {
+                    document.documentElement.classList.add('has-session');
+                }
+            } catch (e) {
+                // sessionStorage can throw in hardened/private modes — fall back to no chrome.
+            }
+        </script>
         <!-- Bootstrap CSS -->
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
@@ -60,21 +91,40 @@ const requiresRedirect = !user && !isPublicPage;
                 flex-grow: 1;
                 display: flex;
             }
+            /*
+              A public page renders the sidebar markup unconditionally and hides it for visitors
+              with no session. Only the no-session case is styled, so a signed-in visitor gets
+              Bootstrap's own column widths untouched rather than a second set to keep in step.
+            */
+            html:not(.has-session) .main-layout.public-page .sidebar-col {
+                /* `!important` to outrank Bootstrap's `d-md-block`, which is itself
+                   `display: block !important` at >=768px. Between two !important rules the more
+                   specific one wins, and this selector is far more specific. */
+                display: none !important;
+            }
+            html:not(.has-session) .main-layout.public-page .main-col {
+                width: 100%;
+            }
         </style>
 	</head>
 	<body>
         <Header client:load />
-		<div class="main-layout">
+		<div class:list={["main-layout", { "public-page": isPublicPage }]}>
 			<div class="container-fluid content-wrapper">
 				<div class="row w-100">
-					{/* Sidebar only shown if user is potentially logged in (not on public pages like login) */}
-					{!isPublicPage && (
-						<div class="col-md-3 col-lg-2 d-md-block bg-light sidebar">
+					{/*
+					  Rendered on public pages too, then hidden by CSS when there is no session.
+					  `client:visible` makes that free: the island hydrates on intersection, and a
+					  display:none element never intersects — so an anonymous visitor downloads and
+					  runs no sidebar JS, exactly as when the markup was absent.
+					*/}
+					{!isChromeless && (
+						<div class="col-md-3 col-lg-2 d-md-block bg-light sidebar sidebar-col">
 							<Sidebar client:visible />
 						</div>
 					)}
 					{/* Main content area */}
-					<main class={isPublicPage ? "col-12" : "col-md-9 ms-sm-auto col-lg-10 px-md-4 pt-4 pb-5"}>
+					<main class={isChromeless ? "col-12" : "main-col col-md-9 ms-sm-auto col-lg-10 px-md-4 pt-4 pb-5"}>
 						<slot />
 						<Footer />
 					</main>
@@ -131,20 +181,27 @@ const requiresRedirect = !user && !isPublicPage;
                 window.location.href = '/login' + suffix;
             }
 
+            // The pre-paint script showed the chrome on the strength of sessionStorage alone.
+            // If the session turns out to be gone, take it back down — but never redirect: on a
+            // public page an anonymous visitor is entitled to be here.
+            function clearSessionChrome() {
+                document.documentElement.classList.remove('has-session');
+            }
+
             async function checkAuthAndRedirect() {
-                if (isPublicPage) {
-                    // Public pages (e.g. /login) don't gate components on
-                    // currentUser; signal "no user" so any island that mounts
-                    // here resolves immediately instead of timing out.
-                    resolveAuth(null);
-                    return;
-                }
                 try {
                     // Check for user data in sessionStorage (indicates a logged-in session)
                     // The actual JWT token is stored in an HttpOnly cookie (secman_auth)
                     // for XSS protection and is sent automatically with credentials: 'include'
                     const userStr = sessionStorage.getItem('user');
                     if (!userStr) {
+                        if (isPublicPage) {
+                            // Signal "no user" so any island that mounts here resolves
+                            // immediately instead of waiting out its timeout.
+                            clearSessionChrome();
+                            resolveAuth(null);
+                            return;
+                        }
                         // No user data, redirect to login
                         console.log('No user data found, redirecting to /login');
                         redirectToLogin();
@@ -160,8 +217,13 @@ const requiresRedirect = !user && !isPublicPage;
                     });
                     if (!response.ok) {
                         if (response.status === 401) {
-                             console.log('Not authenticated, clearing user data and redirecting to /login');
                              sessionStorage.removeItem('user');
+                             if (isPublicPage) {
+                                 clearSessionChrome();
+                                 resolveAuth(null);
+                                 return;
+                             }
+                             console.log('Not authenticated, clearing user data and redirecting to /login');
                              redirectToLogin();
                              return;
                         }

@@ -2,6 +2,7 @@ import { Fragment, useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import { useClientRoles } from '../utils/useClientAuth';
 import { isAdmin } from '../utils/permissions';
+import { clearSelectedReleaseId, readSelectedReleaseId } from '../utils/selectedRelease';
 import ReleaseIndicator from './ReleaseIndicator';
 import ReleaseSelector from './ReleaseSelector';
 import HtmlEditor from './admin/HtmlEditor';
@@ -100,17 +101,25 @@ export default function RequirementManagement() {
     const isEditingBlocked = selectedRelease !== null &&
         (selectedRelease.status === 'ARCHIVED' || selectedRelease.status === 'ACTIVE');
 
-    // Restore release selection from sessionStorage after mount (avoids SSR hydration mismatch)
+    // Restore release selection from sessionStorage after mount (avoids SSR hydration mismatch).
+    // The selectedReleaseId useEffect below handles the fetching.
     useEffect(() => {
-        const stored = sessionStorage.getItem('secman_selectedReleaseId');
-        if (stored) {
-            const parsed = parseInt(stored, 10);
-            if (!isNaN(parsed)) {
-                setSelectedReleaseId(parsed);
-                return; // The selectedReleaseId useEffect below will handle fetching
-            }
-        }
+        setSelectedReleaseId(readSelectedReleaseId());
     }, []);
+
+    /**
+     * The remembered release no longer exists — it was deleted from another session.
+     *
+     * Forget it and fall back to the live corpus. Without this the dead id stayed in
+     * sessionStorage, so every later visit re-fired the same 404s and the page kept claiming to
+     * show a historical snapshot while listing nothing.
+     */
+    const forgetMissingRelease = () => {
+        clearSelectedReleaseId();
+        setSelectedReleaseId(null);
+        setSelectedRelease(null);
+        setIsViewingHistorical(false);
+    };
 
     // Fetch requirements, use cases, and norms from backend
     useEffect(() => {
@@ -156,6 +165,17 @@ export default function RequirementManagement() {
             if (selectedReleaseId !== null) {
                 // Feature 067: Fetch historical requirements from release snapshot
                 const response = await authenticatedGet(`/api/releases/${selectedReleaseId}/requirements?pageSize=10000`);
+                if (!response.ok) {
+                    // Checked before parsing: a 404 body has no `.data`, so parsing it produced an
+                    // empty snapshot list that rendered as a valid-looking (but empty) historical
+                    // view instead of an error.
+                    if (response.status === 404) {
+                        forgetMissingRelease();
+                    } else {
+                        setRequirements([]);
+                    }
+                    return;
+                }
                 const data = await response.json();
                 // Transform snapshot data to requirement format
                 const snapshots = Array.isArray(data) ? data : (data.data || []);
@@ -197,6 +217,14 @@ export default function RequirementManagement() {
     const fetchReleaseDetails = async (releaseId: number) => {
         try {
             const response = await authenticatedGet(`/api/releases/${releaseId}`);
+            if (!response.ok) {
+                if (response.status === 404) {
+                    forgetMissingRelease();
+                } else {
+                    setSelectedRelease(null);
+                }
+                return;
+            }
             const data = await response.json();
             setSelectedRelease(data);
         } catch (error) {

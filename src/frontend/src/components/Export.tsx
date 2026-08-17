@@ -3,6 +3,7 @@ import { authenticatedFetch } from '../utils/auth';
 import ReleaseSelector from './ReleaseSelector';
 import { exportApplications, exportAssets } from '../services/assetService';
 import { downloadBlob, downloadResponse } from '../utils/download';
+import { readSelectedReleaseId } from '../utils/selectedRelease';
 
 interface UseCase {
     id: number;
@@ -35,12 +36,7 @@ const Export = () => {
     const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
 
     useEffect(() => {
-        const stored = sessionStorage.getItem('secman_selectedReleaseId');
-        if (!stored) {
-            return;
-        }
-        const parsed = parseInt(stored, 10);
-        setSelectedReleaseId(isNaN(parsed) ? null : parsed);
+        setSelectedReleaseId(readSelectedReleaseId());
     }, []);
     const [wordTemplateMode, setWordTemplateMode] = useState<WordTemplateMode>('LATEST');
     const [savedTemplates, setSavedTemplates] = useState<RequirementExportTemplate[]>([]);

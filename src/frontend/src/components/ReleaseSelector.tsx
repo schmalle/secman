@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedFetch } from '../utils/auth';
+import { clearSelectedReleaseId, readSelectedReleaseId, writeSelectedReleaseId } from '../utils/selectedRelease';
 
 interface Release {
     id: number;
@@ -15,8 +16,6 @@ interface ReleaseSelectorProps {
     selectedReleaseId?: number | null;
     className?: string;
 }
-
-const SESSION_STORAGE_KEY = 'secman_selectedReleaseId';
 
 const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
     onReleaseChange,
@@ -40,22 +39,27 @@ const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
         if (releases.length === 0 || initialized) return;
 
         // Try restoring from sessionStorage first
-        const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
-        if (stored) {
-            const storedId = parseInt(stored, 10);
-            if (!isNaN(storedId) && releases.some(r => r.id === storedId)) {
+        const storedId = readSelectedReleaseId();
+        if (storedId !== null) {
+            if (releases.some(r => r.id === storedId)) {
                 setSelectedId(storedId);
                 onReleaseChange(storedId);
                 setInitialized(true);
                 return;
             }
+            // The remembered release is not in the list any more — it was deleted. Forget it here
+            // rather than leaving it for the next reader to turn into a 404. This matters most
+            // when there is no ACTIVE release to fall through to, which used to leave the dead id
+            // in storage untouched.
+            clearSelectedReleaseId();
+            onReleaseChange(null);
         }
 
         // Default to ACTIVE release
         const activeRelease = releases.find(r => r.status === 'ACTIVE');
         if (activeRelease) {
             setSelectedId(activeRelease.id);
-            sessionStorage.setItem(SESSION_STORAGE_KEY, activeRelease.id.toString());
+            writeSelectedReleaseId(activeRelease.id);
             onReleaseChange(activeRelease.id);
         }
         setInitialized(true);
@@ -103,11 +107,7 @@ const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
         const newReleaseId = value === '' ? null : parseInt(value, 10);
 
         setSelectedId(newReleaseId);
-        if (newReleaseId !== null) {
-            sessionStorage.setItem(SESSION_STORAGE_KEY, newReleaseId.toString());
-        } else {
-            sessionStorage.removeItem(SESSION_STORAGE_KEY);
-        }
+        writeSelectedReleaseId(newReleaseId);
         onReleaseChange(newReleaseId);
     };
 
