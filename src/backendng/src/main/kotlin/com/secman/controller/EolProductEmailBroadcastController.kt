@@ -59,18 +59,22 @@ open class EolProductEmailBroadcastController(
     open fun createEolProductBroadcast(
         @Body @Valid request: EolProductBroadcastRequest,
         authentication: Authentication
-    ): HttpResponse<EmailBroadcastJob> {
+    ): HttpResponse<*> {
         val htmlText = request.htmlContent.trim()
         if (htmlText.isEmpty()) {
-            return HttpResponse.badRequest()
+            return HttpResponse.badRequest<EmailBroadcastJob>()
         }
+
+        val ccRecipients = normalizeCcRecipients(request.ccRecipients)
+            ?: return HttpResponse.badRequest(ErrorResponse("Invalid CC email address"))
 
         val job = emailBroadcastService.createEolProductJob(
             subject = request.subject,
             htmlContent = htmlText,
             createdBy = authentication.name,
             productName = request.productName,
-            authentication = authentication
+            authentication = authentication,
+            ccRecipients = ccRecipients
         )
 
         if (job.totalRecipients == 0) {
@@ -104,10 +108,29 @@ open class EolProductEmailBroadcastController(
         return HttpResponse.ok(job)
     }
 
+    /**
+     * Normalizes manually-entered CC addresses: trims, drops blanks, dedupes
+     * case-insensitively. Returns null if any surviving address fails the
+     * format check, so the caller can 400 rather than silently drop it.
+     */
+    private fun normalizeCcRecipients(raw: List<String>): List<String>? {
+        val deduped = raw.map { it.trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() }
+        if (deduped.any { it.length > 254 || !ccEmailRegex.matches(it) }) return null
+        return deduped
+    }
+
+    @Serdeable
+    data class ErrorResponse(val error: String)
+
     @Serdeable
     data class EolProductBroadcastRequest(
         @field:NotBlank @field:Size(max = 512) val productName: String,
         @field:NotBlank @field:Size(max = 255) val subject: String,
-        @field:NotBlank @field:Size(max = 1_000_000) val htmlContent: String
+        @field:NotBlank @field:Size(max = 1_000_000) val htmlContent: String,
+        @field:Size(max = 25) val ccRecipients: List<String> = emptyList()
     )
+
+    companion object {
+        private val ccEmailRegex = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+\$")
+    }
 }
