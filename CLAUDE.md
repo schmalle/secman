@@ -70,7 +70,7 @@ Authoritative filter: `AssetFilterService.getAccessibleAssets()`. SQL pre-filter
 | User Mappings | `GET /api/user-mappings/{current,applied-history}`, `POST/PUT/DELETE /api/user-mappings[/{id}]` | ADMIN |
 | AWS Sharing | `GET/POST /api/aws-account-sharing`, `DELETE .../{id}` | ADMIN |
 | Heatmap | `GET /api/vulnerability-heatmap`; `POST .../refresh` (ADMIN); `GET /api/external/vulnerability-heatmap` (API-key, CORS) | mixed |
-| EOL | `GET /api/eol/{findings,summary,assets/{id},catalog/status}` (auth, asset-scoped); `GET /api/eol/repositories/top` (ADMIN/SECCHAMPION); `POST /api/eol/{catalog/sync,notifications/send}` (ADMIN). Source is operator config (`secman.eol.base-url` + `allowed-hosts`, a pair) | mixed |
+| EOL | `GET /api/eol/{findings,summary,assets/{id},catalog/status,products/{product}/assets}` (auth, asset-scoped); `GET /api/eol/repositories/top` (ADMIN/SECCHAMPION); `POST /api/eol/{catalog/sync,notifications/send}` (ADMIN); `GET/POST /api/admin/email-broadcast/eol/{product-recipients,product,jobs/{id}}` (ADMIN/SECCHAMPION, "contact affected owners"). Source is operator config (`secman.eol.base-url` + `allowed-hosts`, a pair) | mixed |
 | Identity Providers | `GET/POST/PUT/DELETE /api/identity-providers[/{id}[/test]]` | ADMIN |
 | Maintenance Banners | `GET /api/maintenance-banners/active` (PUBLIC); `GET/POST/PUT/DELETE /api/maintenance-banners[/{id}]` (ADMIN) | mixed |
 | User Profile | `GET /api/users/profile`, `PUT .../change-password` (LOCAL only), `GET/PUT .../mfa-{status,toggle}`; avatar `GET/POST/DELETE /api/users/profile/picture` (own only, no user id in the route) | auth |

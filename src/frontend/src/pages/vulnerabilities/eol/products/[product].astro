@@ -1,0 +1,29 @@
+---
+/**
+ * Systems affected by one EOL product.
+ *
+ * Reached by clicking a row in the "Top 10 Most Often EOL Products" table on
+ * the vulnerability statistics page. Access control is enforced entirely by
+ * the backend (`GET /api/eol/products/{product}/assets` is asset-scoped) — this
+ * page requires only authentication, handled by Layout.
+ */
+
+import Layout from '../../../../layouts/Layout.astro';
+import EolProductAssetsPage from '../../../../components/EolProductAssetsPage';
+
+const { product } = Astro.params;
+const productName = product ?? '';
+---
+
+<Layout title={`${productName} | End of life | SecMan`}>
+  <main>
+    <EolProductAssetsPage client:load product={productName} />
+  </main>
+</Layout>
+
+<style>
+  main {
+    min-height: 100vh;
+    padding-bottom: 2rem;
+  }
+</style>

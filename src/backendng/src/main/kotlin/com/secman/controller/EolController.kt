@@ -83,6 +83,22 @@ open class EolController(
         return HttpResponse.ok(mapOf("findings" to findings))
     }
 
+    /**
+     * Systems affected by one EOL product, within the caller's accessible scope.
+     * Backs the drilldown from the "Top 10 Most Often EOL Products" table on the
+     * vulnerability statistics page — `product` is matched against the same
+     * `componentName` field that table groups by.
+     */
+    @Get("/products/{product}/assets")
+    @Produces(MediaType.APPLICATION_JSON)
+    open fun findingsForProduct(
+        authentication: Authentication,
+        @PathVariable product: String,
+        @Nullable @QueryValue page: Int?,
+        @Nullable @QueryValue pageSize: Int?
+    ): HttpResponse<*> =
+        HttpResponse.ok(eolQueryService.findingsForProduct(authentication, product, page, pageSize))
+
     /** Catalogue size and last sync outcome. Contains no per-tenant data. */
     @Get("/catalog/status")
     @Produces(MediaType.APPLICATION_JSON)

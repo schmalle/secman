@@ -66,7 +66,14 @@ export default function MostEolProducts({ domain, awsHosted }: MostEolProductsPr
             </thead>
             <tbody>
               {data.map((product, index) => (
-                <tr key={`${product.product}-${index}`}>
+                <tr
+                  key={`${product.product}-${index}`}
+                  onClick={() => {
+                    window.location.href = `/vulnerabilities/eol/products/${encodeURIComponent(product.product)}`;
+                  }}
+                  style={{ cursor: 'pointer' }}
+                  title={`Click to view systems affected by ${product.product}`}
+                >
                   <td className="align-middle">{index + 1}</td>
                   <td className="align-middle">
                     <strong>{product.product}</strong>
@@ -100,6 +107,7 @@ export default function MostEolProducts({ domain, awsHosted }: MostEolProductsPr
         <i className="bi bi-info-circle me-1"></i>
         Showing top 10 products ranked by the number of systems running a version that is past
         end-of-life. A system counts once per product, however many of its versions are affected.
+        Click any row for the affected systems.
       </div>
     </div>
   );

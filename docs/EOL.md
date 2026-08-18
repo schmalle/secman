@@ -204,10 +204,12 @@ here. Consequently:
 | Surface | Who | Boundary |
 |---|---|---|
 | `GET /api/eol/findings`, `/summary`, `/assets/{id}` | any authenticated user | **asset-scoped** via `AssetFilterService` / `AccessibleAssetIdsCache` |
+| `GET /api/eol/products/{product}/assets` | any authenticated user | **asset-scoped**, same cache; backs the systems-affected-by-product drilldown page |
 | `GET /api/eol/catalog/status` | any authenticated user | reference data only, no per-tenant rows |
 | `GET /api/eol/repositories/top` | ADMIN, SECCHAMPION | mirrors `GithubRepositoryController` |
 | `POST /api/eol/catalog/sync` | ADMIN | logs actor + outcome |
 | `POST /api/eol/notifications/send` | ADMIN | logs actor + outcome |
+| `GET/POST /api/admin/email-broadcast/eol/*` | ADMIN, SECCHAMPION | "Contact affected owners" compose-and-send from the product drilldown page; see §6 |
 
 Every asset-scoped read resolves the caller's accessible asset ids **first** and
 passes them as a bound `IN` list. `EolFindingRepository` has no unscoped
@@ -263,6 +265,8 @@ reach the body or a log line.
 | **Vulnerability Management → End of life** (`/vulnerabilities/eol`) | the main view: counters, per-account rollup, filterable findings table |
 | Same page, ADMIN/SECCHAMPION only | **Top 10 repositories with the most EOL components** |
 | Same page, ADMIN only | "Sync catalogue & rescan" button |
+| **Vulnerability Statistics** (`/vulnerability-statistics`) | "Top 10 Most Often EOL Products" table; each row links to the drilldown below |
+| **EOL product systems** (`/vulnerabilities/eol/products/{product}`) | every accessible system a product is EOL/approaching-EOL on, plus (ADMIN/SECCHAMPION) a **Contact affected owners** button — compose a message in-browser and mail every owner/creator/uploader/mapped-user of those systems, reusing `HtmlEditor` and the async broadcast-job machinery from the admin product-notify feature. Distinct from `secman send-eol-notifications` (§5): this is ad-hoc, one product, admin-authored copy; that is scheduled, horizon-based, and templated |
 | **Installed products** (`/installed-products`) | a **Lifecycle** badge per row, linking through to the EOL view |
 | Sidebar → Vulnerability Management | "End of life" entry |
 
