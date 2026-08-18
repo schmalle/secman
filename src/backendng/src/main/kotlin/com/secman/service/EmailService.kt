@@ -82,13 +82,15 @@ open class EmailService(
     /**
      * Send email with inline images embedded as CID attachments.
      * @param inlineImages Map of Content-ID to (bytes, mimeType) pairs
+     * @param cc Additional addresses CC'd on this message (already validated by the caller)
      */
     fun sendEmailWithInlineImages(
         to: String,
         subject: String,
         textContent: String,
         htmlContent: String,
-        inlineImages: Map<String, Pair<ByteArray, String>>
+        inlineImages: Map<String, Pair<ByteArray, String>>,
+        cc: List<String> = emptyList()
     ): CompletableFuture<Boolean> {
         return CompletableFuture.supplyAsync {
             runBlocking {
@@ -99,7 +101,7 @@ open class EmailService(
                         return@runBlocking false
                     }
 
-                    sendEmailWithConfigAndImages(activeConfig, to, subject, textContent, htmlContent, inlineImages)
+                    sendEmailWithConfigAndImages(activeConfig, to, subject, textContent, htmlContent, inlineImages, cc)
                 } catch (e: Exception) {
                     log.error("Failed to send email with inline images to {}: {}", to, e.message, e)
                     false
@@ -118,7 +120,8 @@ open class EmailService(
         subject: String,
         textContent: String,
         htmlContent: String,
-        inlineImages: Map<String, Pair<ByteArray, String>>
+        inlineImages: Map<String, Pair<ByteArray, String>>,
+        cc: List<String> = emptyList()
     ): Boolean {
         return try {
             log.debug("Sending email with {} inline image(s) to {}", inlineImages.size, to)
@@ -129,6 +132,9 @@ open class EmailService(
             val message = MimeMessage(session).apply {
                 setFrom(InternetAddress(config.fromEmail, config.fromName))
                 setRecipients(Message.RecipientType.TO, InternetAddress.parse(to))
+                if (cc.isNotEmpty()) {
+                    setRecipients(Message.RecipientType.CC, InternetAddress.parse(cc.joinToString(",")))
+                }
                 setSubject(subject.replace(Regex("[\\r\\n]"), ""))
 
                 // Build multipart/alternative with text + HTML

@@ -13,6 +13,7 @@ import { describeDeadline, statusBadge } from './eolFormat';
 
 const PAGE_SIZE = 100;
 const ACTIVE_STATUSES = new Set<EmailBroadcastJob['status']>(['PENDING', 'PROCESSING']);
+const CC_EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 interface Props {
   product: string;
@@ -73,6 +74,9 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
   const [sending, setSending] = useState(false);
   const [contactJob, setContactJob] = useState<EmailBroadcastJob | null>(null);
   const [contactError, setContactError] = useState<string | null>(null);
+  const [ccEmails, setCcEmails] = useState<string[]>([]);
+  const [ccInput, setCcInput] = useState('');
+  const [ccInputError, setCcInputError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const openContactModal = async () => {
@@ -83,6 +87,9 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
     setRecipientCount(null);
     setContactJob(null);
     setContactError(null);
+    setCcEmails([]);
+    setCcInput('');
+    setCcInputError(null);
     setShowContactModal(true);
     setLoadingRecipients(true);
 
@@ -106,6 +113,34 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
     }
   };
 
+  const addCcEmail = () => {
+    const value = ccInput.trim();
+    if (!value) return;
+    if (!CC_EMAIL_PATTERN.test(value)) {
+      setCcInputError('Enter a valid email address.');
+      return;
+    }
+    if (ccEmails.some((email) => email.toLowerCase() === value.toLowerCase())) {
+      setCcInput('');
+      setCcInputError(null);
+      return;
+    }
+    setCcEmails((current) => [...current, value]);
+    setCcInput('');
+    setCcInputError(null);
+  };
+
+  const removeCcEmail = (email: string) => {
+    setCcEmails((current) => current.filter((existing) => existing !== email));
+  };
+
+  const handleCcInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addCcEmail();
+    }
+  };
+
   const handleSendContact = async () => {
     const trimmedSubject = contactSubject.trim();
     const trimmedHtml = contactHtml.trim();
@@ -122,6 +157,7 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
         productName: product,
         subject: trimmedSubject,
         htmlContent: trimmedHtml,
+        ccRecipients: ccEmails,
       });
       setContactJob(job);
       setRecipientCount(job.totalRecipients);
@@ -357,6 +393,57 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
                       disabled={sending || Boolean(contactJob)}
                       maxLength={255}
                     />
+                  </div>
+
+                  <div className="mb-3">
+                    <label htmlFor="eolContactCc" className="form-label">
+                      Cc (optional)
+                    </label>
+                    <div className="d-flex gap-2">
+                      <input
+                        id="eolContactCc"
+                        type="email"
+                        className="form-control"
+                        placeholder="name@example.com"
+                        value={ccInput}
+                        onChange={(e) => {
+                          setCcInput(e.target.value);
+                          setCcInputError(null);
+                        }}
+                        onKeyDown={handleCcInputKeyDown}
+                        disabled={sending || Boolean(contactJob)}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary text-nowrap"
+                        onClick={addCcEmail}
+                        disabled={sending || Boolean(contactJob) || !ccInput.trim()}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {ccInputError && <div className="text-danger small mt-1">{ccInputError}</div>}
+                    {ccEmails.length > 0 && (
+                      <div className="d-flex flex-wrap gap-1 mt-2">
+                        {ccEmails.map((email) => (
+                          <span
+                            key={email}
+                            className="badge bg-light text-dark border d-inline-flex align-items-center gap-1"
+                          >
+                            {email}
+                            {!sending && !contactJob && (
+                              <button
+                                type="button"
+                                className="btn-close"
+                                style={{ fontSize: '0.55rem' }}
+                                aria-label={`Remove ${email}`}
+                                onClick={() => removeCcEmail(email)}
+                              ></button>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="mb-0">

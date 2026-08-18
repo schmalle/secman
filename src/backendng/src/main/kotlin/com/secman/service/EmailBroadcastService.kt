@@ -92,7 +92,8 @@ open class EmailBroadcastService(
         htmlContent: String,
         createdBy: String,
         productName: String,
-        authentication: Authentication
+        authentication: Authentication,
+        ccRecipients: List<String> = emptyList()
     ): EmailBroadcastJob {
         val normalizedProduct = productName.trim()
         val total = eolBroadcastRecipientResolver.resolve(normalizedProduct, authentication).size
@@ -105,7 +106,8 @@ open class EmailBroadcastService(
             createdBy = createdBy,
             createdAt = LocalDateTime.now(),
             targetGroup = EmailBroadcastTargetGroup.EOL_PRODUCT_USERS,
-            targetProduct = normalizedProduct
+            targetProduct = normalizedProduct,
+            ccRecipients = serializeCcRecipients(ccRecipients)
         )
         return emailBroadcastJobRepository.save(job)
     }
@@ -163,6 +165,7 @@ open class EmailBroadcastService(
         val wrappedHtml = wrapWithBrand(job.subject, job.htmlContent)
         val textContent = htmlToText(job.htmlContent)
         val logo = loadLogoInlineImage()
+        val ccRecipients = parseCcRecipients(job.ccRecipients)
 
         var sent = 0
         var failed = 0
@@ -173,7 +176,8 @@ open class EmailBroadcastService(
                     subject = job.subject,
                     textContent = textContent,
                     htmlContent = wrappedHtml,
-                    inlineImages = logo
+                    inlineImages = logo,
+                    cc = ccRecipients
                 ).get()
             } catch (e: Exception) {
                 log.warn("Broadcast job {}: send to {} failed: {}", jobId, user.email, e.message)
@@ -289,6 +293,17 @@ open class EmailBroadcastService(
 
     internal fun sanitizeBroadcastHtml(html: String): String =
         Jsoup.clean(html, broadcastHtmlSafelist)
+
+    /**
+     * Manually-added CC addresses are stored comma-joined on the job row (already
+     * trimmed/deduped/validated by the controller) and re-split when the job runs.
+     */
+    private fun serializeCcRecipients(ccRecipients: List<String>): String? =
+        ccRecipients.map { it.trim() }.filter { it.isNotBlank() }.distinct().takeIf { it.isNotEmpty() }
+            ?.joinToString(",")
+
+    private fun parseCcRecipients(raw: String?): List<String> =
+        raw?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
 
     private fun loadLogoInlineImage(): Map<String, Pair<ByteArray, String>> {
         return try {

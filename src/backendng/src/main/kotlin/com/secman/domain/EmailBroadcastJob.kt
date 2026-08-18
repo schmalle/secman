@@ -64,7 +64,10 @@ class EmailBroadcastJob(
     var targetGroup: EmailBroadcastTargetGroup = EmailBroadcastTargetGroup.ALL_USERS,
 
     @Column(name = "target_product", length = 255)
-    var targetProduct: String? = null
+    var targetProduct: String? = null,
+
+    @Column(name = "cc_recipients", length = 2000)
+    var ccRecipients: String? = null
 ) {
     fun progressPercent(): Int {
         if (totalRecipients == 0) return 0
