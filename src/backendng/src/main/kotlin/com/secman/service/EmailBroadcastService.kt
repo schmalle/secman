@@ -27,7 +27,8 @@ open class EmailBroadcastService(
     private val emailBroadcastJobRepository: EmailBroadcastJobRepository,
     private val userRepository: UserRepository,
     private val emailService: EmailService,
-    private val productBroadcastRecipientResolver: ProductBroadcastRecipientResolver
+    private val productBroadcastRecipientResolver: ProductBroadcastRecipientResolver,
+    private val eolBroadcastRecipientResolver: EolBroadcastRecipientResolver
 ) {
     private val log = LoggerFactory.getLogger(EmailBroadcastService::class.java)
     private val broadcastHtmlSafelist = Safelist()
@@ -85,6 +86,30 @@ open class EmailBroadcastService(
         return emailBroadcastJobRepository.save(job)
     }
 
+    @Transactional
+    open fun createEolProductJob(
+        subject: String,
+        htmlContent: String,
+        createdBy: String,
+        productName: String,
+        authentication: Authentication
+    ): EmailBroadcastJob {
+        val normalizedProduct = productName.trim()
+        val total = eolBroadcastRecipientResolver.resolve(normalizedProduct, authentication).size
+        val sanitizedHtml = sanitizeBroadcastHtml(htmlContent)
+        val job = EmailBroadcastJob(
+            status = EmailBroadcastStatus.PENDING,
+            subject = subject.trim(),
+            htmlContent = sanitizedHtml,
+            totalRecipients = total,
+            createdBy = createdBy,
+            createdAt = LocalDateTime.now(),
+            targetGroup = EmailBroadcastTargetGroup.EOL_PRODUCT_USERS,
+            targetProduct = normalizedProduct
+        )
+        return emailBroadcastJobRepository.save(job)
+    }
+
     /**
      * Kicks off the send loop. Returns a CompletableFuture so callers may join during tests.
      */
@@ -105,6 +130,17 @@ open class EmailBroadcastService(
                 runJob(jobId, productAuthentication = authentication)
             } catch (e: Exception) {
                 log.error("Product email broadcast job {} crashed: {}", jobId, e.message, e)
+                markFailed(jobId, e.message ?: e.javaClass.simpleName)
+            }
+        }
+    }
+
+    fun runEolProductJobAsync(jobId: Long, authentication: Authentication): CompletableFuture<Void> {
+        return CompletableFuture.runAsync {
+            try {
+                runJob(jobId, productAuthentication = authentication)
+            } catch (e: Exception) {
+                log.error("EOL product email broadcast job {} crashed: {}", jobId, e.message, e)
                 markFailed(jobId, e.message ?: e.javaClass.simpleName)
             }
         }
@@ -206,6 +242,9 @@ open class EmailBroadcastService(
     fun productRecipientCount(productName: String, authentication: Authentication): Long =
         productBroadcastRecipientResolver.resolve(productName.trim(), authentication).size.toLong()
 
+    fun eolProductRecipientCount(productName: String, authentication: Authentication): Long =
+        eolBroadcastRecipientResolver.resolve(productName.trim(), authentication).size.toLong()
+
     /**
      * Single source of truth for "who receives this broadcast?".
      *
@@ -236,6 +275,12 @@ open class EmailBroadcastService(
             EmailBroadcastTargetGroup.PRODUCT_USERS ->
                 if (targetProduct != null && productAuthentication != null) {
                     productBroadcastRecipientResolver.resolve(targetProduct, productAuthentication)
+                } else {
+                    emptyList()
+                }
+            EmailBroadcastTargetGroup.EOL_PRODUCT_USERS ->
+                if (targetProduct != null && productAuthentication != null) {
+                    eolBroadcastRecipientResolver.resolve(targetProduct, productAuthentication)
                 } else {
                     emptyList()
                 }

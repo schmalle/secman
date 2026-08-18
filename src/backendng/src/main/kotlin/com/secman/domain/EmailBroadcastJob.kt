@@ -84,5 +84,6 @@ enum class EmailBroadcastTargetGroup {
     ADMINS_ONLY,
     ADMINS_AND_SECCHAMPIONS,
     SELF,
-    PRODUCT_USERS
+    PRODUCT_USERS,
+    EOL_PRODUCT_USERS
 }

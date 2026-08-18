@@ -160,6 +160,33 @@ open class EolQueryService(
             .map { it.toResponse() }
     }
 
+    /**
+     * Findings for one exact product name (e.g. "Internet Explorer"), scoped to
+     * the caller's accessible assets — the drilldown behind the "Top 10 Most
+     * Often EOL Products" table on the vulnerability statistics page, which
+     * groups by this same `componentName` field.
+     */
+    open fun findingsForProduct(
+        authentication: Authentication,
+        product: String,
+        page: Int?,
+        pageSize: Int?
+    ): EolFindingListResponse {
+        val effectivePage = (page ?: 0).coerceIn(0, MAX_PAGE)
+        val effectiveSize = (pageSize ?: DEFAULT_PAGE_SIZE).coerceIn(1, MAX_PAGE_SIZE)
+        val assetIds = accessibleAssetIdsCache.get(authentication)
+        if (assetIds.isEmpty()) {
+            return EolFindingListResponse(emptyList(), 0, effectivePage, effectiveSize)
+        }
+
+        val normalizedProduct = product.trim().take(512)
+        val findings = eolFindingRepository.findByComponentNameForAssets(
+            normalizedProduct, assetIds, Pageable.from(effectivePage, effectiveSize)
+        )
+        val total = eolFindingRepository.countByComponentNameForAssets(normalizedProduct, assetIds)
+        return EolFindingListResponse(findings.map { it.toResponse() }, total, effectivePage, effectiveSize)
+    }
+
     /** ADMIN / SECCHAMPION only — the controller enforces it. */
     open fun topRepositories(limit: Int?): EolTopRepositoriesResponse {
         val effectiveLimit = (limit ?: DEFAULT_TOP_REPOSITORIES).coerceIn(1, MAX_TOP_REPOSITORIES)

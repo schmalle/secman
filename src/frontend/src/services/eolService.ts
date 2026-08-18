@@ -127,6 +127,36 @@ export async function getEolSummary(): Promise<EolSummary> {
   };
 }
 
+/**
+ * Findings for one exact product name (e.g. "Internet Explorer"), scoped to the
+ * caller's accessible assets. Backs the drilldown page reached by clicking a row
+ * in the "Top 10 Most Often EOL Products" table, which groups by this same
+ * component name.
+ */
+export async function getEolFindingsForProduct(
+  product: string,
+  page = 0,
+  pageSize = 100,
+): Promise<EolFindingList> {
+  const params = new URLSearchParams();
+  params.append('page', String(page));
+  params.append('pageSize', String(pageSize));
+
+  const response = await authenticatedGet(
+    `/api/eol/products/${encodeURIComponent(product)}/assets?${params.toString()}`,
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to fetch systems for EOL product: ${response.status}`);
+  }
+  const data = await response.json();
+  return {
+    findings: data.findings ?? [],
+    total: data.total ?? 0,
+    page: data.page ?? 0,
+    pageSize: data.pageSize ?? pageSize,
+  };
+}
+
 export async function getEolFindingsForAsset(assetId: number): Promise<EolFinding[]> {
   const response = await authenticatedGet(`/api/eol/assets/${assetId}`);
   if (response.status === 404) return [];

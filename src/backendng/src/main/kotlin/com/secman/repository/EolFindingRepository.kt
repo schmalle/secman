@@ -177,6 +177,48 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
     )
     fun findByAssetId(assetId: Long, pageable: Pageable): List<EolFinding>
 
+    /**
+     * Findings for one exact product name across the caller's accessible assets —
+     * the drilldown behind the "Top 10 Most Often EOL Products" table, which groups
+     * by this same `componentName` field (see [topEolProductsForAssets]).
+     */
+    @Query(
+        """
+        SELECT f FROM EolFinding f
+        WHERE f.assetId IN (:assetIds)
+          AND f.assetId IS NOT NULL
+          AND f.componentName = :product
+        ORDER BY f.status ASC, f.eolDate ASC, f.assetName ASC
+        """
+    )
+    fun findByComponentNameForAssets(product: String, assetIds: Collection<Long>, pageable: Pageable): List<EolFinding>
+
+    @Query(
+        """
+        SELECT COUNT(f) FROM EolFinding f
+        WHERE f.assetId IN (:assetIds)
+          AND f.assetId IS NOT NULL
+          AND f.componentName = :product
+        """
+    )
+    fun countByComponentNameForAssets(product: String, assetIds: Collection<Long>): Long
+
+    /**
+     * Distinct asset ids affected by one product, for the "contact affected
+     * owners" recipient resolution. Deliberately unbounded within `assetIds` —
+     * that collection is already the caller's accessible-asset universe, so this
+     * is not a second unbounded read.
+     */
+    @Query(
+        """
+        SELECT DISTINCT f.assetId FROM EolFinding f
+        WHERE f.assetId IN (:assetIds)
+          AND f.assetId IS NOT NULL
+          AND f.componentName = :product
+        """
+    )
+    fun findAssetIdsByComponentNameForAssets(product: String, assetIds: Collection<Long>): List<Long>
+
     // ---------------------------------------------------------- repository scope
 
     /**
