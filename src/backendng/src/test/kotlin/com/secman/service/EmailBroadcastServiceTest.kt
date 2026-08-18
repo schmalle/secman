@@ -133,7 +133,7 @@ class EmailBroadcastServiceTest {
         every { emailBroadcastJobRepository.update(any<EmailBroadcastJob>()) } answers { firstArg() }
         every { eolBroadcastRecipientResolver.resolve("Internet Explorer", authentication) } returns listOf(activeUser())
         every {
-            emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any())
+            emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any(), any())
         } returns CompletableFuture.completedFuture(true)
 
         service.runEolProductJobAsync(43, authentication).get()
@@ -141,6 +141,51 @@ class EmailBroadcastServiceTest {
         io.mockk.verify(exactly = 1) {
             eolBroadcastRecipientResolver.resolve("Internet Explorer", authentication)
         }
+    }
+
+    @Test
+    fun `createEolProductJob serializes manually-added cc addresses`() {
+        val authentication = Authentication.build("champion", listOf("SECCHAMPION"), mapOf("userId" to 2L))
+        val jobSlot = slot<EmailBroadcastJob>()
+        every { eolBroadcastRecipientResolver.resolve("Internet Explorer", authentication) } returns listOf(activeUser())
+        every { emailBroadcastJobRepository.save(capture(jobSlot)) } answers { jobSlot.captured }
+
+        val job = service.createEolProductJob(
+            subject = "EOL notice",
+            htmlContent = "<p>Update</p>",
+            createdBy = "champion",
+            productName = "Internet Explorer",
+            authentication = authentication,
+            ccRecipients = listOf(" manager@example.com ", "manager@example.com", "second@example.com")
+        )
+
+        assertThat(job.ccRecipients).isEqualTo("manager@example.com,second@example.com")
+    }
+
+    @Test
+    fun `runEolProductJobAsync cc's manually-added addresses on every message`() {
+        val authentication = Authentication.build("champion", listOf("SECCHAMPION"), mapOf("userId" to 2L))
+        val job = EmailBroadcastJob(
+            id = 44,
+            subject = "EOL notice",
+            htmlContent = "<p>Update</p>",
+            totalRecipients = 1,
+            createdBy = "champion",
+            targetGroup = EmailBroadcastTargetGroup.EOL_PRODUCT_USERS,
+            targetProduct = "Internet Explorer",
+            ccRecipients = "manager@example.com,second@example.com"
+        )
+        val ccSlot = slot<List<String>>()
+        every { emailBroadcastJobRepository.findById(44) } returns Optional.of(job)
+        every { emailBroadcastJobRepository.update(any<EmailBroadcastJob>()) } answers { firstArg() }
+        every { eolBroadcastRecipientResolver.resolve("Internet Explorer", authentication) } returns listOf(activeUser())
+        every {
+            emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any(), capture(ccSlot))
+        } returns CompletableFuture.completedFuture(true)
+
+        service.runEolProductJobAsync(44, authentication).get()
+
+        assertThat(ccSlot.captured).containsExactly("manager@example.com", "second@example.com")
     }
 
     private fun activeUser(): User =

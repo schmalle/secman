@@ -41,6 +41,8 @@ export interface ProductBroadcastRequest {
   productName: string;
   subject: string;
   htmlContent: string;
+  /** Manually-added addresses CC'd on every message this job sends. */
+  ccRecipients?: string[];
 }
 
 export async function getRecipientCount(
