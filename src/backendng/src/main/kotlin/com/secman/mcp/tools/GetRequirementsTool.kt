@@ -70,6 +70,15 @@ class GetRequirementsTool(
     )
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
+        // Mirrors RequirementController's own @Secured("ADMIN", "REQ", "SECCHAMPION") boundary —
+        // the requirement corpus is not asset/owner-scoped, so a role gate is the right control
+        // here rather than a row-scope check. Same pattern as ExportRequirementsTool.
+        requireAnyRole(
+            context, "ADMIN", "REQ", "SECCHAMPION",
+            code = "ROLE_REQUIRED",
+            message = "ADMIN, REQ or SECCHAMPION role required to read requirements"
+        )?.let { return it }
+
         val search = arguments["search"] as? String
         val usecase = arguments["usecase"] as? String
         val norm = arguments["norm"] as? String
