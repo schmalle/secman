@@ -1,0 +1,21 @@
+---
+/**
+ * Standalone public download page for a complete security standard.
+ *
+ * PublicLayout, not Layout: this page is meant to be shared with suppliers, auditors and
+ * project teams who have no SecMan account, so it carries no sidebar, user menu or login
+ * prompt. The backend endpoints behind it are all @Secured(IS_ANONYMOUS) — see
+ * docs/PUBLIC_STANDARD_DOWNLOAD.md.
+ *
+ * The "Complete Standard" tile on /requirements/download stays as it is; this is an
+ * additional, shareable entry point rather than a replacement.
+ */
+import PublicLayout from '../layouts/PublicLayout.astro';
+import PublicStandardDownload from '../components/PublicStandardDownload';
+---
+
+<PublicLayout title="Download a Security Standard">
+    <main>
+        <PublicStandardDownload client:load />
+    </main>
+</PublicLayout>
