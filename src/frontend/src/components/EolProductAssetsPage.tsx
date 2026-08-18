@@ -7,15 +7,30 @@ import {
   type EmailBroadcastJob,
 } from '../services/emailBroadcastService';
 import { getUser } from '../utils/auth';
+import { downloadCsv } from '../utils/csv';
 import { canNotifyProductUsers } from './productNotifyAccess';
 import HtmlEditor from './admin/HtmlEditor';
 import { describeDeadline, statusBadge } from './eolFormat';
 
 const PAGE_SIZE = 100;
+/** Backend caps `pageSize` at 500 (EolQueryService.MAX_PAGE_SIZE) — ask for exactly that. */
+const EXPORT_PAGE_SIZE = 500;
+/** Backstop so a server that stops advancing cannot spin the export loop forever. */
+const MAX_EXPORT_PAGES = 200;
 const ACTIVE_STATUSES = new Set<EmailBroadcastJob['status']>(['PENDING', 'PROCESSING']);
 
 interface Props {
   product: string;
+}
+
+/**
+ * Product names come from the upstream catalogue and reach us verbatim
+ * ("Universal Forwarder", ".NET Core"), so they are reduced to a filename-safe
+ * slug before being used as one.
+ */
+function slugifyProduct(product: string): string {
+  const slug = product.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return slug || 'product';
 }
 
 /**
@@ -63,6 +78,45 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
   useEffect(() => {
     load();
   }, [load]);
+
+  // CSV export state. The table only ever holds one page, so the export re-reads
+  // every page from the API rather than serialising what happens to be on screen.
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const handleExportCsv = async () => {
+    setExporting(true);
+    setExportError(null);
+
+    try {
+      const all: EolFinding[] = [];
+      for (let pageIndex = 0; pageIndex < MAX_EXPORT_PAGES; pageIndex++) {
+        const response = await getEolFindingsForProduct(product, pageIndex, EXPORT_PAGE_SIZE);
+        all.push(...response.findings);
+        if (response.findings.length === 0 || all.length >= response.total) break;
+      }
+
+      downloadCsv(
+        `eol-${slugifyProduct(product)}-${new Date().toISOString().slice(0, 10)}.csv`,
+        ['System', 'Owner', 'Cloud account', 'AD domain', 'Version', 'Release cycle', 'End of support', 'Status'],
+        all.map((finding) => [
+          finding.assetName || '',
+          finding.assetOwner || '',
+          finding.cloudAccountId || '',
+          finding.adDomain || '',
+          finding.componentVersion || '',
+          finding.cycle,
+          describeDeadline(finding.eolDate, finding.daysUntilEol),
+          statusBadge(finding.status).label,
+        ]),
+      );
+    } catch (err) {
+      console.error('Failed to export EOL findings as CSV:', err);
+      setExportError(err instanceof Error ? err.message : 'Failed to export the affected systems.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Contact modal state
   const [showContactModal, setShowContactModal] = useState(false);
@@ -172,7 +226,27 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
           <i className="bi bi-hourglass-bottom me-2"></i>
           {product}
         </h1>
-        {canContact && (
+        <div className="d-flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn btn-outline-secondary"
+            onClick={handleExportCsv}
+            disabled={loading || exporting || total === 0}
+            title="Download every affected system as CSV"
+          >
+            {exporting ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-1" role="status"></span>
+                Exporting...
+              </>
+            ) : (
+              <>
+                <i className="bi bi-filetype-csv me-1"></i>
+                Export CSV
+              </>
+            )}
+          </button>
+          {canContact && (
           <button
             type="button"
             className="btn btn-outline-primary"
@@ -183,13 +257,21 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
             <i className="bi bi-envelope me-1"></i>
             Contact affected owners
           </button>
-        )}
+          )}
+        </div>
       </div>
 
       {error && (
         <div className="alert alert-danger" role="alert">
           <i className="bi bi-exclamation-triangle me-2"></i>
           {error}
+        </div>
+      )}
+
+      {exportError && (
+        <div className="alert alert-danger" role="alert">
+          <i className="bi bi-exclamation-triangle me-2"></i>
+          {exportError}
         </div>
       )}
 
