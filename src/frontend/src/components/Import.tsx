@@ -5,6 +5,7 @@ import { formatServerDateTime } from '../utils/dateUtils';
 import VulnerabilityImportForm from './VulnerabilityImportForm';
 import UserMappingUpload from './UserMappingUpload';
 import { importAssets, type ImportResult } from '../services/assetService';
+import { summarizeImportResult } from '../services/requirementImport';
 
 type ImportType = 'requirements' | 'nmap' | 'masscan' | 'vulnerabilities' | 'assets' | 'usermappings';
 
@@ -169,7 +170,12 @@ const Import = () => {
 
         try {
             const response = await csrfPost('/api/import/upload-xlsx', formData);
-            setUploadStatus(`Success: ${response.data.message || 'File uploaded and processed.'} (${response.data.requirementsProcessed} requirements added)`);
+            const summary = summarizeImportResult(response.data);
+            setUploadStatus(
+                summary.hasSkips
+                    ? [summary.headline, ...summary.details].join('\n')
+                    : `Success: ${summary.headline}`
+            );
             setSelectedFile(null);
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
@@ -645,7 +651,9 @@ const Import = () => {
                                 <div className={`alert mt-4 ${uploadStatus.startsWith('Error:') ? 'alert-danger' : 'alert-success'}`} role="alert">
                                     <div className="d-flex align-items-center">
                                         <i className={`bi ${uploadStatus.startsWith('Error:') ? 'bi-exclamation-triangle' : 'bi-check-circle'} me-2`}></i>
-                                        {uploadStatus}
+                                        {/* pre-line so the per-row skip reasons stay on their own
+                                            lines instead of collapsing into one paragraph. */}
+                                        <span style={{ whiteSpace: 'pre-line' }}>{uploadStatus}</span>
                                     </div>
                                 </div>
                             )}

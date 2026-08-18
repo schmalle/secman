@@ -116,17 +116,35 @@ open class StandardExportScopeService(
     /**
      * The requirements covered by [standard], frozen to [release] when one was selected.
      *
-     * A standard with no use cases covers nothing — it returns empty rather than falling
-     * back to "everything", so an unmapped standard cannot silently publish the full corpus.
+     * Two selection modes, and the distinction between them is the whole point:
+     *
+     *  - [Standard.allRequirements] set — the standard covers the entire corpus. Use cases are
+     *    ignored, including requirements that carry none. This is opt-in and deliberate; it is
+     *    the only way an export legitimately returns everything.
+     *  - otherwise — the union over the standard's use cases. A standard with no use cases covers
+     *    nothing and returns empty rather than falling back to "everything", so a *misconfigured*
+     *    standard still cannot silently publish the full corpus.
      */
     open fun requirementsFor(standard: Standard, release: Release?): List<Requirement> {
+        val releaseId = release?.id
+
+        if (standard.allRequirements) {
+            log.debug("Standard '{}' covers all requirements; use cases ignored", forLog(standard.name))
+            return if (releaseId != null) {
+                // The release's frozen content, not the live corpus — a release export has to stay
+                // reproducible after requirements change.
+                releaseRequirementScopeService.allRequirementsForRelease(releaseId)
+            } else {
+                requirementRepository.findAll().sortedWith(REQUIREMENT_ORDER)
+            }
+        }
+
         val useCaseIds = standard.useCases.mapNotNull { it.id }
         if (useCaseIds.isEmpty()) {
             log.debug("Standard '{}' has no use cases; export is empty", forLog(standard.name))
             return emptyList()
         }
 
-        val releaseId = release?.id
         return if (releaseId != null) {
             releaseRequirementScopeService.requirementsForRelease(releaseId, useCaseIds)
         } else {

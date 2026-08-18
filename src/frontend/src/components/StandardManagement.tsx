@@ -16,6 +16,8 @@ interface Standard {
   useCases?: UseCase[];
   createdAt?: string;
   updatedAt?: string;
+  /** Covers every requirement; `useCases` is kept but ignored for selection. */
+  allRequirements?: boolean;
 }
 
 const StandardManagement: React.FC = () => {
@@ -28,7 +30,8 @@ const StandardManagement: React.FC = () => {
   const [formData, setFormData] = useState<Standard>({
     name: '',
     description: '',
-    useCases: []
+    useCases: [],
+    allRequirements: false
   });
   const [selectedUseCaseIds, setSelectedUseCaseIds] = useState<number[]>([]);
 
@@ -78,7 +81,10 @@ const StandardManagement: React.FC = () => {
       const submitData = {
         name: formData.name,
         description: formData.description,
-        useCaseIds: selectedUseCaseIds
+        // Sent even when allRequirements is set: the flag changes what the standard selects, and
+        // keeping the use-case list means unticking it later restores the subset.
+        useCaseIds: selectedUseCaseIds,
+        allRequirements: formData.allRequirements ?? false
       };
 
       if (editingStandard) {
@@ -100,7 +106,8 @@ const StandardManagement: React.FC = () => {
     setFormData({
       name: standard.name,
       description: standard.description || '',
-      useCases: standard.useCases || []
+      useCases: standard.useCases || [],
+      allRequirements: standard.allRequirements ?? false
     });
     setSelectedUseCaseIds(standard.useCases?.map(uc => uc.id) || []);
     setShowForm(true);
@@ -125,7 +132,8 @@ const StandardManagement: React.FC = () => {
     setFormData({
       name: '',
       description: '',
-      useCases: []
+      useCases: [],
+      allRequirements: false
     });
     setSelectedUseCaseIds([]);
     setEditingStandard(null);
@@ -220,28 +228,62 @@ const StandardManagement: React.FC = () => {
                     />
                   </div>
                   <div className="mb-3">
-                    <label className="form-label">Associated Use Cases</label>
-                    <div className="border rounded p-3" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                      {useCases.length === 0 ? (
-                        <p className="text-muted mb-0">No use cases available</p>
-                      ) : (
-                        useCases.map((useCase) => (
-                          <div key={useCase.id} className="form-check">
-                            <input
-                              className="form-check-input"
-                              type="checkbox"
-                              id={`usecase-${useCase.id}`}
-                              checked={selectedUseCaseIds.includes(useCase.id)}
-                              onChange={() => handleUseCaseSelection(useCase.id)}
-                            />
-                            <label className="form-check-label" htmlFor={`usecase-${useCase.id}`}>
-                              {useCase.name}
-                            </label>
-                          </div>
-                        ))
-                      )}
+                    <div className="form-check mb-2">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id="standard-all-requirements"
+                        data-testid="standard-all-requirements"
+                        checked={formData.allRequirements ?? false}
+                        onChange={(e) => setFormData({ ...formData, allRequirements: e.target.checked })}
+                      />
+                      <label className="form-check-label" htmlFor="standard-all-requirements">
+                        <strong>Include all requirements</strong>
+                      </label>
+                      <div className="form-text">
+                        Covers every requirement, including those with no use case, and stays
+                        complete as requirements are added. Selecting use cases below cannot express
+                        this.
+                      </div>
                     </div>
-                    <small className="text-muted">Select one or more use cases that apply to this standard</small>
+                    <label className="form-label">Associated Use Cases</label>
+                    {/* Disabled rather than hidden when the flag is on: the selection is still
+                        stored, so it must stay visible or unticking the flag would look like the
+                        use cases had been lost. */}
+                    <fieldset disabled={formData.allRequirements ?? false} className="p-0 m-0 border-0">
+                      <div
+                        className="border rounded p-3"
+                        style={{
+                          maxHeight: '200px',
+                          overflowY: 'auto',
+                          opacity: formData.allRequirements ? 0.5 : 1
+                        }}
+                      >
+                        {useCases.length === 0 ? (
+                          <p className="text-muted mb-0">No use cases available</p>
+                        ) : (
+                          useCases.map((useCase) => (
+                            <div key={useCase.id} className="form-check">
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                id={`usecase-${useCase.id}`}
+                                checked={selectedUseCaseIds.includes(useCase.id)}
+                                onChange={() => handleUseCaseSelection(useCase.id)}
+                              />
+                              <label className="form-check-label" htmlFor={`usecase-${useCase.id}`}>
+                                {useCase.name}
+                              </label>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </fieldset>
+                    <small className="text-muted">
+                      {formData.allRequirements
+                        ? 'Ignored while "Include all requirements" is set — kept so you can switch back.'
+                        : 'Select one or more use cases that apply to this standard'}
+                    </small>
                   </div>
                   <div className="d-flex justify-content-end">
                     <button type="submit" className="btn btn-success me-2">
@@ -292,7 +334,11 @@ const StandardManagement: React.FC = () => {
                             )}
                           </td>
                           <td>
-                            {standard.useCases && standard.useCases.length > 0 ? (
+                            {standard.allRequirements ? (
+                              /* The use-case badges would misrepresent the coverage here — the
+                                 standard covers everything regardless of what is listed. */
+                              <span className="badge bg-primary">All requirements</span>
+                            ) : standard.useCases && standard.useCases.length > 0 ? (
                               <div>
                                 {standard.useCases.slice(0, 2).map((useCase, index) => (
                                   <span key={useCase.id} className="badge bg-info me-1">

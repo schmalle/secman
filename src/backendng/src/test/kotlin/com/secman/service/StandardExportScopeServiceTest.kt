@@ -260,6 +260,84 @@ class StandardExportScopeServiceTest {
         io.mockk.verify(exactly = 0) { requirementRepository.findByUsecaseId(any()) }
     }
 
+    // ---------- allRequirements ----------
+
+    /**
+     * The reason the flag exists rather than a "tick every use case" button in the UI: a
+     * requirement carrying no use case at all is unreachable through the union, however many
+     * boxes are ticked. On the instance this was built for that was 22 of 168 rows — a standard
+     * that looked complete and silently was not.
+     */
+    @Test
+    fun `an all-requirements standard covers rows that no use case reaches`() {
+        val everything = Standard(id = 20L, name = "Everything", allRequirements = true)
+        val orphan = requirement(99L, chapter = "Z")  // belongs to no use case
+        every { requirementRepository.findAll() } returns listOf(requirement(1L, "A"), orphan)
+
+        val requirements = service.requirementsFor(everything, null)
+
+        assertThat(requirements.map { it.id }).containsExactly(1L, 99L)
+        io.mockk.verify(exactly = 0) { requirementRepository.findByUsecaseId(any()) }
+    }
+
+    @Test
+    fun `an all-requirements standard ignores its use cases without discarding them`() {
+        // The selection is kept so unticking the flag restores the subset instead of emptying it.
+        val everything = Standard(
+            id = 21L, name = "Everything", useCases = mutableSetOf(itSecurity), allRequirements = true
+        )
+        every { requirementRepository.findAll() } returns listOf(requirement(1L), requirement(2L))
+
+        assertThat(service.requirementsFor(everything, null).map { it.id }).containsExactly(1L, 2L)
+        assertThat(everything.useCases).containsExactly(itSecurity)
+        io.mockk.verify(exactly = 0) { requirementRepository.findByUsecaseId(any()) }
+    }
+
+    @Test
+    fun `an all-requirements standard still exports everything when it has no use cases`() {
+        // Without the flag this is the "unmapped standard" case that deliberately exports nothing.
+        // With it, empty use cases are irrelevant — which is exactly why the guard had to move.
+        val everything = Standard(id = 22L, name = "Everything", allRequirements = true)
+        every { requirementRepository.findAll() } returns listOf(requirement(1L))
+
+        assertThat(service.requirementsFor(everything, null).map { it.id }).containsExactly(1L)
+    }
+
+    @Test
+    fun `an all-requirements standard is ordered like any other export`() {
+        val everything = Standard(id = 23L, name = "Everything", allRequirements = true)
+        every { requirementRepository.findAll() } returns listOf(
+            requirement(9L, chapter = "B"), requirement(3L, chapter = "A"), requirement(1L, chapter = "B")
+        )
+
+        assertThat(service.requirementsFor(everything, null).map { it.id }).containsExactly(3L, 1L, 9L)
+    }
+
+    @Test
+    fun `a release-scoped all-requirements export reads the release, not the live corpus`() {
+        // Reproducibility: the export must not change because someone added a requirement today.
+        val everything = Standard(id = 24L, name = "Everything", allRequirements = true)
+        val frozen = listOf(requirement(5L), requirement(6L))
+        every { releaseScopeService.allRequirementsForRelease(42L) } returns frozen
+
+        val requirements = service.requirementsFor(everything, activeRelease)
+
+        assertThat(requirements).isEqualTo(frozen)
+        io.mockk.verify(exactly = 0) { requirementRepository.findAll() }
+        io.mockk.verify(exactly = 0) { releaseScopeService.requirementsForRelease(any<Long>(), any<Collection<Long>>()) }
+    }
+
+    @Test
+    fun `a standard without the flag is completely unaffected`() {
+        // Regression guard: the default must keep the existing union behaviour byte for byte.
+        assertThat(standard.allRequirements).isFalse()
+        every { requirementRepository.findByUsecaseId(1L) } returns listOf(requirement(1L))
+        every { requirementRepository.findByUsecaseId(2L) } returns listOf(requirement(2L))
+
+        assertThat(service.requirementsFor(standard, null).map { it.id }).containsExactly(1L, 2L)
+        io.mockk.verify(exactly = 0) { requirementRepository.findAll() }
+    }
+
     @Test
     fun `a use case not on the standard contributes nothing`() {
         every { requirementRepository.findByUsecaseId(1L) } returns listOf(requirement(1L))

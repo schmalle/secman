@@ -17,6 +17,8 @@ interface Standard {
   useCases?: UseCase[];
   createdAt?: string;
   updatedAt?: string;
+  /** Covers every requirement; the use cases below are kept but do not narrow the standard. */
+  allRequirements?: boolean;
 }
 
 interface Requirement {
@@ -276,6 +278,14 @@ const ViewStandard: React.FC<ViewStandardProps> = ({ standardId }) => {
                 
                 <div className="col-md-6">
                   <h5>Associated Use Cases ({standard.useCases?.length || 0})</h5>
+                  {standard.allRequirements && (
+                    // Without this the listed use cases read as the standard's scope, which would
+                    // understate it — the standard covers everything, these included.
+                    <div className="alert alert-info py-2" data-testid="view-standard-all-requirements">
+                      This standard covers <strong>all requirements</strong>. The use cases below are
+                      kept for reference but do not narrow what it contains.
+                    </div>
+                  )}
                   {standard.useCases && standard.useCases.length > 0 ? (
                     <div className="list-group">
                       {standard.useCases.map((useCase) => (

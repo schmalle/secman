@@ -65,6 +65,22 @@ open class ReleaseRequirementScopeService(
     }
 
     /**
+     * Every requirement frozen in release [releaseId], with no use-case filter.
+     *
+     * Distinct from `requirementsForRelease(releaseId, emptyList())`, which returns nothing: an
+     * empty use-case set means "no use cases were selected", while this means "use cases do not
+     * narrow the selection at all". A standard flagged
+     * [com.secman.domain.Standard.allRequirements] resolves through here, so a release-scoped
+     * export of such a standard stays reproducible — it is the release's frozen content, not
+     * whatever the live corpus holds today.
+     */
+    open fun allRequirementsForRelease(releaseId: Long): List<Requirement> =
+        snapshotRepository.findByReleaseId(releaseId)
+            .map { snapshotToRequirement(it) }
+            .distinctBy { it.id }
+            .sortedWith(SNAPSHOT_ORDER)
+
+    /**
      * Rehydrate a snapshot into a detached [Requirement].
      *
      * `id` is deliberately the ORIGINAL requirement id, not the snapshot id, so

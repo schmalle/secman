@@ -53,6 +53,9 @@ class PublicStandardExportIntegrationTest : BaseIntegrationTest() {
     @Inject
     lateinit var snapshotRepository: RequirementSnapshotRepository
 
+    @Inject
+    lateinit var scopeService: com.secman.service.StandardExportScopeService
+
     private lateinit var standardName: String
     private lateinit var useCase: UseCase
     private lateinit var standard: Standard
@@ -192,6 +195,61 @@ class PublicStandardExportIntegrationTest : BaseIntegrationTest() {
 
         assertThat(response.status).isEqualTo(HttpStatus.OK)
         assertThat(response.body()).contains("No requirements found for this standard")
+    }
+
+    /**
+     * The counterpart to the test above, and the reason `allRequirements` is a stored flag rather
+     * than a "tick every use case" button: a requirement carrying no use case is unreachable
+     * through the union no matter how many boxes are ticked, so only an explicit flag can express
+     * "this standard is everything".
+     *
+     * Note this is the one case where an export legitimately returns the full corpus. The guard it
+     * sits next to — an unmapped standard exporting nothing — still holds, because that standard
+     * does not carry the flag.
+     */
+    @Test
+    fun `an all-requirements standard exports rows no use case reaches`() {
+        val suffix = System.nanoTime()
+        val orphan = requirementRepository.save(
+            Requirement(
+                internalId = "PSE-C-${suffix % 1_000_000_000L}",
+                shortreq = "Orphan requirement with no use case",
+                chapter = "3 Orphan",
+                usecases = mutableSetOf()
+            )
+        )
+        val everything = standardRepository.save(
+            Standard(name = "Everything $suffix", useCases = mutableSetOf(), allRequirements = true)
+        )
+
+        val response = client.toBlocking().exchange(
+            HttpRequest.GET<Any>("/api/requirements/export/xlsx?standardId=${everything.id}"),
+            ByteArray::class.java
+        )
+
+        assertThat(response.status).isEqualTo(HttpStatus.OK)
+        // An XLSX is a ZIP; the row text is not greppable, so assert on the count the export
+        // resolved rather than the bytes.
+        assertThat(scopeService.requirementsFor(everything, null).map { it.id })
+            .describedAs("the orphan and both use-case-tagged rows must all be covered")
+            .contains(orphan.id, inScope.id)
+            .hasSize(requirementRepository.count().toInt())
+    }
+
+    @Test
+    fun `clearing the flag returns a standard to its use-case subset`() {
+        val everything = standardRepository.save(
+            Standard(name = "Switchable ${System.nanoTime()}", useCases = mutableSetOf(useCase), allRequirements = true)
+        )
+        assertThat(scopeService.requirementsFor(everything, null))
+            .hasSize(requirementRepository.count().toInt())
+
+        // The use cases were kept while the flag was set, so this is a real toggle, not a reset.
+        everything.allRequirements = false
+        standardRepository.update(everything)
+
+        assertThat(scopeService.requirementsFor(everything, null).map { it.id })
+            .containsExactly(inScope.id)
     }
 
     // ---------- release selection ----------

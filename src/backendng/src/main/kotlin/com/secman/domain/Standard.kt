@@ -32,6 +32,16 @@ data class Standard(
     )
     var useCases: MutableSet<UseCase> = mutableSetOf(),
 
+    /**
+     * When true this standard covers every requirement, and [useCases] is ignored for selection.
+     *
+     * The use-case union cannot express "everything": it misses requirements that carry no use
+     * case, and it is a snapshot taken at edit time, so requirements added later fall outside the
+     * standard until someone re-edits it. Defaults to false so existing standards are unchanged.
+     */
+    @Column(name = "all_requirements", nullable = false)
+    var allRequirements: Boolean = false,
+
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
 

@@ -7,7 +7,6 @@ import org.apache.poi.xwpf.usermodel.XWPFParagraph
 import org.apache.poi.xwpf.usermodel.XWPFRun
 import org.apache.poi.xwpf.usermodel.XWPFTable
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STBorder
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.STOnOff
 import java.math.BigInteger
 
 /**
@@ -128,16 +127,25 @@ object WordExportStyle {
         val ctp = paragraph.ctp
         val ppr = if (ctp.isSetPPr) ctp.pPr else ctp.addNewPPr()
         val rpr = if (ppr.isSetRPr) ppr.rPr else ppr.addNewRPr()
-        val rFonts = if (rpr.isSetRFonts) rpr.rFonts else rpr.addNewRFonts()
+        // `ppr.rPr` is a CTParaRPr, not the CTRPr a *run* carries. The schema declares these
+        // children as repeating on CTParaRPr, so XmlBeans generates array accessors
+        // (`getRFontsArray(0)` / `sizeOfRFontsArray()`) where CTRPr gets the singular
+        // `isSetRFonts` / `getRFonts`. The two types are otherwise near-identical, which is why
+        // the CTRPr spelling looks right and does not compile.
+        val rFonts = if (rpr.sizeOfRFontsArray() > 0) rpr.getRFontsArray(0) else rpr.addNewRFonts()
         rFonts.ascii = FONT_FAMILY
         rFonts.hAnsi = FONT_FAMILY
         if (bold) {
-            (if (rpr.isSetB) rpr.b else rpr.addNewB()).`val` = STOnOff.TRUE
+            // setVal takes a plain Object here; the STOnOff schema type is only reachable through
+            // xsetVal, and lives in officeDocument.x2006.sharedTypes rather than the wordprocessing
+            // namespace.
+            val b = if (rpr.sizeOfBArray() > 0) rpr.getBArray(0) else rpr.addNewB()
+            b.setVal(true)
         }
-        val sz = if (rpr.isSetSz) rpr.sz else rpr.addNewSz()
-        sz.`val` = BigInteger.valueOf((size * 2).toLong())
-        val col = if (rpr.isSetColor) rpr.color else rpr.addNewColor()
-        col.`val` = color
+        val sz = if (rpr.sizeOfSzArray() > 0) rpr.getSzArray(0) else rpr.addNewSz()
+        sz.setVal(BigInteger.valueOf((size * 2).toLong()))
+        val col = if (rpr.sizeOfColorArray() > 0) rpr.getColorArray(0) else rpr.addNewColor()
+        col.setVal(color)
     }
 
     /** 1-inch margins on every side, set explicitly rather than left to whatever default applies. */

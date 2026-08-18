@@ -3,6 +3,7 @@ import { csrfPost } from '../utils/csrf'; // Import the CSRF-enhanced POST helpe
 import { authenticatedFetch } from '../utils/auth';
 import ReleaseSelector from './ReleaseSelector';
 import { downloadResponse } from '../utils/download';
+import { summarizeImportResult } from '../services/requirementImport';
 
 interface UseCase {
     id: number;
@@ -140,7 +141,12 @@ const ImportExport = () => {
             // Use the CSRF-enhanced POST method; let axios set multipart boundary
             const response = await csrfPost('/api/import/upload-xlsx', formData);
 
-            setUploadStatus(`Success: ${response.data.message || 'File uploaded and processed.'} (${response.data.requirementsProcessed} requirements added)`);
+            const summary = summarizeImportResult(response.data);
+            setUploadStatus(
+                summary.hasSkips
+                    ? [summary.headline, ...summary.details].join('\n')
+                    : `Success: ${summary.headline}`
+            );
             setSelectedFile(null); // Clear selection after successful upload
             // Clear the file input visually
             if (fileInputRef.current) {
@@ -497,7 +503,9 @@ const ImportExport = () => {
                                 <div className={`alert mt-3 ${uploadStatus.startsWith('Error:') ? 'alert-danger' : 'alert-success'}`} role="alert">
                                     <div className="d-flex align-items-center">
                                         <i className={`bi ${uploadStatus.startsWith('Error:') ? 'bi-exclamation-triangle' : 'bi-check-circle'} me-2`}></i>
-                                        {uploadStatus}
+                                        {/* pre-line so the per-row skip reasons stay on their own
+                                            lines instead of collapsing into one paragraph. */}
+                                        <span style={{ whiteSpace: 'pre-line' }}>{uploadStatus}</span>
                                     </div>
                                 </div>
                             )}

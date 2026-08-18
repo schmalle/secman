@@ -50,6 +50,9 @@ open class ImportController(
     companion object {
         private const val MAX_FILE_SIZE = 100 * 1024 * 1024L // 100MB - aligned with application.yml
         private const val REQUIRED_SHEET_NAME = "Reqs"
+
+        /** Enough skipped rows to diagnose a file without turning the response into the file. */
+        private const val MAX_REPORTED_SKIPS = 50
         private val REQUIRED_HEADERS = listOf(
             "Chapter", "Norm", "Short req", "DetailsEN", "MotivationEN", "ExampleEN", "UseCase"
         )
@@ -80,8 +83,22 @@ open class ImportController(
     @Serdeable
     data class ImportResponse(
         val message: String,
-        val requirementsProcessed: Int
+        val requirementsProcessed: Int,
+        /**
+         * Rows the file contained that did not become requirements, and why.
+         *
+         * Silence here was the actual defect behind "why did only N of my rows import?": skips were
+         * a `log.warn` on the server and nothing at all in the response, so an admin comparing their
+         * spreadsheet to the result had no way to tell a deliberate skip from a lost row.
+         */
+        val rowsSkipped: Int = 0,
+        val skipReasons: List<String> = emptyList()
     )
+
+    /** One row that did not import, carrying the spreadsheet row number the user can navigate to. */
+    private data class SkippedRow(val rowNumber: Int, val reason: String) {
+        fun describe(): String = "Row $rowNumber: $reason"
+    }
 
     @Serdeable
     data class ErrorResponse(
@@ -102,28 +119,63 @@ open class ImportController(
             }
             
             // Process file
-            val requirements = parseExcelFile(xlsxFile)
-            
-            if (requirements.isEmpty()) {
-                return HttpResponse.badRequest(ErrorResponse("No valid requirements found in file"))
+            val parsed = parseExcelFile(xlsxFile)
+
+            if (parsed.rows.isEmpty()) {
+                val detail = parsed.skipped.take(MAX_REPORTED_SKIPS).joinToString("; ") { it.describe() }
+                return HttpResponse.badRequest(
+                    ErrorResponse(
+                        "No valid requirements found in file." +
+                            if (detail.isNotBlank()) " $detail" else ""
+                    )
+                )
             }
-            
+
             // Save requirements
-            val processedCount = saveRequirements(requirements)
-            
-            log.info("Successfully processed {} requirements from Excel file", processedCount)
+            val outcome = saveRequirements(parsed.rows)
+            val allSkipped = parsed.skipped + outcome.failed
+
+            log.info(
+                "Processed {} requirements from Excel file {} ({} row(s) skipped)",
+                outcome.processed, sanitizeForLog(xlsxFile.filename), allSkipped.size
+            )
             HttpResponse.ok(ImportResponse(
-                message = "File processed successfully.",
-                requirementsProcessed = processedCount
+                message = if (allSkipped.isEmpty()) {
+                    "File processed successfully."
+                } else {
+                    // Say it in the message too: the count alone is what left admins guessing.
+                    "File processed. ${outcome.processed} imported, ${allSkipped.size} row(s) skipped."
+                },
+                requirementsProcessed = outcome.processed,
+                rowsSkipped = allSkipped.size,
+                // Bounded: a badly-formed file can skip thousands of rows, and an unbounded list
+                // would be a response-size problem rather than a diagnosis.
+                skipReasons = allSkipped.take(MAX_REPORTED_SKIPS).map { it.describe() } +
+                    if (allSkipped.size > MAX_REPORTED_SKIPS) {
+                        listOf("… and ${allSkipped.size - MAX_REPORTED_SKIPS} more (see server log)")
+                    } else emptyList()
             ))
-            
+
+        } catch (e: IllegalArgumentException) {
+            // Structural problems with the workbook — missing sheet, missing headers. These are the
+            // caller's to fix and the message names exactly what is wrong, so it must reach them.
+            // It used to fall into the generic handler below and surface as "An internal error
+            // occurred", which left an admin with a rejected file and no way to tell why.
+            log.warn("Rejected Excel upload {}: {}", sanitizeForLog(xlsxFile.filename), e.message)
+            HttpResponse.badRequest(ErrorResponse(e.message ?: "The file could not be read"))
         } catch (e: Exception) {
             log.error("Error processing Excel file", e)
             HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse("An internal error occurred"))
         }
     }
-    
+
+    /** Strips line breaks and bounds length before a filename reaches a log line (log forging). */
+    private fun sanitizeForLog(value: String?): String {
+        if (value.isNullOrBlank()) return ""
+        return value.replace(Regex("[\\p{Cntrl}\\u0085\\u2028\\u2029]"), " ").trim().take(200)
+    }
+
     private fun validateFile(file: CompletedFileUpload): String? {
         // Check file size
         if (file.size > MAX_FILE_SIZE) {
@@ -150,9 +202,15 @@ open class ImportController(
         return null
     }
 
-    private fun parseExcelFile(file: CompletedFileUpload): List<Requirement> {
-        val requirements = mutableListOf<Requirement>()
-        
+    /** A row that parsed, paired with the spreadsheet row number so a later save failure can name it. */
+    private data class ParsedRow(val rowNumber: Int, val requirement: Requirement)
+
+    private data class ParsedWorkbook(val rows: List<ParsedRow>, val skipped: List<SkippedRow>)
+
+    private fun parseExcelFile(file: CompletedFileUpload): ParsedWorkbook {
+        val rows = mutableListOf<ParsedRow>()
+        val skipped = mutableListOf<SkippedRow>()
+
         file.inputStream.use { inputStream ->
             val workbook = XSSFWorkbook(inputStream)
             
@@ -171,24 +229,34 @@ open class ImportController(
             
             // Process data rows (skip header row 0)
             for (rowIndex in 1..sheet.lastRowNum) {
+                // Excel numbers rows from 1, POI from 0. Report the number the user can navigate to.
+                val rowNumber = rowIndex + 1
                 val row = sheet.getRow(rowIndex) ?: continue
-                
+
                 try {
                     val requirement = parseRowToRequirement(row, headerMap)
-                    if (requirement != null) {
-                        requirements.add(requirement)
+                    when {
+                        requirement != null -> rows.add(ParsedRow(rowNumber, requirement))
+                        // A row with nothing in any mapped column is padding, not a loss — reporting
+                        // it would bury the real skips under noise.
+                        isBlankRow(row, headerMap) -> Unit
+                        else -> skipped.add(SkippedRow(rowNumber, "no value in the 'Short req' column"))
                     }
                 } catch (e: Exception) {
-                    log.warn("Failed to parse row {}: {}", rowIndex + 1, e.message)
-                    // Continue processing other rows
+                    log.warn("Failed to parse row {}: {}", rowNumber, e.message)
+                    skipped.add(SkippedRow(rowNumber, "could not be read (${e.message ?: e.javaClass.simpleName})"))
                 }
             }
-            
+
             workbook.close()
         }
-        
-        return requirements
+
+        return ParsedWorkbook(rows, skipped)
     }
+
+    /** True when every column the importer reads is empty for this row. */
+    private fun isBlankRow(row: Row, headerMap: Map<String, Int>): Boolean =
+        REQUIRED_HEADERS.all { getCellValue(row, headerMap, it).isNullOrBlank() }
     
     private fun validateHeaders(sheet: Sheet): String? {
         val headerRow = sheet.getRow(0) 
@@ -201,18 +269,31 @@ open class ImportController(
                 actualHeaders.add(getCellValueAsString(cell).trim())
             }
         }
-        
-        // Check if all required headers are present (case-insensitive)
+
         val missingHeaders = REQUIRED_HEADERS.filter { required ->
-            actualHeaders.none { actual -> actual.equals(required, ignoreCase = true) }
+            actualHeaders.none { actual -> normalizeHeader(actual) == normalizeHeader(required) }
         }
-        
+
         if (missingHeaders.isNotEmpty()) {
-            return "Missing required headers: ${missingHeaders.joinToString(", ")}"
+            return "Missing required headers: ${missingHeaders.joinToString(", ")}. " +
+                "Found: ${actualHeaders.joinToString(", ").ifBlank { "(no header cells)" }}"
         }
-        
+
         return null
     }
+
+    /**
+     * Reduces a header to letters and digits so spacing and case cannot decide whether a file imports.
+     *
+     * Real workbooks spell the same column "Short req", "ShortReq" and "Short Req"; the previous
+     * comparison ignored case but not whitespace, so "ShortReq" was reported missing and the whole
+     * upload was rejected. Stripping non-alphanumerics also absorbs the line breaks Excel leaves in
+     * wrapped headers (e.g. "UseCase\nBPCS"). It cannot collide the required names with each other:
+     * they normalize to chapter, norm, shortreq, detailsen, motivationen, exampleen, usecase — all
+     * distinct, and distinct from neighbours like "usecasebpcs".
+     */
+    private fun normalizeHeader(header: String): String =
+        header.lowercase().replace(Regex("[^a-z0-9]"), "")
     
     private fun getHeaderMapping(sheet: Sheet): Map<String, Int> {
         val headerRow = sheet.getRow(0)
@@ -222,10 +303,11 @@ open class ImportController(
             val cell = headerRow.getCell(cellIndex)
             if (cell != null) {
                 val headerName = getCellValueAsString(cell).trim()
-                
-                // Map to standardized header names (case-insensitive)
+
+                // Map to standardized header names; must use the same tolerance as validateHeaders,
+                // or a file could pass validation and then read every cell as null.
                 REQUIRED_HEADERS.forEach { required ->
-                    if (headerName.equals(required, ignoreCase = true)) {
+                    if (normalizeHeader(headerName) == normalizeHeader(required)) {
                         headerMap[required] = cellIndex
                     }
                 }
@@ -346,21 +428,27 @@ open class ImportController(
         }
     }
     
-    private fun saveRequirements(requirements: List<Requirement>): Int {
-        var processedCount = 0
+    private data class SaveOutcome(val processed: Int, val failed: List<SkippedRow>)
 
-        for (requirement in requirements) {
+    private fun saveRequirements(rows: List<ParsedRow>): SaveOutcome {
+        var processedCount = 0
+        val failed = mutableListOf<SkippedRow>()
+
+        for ((rowNumber, requirement) in rows) {
             try {
                 val saved = requirementImportService.saveOne(requirement)
                 log.debug("Saved requirement: {} with ID {}", saved.shortreq, saved.internalId)
                 processedCount++
             } catch (e: Exception) {
                 log.warn("Failed to save requirement '{}': {}", requirement.shortreq, e.message)
-                // Continue with next requirement; its REQUIRES_NEW transaction rolled back independently.
+                // Continue with next requirement; its REQUIRES_NEW transaction rolled back
+                // independently. Record it so the caller learns the row was lost — this used to be
+                // a server-side warning only, which is how rows disappeared without explanation.
+                failed.add(SkippedRow(rowNumber, "could not be saved (${e.message ?: e.javaClass.simpleName})"))
             }
         }
 
-        return processedCount
+        return SaveOutcome(processedCount, failed)
     }
 
     /**

@@ -36,14 +36,18 @@ open class StandardController(
     data class CreateStandardRequest(
         @NotBlank val name: String,
         @Nullable val description: String? = null,
-        @Nullable val useCaseIds: List<Long>? = null
+        @Nullable val useCaseIds: List<Long>? = null,
+        /** Cover the whole corpus instead of the use-case union; see [Standard.allRequirements]. */
+        @Nullable val allRequirements: Boolean? = null
     )
 
     @Serdeable
     data class UpdateStandardRequest(
         @Nullable val name: String? = null,
         @Nullable val description: String? = null,
-        @Nullable val useCaseIds: List<Long>? = null
+        @Nullable val useCaseIds: List<Long>? = null,
+        /** Omitted leaves the current setting; this endpoint patches rather than replaces. */
+        @Nullable val allRequirements: Boolean? = null
     )
 
     @Serdeable
@@ -155,10 +159,13 @@ open class StandardController(
             // Create new standard
             val standard = Standard(
                 name = trimmedName,
-                description = request.description?.trim()
+                description = request.description?.trim(),
+                allRequirements = request.allRequirements ?: false
             )
-            
-            // Handle use case associations
+
+            // Use cases are still stored when allRequirements is set: the flag changes what the
+            // standard *selects*, and keeping the selection means unticking it later restores the
+            // subset instead of silently emptying the standard.
             request.useCaseIds?.let { ids ->
                 val useCases = ids.mapNotNull { useCaseId ->
                     useCaseRepository.findById(useCaseId).orElse(null)
@@ -215,6 +222,8 @@ open class StandardController(
                 standard.description = newDescription.trim().takeIf { it.isNotBlank() }
             }
             
+            request.allRequirements?.let { standard.allRequirements = it }
+
             // Update use case associations if provided
             request.useCaseIds?.let { ids ->
                 val useCases = ids.mapNotNull { useCaseId ->
@@ -226,8 +235,13 @@ open class StandardController(
             }
             
             val updatedStandard = standardRepository.update(standard)
-            
-            // Force loading of useCases for response
+
+            // FLUSH BEFORE REFRESH. `update` only merges; the SQL has not run yet, and `refresh`
+            // re-reads the row and overwrites the in-memory entity — silently discarding every
+            // pending change. Without this, PUT was a no-op for *all* fields (name, description,
+            // use cases) while still returning 200 with the old values, so it looked like it had
+            // worked.
+            entityManager.flush()
             entityManager.refresh(updatedStandard)
             updatedStandard.useCases.size // Force lazy loading
             
