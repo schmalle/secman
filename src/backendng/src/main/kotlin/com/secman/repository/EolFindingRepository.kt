@@ -105,6 +105,69 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
     )
     fun topComponentsForAssets(assetIds: Collection<Long>, pageable: Pageable): List<Array<Any>>
 
+    /**
+     * Products ranked by how many distinct assets they are end-of-life on.
+     *
+     * Deliberately coarser than [topComponentsForAssets], which groups by
+     * `componentName + eolCycle + status` and therefore lists one product once per
+     * release cycle — "Universal Forwarder" appears three times for 9.0, 9.2 and 8.1.
+     * The question this answers is "which product is most often EOL", so the grouping
+     * key is the product alone and an asset carrying two EOL cycles of the same
+     * product counts once, not twice.
+     *
+     * Repository components are excluded via `assetId IS NOT NULL`: they belong to a
+     * GitHub repository, not an asset, and are ranked by [topRepositoriesByEolComponents].
+     *
+     * The HAVING clause keeps a product that is only ever *approaching* EOL out of a
+     * table titled "most often EOL"; its approaching count is still reported for the
+     * products that do qualify.
+     *
+     * Row shape: `[componentName, eolAssets, approachingAssets, eolCycles]`.
+     */
+    @Query(
+        """
+        SELECT f.componentName,
+               COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.assetId END),
+               COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.APPROACHING_EOL THEN f.assetId END),
+               COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.eolCycle END)
+        FROM EolFinding f
+        WHERE f.assetId IS NOT NULL
+          AND f.assetId IN (:assetIds)
+        GROUP BY f.componentName
+        HAVING COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.assetId END) > 0
+        ORDER BY COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.assetId END) DESC,
+                 f.componentName ASC
+        """
+    )
+    fun topEolProductsForAssets(assetIds: Collection<Long>, pageable: Pageable): List<Array<Any>>
+
+    /**
+     * Unscoped counterpart of [topEolProductsForAssets], for the ADMIN case where
+     * `getAccessibleAssetIdsWithDomain` returns null to mean "no restriction".
+     *
+     * This is the one shape the header note warns about, so it carries the same
+     * contract as [topRepositoriesByEolComponents]: **the caller must have already
+     * established universal access.** `VulnerabilityStatisticsService` reaches it only
+     * on a null id set, which `getAccessibleAssetIds` returns for ADMIN alone — an
+     * *empty* set means "this user can see nothing" and must return no rows, never
+     * fall through to here.
+     */
+    @Query(
+        """
+        SELECT f.componentName,
+               COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.assetId END),
+               COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.APPROACHING_EOL THEN f.assetId END),
+               COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.eolCycle END)
+        FROM EolFinding f
+        WHERE f.assetId IS NOT NULL
+        GROUP BY f.componentName
+        HAVING COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.assetId END) > 0
+        ORDER BY COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.assetId END) DESC,
+                 f.componentName ASC
+        """
+    )
+    fun topEolProductsForAll(pageable: Pageable): List<Array<Any>>
+
     @Query(
         """
         SELECT f FROM EolFinding f

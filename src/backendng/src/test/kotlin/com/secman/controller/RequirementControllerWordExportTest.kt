@@ -73,9 +73,13 @@ class RequirementControllerWordExportTest {
 
         val document = createTranslatedWordDocument(requirements)
 
+        // The heading is the bare chapter name: the shared design system (28a711be) renders it
+        // through WordExportStyle.sectionHeading, which dropped the old "Chapter: " prefix.
+        // What this test actually guards is the *count* — two requirements sharing a chapter must
+        // still produce one heading, not two.
         val chapterHeadingCount = document.paragraphs
             .map { it.text }
-            .count { it == "Chapter: AWS Configuration Requirements" }
+            .count { it == "AWS Configuration Requirements" }
 
         assertThat(chapterHeadingCount).isEqualTo(1)
     }
