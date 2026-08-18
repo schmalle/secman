@@ -28,7 +28,7 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { vulnerabilityStatisticsApi, type TemporalTrendsDto } from '../../services/api/vulnerabilityStatisticsApi';
-import { severityHex, severityHexAlpha } from '../../utils/severityColors';
+import { THEME_HEX, severityHex, severityHexAlpha } from '../../utils/severityColors';
 import { ChartCardEmpty, ChartCardError, ChartCardLoading } from './ChartCardStates';
 import { useChartData } from './useChartData';
 
@@ -78,8 +78,8 @@ export default function TemporalTrendsChart() {
       {
         label: 'Total',
         data: data.dataPoints.map(dp => dp.totalCount),
-        borderColor: '#4A7C6F', // --scand-primary (canvas can't resolve CSS var())
-        backgroundColor: '#E8F0ED', // --scand-primary-light
+        borderColor: THEME_HEX.primary, // canvas can't resolve CSS var(); THEME_HEX is drift-tested
+        backgroundColor: THEME_HEX.primaryLight,
         tension: 0.4,
         fill: true
       },

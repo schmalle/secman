@@ -205,7 +205,7 @@ export const AlignmentResultsPage: React.FC<AlignmentResultsPageProps> = ({ toke
                 <div
                     className="p-4 rounded-top"
                     style={{
-                        background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
+                        background: 'var(--scand-success)',
                     }}
                 >
                     <h1 className="text-white mb-1" style={{ fontSize: '1.75rem' }}>

@@ -290,7 +290,7 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
       <div className="card">
         <div
           className="card-header"
-          style={{ backgroundColor: 'var(--scand-bg-header)', color: 'var(--scand-text-light)' }}
+          style={{ backgroundColor: 'var(--scand-bg-header)', color: 'var(--scand-text-on-header)' }}
         >
           <h5 className="mb-0">Affected systems</h5>
         </div>

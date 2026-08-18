@@ -7,7 +7,7 @@
  * - Bootstrap card wrapper with responsive design
  * - Click handlers for drill-down to filtered vulnerability lists
  * - Loading, error, and empty states
- * - Color mapping: CRITICAL=#dc3545 (red), HIGH=#fd7e14 (orange), MEDIUM=#ffc107 (yellow), LOW=#0dcaf0 (cyan), UNKNOWN=#6c757d (gray)
+ * - Color mapping comes from SEVERITY_HEX (utils/severityColors.ts), which is drift-tested against theme.css
  *
  * Feature: 036-vuln-stats-lense
  * Task: T026 [US2]
@@ -89,7 +89,7 @@ export default function SeverityDistributionChart({ domain, awsHosted }: Severit
           SEVERITY_COLORS.low,
           SEVERITY_COLORS.unknown
         ],
-        borderColor: '#ffffff',
+        borderColor: '#F2F2F0', // --scand-bg-page: segments separate against the canvas, not white
         borderWidth: 2
       }
     ]

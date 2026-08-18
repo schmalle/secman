@@ -1,8 +1,14 @@
 /**
- * Bootstrap 5.3 Overrides for Scandinavian Design System
+ * Bootstrap 5.3 Overrides for the Editorial Design System
  *
- * Overrides Bootstrap's default vivid colors with muted, nature-inspired
- * Scandinavian alternatives (mint, sage, seafoam, dusty rose).
+ * Maps Bootstrap's vivid defaults onto the editorial tokens in theme.css and
+ * strips the chrome Bootstrap adds by default: card shadows, filled header
+ * bars, striped rows and rounded corners all give way to a flat canvas with
+ * hairline rules and uppercase letterspaced labels.
+ *
+ * The --bs-*-rgb triplets below must be restated as literal numbers because
+ * Bootstrap composes them inside rgba(); they cannot reference a var(). Keep
+ * them in step with theme.css by hand — nothing else notices when they drift.
  */
 
 /* ========================
@@ -12,33 +18,33 @@
 :root {
   /* Override Bootstrap's primary colors */
   --bs-primary: var(--scand-primary);
-  --bs-primary-rgb: 74, 124, 111;
+  --bs-primary-rgb: 42, 111, 158;   /* #2A6F9E */
 
   /* Override Bootstrap's danger colors */
   --bs-danger: var(--scand-danger);
-  --bs-danger-rgb: 155, 107, 107;
+  --bs-danger-rgb: 161, 29, 61;   /* #a11d3d */
 
   /* Override Bootstrap's warning colors */
   --bs-warning: var(--scand-warning);
-  --bs-warning-rgb: 139, 139, 94;
+  --bs-warning-rgb: 154, 107, 24;   /* #9a6b18 */
 
   /* Override Bootstrap's success colors */
   --bs-success: var(--scand-success);
-  --bs-success-rgb: 94, 139, 107;
+  --bs-success-rgb: 46, 107, 79;   /* #2E6B4F */
 
   /* Override Bootstrap's info colors */
   --bs-info: var(--scand-info);
-  --bs-info-rgb: 94, 139, 139;
+  --bs-info-rgb: 42, 111, 158;   /* #2a6f9e */
 
   /* Override Bootstrap's secondary colors */
   --bs-secondary: var(--scand-muted);
-  --bs-secondary-rgb: 123, 139, 139;
+  --bs-secondary-rgb: 110, 110, 104;   /* #6e6e68 */
 
   /* Override Bootstrap's light/dark */
   --bs-light: var(--scand-bg-sidebar);
-  --bs-light-rgb: 242, 245, 244;
-  --bs-dark: var(--scand-bg-header);
-  --bs-dark-rgb: 61, 79, 79;
+  --bs-light-rgb: 242, 242, 240;   /* #F2F2F0 */
+  --bs-dark: var(--scand-ink);
+  --bs-dark-rgb: 22, 22, 20;   /* #161614 */
 
   /* Override body colors */
   --bs-body-bg: var(--scand-bg-page);
@@ -59,6 +65,36 @@
 body {
   background-color: var(--scand-bg-page);
   color: var(--scand-text-primary);
+  font-family: var(--scand-font-family);
+}
+
+/* Headings carry the design's personality: serif, near-black, set tight.
+   Bootstrap's default h1-h6 sizes are kept — only the face and rhythm change. */
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+  font-family: var(--scand-font-display);
+  color: var(--scand-text-primary);
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+h1, .h1 {
+  font-weight: var(--scand-font-weight-bold);
+  letter-spacing: -0.02em;
+}
+
+/*
+ * The label treatment. Eyebrows, section headers and table column heads all
+ * use it, which is what makes the hierarchy legible without boxes or fills.
+ * Applied by class where markup allows, and by element selector for thead
+ * cells so 161 existing tables inherit it without being edited.
+ */
+.scand-label {
+  font-size: var(--scand-label-size);
+  font-weight: var(--scand-label-weight);
+  letter-spacing: var(--scand-label-tracking);
+  text-transform: uppercase;
+  color: var(--scand-text-secondary);
 }
 
 /* ========================
@@ -66,23 +102,42 @@ body {
    ======================== */
 
 .card {
-  border-color: var(--scand-border);
+  background-color: transparent;
+  border: 0;
+  border-top: 1px solid var(--scand-border);
   box-shadow: var(--scand-card-shadow);
   border-radius: var(--scand-card-border-radius);
 }
 
-.card-header {
-  background-color: var(--scand-bg-sidebar);
-  border-bottom-color: var(--scand-border);
-}
-
-/* Card headers with dark background */
+/*
+ * A card header is now a label above a hairline, not a filled bar. The colour
+ * utilities below are folded into the same rule on purpose: markup all over the
+ * app writes `card-header bg-primary`, and leaving those to Bootstrap would put
+ * a saturated bar back on the page.
+ */
+.card-header,
 .card-header.bg-primary,
 .card-header.bg-info,
 .card-header.bg-dark {
   background-color: var(--scand-bg-header) !important;
-  color: var(--scand-text-light);
-  border-bottom-color: var(--scand-bg-header);
+  color: var(--scand-text-on-header);
+  border-bottom: 1px solid var(--scand-border);
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.card-header h5,
+.card-header .h5 {
+  font-size: var(--scand-label-size);
+  font-weight: var(--scand-label-weight);
+  letter-spacing: var(--scand-label-tracking);
+  text-transform: uppercase;
+  color: var(--scand-text-secondary);
+}
+
+.card-body {
+  padding-left: 0;
+  padding-right: 0;
 }
 
 /* ========================
@@ -318,7 +373,7 @@ body {
    ======================== */
 
 .table {
-  --bs-table-bg: var(--scand-bg-card);
+  --bs-table-bg: transparent;
   --bs-table-striped-bg: var(--scand-table-stripe-bg);
   --bs-table-hover-bg: var(--scand-table-hover-bg);
   --bs-table-border-color: var(--scand-border);
@@ -330,10 +385,16 @@ body {
 }
 
 /* Table header with dark teal-gray background */
+/*
+ * `thead.table-dark` appears in several tables and used to paint a solid teal
+ * bar. It becomes the same letterspaced label as every other column head, so
+ * the tables agree with each other; `.bg-dark` badges keep a real dark fill
+ * through --scand-ink, which is why the two roles are separate tokens.
+ */
 .table-dark,
 thead.table-dark {
   --bs-table-bg: var(--scand-table-header-bg);
-  --bs-table-color: var(--scand-text-light);
+  --bs-table-color: var(--scand-table-header-text);
 }
 
 /* ========================
@@ -409,13 +470,15 @@ thead.table-dark {
 
 .form-control,
 .form-select {
+  background-color: var(--scand-bg-card);
   border-color: var(--scand-border);
+  color: var(--scand-text-primary);
 }
 
 .form-control:focus,
 .form-select:focus {
   border-color: var(--scand-primary);
-  box-shadow: 0 0 0 0.2rem rgba(74, 124, 111, 0.25);
+  box-shadow: 0 0 0 0.2rem rgba(42, 111, 158, 0.25);   /* --scand-primary at 25% */
 }
 
 /* ========================
@@ -552,4 +615,97 @@ thead.table-dark {
 .application-register .nav-tabs .nav-link.active {
   color: var(--scand-text-primary);
   font-weight: 600;
+}
+
+
+/* ========================
+   EDITORIAL TABLES
+   ======================== */
+
+/*
+ * Column heads become labels and the only rules are horizontal hairlines.
+ * Targeting `thead th` by element rather than by class means every existing
+ * table adopts this without markup changes — `.table-light` and
+ * `.table-dark` heads included, which is why both now look the same.
+ */
+.table > thead > tr > th {
+  background-color: var(--scand-table-header-bg);
+  color: var(--scand-table-header-text);
+  font-size: var(--scand-label-size);
+  font-weight: var(--scand-label-weight);
+  letter-spacing: var(--scand-label-tracking);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--scand-border-dark);
+  border-top: 0;
+}
+
+.table > tbody > tr > td {
+  border-top: 0;
+  border-bottom: 1px solid var(--scand-border);
+  vertical-align: middle;
+}
+
+/* Bootstrap draws a vertical rule between cells in some variants; the design has none. */
+.table > :not(caption) > * > * {
+  border-left: 0;
+  border-right: 0;
+  box-shadow: none;
+}
+
+/* ========================
+   FLAT SURFACES
+   ======================== */
+
+/* Nothing floats. Elevation is not part of this system. */
+.card,
+.dropdown-menu,
+.modal-content,
+.list-group-item {
+  box-shadow: none;
+}
+
+.dropdown-menu,
+.modal-content {
+  background-color: var(--scand-bg-card);
+  border: 1px solid var(--scand-border);
+  border-radius: 0;
+}
+
+/* ========================
+   LINKS
+   ======================== */
+
+a {
+  color: var(--scand-text-link);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+
+a:hover {
+  color: var(--scand-primary-hover);
+}
+
+/* ========================
+   CORNERS
+   ======================== */
+
+/*
+ * The tokens for radius existed but nothing consumed them — Bootstrap's own
+ * .btn/.form-control/.badge radii won because no rule here ever set them.
+ * The design is near-square, so these are stated once, centrally.
+ */
+.btn,
+.form-control,
+.form-select,
+.input-group-text {
+  border-radius: var(--scand-btn-border-radius);
+}
+
+.badge {
+  border-radius: var(--scand-badge-border-radius);
+}
+
+/* Buttons carry the label treatment too — the design has no sentence-case fills. */
+.btn {
+  font-family: var(--scand-font-family);
 }

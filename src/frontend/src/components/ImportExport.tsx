@@ -348,7 +348,7 @@ const ImportExport = () => {
                 {/* Import Section */}
                 <div className="col-lg-6">
                     <div className="card h-100 shadow-sm border-0">
-                        <div className="card-header bg-gradient" style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}}>
+                        <div className="card-header">
                             <h3 className="card-title text-white mb-0">
                                 <i className="bi bi-cloud-upload me-2"></i>
                                 Import Requirements
@@ -516,7 +516,7 @@ const ImportExport = () => {
                 {/* Export Section */}
                 <div className="col-lg-6">
                     <div className="card h-100 shadow-sm border-0">
-                        <div className="card-header bg-gradient" style={{background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)'}}>
+                        <div className="card-header">
                             <h3 className="card-title text-white mb-0">
                                 <i className="bi bi-download me-2"></i>
                                 Export Requirements

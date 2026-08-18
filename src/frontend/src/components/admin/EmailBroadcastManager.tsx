@@ -265,7 +265,7 @@ export default function EmailBroadcastManager() {
             <div className="card-header">
               <h5 className="mb-0">Live Preview</h5>
             </div>
-            <div className="card-body p-0" style={{ background: '#f4f4f4' }}>
+            <div className="card-body p-0" style={{ background: 'var(--scand-bg-hover)' }}>
               <div
                 style={{
                   maxWidth: 600,
@@ -289,7 +289,7 @@ export default function EmailBroadcastManager() {
                 <div
                   style={{
                     padding: '16px 24px',
-                    borderTop: '1px solid #e5e5e5',
+                    borderTop: '1px solid var(--scand-border)',
                     fontSize: 12,
                     color: '#888',
                     textAlign: 'center',

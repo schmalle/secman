@@ -2,16 +2,32 @@
  * Shared severity color palette for chart libraries (Chart.js/canvas) that cannot resolve
  * CSS custom properties at paint time. These hex values are the literal equivalents of the
  * --scand-danger/-warning/-info/-muted tokens in styles/theme.css, kept in sync manually so
- * every chart, badge, and status lamp renders the same Scandinavian severity palette instead
+ * every chart, badge, and status lamp renders the same editorial severity palette instead
  * of each component picking its own Bootstrap red/orange/yellow/cyan.
+ *
+ * `severityColors.test.ts` parses theme.css and fails when these drift, so retuning a
+ * token in CSS forces the matching edit here rather than leaving charts on old colours.
  */
 
 export const SEVERITY_HEX = {
-  critical: '#9B6B6B', // --scand-danger
-  high: '#8B8B5E',     // --scand-warning
-  medium: '#5E8B8B',   // --scand-info
-  low: '#7B8B8B',      // --scand-muted
-  unknown: '#636E72',  // --scand-text-secondary
+  critical: '#a11d3d', // --scand-danger
+  high: '#9a6b18',     // --scand-warning
+  medium: '#2a6f9e',   // --scand-info
+  low: '#6e6e68',      // --scand-muted
+  unknown: '#6E6E68',  // --scand-text-secondary
+} as const;
+
+/**
+ * Non-severity tokens that charts also need as literals. Same reason as above —
+ * a canvas cannot resolve var() — and same guard: severityColors.test.ts parses
+ * theme.css and fails when either drifts. Two chart files previously kept private
+ * copies of these with a comment claiming they matched the tokens; they silently
+ * did not after a retune, which is what this export exists to prevent.
+ */
+export const THEME_HEX = {
+  primary: '#2A6F9E',      // --scand-primary
+  primaryLight: '#E7F2F9', // --scand-primary-light
+  success: '#2E6B4F',      // --scand-success
 } as const;
 
 /** Same palette, keyed by uppercase severity string as returned by the backend. */

@@ -1,14 +1,20 @@
 /**
- * SecMan Scandinavian Design System
+ * SecMan Editorial Design System
  *
- * A muted, professional color palette inspired by Nordic minimalism
- * with mint/sage/seafoam tones for a calming, natural aesthetic.
+ * An editorial, print-derived system: a warm light-gray canvas, near-black
+ * serif type, one steel-blue accent, and hairline rules instead of boxes.
  *
  * Design Principles:
- * - Soft off-whites and warm grays for backgrounds
- * - Dark slate-gray for text (not pure black)
- * - Muted, nature-inspired colors (mint, sage, dusty rose, seafoam)
- * - Clean, generous whitespace
+ * - Flat surfaces. Content sits on the canvas; no card chrome, no shadows.
+ * - Serif throughout — headings, body and tabular data share one family.
+ * - Structure comes from typography: uppercase letterspaced labels and
+ *   hairline rules do the work that borders and filled bars used to do.
+ * - One accent. Steel blue carries links, the active nav item and selected
+ *   controls; nothing else competes with it.
+ *
+ * Token names are unchanged from the previous system so no component needed
+ * rewriting to adopt this — only the values moved. The one addition is
+ * --scand-text-on-header, see the note beside it.
  */
 
 :root {
@@ -17,110 +23,135 @@
      ======================== */
 
   /* Page & Container Backgrounds */
-  --scand-bg-page: #F8F9FA;           /* Neutral off-white */
-  --scand-bg-card: #FFFFFF;           /* Card/panel backgrounds */
-  --scand-bg-sidebar: #F8F9FA;        /* Light neutral gray sidebar */
-  --scand-bg-header: #3D4F4F;         /* Dark teal-gray header */
-  --scand-bg-hover: #EBEDEF;          /* Neutral hover state */
+  --scand-bg-page: #F2F2F0;           /* Warm light-gray canvas */
+  --scand-bg-card: #FFFFFF;           /* Opaque surfaces only: modals, dropdowns, popovers */
+  --scand-bg-sidebar: #F2F2F0;        /* Same as the canvas — the rail is not a panel */
+  --scand-bg-header: transparent;     /* Section headers are type, not a filled bar */
+  --scand-ink: #161614;               /* Genuinely dark surface: .bg-dark badges, .table-dark heads */
+  --scand-bg-hover: #E8E8E4;          /* Warm neutral hover */
 
   /* Text Colors */
-  --scand-text-primary: #2D3436;      /* Dark charcoal */
-  --scand-text-secondary: #636E72;    /* Muted gray */
-  --scand-text-light: #FFFFFF;        /* Light text on dark backgrounds */
-  --scand-text-link: #4A7C6F;         /* Muted teal for links */
+  --scand-text-primary: #161614;      /* Near-black, never pure black */
+  --scand-text-secondary: #6E6E68;    /* Warm gray for supporting copy */
+  --scand-text-light: #FFFFFF;        /* Text on a saturated fill (buttons, badges) */
+  --scand-text-link: #2A6F9E;         /* Steel blue */
+
+  /*
+   * Text on a section header. Previously every header paired
+   * --scand-bg-header with --scand-text-light, which was correct only while
+   * the header was a dark teal bar. The header is now the canvas, so the two
+   * uses had to split: --scand-text-light stays white for saturated fills,
+   * and this token carries header text.
+   */
+  --scand-text-on-header: #161614;
 
   /* Border Colors */
-  --scand-border: #DFE6E3;            /* Soft gray-green border */
-  --scand-border-light: #EDF2F0;      /* Light borders */
-  --scand-border-dark: #C8D1CD;       /* Emphasized borders */
+  --scand-border: #DCDCD7;            /* Hairline rule — the default separator */
+  --scand-border-light: #E7E7E3;      /* Faintest rule */
+  --scand-border-dark: #161614;       /* Deliberate near-black outline (segmented controls) */
 
   /* ========================
      ACCENT COLORS
      ======================== */
 
-  /* Primary Accent (Muted Teal/Sage) */
-  --scand-primary: #4A7C6F;           /* Primary teal-sage */
-  --scand-primary-hover: #3D6A5E;     /* Darker teal */
-  --scand-primary-light: #E8F0ED;     /* Light mint background */
+  /* Primary Accent (Steel Blue) */
+  --scand-primary: #2A6F9E;           /* The single accent */
+  --scand-primary-hover: #1F5A82;     /* Pressed / hover */
+  --scand-primary-light: #E7F2F9;     /* Active-row and selected tint */
 
-  /* Secondary Accent (Seafoam) */
-  --scand-accent: #6B9E9E;            /* Seafoam teal */
-  --scand-accent-hover: #5A8888;      /* Darker seafoam */
-  --scand-accent-light: #E5F0F0;      /* Light seafoam background */
+  /* Secondary Accent (Crimson) — reserved for counts that demand attention */
+  --scand-accent: #B01B5C;            /* Crimson, e.g. the pending-exceptions count */
+  --scand-accent-hover: #8E1449;
+  --scand-accent-light: #FBEDF1;      /* Pale rose chip background */
 
   /* ========================
-     SEMANTIC COLORS - SCANDINAVIAN/MINT STYLE
-     (Nature-inspired, muted, harmonious)
+     SEMANTIC COLORS - EDITORIAL
+     (Print-weight saturation: readable at chip size, quiet in bulk)
      ======================== */
 
-  /* Critical - Dusty Rose/Terracotta (muted, not alarming) */
-  --scand-danger: #9B6B6B;            /* Dusty rose */
-  --scand-danger-bg: #F5EDED;         /* Very light rose */
-  --scand-danger-border: #D4B5B5;     /* Muted rose border */
-  --scand-danger-hover: #7A5555;      /* Darker dusty rose */
+  /* Critical - Deep crimson */
+  --scand-danger: #a11d3d;
+  --scand-danger-bg: #FAEBEF;
+  --scand-danger-border: #E6C6D0;
+  --scand-danger-hover: #7E1630;
 
-  /* High/Warning - Sage/Olive (earthy, natural) */
-  --scand-warning: #8B8B5E;           /* Sage olive */
-  --scand-warning-bg: #F2F2E8;        /* Pale sage background */
-  --scand-warning-border: #C9C9A8;    /* Muted sage border */
-  --scand-warning-hover: #6E6E4A;     /* Darker sage */
+  /* High/Warning - Amber-brown */
+  --scand-warning: #9a6b18;
+  --scand-warning-bg: #F7EFDF;
+  --scand-warning-border: #E0CFA8;
+  --scand-warning-hover: #7A5412;
 
-  /* Medium/Info - Seafoam/Teal (calming, balanced) */
-  --scand-info: #5E8B8B;              /* Seafoam teal */
-  --scand-info-bg: #E8F2F2;           /* Pale seafoam background */
-  --scand-info-border: #A8C9C9;       /* Muted seafoam border */
-  --scand-info-hover: #4A7070;        /* Darker seafoam */
+  /* Medium/Info - The accent blue */
+  --scand-info: #2a6f9e;
+  --scand-info-bg: #E7F2F9;
+  --scand-info-border: #C2DCEB;
+  --scand-info-hover: #1F5A82;
 
-  /* Success - Soft Mint (fresh, positive) */
-  --scand-success: #5E8B6B;           /* Soft mint green */
-  --scand-success-bg: #E8F2EB;        /* Pale mint background */
-  --scand-success-border: #A8C9B5;    /* Muted mint border */
-  --scand-success-hover: #4A7055;     /* Darker mint */
+  /* Success - Deep green */
+  --scand-success: #2E6B4F;
+  --scand-success-bg: #E6F0EA;
+  --scand-success-border: #BFD6C8;
+  --scand-success-hover: #23533D;
 
-  /* Low/Muted - Cool Gray-Blue (neutral, unobtrusive) */
-  --scand-muted: #7B8B8B;             /* Cool gray-blue */
-  --scand-muted-bg: #EDF0F0;          /* Pale gray background */
-  --scand-muted-border: #C0CCCC;      /* Muted gray border */
-  --scand-muted-hover: #5E6E6E;       /* Darker gray */
+  /* Low/Muted - Warm gray */
+  --scand-muted: #6e6e68;
+  --scand-muted-bg: #ECECE8;
+  --scand-muted-border: #D2D2CC;
+  --scand-muted-hover: #55554F;
 
   /* ========================
      COMPONENT-SPECIFIC TOKENS
      ======================== */
 
-  /* Cards */
-  --scand-card-shadow: 0 1px 3px rgba(61, 79, 79, 0.08);
-  --scand-card-shadow-hover: 0 4px 6px rgba(61, 79, 79, 0.12);
-  --scand-card-border-radius: 0.5rem;
+  /* Cards — flat by design. Kept as tokens so a future variant can reintroduce
+     elevation without hunting through component files. */
+  --scand-card-shadow: none;
+  --scand-card-shadow-hover: none;
+  --scand-card-border-radius: 0;
 
   /* Modal backdrop overlay (used by hand-rolled modals that don't rely on Bootstrap's own .modal-backdrop) */
-  --scand-overlay: rgba(0, 0, 0, 0.5);
+  --scand-overlay: rgba(22, 22, 20, 0.45);
 
   /* Buttons */
-  --scand-btn-border-radius: 0.375rem;
+  --scand-btn-border-radius: 2px;
 
   /* Tables */
-  --scand-table-header-bg: #3D4F4F;
-  --scand-table-header-text: #FFFFFF;
-  --scand-table-stripe-bg: #F8F9FA;
-  --scand-table-hover-bg: #EBEDEF;
+  --scand-table-header-bg: transparent;
+  --scand-table-header-text: #6E6E68;
+  --scand-table-stripe-bg: transparent;
+  --scand-table-hover-bg: #E8E8E4;
 
   /* Sidebar */
   --scand-sidebar-section-bg: transparent;
-  --scand-sidebar-section-border: #ADB5BD;
-  --scand-sidebar-hover-bg: #E9ECEF;
+  --scand-sidebar-section-border: #DCDCD7;
+  --scand-sidebar-hover-bg: #E8E8E4;
+  --scand-sidebar-active-bg: #E7F2F9;
+  --scand-sidebar-active-bar: #2A6F9E;
 
   /* Badges */
-  --scand-badge-border-radius: 0.25rem;
+  --scand-badge-border-radius: 2px;
 
   /* ========================
      TYPOGRAPHY
      ======================== */
 
-  --scand-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /*
+   * System serifs only — no webfont, so no CSP font-src entry and no network
+   * fetch on first paint. Charter and Iowan Old Style are the closest system
+   * faces to the design's transitional serif; Georgia is the universal floor.
+   */
+  --scand-font-family: Charter, 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --scand-font-display: var(--scand-font-family);
   --scand-font-weight-normal: 400;
   --scand-font-weight-medium: 500;
   --scand-font-weight-semibold: 600;
   --scand-font-weight-bold: 700;
+
+  /* Label treatment: the uppercase letterspaced eyebrows, section headers and
+     table column heads. Applied via .scand-label in bootstrap-overrides.css. */
+  --scand-label-size: 0.72rem;
+  --scand-label-tracking: 0.12em;
+  --scand-label-weight: 600;
 
   /* ========================
      TRANSITIONS

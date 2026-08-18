@@ -413,12 +413,12 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                                             const isWarning = m.warning && !isDanger;
 
                                             let cardBg = isSelected
-                                                ? (isDanger ? '#fff5f5' : isWarning ? '#fffbf0' : '#f0f7ff')
+                                                ? (isDanger ? 'var(--scand-danger-bg)' : isWarning ? 'var(--scand-warning-bg)' : 'var(--scand-info-bg)')
                                                 : '#fff';
                                             let borderColor = isSelected
-                                                ? (isDanger ? '#dc3545' : isWarning ? '#ffc107' : '#0d6efd')
-                                                : '#dee2e6';
-                                            let iconColor = isDanger ? '#dc3545' : isWarning ? '#856404' : '#0d6efd';
+                                                ? (isDanger ? 'var(--scand-danger)' : isWarning ? 'var(--scand-warning)' : 'var(--scand-info)')
+                                                : 'var(--scand-border)';
+                                            let iconColor = isDanger ? 'var(--scand-danger)' : isWarning ? 'var(--scand-warning)' : 'var(--scand-info)';
                                             if (!isSelected && (isDanger || isWarning)) iconColor = '#aaa';
 
                                             const dividerBefore = m.mode === 'GLOBAL' || m.mode === 'ALL_VULNS_AWS_ACCOUNT';

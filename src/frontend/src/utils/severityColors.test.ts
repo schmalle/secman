@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { SEVERITY_HEX, hexToRgba, severityHex, severityHexAlpha } from './severityColors.ts';
+import { SEVERITY_HEX, THEME_HEX, hexToRgba, severityHex, severityHexAlpha } from './severityColors.ts';
 
 // severityColors.ts exists so every chart, badge and status lamp uses one palette
 // instead of each component reaching for its own Bootstrap red. Its hex values are
@@ -55,6 +55,9 @@ test('the palette still matches the CSS tokens it was copied from', () => {
     ['--scand-info', SEVERITY_HEX.medium],
     ['--scand-muted', SEVERITY_HEX.low],
     ['--scand-text-secondary', SEVERITY_HEX.unknown],
+    ['--scand-primary', THEME_HEX.primary],
+    ['--scand-primary-light', THEME_HEX.primaryLight],
+    ['--scand-success', THEME_HEX.success],
   ];
 
   for (const [token, expected] of tokens) {

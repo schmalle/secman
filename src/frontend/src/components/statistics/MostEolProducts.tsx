@@ -46,7 +46,7 @@ export default function MostEolProducts({ domain, awsHosted }: MostEolProductsPr
 
   return (
     <div className="card">
-      <div className="card-header" style={{ backgroundColor: 'var(--scand-bg-header)', color: 'var(--scand-text-light)' }}>
+      <div className="card-header" style={{ backgroundColor: 'var(--scand-bg-header)', color: 'var(--scand-text-on-header)' }}>
         <h5 className="mb-0">
           <i className="bi bi-hourglass-bottom me-2"></i>
           Top 10 Most Often EOL Products

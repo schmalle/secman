@@ -12,6 +12,7 @@ import {
     canAccessAccountOnboarding
 } from '../utils/permissions';
 import { connectToBadgeUpdates } from '../services/exceptionBadgeService';
+import { ADMIN_NAV, activeHrefForPath, filterAdminNav, groupKeyForPath } from './adminNav';
 
 const Sidebar = () => {
     const [assetsExpanded, setAssetsExpanded] = useState(false);
@@ -31,6 +32,12 @@ const Sidebar = () => {
     const [awsAccountCount, setAwsAccountCount] = useState<number>(0);
     const [domainCount, setDomainCount] = useState<number>(0);
     const [pendingExceptionCount, setPendingExceptionCount] = useState<number>(0);
+    // ADMIN rail (design 1b): the filter text, the one open group, and the entry
+    // for the page we are on. The latter two are derived from the URL on mount —
+    // `location` does not exist during Astro's server render.
+    const [adminQuery, setAdminQuery] = useState('');
+    const [openAdminGroup, setOpenAdminGroup] = useState<string | null>(null);
+    const [activeAdminHref, setActiveAdminHref] = useState<string | null>(null);
 
     const toggleAssets = () => {
         setAssetsExpanded(!assetsExpanded);
@@ -74,6 +81,9 @@ const Sidebar = () => {
 
     const toggleAdminMenu = () => {
         setAdminMenuOpen(!adminMenuOpen);
+        // Reopening a rail that is still filtered from last time looks like items
+        // went missing, so the query dies with the section.
+        if (adminMenuOpen) setAdminQuery('');
         // Collapse all other sections
         setAssetsExpanded(false);
         setRequirementsExpanded(false);
@@ -141,6 +151,51 @@ const Sidebar = () => {
             disconnect();
         };
     }, [userRoles.join(',')]); // Re-connect only when actual role membership changes
+
+    /*
+     * Mark the link for the page we are on. Done by querying the rendered rail
+     * rather than threading an `active` prop through ~40 anchors: the markup
+     * stays untouched, and a link added later is picked up for free.
+     *
+     * `location` does not exist during Astro's server render, so this runs in an
+     * effect — the server and client HTML agree, and the highlight appears on
+     * mount (same reasoning as the roles read above).
+     */
+    useEffect(() => {
+        const path = window.location.pathname.replace(/\/+$/, '') || '/';
+        let best: Element | null = null;
+        let bestLength = 0;
+
+        document.querySelectorAll('#sidebar a[href]').forEach((link) => {
+            const href = (link.getAttribute('href') || '').replace(/\/+$/, '') || '/';
+            // Longest matching prefix wins, so /assets/123 highlights /assets
+            // without /  also claiming every page.
+            const matches = path === href || (href !== '/' && path.startsWith(href + '/'));
+            if (matches && href.length > bestLength) {
+                best = link;
+                bestLength = href.length;
+            }
+        });
+
+        best?.classList.add('sidebar-item-active');
+        return () => best?.classList.remove('sidebar-item-active');
+    }, []);
+
+    /*
+     * "Groups folded shut except the one you are in" — the fold's starting
+     * position comes from the URL. Landing on an admin page also unrolls the
+     * ADMIN section itself, so the rail shows where you are rather than making
+     * you find it again.
+     */
+    useEffect(() => {
+        const path = window.location.pathname;
+        const groupKey = groupKeyForPath(ADMIN_NAV, path);
+        setActiveAdminHref(activeHrefForPath(ADMIN_NAV, path));
+        setOpenAdminGroup(groupKey);
+        if (groupKey) setAdminMenuOpen(true);
+    }, []);
+
+    const visibleAdminGroups = filterAdminNav(ADMIN_NAV, adminQuery);
 
     return (
         <nav id="sidebar" className="bg-light border-end">
@@ -310,59 +365,53 @@ const Sidebar = () => {
                         </div>
                         {vulnMenuOpen && (
                             <ul className="list-unstyled ps-4">
-                                {/* Overview - ADMIN, SECCHAMPION, or VULN */}
-                                {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION') || userRoles.includes('VULN')) && (
-                                    <li>
-                                        <a href="/vulnerabilities/current" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                            <i className="bi bi-list-ul me-2"></i> Overview
-                                        </a>
-                                    </li>
+                                <li className="sidebar-subsection-header">Analyze</li>
+                                <li>
+                                    <a href="/analytics" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                        title="Overview, Lense and Heatmap in one place">
+                                        <i className="bi bi-graph-up me-2"></i> Analytics
+                                    </a>
+                                </li>
+                                {userRoles.includes('ADMIN') && (
+                                <li>
+                                    <a href="/account-finding-age" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                        title="AWS accounts ranked by the age of their oldest still-open finding">
+                                        <i className="bi bi-hourglass-bottom me-2"></i> Account Aging
+                                    </a>
+                                </li>
+                                )}
+
+                                <li className="sidebar-subsection-header">Inventory</li>
+                                {(isAdmin || userRoles.includes('SECCHAMPION')) && (
+                                <li>
+                                    <a href="/vulnerabilities/system" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-hdd me-2"></i> System vulns
+                                    </a>
+                                </li>
                                 )}
                                 {!isAdmin && (userRoles.includes('SECCHAMPION') || domainCount > 0) && (
-                                    <li>
-                                        <a href="/vulnerabilities/domain" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                            <i className="bi bi-globe me-2"></i> Domain vulns
-                                        </a>
-                                    </li>
-                                )}
-                                {(isAdmin || userRoles.includes('SECCHAMPION')) && (
-                                    <li>
-                                        <a href="/vulnerabilities/system" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                            <i className="bi bi-hdd me-2"></i> System vulns
-                                        </a>
-                                    </li>
+                                <li>
+                                    <a href="/vulnerabilities/domain" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-globe me-2"></i> Domain vulns
+                                    </a>
+                                </li>
                                 )}
                                 {!isAdmin && (userRoles.includes('SECCHAMPION') || awsAccountCount > 0) && (
-                                    <li>
-                                        <a href="/account-vulns" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
-                                            title="View vulnerabilities for your AWS accounts">
-                                            <i className="bi bi-cloud me-2"></i> Account vulns
-                                        </a>
-                                    </li>
+                                <li>
+                                    <a href="/account-vulns" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                        title="View vulnerabilities for your AWS accounts">
+                                        <i className="bi bi-cloud me-2"></i> Account vulns
+                                    </a>
+                                </li>
                                 )}
                                 {!isAdmin && (userRoles.includes('SECCHAMPION') || workgroupCount > 0) && (
-                                    <li>
-                                        <a href="/wg-vulns" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
-                                            title="View vulnerabilities for your workgroups">
-                                            <i className="bi bi-people-fill me-2"></i> WG vulns
-                                        </a>
-                                    </li>
+                                <li>
+                                    <a href="/wg-vulns" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                        title="View vulnerabilities for your workgroups">
+                                        <i className="bi bi-people-fill me-2"></i> WG vulns
+                                    </a>
+                                </li>
                                 )}
-                                <li>
-                                    <a href="/outdated-assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-hourglass-split me-2"></i> Outdated Assets
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/vulnerability-statistics" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-bar-chart-line me-2"></i> Lense
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/vulnerability-heatmap" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-grid-3x3-gap-fill me-2"></i> Heatmap
-                                    </a>
-                                </li>
                                 <li>
                                     <a href="/products" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-box-seam me-2"></i> Vulnerable products
@@ -371,6 +420,11 @@ const Sidebar = () => {
                                 <li>
                                     <a href="/installed-products" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-boxes me-2"></i> Installed products
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/outdated-assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-hourglass-split me-2"></i> Outdated assets
                                     </a>
                                 </li>
                                 {/* End-of-life software — scoped server-side to the caller's
@@ -382,6 +436,16 @@ const Sidebar = () => {
                                         <i className="bi bi-calendar-x me-2"></i> End of life
                                     </a>
                                 </li>
+                                {(userRoles.includes('ADMIN') || userRoles.includes('VULN') || userRoles.includes('SECCHAMPION')) && (
+                                <li>
+                                    <a href="/github-repos" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                        title="GitHub repositories with their open high/critical Dependabot alerts">
+                                        <i className="bi bi-github me-2"></i> GitHub
+                                    </a>
+                                </li>
+                                )}
+
+                                <li className="sidebar-subsection-header">Workflow</li>
                                 <li>
                                     <a href="/vulnerabilities/exceptions" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-x-circle me-2"></i> Exceptions
@@ -392,54 +456,36 @@ const Sidebar = () => {
                                         <i className="bi bi-clipboard-check me-2"></i> My Exception Requests
                                     </a>
                                 </li>
+                                {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION')) && (
+                                <li>
+                                    <a href="/exception-approvals" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-shield-check me-2"></i> Approve Exceptions
+                                        {pendingExceptionCount > 0 && (
+                                            <span className="badge bg-danger ms-auto" title={`${pendingExceptionCount} pending approval${pendingExceptionCount > 1 ? 's' : ''}`}>
+                                                {pendingExceptionCount}
+                                            </span>
+                                        )}
+                                    </a>
+                                </li>
+                                )}
                                 {/* AWS Sharing:
                                     - ADMIN / VULN / SECCHAMPION → /admin/aws-account-sharing (full view, all rules)
                                     - Other users with AWS accounts → /aws-account-sharing (self-service) */}
                                 {(isAdmin || userRoles.includes('VULN') || userRoles.includes('SECCHAMPION')) ? (
-                                    <li>
-                                        <a href="/admin/aws-account-sharing" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
-                                            title="View and manage AWS account sharing rules across all users">
-                                            <i className="bi bi-share-fill me-2"></i> AWS Sharing
-                                        </a>
-                                    </li>
+                                <li>
+                                    <a href="/admin/aws-account-sharing" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                        title="View and manage AWS account sharing rules across all users">
+                                        <i className="bi bi-share-fill me-2"></i> AWS Sharing
+                                    </a>
+                                </li>
                                 ) : awsAccountCount > 0 ? (
-                                    <li>
-                                        <a href="/aws-account-sharing" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
-                                            title="Manage sharing of your AWS accounts with other users">
-                                            <i className="bi bi-share-fill me-2"></i> AWS Sharing
-                                        </a>
-                                    </li>
+                                <li>
+                                    <a href="/aws-account-sharing" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                        title="Manage sharing of your AWS accounts with other users">
+                                        <i className="bi bi-share-fill me-2"></i> AWS Sharing
+                                    </a>
+                                </li>
                                 ) : null}
-                                {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION')) && (
-                                    <li>
-                                        <a href="/exception-approvals" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                            <i className="bi bi-shield-check me-2"></i> Approve Exceptions
-                                            {pendingExceptionCount > 0 && (
-                                                <span className="badge bg-danger ms-auto" title={`${pendingExceptionCount} pending approval${pendingExceptionCount > 1 ? 's' : ''}`}>
-                                                    {pendingExceptionCount}
-                                                </span>
-                                            )}
-                                        </a>
-                                    </li>
-                                )}
-                                {/* GitHub repos - ADMIN, VULN, or SECCHAMPION (mirrors GET /api/github/repositories) */}
-                                {(userRoles.includes('ADMIN') || userRoles.includes('VULN') || userRoles.includes('SECCHAMPION')) && (
-                                    <li>
-                                        <a href="/github-repos" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
-                                            title="GitHub repositories with their open high/critical Dependabot alerts">
-                                            <i className="bi bi-github me-2"></i> GitHub
-                                        </a>
-                                    </li>
-                                )}
-                                {/* Longest-open findings by account - ADMIN only (mirrors GET /api/admin/account-finding-age/top) */}
-                                {userRoles.includes('ADMIN') && (
-                                    <li>
-                                        <a href="/account-finding-age" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
-                                            title="AWS accounts ranked by the age of their oldest still-open finding">
-                                            <i className="bi bi-hourglass-bottom me-2"></i> Account Aging
-                                        </a>
-                                    </li>
-                                )}
                             </ul>
                         )}
                     </li>
@@ -510,7 +556,16 @@ const Sidebar = () => {
                     </li>
                 )}
 
-                {/* ADMIN Section - expandable menu (only visible to admin users) */}
+                {/*
+                  * ADMIN Section — filter and fold (design 1b).
+                  *
+                  * Twenty-plus entries used to unroll as one column taller than the
+                  * viewport. Now a filter field sits at the top and the groups stay
+                  * shut except the one holding the page you are on; opening a group
+                  * closes the previous one, so the rail is never longer than a screen.
+                  * The entries themselves live in adminNav.ts — markup cannot be
+                  * searched, a list can.
+                  */}
                 {isAdmin && (
                     <li>
                         <div
@@ -523,170 +578,68 @@ const Sidebar = () => {
                             <i className={`bi ${adminMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
                         </div>
                         {adminMenuOpen && (
-                            <ul className="list-unstyled ps-4">
-                                {/* Dashboard Overview */}
-                                <li>
-                                    <a href="/admin" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-speedometer me-2"></i> Dashboard
-                                    </a>
-                                </li>
-
-                                {/* Users & Access Management */}
-                                <li className="admin-subsection-header">Users & Access</li>
-                                <li>
-                                    <a href="/admin/user-management" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-people-fill me-2"></i> User Management
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/workgroups" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-diagram-2 me-2"></i> Workgroups
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/admin/user-mappings" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-diagram-3-fill me-2"></i> User Mappings
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/admin/identity-providers" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-shield-lock me-2"></i> Identity Providers
-                                    </a>
-                                </li>
-
-                                {/* System Configuration */}
-                                <li className="admin-subsection-header">System Configuration</li>
-                                <li>
-                                    <a href="/admin/email-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-envelope-gear me-2"></i> Email Settings
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/admin/vulnerability-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-shield-exclamation me-2"></i> Vulnerability Settings
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/admin/notification-settings" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-bell-fill me-2"></i> Notification Settings
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/admin/chat-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
-                                        title="Workspace Slack and Telegram bot credentials for chat notifications">
-                                        <i className="bi bi-chat-dots me-2"></i> Chat Configuration
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/admin/falcon-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-shield-lock me-2"></i> CrowdStrike Falcon
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/admin/github-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-github me-2"></i> GitHub App
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/admin/translation-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-translate me-2"></i> LLM Config
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/admin/mcp-api-keys" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-key-fill me-2"></i> MCP API Keys
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/admin/requirement-export-templates" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
-                                        title="Company Word templates used by requirement exports">
-                                        <i className="bi bi-file-earmark-word me-2"></i> Export Templates
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/admin/classification-rules" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-funnel-fill me-2"></i> Classification Rules
-                                    </a>
-                                </li>
-
-                                {/* Content & Data Management */}
-                                <li className="admin-subsection-header">Content & Data</li>
-                                <li>
-                                    <a href="/admin/requirements" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-list-task me-2"></i> Requirements Mgmt
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/scans" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-radar me-2"></i> Scans
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/admin/add-system" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-plus-circle me-2"></i> Add System
-                                    </a>
-                                </li>
-
-                                {/* I/O (import/export/config bundle) */}
-                                <li className="admin-subsection-header">I/O</li>
-                                <li>
-                                    <a href="/import" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-cloud-upload me-2"></i> Import
-                                    </a>
-                                </li>
-                                <li>
-                                    <div
-                                        onClick={() => setExportMenuOpen(!exportMenuOpen)}
-                                        className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
-                                        style={{ cursor: 'pointer' }}
-                                    >
-                                        <i className="bi bi-download me-2"></i>
-                                        Export
-                                        <i className={`bi ${exportMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
-                                    </div>
-                                    {exportMenuOpen && (
-                                        <ul className="list-unstyled ps-4">
-                                            <li>
-                                                <a href="/export" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                                    <i className="bi bi-file-earmark-excel me-2"></i> Requirements
-                                                </a>
-                                            </li>
-                                            <li>
-                                                <a href="/export?type=assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                                    <i className="bi bi-hdd-rack me-2"></i> Assets
-                                                </a>
-                                            </li>
-                                        </ul>
+                            <div className="admin-nav">
+                                <div className="admin-nav-filter">
+                                    <i className="bi bi-search" aria-hidden="true"></i>
+                                    <input
+                                        type="search"
+                                        value={adminQuery}
+                                        onChange={(e) => setAdminQuery(e.target.value)}
+                                        placeholder="Filter"
+                                        aria-label="Filter admin menu"
+                                    />
+                                </div>
+                                <ul className="list-unstyled mb-0">
+                                    {visibleAdminGroups.length === 0 && (
+                                        <li className="admin-nav-empty">Nothing matches “{adminQuery.trim()}”</li>
                                     )}
-                                </li>
-                                <li>
-                                    <a href="/admin/config-bundle" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-box-arrow-in-down me-2"></i> Configuration Bundle
-                                    </a>
-                                </li>
-
-                                {/* Monitoring */}
-                                <li className="admin-subsection-header">Monitoring</li>
-                                <li>
-                                    <a href="/notification-preferences" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-bell me-2"></i> Notifications
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/notification-logs" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-envelope-paper me-2"></i> Notification Logs
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/admin/ec2-compliance" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-shield-check me-2"></i> EC2 Compliance
-                                    </a>
-                                </li>
-                            </ul>
+                                    {visibleAdminGroups.map((group) => {
+                                        // A filter overrides the fold: what you searched for is
+                                        // no use hidden behind a group you still have to open.
+                                        const open = adminQuery.trim() !== ''
+                                            || group.label === null
+                                            || openAdminGroup === group.key;
+                                        return (
+                                            <React.Fragment key={group.key}>
+                                                {group.label && (
+                                                    <li>
+                                                        <button
+                                                            type="button"
+                                                            className="admin-nav-group"
+                                                            aria-expanded={open}
+                                                            onClick={() => setOpenAdminGroup(
+                                                                openAdminGroup === group.key ? null : group.key,
+                                                            )}
+                                                        >
+                                                            <span>{group.label}</span>
+                                                            {!open && (
+                                                                <span className="admin-nav-count">{group.items.length}</span>
+                                                            )}
+                                                        </button>
+                                                    </li>
+                                                )}
+                                                {open && group.items.map((item) => (
+                                                    <li key={item.href}>
+                                                        <a
+                                                            href={item.href}
+                                                            title={item.title}
+                                                            className={
+                                                                'admin-nav-item d-flex align-items-center p-2 text-decoration-none'
+                                                                + (item.href === activeAdminHref ? ' sidebar-item-active' : '')
+                                                            }
+                                                        >
+                                                            <i className={`bi ${item.icon} me-2`}></i> {item.label}
+                                                        </a>
+                                                    </li>
+                                                ))}
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </ul>
+                            </div>
                         )}
                     </li>
                 )}
-
                 {/* About at the bottom */}
                 <li>
                     <a href="/about" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
@@ -700,7 +653,7 @@ const Sidebar = () => {
 
 export default Sidebar;
 
-// Scandinavian Design System styling
+// Editorial Design System styling
 const styles = `
 #sidebar {
     min-width: 250px;
@@ -708,7 +661,9 @@ const styles = `
     min-height: 100vh;
     transition: all 0.3s;
     background-color: var(--scand-bg-sidebar);
-    border-right-color: var(--scand-border);
+    /* No divider. The rail sits on the same canvas as the content; separation
+       comes from the left margin of the content column, not from a rule. */
+    border-right: 0 !important;
 }
 
 #sidebar.active {
@@ -721,23 +676,22 @@ const styles = `
 
 /* Consistent font size for all top-level sidebar items */
 #sidebar .components > li > a {
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: var(--scand-label-size);
+    font-weight: var(--scand-label-weight);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--scand-label-tracking);
     color: var(--scand-text-secondary);
 }
 
 .sidebar-section-header {
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: var(--scand-label-size);
+    font-weight: var(--scand-label-weight);
     text-transform: uppercase;
     color: var(--scand-text-secondary);
     padding: 12px 8px 6px 8px;
     margin-top: 8px;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--scand-label-tracking);
     background-color: var(--scand-sidebar-section-bg);
-    border-left: 3px solid var(--scand-sidebar-section-border);
 }
 
 .sidebar-section-header:first-child {
@@ -751,9 +705,8 @@ const styles = `
     color: var(--scand-text-secondary);
     padding: 12px 8px 8px 8px;
     margin-top: 8px;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--scand-label-tracking);
     background-color: var(--scand-sidebar-section-bg);
-    border-left: 3px solid var(--scand-sidebar-section-border);
     transition: all var(--scand-transition-normal);
 }
 
@@ -762,15 +715,129 @@ const styles = `
     color: var(--scand-text-primary);
 }
 
-.admin-subsection-header {
+/*
+ * The active item — a blue tint with a left accent bar. This is the one place
+ * the rail uses colour, so it reads as position rather than decoration.
+ */
+#sidebar a.sidebar-item-active {
+    background-color: var(--scand-sidebar-active-bg);
+    box-shadow: inset 3px 0 0 0 var(--scand-sidebar-active-bar);
+    color: var(--scand-text-primary) !important;
+    font-weight: var(--scand-font-weight-semibold);
+}
+
+/*
+ * Subsection label inside an expanded section — Vulnerability Management's
+ * Analyze / Inventory / Workflow groups. The ADMIN rail used to share this rule
+ * under a second class name; its groups are now buttons (.admin-nav-group), so
+ * only the generic name is left.
+ */
+.sidebar-subsection-header {
     font-size: 0.7rem;
     font-weight: 500;
     text-transform: uppercase;
     color: var(--scand-text-secondary);
     padding: 8px 8px 4px 8px;
     margin-top: 12px;
-    letter-spacing: 0.3px;
+    letter-spacing: var(--scand-label-tracking);
     border-bottom: 1px solid var(--scand-border);
+}
+
+/* ========================================================================
+   ADMIN rail — filter and fold (design 1b)
+   ======================================================================== */
+
+.admin-nav {
+    padding-bottom: 8px;
+}
+
+/*
+ * The filter field. A tinted well rather than a bordered input: the rail sits on
+ * the page canvas, and a boxed control here would read as a form.
+ */
+.admin-nav-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--scand-bg-hover);
+    padding: 6px 10px;
+    margin: 8px 8px 6px 8px;
+}
+
+.admin-nav-filter i {
+    font-size: 0.8rem;
+    color: var(--scand-text-secondary);
+}
+
+.admin-nav-filter input {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    outline: none;
+    font-family: var(--scand-font-family);
+    font-size: 0.9rem;
+    color: var(--scand-text-primary);
+}
+
+.admin-nav-filter input::placeholder {
+    color: var(--scand-text-secondary);
+}
+
+/* A group heading is now a control, so it is a <button> — stripped back to type. */
+.admin-nav-group {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    background: none;
+    border: 0;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: var(--scand-label-tracking);
+    color: var(--scand-text-secondary);
+    padding: 14px 8px 5px 8px;
+    transition: color var(--scand-transition-fast);
+}
+
+.admin-nav-group:hover,
+.admin-nav-group:focus-visible {
+    color: var(--scand-text-primary);
+}
+
+/* How many entries are folded away. Letterspacing off — it is a number, not a label. */
+.admin-nav-count {
+    margin-left: auto;
+    letter-spacing: 0;
+    font-size: 0.7rem;
+    color: var(--scand-text-secondary);
+}
+
+.admin-nav-item {
+    color: var(--scand-text-secondary);
+    padding-left: 1rem !important;
+}
+
+.admin-nav-item i {
+    color: var(--scand-text-secondary);
+}
+
+.admin-nav-item:hover {
+    background-color: var(--scand-sidebar-hover-bg);
+    color: var(--scand-text-primary);
+}
+
+/* The one place the rail uses colour, matching the active-row rule above. */
+.admin-nav-item.sidebar-item-active i {
+    color: var(--scand-sidebar-active-bar);
+}
+
+.admin-nav-empty {
+    font-size: 0.85rem;
+    font-style: italic;
+    color: var(--scand-text-secondary);
+    padding: 6px 8px 6px 16px;
 }
 `;
 

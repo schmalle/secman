@@ -123,7 +123,7 @@ export default function MostVulnerableProducts({ domain, awsHosted }: MostVulner
   // Data table
   return (
     <div className="card">
-      <div className="card-header" style={{backgroundColor: 'var(--scand-bg-header)', color: 'var(--scand-text-light)'}}>
+      <div className="card-header" style={{backgroundColor: 'var(--scand-bg-header)', color: 'var(--scand-text-on-header)'}}>
         <h5 className="mb-0">
           <i className="bi bi-box-seam me-2"></i>
           Top 10 Most Vulnerable Products
@@ -198,7 +198,7 @@ export default function MostVulnerableProducts({ domain, awsHosted }: MostVulner
         <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: 'var(--scand-overlay)' }}>
           <div className="modal-dialog modal-lg modal-dialog-scrollable">
             <div className="modal-content">
-              <div className="modal-header" style={{ backgroundColor: 'var(--scand-bg-header)', color: 'var(--scand-text-light)' }}>
+              <div className="modal-header" style={{ backgroundColor: 'var(--scand-bg-header)', color: 'var(--scand-text-on-header)' }}>
                 <h5 className="modal-title">
                   <i className="bi bi-box-seam me-2"></i>
                   Systems with Product {modalData && `- ${modalData.product}`}
