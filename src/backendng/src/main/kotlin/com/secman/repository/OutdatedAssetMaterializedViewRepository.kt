@@ -47,6 +47,8 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
      *  - Only assets with at least one overdue, non-excepted vulnerability produce a row —
      *    `PARTITION BY` cannot create a partition with no rows.
      *  - `excepted = 0` is pushed into SQL, replacing the in-memory post-filter.
+     *  - `product_class <> 'INSTALLER_ARTIFACT'` matches every other overdue surface, so an
+     *    installer payload never makes an asset look outdated.
      *
      * Two deliberate behaviour changes, both improvements:
      *  - Ties for "oldest" now resolve to the lexicographically smallest `vulnerability_id`
@@ -105,6 +107,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
                 ) AS rn
             FROM vulnerability v
             WHERE v.excepted = 0
+              AND v.product_class <> 'INSTALLER_ARTIFACT'
               AND COALESCE(v.first_seen_at, v.scan_timestamp) < :thresholdDate
         ) r
         JOIN asset a ON a.id = r.asset_id
@@ -127,6 +130,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
         SELECT COUNT(DISTINCT v.asset_id)
         FROM vulnerability v
         WHERE v.excepted = 0
+          AND v.product_class <> 'INSTALLER_ARTIFACT'
           AND COALESCE(v.first_seen_at, v.scan_timestamp) < :thresholdDate
         """,
         nativeQuery = true

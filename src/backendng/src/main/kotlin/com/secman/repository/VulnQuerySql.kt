@@ -57,6 +57,27 @@ object VulnQuerySql {
      */
     const val NOT_EXCEPTED = "v.excepted = 0"
 
+    /**
+     * Installer/setup-payload filter, the second materialized visibility flag.
+     *
+     * `product_class` is maintained by [com.secman.service.ProductClassificationService] from the
+     * admin-managed [com.secman.domain.ProductClassificationRule] set. Written as `<>` rather than
+     * `IN ('INSTALLED','UNKNOWN')` deliberately: UNKNOWN — the column default, and the value a row
+     * carries before it has ever been classified — must read as VISIBLE. Only an explicit
+     * INSTALLER_ARTIFACT hides anything, so a failed or lagging materialization over-shows rather
+     * than over-hides, matching [NOT_EXCEPTED].
+     *
+     * No index backs this column on `vulnerability`, on purpose — see V256 for why (the column is
+     * ~99.99% one value, and index count on that table is load-bearing for import deadlocks).
+     */
+    const val NOT_INSTALLER_ARTIFACT = "v.product_class <> 'INSTALLER_ARTIFACT'"
+
+    /**
+     * Both visibility flags. The statistics families apply this unconditionally — exactly as they
+     * already do for exceptions — so the numbers keep agreeing with the list they summarise.
+     */
+    const val VISIBLE = "$NOT_EXCEPTED AND $NOT_INSTALLER_ARTIFACT"
+
     // --- Most common vulnerabilities (top 10 by occurrence) ---
     const val MOST_COMMON_SELECT = """
         SELECT v.vulnerability_id as vulnerabilityId,
@@ -70,7 +91,7 @@ object VulnQuerySql {
     // `v.cvss_severity` while selecting `COALESCE(v.cvss_severity, 'UNKNOWN')` emits TWO rows
     // both labelled UNKNOWN when a literal 'UNKNOWN' and a NULL both exist.
     // Tiebreaker on vulnerability_id so the LIMIT 10 boundary is stable across refreshes.
-    const val MOST_COMMON_TAIL = """$NOT_EXCEPTED
+    const val MOST_COMMON_TAIL = """$VISIBLE
         GROUP BY v.vulnerability_id, COALESCE(v.cvss_severity, 'UNKNOWN')
         ORDER BY COUNT(*) DESC, v.vulnerability_id ASC
         LIMIT 10
@@ -88,7 +109,7 @@ object VulnQuerySql {
         WHERE """
     const val MOST_VULNERABLE_PRODUCTS_TAIL = """v.vulnerable_product_versions IS NOT NULL
           AND v.vulnerable_product_versions != ''
-          AND $NOT_EXCEPTED
+          AND $VISIBLE
         GROUP BY v.vulnerable_product_versions
         ORDER BY COUNT(DISTINCT v.vulnerability_id) DESC, v.vulnerable_product_versions ASC
         LIMIT 10
@@ -100,7 +121,7 @@ object VulnQuerySql {
         FROM vulnerability v
         JOIN asset a ON v.asset_id = a.id
         WHERE """
-    const val SEVERITY_DISTRIBUTION_TAIL = """$NOT_EXCEPTED
+    const val SEVERITY_DISTRIBUTION_TAIL = """$VISIBLE
         GROUP BY COALESCE(v.cvss_severity, 'UNKNOWN')
         """
 
@@ -116,7 +137,7 @@ object VulnQuerySql {
         JOIN asset a ON v.asset_id = a.id
         WHERE """
     // Tiebreaker on a.id so the LIMIT 50 boundary is stable across refreshes.
-    const val TOP_ASSETS_TAIL = """$NOT_EXCEPTED
+    const val TOP_ASSETS_TAIL = """$VISIBLE
         GROUP BY a.id, a.name, a.type, a.ip
         ORDER BY COUNT(*) DESC, a.id ASC
         LIMIT 50
@@ -135,7 +156,7 @@ object VulnQuerySql {
         FROM vulnerability v
         JOIN asset a ON v.asset_id = a.id
         WHERE """
-    const val BY_ASSET_TYPE_TAIL = """$NOT_EXCEPTED
+    const val BY_ASSET_TYPE_TAIL = """$VISIBLE
         GROUP BY COALESCE(a.type, 'Unknown')
         ORDER BY COUNT(*) DESC
         """
@@ -152,7 +173,7 @@ object VulnQuerySql {
         JOIN asset a ON v.asset_id = a.id
         WHERE """
     const val TEMPORAL_TRENDS_TAIL = """v.scan_timestamp >= :startDate
-        AND $NOT_EXCEPTED
+        AND $VISIBLE
         GROUP BY DATE(v.scan_timestamp)
         ORDER BY DATE(v.scan_timestamp) ASC
         """

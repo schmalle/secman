@@ -91,6 +91,17 @@ data class EolFinding(
     @Column(name = "component_version", length = 255)
     var componentVersion: String? = null,
 
+    /**
+     * Whether the subject of this finding is deployed software or an installer payload.
+     * Denormalized at scan time from the source `InstalledProduct` for ASSET_PRODUCT findings,
+     * matching how assetName / cloudAccountId / assetOwner are already carried here.
+     * ASSET_OS and REPOSITORY_COMPONENT findings are always INSTALLED — an operating system is
+     * not a cached payload and a repository dependency is not a file on disk.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "product_class", nullable = false, length = 20)
+    var productClass: ProductClass = ProductClass.UNKNOWN,
+
     /** Package ecosystem for repository components, e.g. `npm`, `maven`. */
     @Column(name = "ecosystem", length = 64)
     var ecosystem: String? = null,

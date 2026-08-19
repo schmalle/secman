@@ -2,6 +2,7 @@ package com.secman.mcp.tools
 
 import com.secman.domain.Asset
 import com.secman.domain.McpOperation
+import com.secman.domain.ProductClass
 import com.secman.domain.Vulnerability
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.AssetRepository
@@ -73,6 +74,11 @@ open class GetVulnerabilitiesTool(
                 "type" to "boolean",
                 "description" to "Include vulnerabilities that are covered by active exceptions (default: false). Set to true to see all vulnerabilities including excepted ones.",
                 "default" to false
+            ),
+            "includeInstallerFindings" to mapOf(
+                "type" to "boolean",
+                "description" to "Include findings whose affected product is an installer or setup payload rather than deployed software (e.g. \"Chrome Installer\", \"Photon Setup\"). Default false, matching the web UI.",
+                "default" to false
             )
         )
     )
@@ -86,6 +92,7 @@ open class GetVulnerabilitiesTool(
         val startDateStr = arguments["startDate"] as? String
         val endDateStr = arguments["endDate"] as? String
         val includeExcepted = arguments["includeExcepted"] as? Boolean ?: false
+        val includeInstallerFindings = arguments["includeInstallerFindings"] as? Boolean ?: false
 
         // Validate parameters
         if (pageSize < 1 || pageSize > 500) {
@@ -189,7 +196,7 @@ open class GetVulnerabilitiesTool(
             }
 
             // Filter out excepted vulnerabilities unless explicitly included
-            val filteredContent: List<Vulnerability> = if (!includeExcepted) {
+            val exceptionFiltered: List<Vulnerability> = if (!includeExcepted) {
                 val activeExceptions = vulnerabilityExceptionService.getActiveExceptions()
                 resultPage.content.filter { vuln ->
                     val asset = assetsById[vuln.asset.id] ?: return@filter false
@@ -197,6 +204,17 @@ open class GetVulnerabilitiesTool(
                 }
             } else {
                 resultPage.content
+            }
+
+            // Installer/setup payload filter, reading the materialized class. Applied here rather
+            // than in SQL because this tool's query branches are plain derived finders with no
+            // shared WHERE fragment to extend; it therefore inherits the same post-pagination
+            // caveat the exception filter above already has (`total` reflects the filtered page).
+            // UNKNOWN reads as visible, exactly as it does in every SQL surface.
+            val filteredContent: List<Vulnerability> = if (!includeInstallerFindings) {
+                exceptionFiltered.filter { it.productClass != ProductClass.INSTALLER_ARTIFACT }
+            } else {
+                exceptionFiltered
             }
 
             // Map vulnerabilities to response format using hydrated assets
@@ -217,11 +235,12 @@ open class GetVulnerabilitiesTool(
 
             val response = mapOf(
                 "vulnerabilities" to vulnerabilities,
-                "total" to if (!includeExcepted) vulnerabilities.size.toLong() else resultPage.totalSize,
+                "total" to if (!includeExcepted || !includeInstallerFindings) vulnerabilities.size.toLong() else resultPage.totalSize,
                 "page" to page,
                 "pageSize" to pageSize,
                 "totalPages" to resultPage.totalPages,
-                "exceptedFiltered" to !includeExcepted
+                "exceptedFiltered" to !includeExcepted,
+                "installerFindingsFiltered" to !includeInstallerFindings
             )
 
             return McpToolResult.success(response)

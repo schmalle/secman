@@ -54,9 +54,19 @@ open class EolController(
         @Nullable @QueryValue search: String?,
         @Nullable @QueryValue cloudAccountId: String?,
         @Nullable @QueryValue page: Int?,
-        @Nullable @QueryValue pageSize: Int?
+        @Nullable @QueryValue pageSize: Int?,
+        /**
+         * Opt back in to installer/setup payload findings ("Chrome Installer", "Photon Setup").
+         * Default false. Widens visibility of rows the caller is already authorized to see;
+         * the asset scope still comes from AssetFilterService via accessibleAssetIdsCache.
+         */
+        @QueryValue(defaultValue = "false") includeInstallerFindings: Boolean
     ): HttpResponse<*> = try {
-        HttpResponse.ok(eolQueryService.listFindings(authentication, status, search, cloudAccountId, page, pageSize))
+        HttpResponse.ok(
+            eolQueryService.listFindings(
+                authentication, status, search, cloudAccountId, page, pageSize, includeInstallerFindings
+            )
+        )
     } catch (e: IllegalArgumentException) {
         HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid request")))
     }

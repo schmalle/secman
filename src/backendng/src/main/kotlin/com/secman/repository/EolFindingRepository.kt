@@ -19,6 +19,29 @@ import io.micronaut.data.model.Pageable
 @Repository
 interface EolFindingRepository : JpaRepository<EolFinding, Long> {
 
+    // --- Product classification ---
+
+    /**
+     * Carry the class from the source installed_product row onto ASSET_PRODUCT findings.
+     * Cheaper and less error-prone than a full EOL rescan when only the rules changed; OS and
+     * repository findings are left at their scan-time value (always INSTALLED).
+     */
+    @Query(
+        value = """
+        UPDATE eol_finding f JOIN installed_product p ON f.installed_product_id = p.id
+        SET f.product_class = p.product_class
+        WHERE f.subject_type = 'ASSET_PRODUCT'
+        """,
+        nativeQuery = true
+    )
+    fun syncProductClassFromInstalledProducts(): Long
+
+    @Query(
+        value = "SELECT COUNT(*) FROM eol_finding WHERE product_class = 'INSTALLER_ARTIFACT'",
+        nativeQuery = true
+    )
+    fun countInstallerArtifacts(): Long
+
     // ---------------------------------------------------------------- asset scope
 
     @Query(
@@ -32,6 +55,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
                OR LOWER(COALESCE(f.assetName, '')) LIKE LOWER(CONCAT('%', :search, '%')))
           AND (:cloudAccountId IS NULL OR :cloudAccountId = ''
                OR COALESCE(NULLIF(f.cloudAccountId, ''), :unassignedAccountToken) = :cloudAccountId)
+          AND (:includeInstallerFindings = TRUE OR f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT)
         ORDER BY f.eolDate ASC, f.assetName ASC, f.componentName ASC
         """
     )
@@ -41,7 +65,8 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
         search: String?,
         cloudAccountId: String?,
         unassignedAccountToken: String,
-        pageable: Pageable
+        pageable: Pageable,
+        includeInstallerFindings: Boolean
     ): List<EolFinding>
 
     @Query(
@@ -55,6 +80,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
                OR LOWER(COALESCE(f.assetName, '')) LIKE LOWER(CONCAT('%', :search, '%')))
           AND (:cloudAccountId IS NULL OR :cloudAccountId = ''
                OR COALESCE(NULLIF(f.cloudAccountId, ''), :unassignedAccountToken) = :cloudAccountId)
+          AND (:includeInstallerFindings = TRUE OR f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT)
         """
     )
     fun countForAssets(
@@ -62,13 +88,15 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
         statuses: Collection<EolStatus>,
         search: String?,
         cloudAccountId: String?,
-        unassignedAccountToken: String
+        unassignedAccountToken: String,
+        includeInstallerFindings: Boolean
     ): Long
 
     @Query(
         """
         SELECT f.status, COUNT(f) FROM EolFinding f
         WHERE f.assetId IN (:assetIds)
+          AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         GROUP BY f.status
         """
     )
@@ -78,6 +106,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
         """
         SELECT COUNT(DISTINCT f.assetId) FROM EolFinding f
         WHERE f.assetId IN (:assetIds)
+          AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         """
     )
     fun countDistinctAssets(assetIds: Collection<Long>): Long
@@ -88,6 +117,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
         SELECT COALESCE(f.cloudAccountId, ''), f.status, COUNT(f)
         FROM EolFinding f
         WHERE f.assetId IN (:assetIds)
+          AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         GROUP BY COALESCE(f.cloudAccountId, ''), f.status
         """
     )
@@ -99,6 +129,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
         SELECT f.componentName, f.eolProductKey, f.eolCycle, f.status, COUNT(DISTINCT f.assetId)
         FROM EolFinding f
         WHERE f.assetId IN (:assetIds)
+          AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         GROUP BY f.componentName, f.eolProductKey, f.eolCycle, f.status
         ORDER BY COUNT(DISTINCT f.assetId) DESC, f.componentName ASC
         """
@@ -133,6 +164,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
         FROM EolFinding f
         WHERE f.assetId IS NOT NULL
           AND f.assetId IN (:assetIds)
+          AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         GROUP BY f.componentName
         HAVING COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.assetId END) > 0
         ORDER BY COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.assetId END) DESC,
@@ -160,6 +192,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
                COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.eolCycle END)
         FROM EolFinding f
         WHERE f.assetId IS NOT NULL
+          AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         GROUP BY f.componentName
         HAVING COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.assetId END) > 0
         ORDER BY COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.assetId END) DESC,
@@ -172,6 +205,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
         """
         SELECT f FROM EolFinding f
         WHERE f.assetId = :assetId
+          AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         ORDER BY f.eolDate ASC, f.componentName ASC
         """
     )
@@ -188,6 +222,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
         WHERE f.assetId IN (:assetIds)
           AND f.assetId IS NOT NULL
           AND f.componentName = :product
+          AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         ORDER BY f.status ASC, f.eolDate ASC, f.assetName ASC
         """
     )
@@ -199,6 +234,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
         WHERE f.assetId IN (:assetIds)
           AND f.assetId IS NOT NULL
           AND f.componentName = :product
+          AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         """
     )
     fun countByComponentNameForAssets(product: String, assetIds: Collection<Long>): Long
@@ -215,6 +251,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
         WHERE f.assetId IN (:assetIds)
           AND f.assetId IS NOT NULL
           AND f.componentName = :product
+          AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         """
     )
     fun findAssetIdsByComponentNameForAssets(product: String, assetIds: Collection<Long>): List<Long>
@@ -268,6 +305,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
           AND f.eolDate IS NOT NULL
           AND f.eolDate >= :from
           AND f.eolDate <= :to
+          AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         ORDER BY f.id ASC
         """
     )

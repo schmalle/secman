@@ -56,6 +56,28 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
     @Query("SELECT p FROM InstalledProduct p JOIN FETCH p.asset ORDER BY p.id ASC")
     fun findAllWithAssetOrdered(pageable: Pageable): List<InstalledProduct>
 
+    // --- Product classification ---
+
+    /**
+     * Id-ordered sweep WITHOUT the asset join, for the reclassify pass. Classification reads
+     * only name / vendor / installationPath, so fetching the asset would be pure overhead on a
+     * 182k-row table.
+     */
+    @Query("SELECT p FROM InstalledProduct p WHERE p.id > :afterId ORDER BY p.id ASC")
+    fun findForClassification(afterId: Long, pageable: Pageable): List<InstalledProduct>
+
+    @Query(
+        value = "UPDATE installed_product SET product_class = :productClass WHERE id IN (:ids)",
+        nativeQuery = true
+    )
+    fun updateProductClass(productClass: String, ids: Collection<Long>): Long
+
+    @Query(
+        value = "SELECT COUNT(*) FROM installed_product WHERE product_class = :productClass",
+        nativeQuery = true
+    )
+    fun countByProductClass(productClass: String): Long
+
     @Query("""
         SELECT p FROM InstalledProduct p
         JOIN FETCH p.asset

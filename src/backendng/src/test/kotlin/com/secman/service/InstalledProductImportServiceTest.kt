@@ -22,7 +22,11 @@ class InstalledProductImportServiceTest {
     fun setUp() {
         assetRepository = mockk()
         installedProductRepository = mockk()
-        service = InstalledProductImportService(assetRepository, installedProductRepository)
+        // relaxed mock returns an empty rule list, so every product classifies as INSTALLED —
+        // the behaviour these tests assert predates classification.
+        service = InstalledProductImportService(
+            assetRepository, installedProductRepository, mockk(relaxed = true)
+        )
     }
 
     @Test

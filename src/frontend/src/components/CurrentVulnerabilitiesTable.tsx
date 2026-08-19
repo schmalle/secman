@@ -109,6 +109,9 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
 
   // Track previous filter values to detect filter-only vs page/sort changes
   // When only page/sort changes, we pass knownTotal to skip the expensive count query
+  // Off by default: installer/setup payload findings ("Notepad++ Installer") are hidden unless
+  // the user explicitly asks for them, matching the backend default.
+  const [includeInstallerFindings, setIncludeInstallerFindings] = useState(false);
   const prevFiltersRef = useRef<string>("");
   const countRequestKeyRef = useRef<string>("");
 
@@ -157,6 +160,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     debouncedCveFilter,
     adDomainFilter,
     cloudAccountIdFilter,
+    includeInstallerFindings,
     currentPage,
     sortField,
     sortOrder,
@@ -220,7 +224,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
 
       // PERFORMANCE: When only page/sort changes (filters unchanged), pass the known total
       // to skip the expensive COUNT query with NOT EXISTS on 358k+ rows
-      const currentFilterKey = `${severityFilter}|${debouncedSystemFilter}|${exceptionFilter}|${productFilter}|${debouncedCveFilter}|${adDomainFilter}|${cloudAccountIdFilter}`;
+      const currentFilterKey = `${severityFilter}|${debouncedSystemFilter}|${exceptionFilter}|${productFilter}|${debouncedCveFilter}|${adDomainFilter}|${cloudAccountIdFilter}|${includeInstallerFindings}`;
       const filtersUnchanged = currentFilterKey === prevFiltersRef.current;
       const knownTotal = filtersUnchanged && paginatedResponse?.totalExact !== false
         ? paginatedResponse.totalElements
@@ -243,6 +247,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
         effectiveSortOrder,
         knownTotal,
         countMode,
+        includeInstallerFindings,
       );
       setPaginatedResponse(data);
       setError(null);
@@ -276,6 +281,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
         pageSize,
         backendSortField,
         effectiveSortOrder,
+        includeInstallerFindings,
       );
       if (countRequestKeyRef.current !== requestKey) return;
       setPaginatedResponse((current) => {
@@ -1042,6 +1048,31 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
               handleFilterChange();
             }}
           />
+        </div>
+
+        <div className="col-md-3 d-flex align-items-end">
+          <div className="form-check mb-2">
+            <input
+              className="form-check-input"
+              type="checkbox"
+              id="includeInstallerFindings"
+              checked={includeInstallerFindings}
+              onChange={(e) => {
+                setIncludeInstallerFindings(e.target.checked);
+                handleFilterChange();
+              }}
+            />
+            <label className="form-check-label" htmlFor="includeInstallerFindings">
+              <i className="bi bi-box-seam me-2"></i>
+              Include installer / setup findings
+              <span
+                className="d-block text-muted small"
+                title="Findings whose affected product is an installer or setup payload rather than deployed software. Rules under Admin -> Product classification."
+              >
+                e.g. &quot;Chrome Installer&quot;, &quot;Photon Setup&quot;
+              </span>
+            </label>
+          </div>
         </div>
       </div>
 

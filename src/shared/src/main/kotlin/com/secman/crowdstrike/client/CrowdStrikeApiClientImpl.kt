@@ -627,7 +627,12 @@ open class CrowdStrikeApiClientImpl(
 
                 val uri = UriBuilder.of("/discover/combined/applications/v1")
                     .queryParam("filter", filter)
-                    .queryParam("facet", "host_info")
+                    // install_usage is NOT optional enrichment: installation_paths,
+                    // installation_timestamp and last_used_timestamp are ONLY returned when it is
+                    // requested. Without it CrowdStrike omits the fields entirely and
+                    // InstalledProduct.installationPath / installedAt / lastUsedAt persist as NULL
+                    // for every row (verified 2026-08-19: 182131/182131 rows NULL).
+                    .queryParam("facet", "host_info", "install_usage")
                     .queryParam("limit", limit)
                     .apply {
                         if (!afterToken.isNullOrBlank()) {

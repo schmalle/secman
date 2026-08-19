@@ -336,3 +336,18 @@ closed — that is the SSRF guard working, not a bug.
 The E2E driver reports **SKIP**, not FAIL, when the backend cannot reach the
 upstream source: an air-gapped runner is not a broken feature. A run whose
 catalogue assertions all skipped is a partial result, not a clean pass.
+
+## Installer / setup payload findings
+
+`EolFinding.productClass` marks findings whose subject is an installer payload rather than deployed
+software — `Chrome Installer` (222 findings), `Photon Setup` (24), `SQL Server Setup Bootstrapper`
+(9): 255 of 4210 `ASSET_PRODUCT` findings, ~6%. They are hidden from `GET /api/eol/findings`, the
+summary rollups, the product drilldown and the owner notification mail unless the caller passes
+`includeInstallerFindings=true` (a checkbox on the EOL dashboard, which badges the rows when shown).
+
+`ASSET_OS` and `REPOSITORY_COMPONENT` findings are always `INSTALLED` — an operating system is not a
+cached payload and a repository dependency is not a file on disk.
+
+Rules are ADMIN-managed under `/admin/product-classification`; the classification itself, and why it
+keys on product identity rather than the installation path, is documented in
+`docs/CROWDSTRIKE_IMPORT.md` §Installer / setup payload classification.

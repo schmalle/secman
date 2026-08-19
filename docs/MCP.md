@@ -231,7 +231,7 @@ One tool, six actions selected by `action`:
 
 | Tool | Arguments | Roles | Deleg. |
 |---|---|---|---|
-| `get_vulnerabilities` | `page`, `pageSize` (max 500), `cveId`, `severity[]` (`Critical\|High\|Medium\|Low\|Info`), `assetId`, `startDate`, `endDate`, `includeExcepted` | any | — |
+| `get_vulnerabilities` | `page`, `pageSize` (max 500), `cveId`, `severity[]` (`Critical\|High\|Medium\|Low\|Info`), `assetId`, `startDate`, `endDate`, `includeExcepted`, `includeInstallerFindings` | any | — |
 | `get_all_vulnerabilities_detail` | `severity` (`CRITICAL\|HIGH\|MEDIUM\|LOW`), `assetId`, `minDaysOpen`, `page`, `pageSize` (default 100, max 1000), `includeExcepted` | any | — |
 | `get_all_accessible_vulnerabilities` | `severity[]` (`CRITICAL\|HIGH\|MEDIUM\|LOW`), `includeExcepted`, `limit` (default 5000, max 20000) | any | — |
 | `get_overdue_assets` | `page`, `size` (max 100), `minSeverity`, `searchTerm` | ADMIN / VULN | ✓ |
@@ -242,6 +242,10 @@ One tool, six actions selected by `action`:
 | `get_top_accounts_by_finding_age` | `limit` (1–50, default 10) | ADMIN | ✓ |
 | `list_products` | `search` | ADMIN / SECCHAMPION | ✓ |
 
+- `includeInstallerFindings` (default `false`, matching the web UI) hides findings whose affected product is an
+  installer or setup payload (`Chrome Installer`, `Photon Setup`). Like `includeExcepted` it is applied in Kotlin
+  after the page is fetched, so `total` reflects the filtered page — see `docs/CROWDSTRIKE_IMPORT.md`
+  §Installer / setup payload classification.
 - `severity` is an **array** on `get_vulnerabilities` and `get_all_accessible_vulnerabilities`, but a plain **string** on `get_all_vulnerabilities_detail`. The casing also differs: `get_vulnerabilities` uses `Critical|High|…`, the others `CRITICAL|HIGH|…`.
 - `includeExcepted` defaults to `false` everywhere — excepted findings are hidden unless asked for.
 - `get_all_accessible_vulnerabilities` is the single-call, unpaginated view over every asset the caller can reach. The response carries `total`/`returned`/`truncated` so callers can tell when `limit` clipped the result.

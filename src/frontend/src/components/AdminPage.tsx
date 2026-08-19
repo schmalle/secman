@@ -241,6 +241,22 @@ const AdminPage = () => {
                     <div className="card">
                         <div className="card-body">
                             <h5 className="card-title">
+                                <i className="bi bi-box-seam me-2"></i>
+                                Product Classification
+                            </h5>
+                            <p className="card-text">Decide which findings are installer or setup payloads rather than deployed software, and hide them from vulnerability and EOL views.</p>
+                            <a href="/admin/product-classification" className="btn btn-primary">
+                                <i className="bi bi-sliders me-2"></i>
+                                Manage Rules
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="col-md-4 mb-3">
+                    <div className="card">
+                        <div className="card-body">
+                            <h5 className="card-title">
                                 <i className="bi bi-diagram-3-fill me-2"></i>
                                 User Mappings
                             </h5>

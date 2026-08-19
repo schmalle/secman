@@ -49,6 +49,9 @@ const EolDashboard: React.FC = () => {
   const [status, setStatus] = useState<StatusFilter>('ALL');
   const [search, setSearch] = useState('');
   const [accountFilter, setAccountFilter] = useState('');
+  // Off by default: installer/setup payloads ("Chrome Installer", "Photon Setup") are hidden
+  // unless the user explicitly asks for them, matching the backend default.
+  const [includeInstallerFindings, setIncludeInstallerFindings] = useState(false);
   const [repositories, setRepositories] = useState<EolRepositoryRank[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +82,14 @@ const EolDashboard: React.FC = () => {
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       setLoading(true);
-      getEolFindings({ status, search, cloudAccountId: accountFilter, page, pageSize: PAGE_SIZE })
+      getEolFindings({
+        status,
+        search,
+        cloudAccountId: accountFilter,
+        page,
+        pageSize: PAGE_SIZE,
+        includeInstallerFindings,
+      })
         .then((response) => {
           setFindings(response.findings);
           setTotal(response.total);
@@ -89,13 +99,13 @@ const EolDashboard: React.FC = () => {
         .finally(() => setLoading(false));
     }, 250);
     return () => window.clearTimeout(timeout);
-  }, [status, search, accountFilter, page]);
+  }, [status, search, accountFilter, page, includeInstallerFindings]);
 
   // Any filter change invalidates the current offset — staying on page 5 of a
   // narrower result set silently shows an empty table.
   useEffect(() => {
     setPage(0);
-  }, [status, search, accountFilter]);
+  }, [status, search, accountFilter, includeInstallerFindings]);
 
   const sortedFindings = useMemo(
     () => [...findings].sort((a, b) => urgencyRank(a.status, a.daysUntilEol) - urgencyRank(b.status, b.daysUntilEol)),
@@ -328,6 +338,18 @@ const EolDashboard: React.FC = () => {
               <option value="APPROACHING_EOL">Approaching EOL</option>
             </select>
           </div>
+          <div className="form-check ms-2">
+            <input
+              className="form-check-input"
+              type="checkbox"
+              id="eol-include-installer"
+              checked={includeInstallerFindings}
+              onChange={(event) => setIncludeInstallerFindings(event.target.checked)}
+            />
+            <label className="form-check-label small" htmlFor="eol-include-installer">
+              Include installer / setup findings
+            </label>
+          </div>
         </div>
 
         <div className="table-responsive">
@@ -375,6 +397,14 @@ const EolDashboard: React.FC = () => {
                       <td className="text-muted small">{subjectLabel(finding.subjectType)}</td>
                       <td>
                         {componentLabel(finding.componentName, finding.componentVendor, finding.componentVersion)}
+                        {finding.productClass === 'INSTALLER_ARTIFACT' && (
+                          <span
+                            className="badge bg-secondary-subtle text-secondary-emphasis ms-2"
+                            title="Classified as an installer or setup payload rather than deployed software. Hidden by default; tune the rules under Admin -> Product classification."
+                          >
+                            installer
+                          </span>
+                        )}
                       </td>
                       <td>{finding.cycle}</td>
                       <td>{describeDeadline(finding.eolDate, finding.daysUntilEol)}</td>

@@ -14,7 +14,8 @@ import java.time.LocalDateTime
 @Singleton
 open class InstalledProductImportService(
     private val assetRepository: AssetRepository,
-    private val installedProductRepository: InstalledProductRepository
+    private val installedProductRepository: InstalledProductRepository,
+    private val productClassificationService: ProductClassificationService
 ) {
     private val log = LoggerFactory.getLogger(InstalledProductImportService::class.java)
 
@@ -31,6 +32,9 @@ open class InstalledProductImportService(
         require(products.size <= MAX_PRODUCTS_PER_REQUEST) {
             "At most $MAX_PRODUCTS_PER_REQUEST products can be imported per request"
         }
+
+        // Compiled once per request, not per row: building the regexes is the expensive part.
+        val classificationRules = productClassificationService.rules()
 
         var imported = 0
         var updated = 0
@@ -124,6 +128,13 @@ open class InstalledProductImportService(
                     return@forEach
                 }
 
+                val installationPath = normalize(dto.installationPath, 1024)
+                // Classify at write time so a freshly imported row is never left at the UNKNOWN
+                // default. Rules are compiled once and cached, so this is a few regex matches.
+                val productClass = ProductClassifier.classifyProduct(
+                    name, vendor, listOfNotNull(installationPath), classificationRules
+                )
+
                 if (existing == null) {
                     installedProductRepository.save(
                         InstalledProduct(
@@ -134,7 +145,8 @@ open class InstalledProductImportService(
                             vendor = vendor,
                             version = version,
                             category = normalize(dto.category, 255),
-                            installationPath = normalize(dto.installationPath, 1024),
+                            installationPath = installationPath,
+                            productClass = productClass,
                             installedAt = dto.installedAt,
                             lastUsedAt = dto.lastUsedAt,
                             lastUpdatedAt = dto.lastUpdatedAt,
@@ -151,7 +163,8 @@ open class InstalledProductImportService(
                     existing.vendor = vendor
                     existing.version = version
                     existing.category = normalize(dto.category, 255)
-                    existing.installationPath = normalize(dto.installationPath, 1024)
+                    existing.installationPath = installationPath
+                    existing.productClass = productClass
                     existing.installedAt = dto.installedAt
                     existing.lastUsedAt = dto.lastUsedAt
                     existing.lastUpdatedAt = dto.lastUpdatedAt

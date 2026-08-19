@@ -2,6 +2,7 @@ package com.secman.dto
 
 import com.secman.domain.EolStatus
 import com.secman.domain.EolSubjectType
+import com.secman.domain.ProductClass
 import io.micronaut.serde.annotation.Serdeable
 import java.time.Instant
 import java.time.LocalDate
@@ -27,7 +28,12 @@ data class EolFindingResponse(
     val eolDate: LocalDate?,
     val status: EolStatus,
     val daysUntilEol: Long?,
-    val detectedAt: Instant?
+    val detectedAt: Instant?,
+    /**
+     * INSTALLED / INSTALLER_ARTIFACT / UNKNOWN. Only ever INSTALLER_ARTIFACT here when the caller
+     * asked for those rows, so the UI can badge them rather than presenting them as normal risk.
+     */
+    val productClass: ProductClass
 )
 
 @Serdeable

@@ -58,7 +58,8 @@ open class EolQueryService(
         search: String?,
         cloudAccountId: String?,
         page: Int?,
-        pageSize: Int?
+        pageSize: Int?,
+        includeInstallerFindings: Boolean = false
     ): EolFindingListResponse {
         val statuses = resolveStatuses(status)
         val effectivePage = (page ?: 0).coerceIn(0, MAX_PAGE)
@@ -77,10 +78,12 @@ open class EolQueryService(
             search = normalizedSearch,
             cloudAccountId = normalizedAccount,
             unassignedAccountToken = UNASSIGNED_ACCOUNT_LABEL,
-            pageable = Pageable.from(effectivePage, effectiveSize)
+            pageable = Pageable.from(effectivePage, effectiveSize),
+            includeInstallerFindings = includeInstallerFindings
         )
         val total = eolFindingRepository.countForAssets(
-            assetIds, statuses, normalizedSearch, normalizedAccount, UNASSIGNED_ACCOUNT_LABEL
+            assetIds, statuses, normalizedSearch, normalizedAccount, UNASSIGNED_ACCOUNT_LABEL,
+            includeInstallerFindings
         )
         return EolFindingListResponse(findings.map { it.toResponse() }, total, effectivePage, effectiveSize)
     }
@@ -241,7 +244,8 @@ open class EolQueryService(
         eolDate = eolDate,
         status = status,
         daysUntilEol = daysUntilEol,
-        detectedAt = detectedAt
+        detectedAt = detectedAt,
+        productClass = productClass
     )
 
     companion object {

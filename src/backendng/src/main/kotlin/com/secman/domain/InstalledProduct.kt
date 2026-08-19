@@ -3,6 +3,8 @@ package com.secman.domain
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
 import jakarta.persistence.GenerationType
 import jakarta.persistence.FetchType
 import jakarta.persistence.GeneratedValue
@@ -60,6 +62,14 @@ data class InstalledProduct(
 
     @Column(name = "installation_path", length = 1024)
     var installationPath: String? = null,
+
+    /**
+     * Whether this row describes deployed software or an installer payload.
+     * Maintained by [com.secman.service.ProductClassificationService]; never set by the import.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "product_class", nullable = false, length = 20)
+    var productClass: ProductClass = ProductClass.UNKNOWN,
 
     @Column(name = "installed_at")
     var installedAt: LocalDateTime? = null,

@@ -3,6 +3,8 @@ import { authenticatedGet, authenticatedPost } from '../utils/auth';
 export type EolStatus = 'EOL' | 'APPROACHING_EOL' | 'SUPPORTED';
 export type EolSubjectType = 'ASSET_OS' | 'ASSET_PRODUCT' | 'REPOSITORY_COMPONENT';
 
+export type ProductClass = 'INSTALLED' | 'INSTALLER_ARTIFACT' | 'UNKNOWN';
+
 export interface EolFinding {
   id: number;
   subjectType: EolSubjectType;
@@ -22,6 +24,8 @@ export interface EolFinding {
   eolDate?: string | null;
   status: EolStatus;
   daysUntilEol?: number | null;
+  /** INSTALLED | INSTALLER_ARTIFACT | UNKNOWN — only ever INSTALLER_ARTIFACT when explicitly requested. */
+  productClass?: ProductClass;
   detectedAt?: string | null;
 }
 
@@ -82,6 +86,8 @@ export interface EolFindingQuery {
   cloudAccountId?: string;
   page?: number;
   pageSize?: number;
+  /** Opt back in to installer/setup payload findings. Omitted means false (backend default). */
+  includeInstallerFindings?: boolean;
 }
 
 /**
@@ -96,6 +102,7 @@ export async function getEolFindings(query: EolFindingQuery = {}): Promise<EolFi
   if (query.cloudAccountId?.trim()) params.append('cloudAccountId', query.cloudAccountId.trim());
   if (query.page !== undefined) params.append('page', String(query.page));
   if (query.pageSize !== undefined) params.append('pageSize', String(query.pageSize));
+  if (query.includeInstallerFindings) params.append('includeInstallerFindings', 'true');
 
   const response = await authenticatedGet(`/api/eol/findings?${params.toString()}`);
   if (!response.ok) {

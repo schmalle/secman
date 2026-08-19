@@ -9,6 +9,7 @@ import com.secman.repository.EolProductRepository
 import com.secman.repository.EolReleaseRepository
 import com.secman.repository.GithubRepoDependabotAlertRepository
 import com.secman.repository.GithubRepositoryRepository
+import com.secman.domain.ProductClass
 import com.secman.repository.InstalledProductRepository
 import io.micronaut.context.annotation.Value
 import io.micronaut.data.model.Pageable
@@ -218,7 +219,9 @@ open class EolScanService(
                     eolDate = match.release.eolDate,
                     status = match.status,
                     daysUntilEol = match.daysUntilEol,
-                    scanRunId = runId
+                    scanRunId = runId,
+                    // An operating system is never an installer payload.
+                    productClass = ProductClass.INSTALLED
                 )
             }
             persistBatch(batch, counters)
@@ -271,7 +274,11 @@ open class EolScanService(
                     eolDate = match.release.eolDate,
                     status = match.status,
                     daysUntilEol = match.daysUntilEol,
-                    scanRunId = runId
+                    scanRunId = runId,
+                    // Carried from the source row rather than recomputed: the installed-product
+                    // class is already materialized, and denormalizing it here keeps the EOL
+                    // read queries single-table (as assetName / cloudAccountId / assetOwner do).
+                    productClass = product.productClass
                 )
             }
             persistBatch(batch, counters)
@@ -363,7 +370,9 @@ open class EolScanService(
                 eolDate = match.release.eolDate,
                 status = match.status,
                 daysUntilEol = match.daysUntilEol,
-                scanRunId = runId
+                scanRunId = runId,
+                // A repository dependency is not a file on disk, so it cannot be a payload.
+                productClass = ProductClass.INSTALLED
             )
         }
         persistBatch(batch, counters)

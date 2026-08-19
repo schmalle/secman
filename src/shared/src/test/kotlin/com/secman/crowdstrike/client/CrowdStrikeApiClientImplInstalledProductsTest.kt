@@ -31,6 +31,46 @@ class CrowdStrikeApiClientImplInstalledProductsTest {
     private val config = FalconConfigDto(clientId = "client", clientSecret = "secret")
 
     @Test
+    fun `queryInstalledProductsStreaming requests the install_usage facet and maps the fields it unlocks`() {
+        // installation_paths, installation_timestamp and last_used_timestamp are returned by
+        // CrowdStrike ONLY when facet=install_usage is requested. Dropping the facet silently
+        // NULLs three persisted columns rather than failing, so the query string is asserted here.
+        val page = mapOf(
+            "resources" to listOf(
+                mapOf(
+                    "id" to "app-1",
+                    "name" to "Universal Forwarder",
+                    "host" to mapOf("hostname" to "server01"),
+                    "installation_paths" to listOf("C:\\Windows\\Installer\\8d07c.msi"),
+                    "installation_timestamp" to "2024-05-15T22:18:26Z",
+                    "last_used_timestamp" to "2026-08-01T06:00:00Z"
+                )
+            ),
+            "meta" to mapOf("pagination" to mapOf("total" to 1))
+        )
+
+        val requests = mutableListOf<HttpRequest<Any>>()
+        every {
+            blockingClient.exchange(capture(requests), Map::class.java)
+        } returns HttpResponse.ok(page)
+
+        val captured = mutableListOf<com.secman.crowdstrike.dto.InstalledProductDto>()
+        val total = client.queryInstalledProductsStreaming("SERVER", config, limit = 1000) { products ->
+            captured += products
+        }
+
+        assertThat(total).isEqualTo(1)
+        val uri = requests.single().uri.toString()
+        assertThat(uri).contains("facet=host_info")
+        assertThat(uri).contains("facet=install_usage")
+
+        val product = captured.single()
+        assertThat(product.installationPath).isEqualTo("C:\\Windows\\Installer\\8d07c.msi")
+        assertThat(product.installedAt).isNotNull()
+        assertThat(product.lastUsedAt).isNotNull()
+    }
+
+    @Test
     fun `queryInstalledProductsStreaming retries same page when CrowdStrike closes connection before response`() {
         val firstPage = mapOf(
             "resources" to listOf(

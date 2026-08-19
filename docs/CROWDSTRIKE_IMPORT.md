@@ -53,6 +53,82 @@ Operational notes:
 
 See `docs/CLI.md` for the full option table and troubleshooting guidance.
 
+## Installer / setup payload classification
+
+CrowdStrike Discover reports installer payloads as **first-class application entities**, separate
+from the products they install: `Chrome Installer` is a different application from `Chrome`. EOL
+and vulnerability findings are therefore raised against things that never run.
+
+`ProductClassificationService` marks those rows `product_class = 'INSTALLER_ARTIFACT'`, and every
+vulnerability/EOL list, count, export, statistic and materialized view hides them unless the caller
+passes `includeInstallerFindings=true`. Nothing is deleted, and `UNKNOWN` — the column default —
+reads exactly like `INSTALLED`, so a lagging materialization over-shows rather than over-hides.
+
+Rules live in `product_classification_rule` (ADMIN CRUD at `/api/product-classification`, UI at
+`/admin/product-classification`). A rule is a **glob** (`*`, `?`) — never a regex, which from an
+admin would be a ReDoS vector on a per-row path — matched case-insensitively against a product
+name, a vendor or an installation path. Rules classifying as `INSTALLED` are an allowlist and are
+always evaluated first, whatever their priority.
+
+### Why product identity and not the installation path
+
+Measured against the live tenant on 2026-08-19, before building anything:
+
+| Path pattern | Rows estate-wide | What it actually means |
+|---|---|---|
+| `*Downloads*` | 5 | a genuine stray installer |
+| `*ccmcache*` | 5 | genuine |
+| `*Temp*` | 9 | all false hits (a product literally named "EasyTemp") |
+| `C:\WINDOWS\Installer\*.msi` | 565594 | Windows' MSI cache **for an installed product** |
+| `C:\ProgramData\Package Cache\` | 150812 | WiX bundle cache **for an installed bundle** |
+
+Two conclusions, both load-bearing:
+
+1. **`Windows\Installer` and `Package Cache` must classify as `INSTALLED`.** They are where Windows
+   and WiX keep the package of an installed product for repair and uninstall. Splunk Universal
+   Forwarder is 100% the former (293 EOL findings) and is running; AWS CLI and Intune Management
+   Extension are the same shape. Seeding them as artifact locations would have hidden ~716000 rows
+   of genuine risk.
+2. **The path cannot carry the signal at all for the worst offender.** `Chrome Installer` — 222 EOL
+   findings, 17910 Discover rows — returns **no installation path**. A path-only design would have
+   classified none of it.
+
+Path rules are still supported and seeded for `Downloads` / `Temp` / `ccmcache` / `$Recycle.Bin`,
+but they are correctness rules, not volume rules. Note also that CrowdStrike's own FQL wildcard
+matching on `installation_paths` is **case-sensitive** (`*Downloads*` matches, `*downloads*` returns
+0), which is one reason classification happens in Kotlin against a normalized value rather than
+server-side in the query.
+
+### `facet=install_usage` is mandatory
+
+`installation_paths`, `installation_timestamp` and `last_used_timestamp` are returned by
+`/discover/combined/applications/v1` **only** when `facet=install_usage` is requested. Requesting
+only `host_info` makes CrowdStrike omit the fields entirely — no error, no warning. Before this was
+fixed, all 182131 `installed_product` rows had `installation_path`, `installed_at` and `last_used_at`
+NULL while the mapping code looked correct.
+
+`CrowdStrikeApiClientImplInstalledProductsTest` asserts the facet is on the query string, because a
+regression here is silent.
+
+### Where it is applied
+
+- Write time: `InstalledProductImportService` (per row) and
+  `CrowdStrikeVulnerabilityImportService` (per asset, beside the existing exception recompute).
+- `EolScanService` denormalizes the class from the source `InstalledProduct` onto `ASSET_PRODUCT`
+  findings; OS and repository findings are always `INSTALLED`.
+- Read time: `VulnQuerySql.NOT_INSTALLER_ARTIFACT` / `VISIBLE`, the 16 status-filtered list
+  families, `EolFindingRepository`, `OutdatedAssetMaterializedViewRepository`, and the MCP
+  `get_vulnerabilities` tool.
+- Rule changes need `POST /api/product-classification/reclassify` ("Reclassify now") to be applied
+  to stored rows; it returns 202 and runs in the background, chunked by primary-key range.
+
+**Deliberately unfiltered:** `GET /api/vulnerabilities/current?exceptionStatus=all` falls through to
+`findLatestVulnerabilitiesPerAssetWithFilters` / `findLatestVulnerabilitiesWithAccessControl`, which
+carry neither the `excepted` nor the `product_class` predicate. That is not an oversight — it is the
+"show me everything" path, and `extensions/secman_visual_check` depends on it: it lists existing
+findings to deduplicate before uploading, so hiding a row from it would make it re-upload that row.
+The UI never sends `all` (the controller defaults a blank value to `not_excepted`).
+
 ## Pattern: transactional replace
 
 For each (Asset, batch) pair, in one transaction:
