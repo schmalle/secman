@@ -239,14 +239,24 @@ open class EolScanService(
         counters: Counters
     ) {
         var page = 0
+        var afterId = 0L
         while (page < MAX_PAGES) {
-            val products = loadInstalledProductPage(page, pageSize)
+            val products = loadInstalledProductPage(afterId, pageSize)
             if (products.isEmpty()) break
+            // One bounded lookup per page instead of the join the page query used
+            // to carry, and instead of the N+1 the lazy `asset` would otherwise
+            // cause outside a session. At most `pageSize` ids, usually far fewer:
+            // products are id-ordered and the import writes them per asset.
+            val assetsById = assetRepository
+                .findByIdIn(products.map { it.assetId }.distinct())
+                .associateBy { it.id }
             val batch = mutableListOf<EolFinding>()
             for (product in products) {
                 counters.installedProducts++
-                val asset = product.asset
-                val assetId = asset.id ?: continue
+                val assetId = product.assetId
+                // The old query inner-joined `asset`, so a product whose asset had
+                // vanished was silently dropped. Preserved deliberately.
+                val asset = assetsById[assetId] ?: continue
                 val match = matcher.matchComponent(
                     index = index,
                     name = product.name,
@@ -263,7 +273,7 @@ open class EolScanService(
                     cloudAccountId = asset.cloudAccountId,
                     adDomain = asset.adDomain,
                     assetOwner = asset.owner.take(255),
-                    installedProductId = product.id,
+                    installedProductId = product.productId,
                     componentName = product.name.take(512),
                     componentVendor = product.vendor?.take(255),
                     componentVersion = product.version?.take(255),
@@ -283,12 +293,15 @@ open class EolScanService(
             }
             persistBatch(batch, counters)
             if (products.size < pageSize) break
+            // Resume from this page's last id. The query orders by id ascending,
+            // so the last row is the highest id read.
+            afterId = products.last().productId
             page++
         }
     }
 
-    private fun loadInstalledProductPage(page: Int, pageSize: Int) =
-        installedProductRepository.findAllWithAssetOrdered(Pageable.from(page, pageSize))
+    private fun loadInstalledProductPage(afterId: Long, pageSize: Int) =
+        installedProductRepository.findScanRowsAfter(afterId, Pageable.from(0, pageSize))
 
     // ------------------------------------------------------------- repositories
 

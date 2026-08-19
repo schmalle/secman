@@ -10,7 +10,7 @@ import { getUser } from '../utils/auth';
 import { downloadCsv } from '../utils/csv';
 import { canNotifyProductUsers } from './productNotifyAccess';
 import HtmlEditor from './admin/HtmlEditor';
-import { describeDeadline, statusBadge } from './eolFormat';
+import { describeDeadline, statusBadge, subjectLabel } from './eolFormat';
 
 const PAGE_SIZE = 100;
 /** Backend caps `pageSize` at 500 (EolQueryService.MAX_PAGE_SIZE) — ask for exactly that. */
@@ -335,7 +335,7 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
             <thead className="table-light">
               <tr>
                 <th>System</th>
-                <th>Owner</th>
+                <th>Type</th>
                 <th>Cloud account</th>
                 <th>AD domain</th>
                 <th>Version</th>
@@ -371,7 +371,7 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
                           finding.assetName || '-'
                         )}
                       </td>
-                      <td>{finding.assetOwner || '-'}</td>
+                      <td className="text-muted small">{subjectLabel(finding.subjectType)}</td>
                       <td>{finding.cloudAccountId || '-'}</td>
                       <td>{finding.adDomain || '-'}</td>
                       <td>{finding.componentVersion || '-'}</td>

@@ -2,6 +2,7 @@ package com.secman.repository
 
 import com.secman.domain.Asset
 import com.secman.domain.InstalledProduct
+import com.secman.domain.ProductClass
 import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
@@ -48,13 +49,44 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
     fun findLogicalDuplicate(assetId: Long, name: String, vendor: String?, version: String?): InstalledProduct?
 
     /**
-     * Paged, id-ordered sweep with the asset eagerly joined. Used by the EOL
-     * scan, which walks the whole table once per run: without the JOIN FETCH the
-     * lazy `asset` turns each page into N+1 queries, and without the stable id
-     * ordering pages can skip or repeat rows while the import writes.
+     * One page of the EOL scan's full-table sweep, resumed by key.
+     *
+     * ## Why there is no join here
+     *
+     * This replaced `SELECT p FROM InstalledProduct p JOIN FETCH p.asset ORDER BY
+     * p.id ASC` with offset paging. `asset` is small (~2.3k rows) and
+     * `installed_product` is large (~500k), so MariaDB planned that query by
+     * driving from `asset` with a full table scan and resolving products through
+     * `idx_installed_product_asset`. That produces rows in *asset* order, so
+     * `ORDER BY p.id` could not be served by an index and every page sorted the
+     * entire ~500k-row join through a temporary table (`Using temporary; Using
+     * filesort`) only to discard all but 500 rows.
+     *
+     * Measured on the live estate: ~4.8s per page against 0.03s for this query,
+     * i.e. ~1.5 hours for one sweep, growing quadratically with the table. It was
+     * reported as "eol-sync hangs". Narrowing the projection does not help and
+     * neither does keyset paging on its own — the join is what fixes the join
+     * order, so the join has to go. Callers resolve the asset separately with a
+     * bounded `AssetRepository.findByIdIn` over the page's ids.
+     *
+     * `p.asset.id` reads the `asset_id` foreign key directly and does **not**
+     * emit a join. Projecting instead of returning entities also keeps the lazy
+     * `asset` proxy out of the result: [com.secman.service.EolScanService] is not
+     * transactional, so the session is already closed by the time it reads a row.
+     *
+     * Paging by `p.id > :afterId` rather than by offset keeps the sweep stable
+     * while the CrowdStrike import writes to the same table, and stays flat as
+     * the table grows. Pass `afterId = 0` for the first page.
      */
-    @Query("SELECT p FROM InstalledProduct p JOIN FETCH p.asset ORDER BY p.id ASC")
-    fun findAllWithAssetOrdered(pageable: Pageable): List<InstalledProduct>
+    @Query("""
+        SELECT new com.secman.repository.InstalledProductScanRow(
+            p.id, p.asset.id, p.name, p.vendor, p.version, p.productClass
+        )
+        FROM InstalledProduct p
+        WHERE p.id > :afterId
+        ORDER BY p.id ASC
+    """)
+    fun findScanRowsAfter(afterId: Long, pageable: Pageable): List<InstalledProductScanRow>
 
     // --- Product classification ---
 
@@ -192,3 +224,21 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
     """)
     fun findDistinctNamesForAssets(assetIds: Set<Long>, pageable: Pageable): List<String>
 }
+
+/**
+ * One installed-product row as the EOL scan reads it, from
+ * [InstalledProductRepository.findScanRowsAfter].
+ *
+ * Carries the `asset_id` foreign key rather than the [Asset] itself so the
+ * paging query needs no join — see that method for why the join was the whole
+ * problem. The scan resolves the asset per page through
+ * [AssetRepository.findByIdIn].
+ */
+data class InstalledProductScanRow(
+    val productId: Long,
+    val assetId: Long,
+    val name: String,
+    val vendor: String?,
+    val version: String?,
+    val productClass: ProductClass
+)
