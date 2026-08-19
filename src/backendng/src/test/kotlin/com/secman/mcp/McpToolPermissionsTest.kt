@@ -94,6 +94,16 @@ class McpToolPermissionsTest {
     }
 
     @Test
+    fun `add_requirement is in BOTH tables`() {
+        // Regression: add_requirement was present in LISTING (REQUIREMENTS_WRITE) but absent
+        // from CALLING entirely, so tools/call unconditionally denied it for every caller
+        // regardless of role — fail-closed, but still a bug (§A01, see McpToolPermissions.kt).
+        assertThat(McpToolPermissions.LISTING).describedAs("LISTING/add_requirement").containsKey("add_requirement")
+        assertThat(McpToolPermissions.CALLING).describedAs("CALLING/add_requirement").containsKey("add_requirement")
+        assertThat(McpToolPermissions.CALLING["add_requirement"]).isEqualTo(setOf(McpPermission.REQUIREMENTS_WRITE))
+    }
+
+    @Test
     fun `no tool is mapped to an empty permission set`() {
         val tables = mapOf("LISTING" to McpToolPermissions.LISTING, "CALLING" to McpToolPermissions.CALLING)
         tables.forEach { (name, table) ->

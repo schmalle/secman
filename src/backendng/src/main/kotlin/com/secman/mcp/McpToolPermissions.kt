@@ -134,6 +134,13 @@ object McpToolPermissions {
             setOf(ASSETS_WRITE) to listOf(
                 "create_asset", "update_asset",
             ),
+            // Was missing from CALLING entirely, so tools/call unconditionally denied
+            // add_requirement regardless of caller — a fail-closed bug (functionality,
+            // not authorization) uncovered while adding the role guard this tool was
+            // also missing (see requireAnyRole call in AddRequirementTool.execute()).
+            setOf(REQUIREMENTS_WRITE) to listOf(
+                "add_requirement",
+            ),
             setOf(VULNERABILITIES_READ) to listOf(
                 "get_vulnerabilities", "search_vulnerabilities",
                 "get_all_vulnerabilities_detail", "get_asset_most_vulnerabilities",
