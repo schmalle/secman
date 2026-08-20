@@ -106,7 +106,19 @@ Source of the EOL lifecycle data. Operator configuration only — no request val
 | `SECMAN_EOL_SCAN_PAGE_SIZE` | `500` | page size for the inventory sweep (coerced to 50..5000) |
 
 ### CrowdStrike stale-asset cleanup
-Daily scheduled job (02:30 server TZ) that deletes assets whose `crowdStrikeLastImportedAt` is older than `STALE_DAYS`. Manual runs (admin UI / CLI `delete-asset-not-seen`) ignore the brake but are still recorded in `crowdstrike_cleanup_run`.
+Daily scheduled job (02:30 server TZ) that deletes assets whose `crowdStrikeLastImportedAt` is older than `STALE_DAYS`. Every trigger below is recorded in `crowdstrike_cleanup_run`, distinguished by `triggered_by`.
+
+**Triggering it by hand.** Two different things are on offer — pick by whether you want the *nightly policy* or an *ad-hoc threshold*:
+
+| Trigger | Threshold | Safety brake | `triggered_by` |
+|---|---|---|---|
+| The 02:30 scheduler | `STALE_DAYS` | **applied** | `scheduler` |
+| `POST /api/crowdstrike/cleanup/run-now` (ADMIN) — "Run scheduled cleanup now" on `/admin/falcon-config` | `STALE_DAYS` | **applied** | `manual:<username>` |
+| `POST /api/assets/delete-not-seen-by-crowdstrike` (ADMIN) — the ad-hoc form on the same panel | request `days` | ignored | `<username>` |
+| CLI `secman delete-asset-not-seen <days> [--dry-run]` | argument | ignored | `<username>` |
+| MCP `delete_asset_not_seen` (ADMIN, delegated) | argument | ignored | delegated email |
+
+`run-now` replays the nightly job exactly — same threshold, same `INCLUDE_LEGACY` default, brake included — so use it to pull tonight's run forward or to confirm what it will do. It returns `409` when `CROWDSTRIKE_CLEANUP_ENABLED=false`. A tripped brake is **not** an error: the response is `200` with status `ABORTED_SAFETY_BRAKE` and nothing is deleted. The other four take an ad-hoc threshold and deliberately run brake-free, so they can delete more than the scheduler ever would — dry-run first.
 
 | Var | Default | Effect |
 |---|---|---|

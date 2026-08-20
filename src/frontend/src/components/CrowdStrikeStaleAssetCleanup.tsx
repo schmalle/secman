@@ -154,6 +154,49 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
         }
     };
 
+    /**
+     * Replay the nightly job exactly as it runs at 02:30 — configured threshold,
+     * configured legacy rule, safety brake included. Deliberately ignores the
+     * ad-hoc fields below, which is why it lives in its own block.
+     */
+    const runScheduledNow = async () => {
+        if (!isAdmin || !config) return;
+        const legacyNote = config.includeLegacy
+            ? ' Legacy CrowdStrike rows are included.'
+            : '';
+        const brakeNote = config.maxDeletePercent >= 100
+            ? 'The safety brake is off (set to 100%), so no limit applies.'
+            : `The run aborts without deleting anything if more than ${config.maxDeletePercent}% of tracked assets would be removed.`;
+        const ok = window.confirm(
+            `Run the scheduled cleanup now, exactly as the ${config.cron} job would?\n\n` +
+            `Threshold: ${config.staleDays} days.${legacyNote}\n` +
+            `${brakeNote}\n\n` +
+            'This ignores the manual fields below. Deletions cascade to vulnerabilities, ' +
+            'scan results and workgroup links, and cannot be undone.'
+        );
+        if (!ok) return;
+        try {
+            setBusy(true);
+            setError(null);
+            setInfo(null);
+            const res = await axios.post('/api/crowdstrike/cleanup/run-now', {});
+            const r = res.data || {};
+            const aborted = typeof r.status === 'string' && r.status.startsWith('ABORTED');
+            setInfo(
+                `Scheduled-policy run complete — candidates: ${r.candidateCount ?? 0}, ` +
+                `deleted: ${r.deletedCount ?? 0}` +
+                (r.status ? ` (status: ${r.status})` : '') +
+                // A brake trip returns 200 and deletes nothing; say so, or it reads as a no-op bug.
+                (aborted ? ' — the safety brake stopped this run; nothing was deleted.' : '')
+            );
+            await load();
+        } catch (e: any) {
+            setError(e.response?.data?.error || 'Scheduled cleanup request failed');
+        } finally {
+            setBusy(false);
+        }
+    };
+
     if (!isAdmin && !loading) {
         return null;
     }
@@ -221,6 +264,29 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
                             </div>
                         </div>
 
+                        <div className="d-flex align-items-center gap-3 border rounded p-2 mb-3">
+                            <button
+                                type="button"
+                                className="btn btn-warning"
+                                onClick={runScheduledNow}
+                                disabled={busy || !config?.enabled}
+                                title={config?.enabled
+                                    ? 'Run the nightly policy immediately'
+                                    : 'Enable the scheduler first (CROWDSTRIKE_CLEANUP_ENABLED=true)'}
+                            >
+                                <i className="bi bi-play-fill me-1"></i>
+                                Run scheduled cleanup now
+                            </button>
+                            <div className="text-muted small">
+                                Replays the <code>{config?.cron}</code> job exactly: {config?.staleDays} days,
+                                {config?.includeLegacy ? ' legacy rows included,' : ' legacy rows excluded,'}
+                                {' '}safety brake at {config?.maxDeletePercent}%.
+                                {config && !config.enabled && ' Disabled — set CROWDSTRIKE_CLEANUP_ENABLED=true to use this.'}
+                            </div>
+                        </div>
+
+                        <hr />
+
                         <div className="row g-2 align-items-end mb-3">
                             <div className="col-auto">
                                 <label className="form-label">Stale days for manual run</label>
@@ -274,7 +340,8 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
                                 </button>
                             </div>
                             <div className="col text-muted small">
-                                Manual runs do not apply the safety brake. Always dry-run first.
+                                These ad-hoc runs use the fields above and do not apply the
+                                safety brake. Always dry-run first.
                             </div>
                         </div>
 
