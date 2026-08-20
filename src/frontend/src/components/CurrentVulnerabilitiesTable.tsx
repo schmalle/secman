@@ -38,6 +38,10 @@ import ExceptionRequestModal from "./ExceptionRequestModal";
 import CveLink from "./CveLink";
 import { isAdmin, hasRole, hasVulnAccess } from "../utils/auth";
 import SearchableSelect from "./SearchableSelect";
+import {
+  buildVulnerabilityExportFilters,
+  describeExportScope,
+} from "./currentVulnerabilitiesExportFilters";
 
 function formatDuration(totalSec: number): string {
   if (totalSec < 60) return `${totalSec}s`;
@@ -328,6 +332,19 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     fetchVulnerabilities();
   };
 
+  // Filters the Export button will send. Uses the DEBOUNCED system/CVE values so the export
+  // matches the rows actually rendered rather than a half-typed search box.
+  const exportFilters = buildVulnerabilityExportFilters({
+    severityFilter,
+    systemFilter: debouncedSystemFilter,
+    exceptionFilter,
+    productFilter,
+    cveFilter: debouncedCveFilter,
+    adDomainFilter,
+    cloudAccountIdFilter,
+    includeInstallerFindings,
+  });
+
   const handleCleanupDuplicates = async () => {
     try {
       setCleanupLoading(true);
@@ -360,6 +377,9 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
    * - Polls for progress (updates UI every 2 seconds)
    * - Downloads file when complete
    * - Supports cancellation
+   *
+   * The export sends the SAME filters the table is currently showing, so the workbook matches
+   * the screen. Previously it sent none, and e.g. a selected AD domain was silently ignored.
    */
   const handleExport = async () => {
     try {
@@ -370,6 +390,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
       setError(null);
 
       await exportVulnerabilitiesServerSide({
+        filters: exportFilters,
         onProgress: (update) => {
           setExportProgress(update.job);
           setExportJobId(update.job.jobId);
@@ -726,7 +747,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                     title={
                       exportLoading && exportProgress
                         ? `${describeExportStage(exportProgress)} — ${exportProgress.processedItems.toLocaleString()} / ${exportProgress.totalItems.toLocaleString()}`
-                        : "Export all vulnerabilities to Excel"
+                        : describeExportScope(exportFilters)
                     }
                   >
                     {exportLoading ? (

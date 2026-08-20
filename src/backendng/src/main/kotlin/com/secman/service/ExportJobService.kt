@@ -6,6 +6,7 @@ import com.secman.domain.ExportJob
 import com.secman.domain.ExportJobStatus
 import com.secman.domain.ExportType
 import com.secman.dto.ExportJobDto
+import com.secman.dto.VulnerabilityExportFilters
 import com.secman.dto.VulnerabilityExportDto
 import com.secman.repository.ExportJobRepository
 import io.micronaut.context.annotation.Value
@@ -105,12 +106,19 @@ open class ExportJobService(
      *
      * @param authentication Current user authentication
      * @param exportType Type of export (default: VULNERABILITIES)
+     * @param filters Row filters to apply, mirroring GET /api/vulnerabilities/current.
+     *        Defaults to no filters. These only narrow the result - asset scoping is
+     *        computed from [authentication] below and is never widened by them.
      * @return Created job DTO
      * @throws IllegalStateException if rate limits exceeded
      */
-    open fun startExport(authentication: Authentication, exportType: ExportType = ExportType.VULNERABILITIES): ExportJobDto {
+    open fun startExport(
+        authentication: Authentication,
+        exportType: ExportType = ExportType.VULNERABILITIES,
+        filters: VulnerabilityExportFilters = VulnerabilityExportFilters.NONE
+    ): ExportJobDto {
         val username = authentication.name
-        log.info("Starting export job for user: {}, type: {}", username, exportType)
+        log.info("Starting export job for user: {}, type: {}, filters: {}", username, exportType, filters.describe())
 
         // Check rate limits
         val runningStatuses = listOf(ExportJobStatus.PENDING, ExportJobStatus.PROCESSING)
@@ -166,8 +174,11 @@ open class ExportJobService(
                 .toSet()
         }
 
+        // The filters ride this closure into the background thread. They are deliberately not
+        // persisted on the job row: nothing ever re-runs a job from the DB (autoResetStaleJobs
+        // and resetStuckJobs only mark stale jobs FAILED), so the in-memory hand-off is complete.
         executorService.submit {
-            processExportInBackground(jobId, username, isAdmin, accessibleAssetIds)
+            processExportInBackground(jobId, username, isAdmin, accessibleAssetIds, filters)
         }
 
         return ExportJobDto.fromEntity(savedJob)
@@ -377,12 +388,14 @@ open class ExportJobService(
      * @param username Username for logging
      * @param isAdmin Whether user is admin (for access control)
      * @param accessibleAssetIds Pre-computed set of accessible asset IDs
+     * @param filters Row filters to apply to every query this job runs
      */
     private fun processExportInBackground(
         jobId: String,
         username: String,
         isAdmin: Boolean,
-        accessibleAssetIds: Set<Long>
+        accessibleAssetIds: Set<Long>,
+        filters: VulnerabilityExportFilters
     ) {
         val shortId = jobId.take(8)
         val originalThreadName = Thread.currentThread().name
@@ -415,7 +428,7 @@ open class ExportJobService(
             updateJobStage(jobId, STAGE_STARTING)
 
             when (job.exportType) {
-                ExportType.VULNERABILITIES -> processVulnerabilityExport(jobId, isAdmin, accessibleAssetIds)
+                ExportType.VULNERABILITIES -> processVulnerabilityExport(jobId, isAdmin, accessibleAssetIds, filters)
                 else -> throw IllegalArgumentException("Unsupported export type: ${job.exportType}")
             }
 
@@ -581,21 +594,27 @@ open class ExportJobService(
     open fun fetchVulnerabilityPageForExport(
         accessibleAssetIds: Set<Long>,
         isAdmin: Boolean,
+        filters: VulnerabilityExportFilters,
         page: Int,
         size: Int
     ): com.secman.dto.PaginatedVulnerabilitiesResponse {
+        // Every filter comes from the caller so the workbook matches what the UI is showing.
+        // These previously were hardcoded nulls, which is why an exported file ignored the
+        // selected AD domain (and every other filter) and contained the whole accessible set.
+        // No sort/sortDir on purpose - see VulnerabilityExportFilters.
         return vulnerabilityService.getCurrentVulnerabilitiesOptimized(
             accessibleAssetIds = accessibleAssetIds,
             isAdmin = isAdmin,
-            severity = null,
-            system = null,
-            exceptionStatus = "not_excepted",
-            product = null,
-            cve = null,
-            adDomain = null,
-            cloudAccountId = null,
+            severity = filters.severity,
+            system = filters.system,
+            exceptionStatus = filters.exceptionStatus,
+            product = filters.product,
+            cve = filters.cve,
+            adDomain = filters.adDomain,
+            cloudAccountId = filters.cloudAccountId,
             page = page,
-            size = size
+            size = size,
+            includeInstallerFindings = filters.includeInstallerFindings
         )
     }
 
@@ -607,8 +626,9 @@ open class ExportJobService(
      *   STARTING -> COUNTING -> EXPORTING -> WRITING_FILE -> FINALIZING -> (COMPLETED)
      *
      * Correctness notes:
-     * - Count query and export loop now share identical filters ("not_excepted"),
-     *   so processedItems == totalItems on success (previously diverged and progress
+     * - Count query and export loop share the caller's filters verbatim (both go through
+     *   fetchVulnerabilityPageForExport with the same [filters] instance), so
+     *   processedItems == totalItems on success (previously diverged and progress
      *   never reached 100%).
      * - processedItems increments by actual returned rows, not (page+1)*batchSize,
      *   so the final (partial) batch doesn't over-count.
@@ -616,14 +636,15 @@ open class ExportJobService(
     private fun processVulnerabilityExport(
         jobId: String,
         isAdmin: Boolean,
-        accessibleAssetIds: Set<Long>
+        accessibleAssetIds: Set<Long>,
+        filters: VulnerabilityExportFilters
     ) {
         val shortId = jobId.take(8)
 
         // --- STAGE 1: COUNTING ------------------------------------------------
         updateJobStage(jobId, STAGE_COUNTING)
-        log.info("[export {}] COUNTING started (isAdmin={}, accessibleAssets={})",
-            shortId, isAdmin, if (isAdmin) "ALL" else accessibleAssetIds.size.toString())
+        log.info("[export {}] COUNTING started (isAdmin={}, accessibleAssets={}, filters={})",
+            shortId, isAdmin, if (isAdmin) "ALL" else accessibleAssetIds.size.toString(), filters.describe())
 
         val countStart = System.currentTimeMillis()
         // IMPORTANT: use the SAME filter as the export loop below. If this
@@ -632,6 +653,7 @@ open class ExportJobService(
         val firstPage = fetchVulnerabilityPageForExport(
             accessibleAssetIds = accessibleAssetIds,
             isAdmin = isAdmin,
+            filters = filters,
             page = 0,
             size = 1
         )
@@ -680,6 +702,7 @@ open class ExportJobService(
                 val response = fetchVulnerabilityPageForExport(
                     accessibleAssetIds = accessibleAssetIds,
                     isAdmin = isAdmin,
+                    filters = filters,
                     page = page,
                     size = batchSize
                 )
