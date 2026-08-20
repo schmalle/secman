@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Re-render the allowlist and rebuild the allow-set, without restarting anything.
+#
+# This is not optional maintenance. Filtering by address makes the policy a
+# snapshot of DNS, and the services this container depends on are CDN-hosted:
+# registry.npmjs.org, api.anthropic.com and repo.maven.apache.org move between
+# addresses within hours. The entrypoint runs this on a timer for that reason;
+# run it by hand after editing allowlist.local.txt, or when a download starts
+# failing for no visible reason.
+#
+# Failure leaves the previous ruleset in place — the safe direction. A partial
+# rebuild would be worse than a stale one.
+set -euo pipefail
+[ "$(id -u)" -eq 0 ] || { echo "refresh-egress must run as root" >&2; exit 1; }
+
+count=$(/usr/local/sbin/render-egress-allowlist)
+echo "[egress] allowlist rendered: $count entries"
+
+/usr/local/sbin/init-egress-firewall

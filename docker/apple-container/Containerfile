@@ -1,0 +1,205 @@
+# Secman shielded development container — Apple `container` (Apple silicon, macOS)
+# =============================================================================
+# A *development* image, not a deployment image. It carries the toolchains this
+# repo needs (JDK 25, Gradle 9.7.0, Node, Go, Python/uv, MariaDB 11.4 client and
+# server, nginx) plus the two coding agents the developer drives it with
+# (Claude Code and Kimi CLI) and `pass-cli` for secret resolution.
+#
+# The repository itself is NOT copied in — it is bind-mounted at /workspace by
+# scripts/container/secman-container.sh. That is deliberate: the running
+# container must see exactly one host path and nothing else.
+#
+# Build (from the repository root):
+#   ./scripts/container/secman-container.sh build
+#
+# Everything below runs on arm64. `container` defaults to the host architecture
+# on Apple silicon; an amd64 build would run under Rosetta and is not supported
+# here (the Gradle/KSP build needs the native JIT to finish in reasonable time).
+# =============================================================================
+FROM debian:bookworm-slim
+
+# --- Versions -----------------------------------------------------------------
+# Pinned where the upstream publishes stable, addressable artifacts. Node and Go
+# resolve the newest patch of a pinned major/minor at build time and verify the
+# published checksum, because neither upstream keeps a stable "latest" URL.
+ARG GRADLE_VERSION=9.7.0
+ARG NODE_MAJOR=24
+ARG GO_SERIES=1.24
+ARG MARIADB_SERIES=11.4
+ARG TEMURIN_MAJOR=25
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+# --- Base packages ------------------------------------------------------------
+# iptables: the egress firewall, and the only egress control there is — there is
+#           no proxy. On Apple's default container kernel nftables is NOT
+#           available (missing kernel bits), so the legacy xtables backend is
+#           the one that works — see docs/APPLE_CONTAINER_DEV.md.
+# ipset:    holds the allow-set as one hash instead of a few hundred linear
+#           rules. Probed at run time; the firewall falls back to plain rules on
+#           a kernel without it.
+# dnsutils: `dig`, which is how the allowlist's names become addresses.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        ca-certificates curl wget gnupg dirmngr \
+        git openssh-client rsync unzip zip xz-utils bzip2 \
+        bash bash-completion less nano vim-tiny procps psmisc lsof \
+        jq ripgrep fd-find bc file tree \
+        build-essential pkg-config \
+        iptables ipset iproute2 dnsutils netcat-openbsd \
+        nginx openssl \
+        python3 python3-venv \
+        sudo tini locales; \
+    rm -rf /var/lib/apt/lists/*
+
+# Apple's kernel has no working nftables backend; pin xtables explicitly so a
+# later `iptables` invocation cannot silently pick nft and fail open.
+RUN update-alternatives --set iptables /usr/sbin/iptables-legacy \
+ && update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+
+# --- MariaDB 11.4 (server + client) -------------------------------------------
+# Debian bookworm ships 10.11; this repo targets 11.4, so use MariaDB's own repo.
+RUN set -eux; \
+    curl -fsSL https://supplychain.mariadb.com/MariaDB-Server-GPG-KEY \
+      | gpg --dearmor -o /usr/share/keyrings/mariadb-keyring.gpg; \
+    echo "deb [signed-by=/usr/share/keyrings/mariadb-keyring.gpg] https://dlm.mariadb.com/repo/mariadb-server/${MARIADB_SERIES}/repo/debian bookworm main" \
+      > /etc/apt/sources.list.d/mariadb.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends mariadb-server mariadb-client; \
+    rm -rf /var/lib/apt/lists/* /var/lib/mysql; \
+    mkdir -p /var/lib/mysql
+
+# --- JDK 25 (Eclipse Temurin) -------------------------------------------------
+RUN set -eux; \
+    curl -fsSL https://packages.adoptium.net/artifactory/api/gpg/key/public \
+      | gpg --dearmor -o /usr/share/keyrings/adoptium-keyring.gpg; \
+    echo "deb [signed-by=/usr/share/keyrings/adoptium-keyring.gpg] https://packages.adoptium.net/artifactory/deb bookworm main" \
+      > /etc/apt/sources.list.d/adoptium.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends "temurin-${TEMURIN_MAJOR}-jdk"; \
+    rm -rf /var/lib/apt/lists/*; \
+    ln -s "$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")" /opt/java; \
+    /opt/java/bin/java -version
+# Symlinked above rather than written literally: Temurin's Debian package installs
+# into an arch-suffixed path (…-jdk-arm64), so a hardcoded value breaks the moment
+# the image is built for another architecture.
+ENV JAVA_HOME=/opt/java
+
+# --- Gradle 9.7.0 -------------------------------------------------------------
+# scripts/startbackenddev.sh invokes `gradle` (not ./gradlew), so a system Gradle
+# matching gradle/wrapper/gradle-wrapper.properties has to be on PATH.
+RUN set -eux; \
+    curl -fsSLo /tmp/gradle.zip "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"; \
+    curl -fsSLo /tmp/gradle.sha256 "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip.sha256"; \
+    echo "$(cat /tmp/gradle.sha256)  /tmp/gradle.zip" | sha256sum -c -; \
+    unzip -q /tmp/gradle.zip -d /opt; \
+    ln -s "/opt/gradle-${GRADLE_VERSION}/bin/gradle" /usr/local/bin/gradle; \
+    rm -f /tmp/gradle.zip /tmp/gradle.sha256
+
+# --- Node (major pinned, patch resolved + checksum-verified) ------------------
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in arm64) narch=arm64 ;; amd64) narch=x64 ;; *) echo "unsupported arch $arch" >&2; exit 1 ;; esac; \
+    base="https://nodejs.org/dist/latest-v${NODE_MAJOR}.x"; \
+    curl -fsSLo /tmp/SHASUMS256.txt "${base}/SHASUMS256.txt"; \
+    tarball="$(awk -v a="linux-${narch}.tar.xz" '$2 ~ a {print $2}' /tmp/SHASUMS256.txt | head -1)"; \
+    test -n "$tarball"; \
+    curl -fsSLo "/tmp/${tarball}" "${base}/${tarball}"; \
+    (cd /tmp && grep " ${tarball}\$" SHASUMS256.txt | sha256sum -c -); \
+    tar -xJf "/tmp/${tarball}" -C /usr/local --strip-components=1 \
+        --exclude CHANGELOG.md --exclude LICENSE --exclude README.md; \
+    rm -f "/tmp/${tarball}" /tmp/SHASUMS256.txt; \
+    node --version; npm --version
+
+# --- Go (src/relay is a separate Go module; ./gradlew never builds it) --------
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in arm64) garch=arm64 ;; amd64) garch=amd64 ;; *) echo "unsupported arch $arch" >&2; exit 1 ;; esac; \
+    ver="$(curl -fsSL 'https://go.dev/dl/?mode=json&include=all' \
+            | jq -r --arg s "go${GO_SERIES}" '[.[] | select(.version | startswith($s))][0].version')"; \
+    test -n "$ver" -a "$ver" != "null"; \
+    curl -fsSLo /tmp/go.tgz "https://go.dev/dl/${ver}.linux-${garch}.tar.gz"; \
+    curl -fsSL "https://go.dev/dl/?mode=json&include=all" \
+      | jq -r --arg v "$ver" --arg f "${ver}.linux-${garch}.tar.gz" \
+             '.[] | select(.version==$v) | .files[] | select(.filename==$f) | .sha256' > /tmp/go.sha256; \
+    echo "$(cat /tmp/go.sha256)  /tmp/go.tgz" | sha256sum -c -; \
+    tar -xzf /tmp/go.tgz -C /usr/local; \
+    rm -f /tmp/go.tgz /tmp/go.sha256; \
+    /usr/local/go/bin/go version
+ENV PATH=/usr/local/go/bin:$PATH
+
+# --- uv (Python toolchain manager; Kimi CLI is a Python tool) -----------------
+ENV UV_INSTALL_DIR=/usr/local/bin \
+    UV_UNMANAGED_INSTALL=/usr/local/bin
+RUN set -eux; \
+    curl -fsSL https://astral.sh/uv/install.sh | sh; \
+    uv --version
+
+# --- pass-cli (Proton Pass) ---------------------------------------------------
+# Canonical secret resolution for this repo (docs/PASS_CLI.md). The install
+# script drops the binary in $HOME/.local/bin by default; force a system path so
+# every user in the container sees it.
+# The upstream installer picks its own target directory (typically
+# $HOME/.local/bin); locate whatever it produced and put a system-wide symlink on
+# PATH so every user in the container, not just root, can resolve secrets.
+RUN set -eux; \
+    curl -fsSL https://proton.me/download/pass-cli/install.sh | bash; \
+    binary="$(find /root /usr/local /opt -maxdepth 5 -type f -name pass-cli -perm -u+x 2>/dev/null | head -1)"; \
+    test -n "$binary"; \
+    install -m 0755 "$binary" /usr/local/bin/pass-cli; \
+    chmod -R a+rX /usr/local/bin/pass-cli; \
+    pass-cli --version
+
+# --- Coding agents ------------------------------------------------------------
+# Claude Code (npm) and Kimi CLI (uv tool, Python 3.13 per upstream guidance).
+RUN set -eux; \
+    npm install -g @anthropic-ai/claude-code; \
+    claude --version || true
+# uv would otherwise install under $HOME/.local (i.e. root's home, which the
+# unprivileged `dev` user cannot read). Point both the tool store and the shim
+# directory at shared, world-readable paths instead.
+ENV UV_TOOL_DIR=/opt/uv-tools \
+    UV_TOOL_BIN_DIR=/usr/local/bin \
+    UV_PYTHON_INSTALL_DIR=/opt/uv-python
+RUN set -eux; \
+    mkdir -p /opt/uv-tools /opt/uv-python; \
+    uv tool install --python 3.13 kimi-cli; \
+    chmod -R a+rX /opt/uv-tools /opt/uv-python; \
+    kimi --version
+
+# --- Container configuration --------------------------------------------------
+COPY egress/allowlist.txt           /etc/secman-dev/egress/allowlist.txt
+COPY egress/init-egress-firewall.sh /usr/local/sbin/init-egress-firewall
+COPY nginx/secman-dev.conf          /etc/secman-dev/nginx/secman-dev.conf
+COPY profile.d/secman-dev.sh        /etc/profile.d/secman-dev.sh
+COPY bin/devctl                     /usr/local/bin/devctl
+COPY bin/egress-check               /usr/local/bin/egress-check
+COPY bin/render-egress-allowlist    /usr/local/sbin/render-egress-allowlist
+COPY bin/refresh-egress             /usr/local/sbin/refresh-egress
+COPY entrypoint.sh                  /usr/local/sbin/secman-dev-entrypoint
+
+RUN set -eux; \
+    chmod 0755 /usr/local/sbin/init-egress-firewall \
+               /usr/local/sbin/render-egress-allowlist \
+               /usr/local/sbin/refresh-egress \
+               /usr/local/sbin/secman-dev-entrypoint \
+               /usr/local/bin/devctl \
+               /usr/local/bin/egress-check; \
+    : > /etc/secman-dev/egress/allowlist.local.txt; \
+    chmod 0644 /etc/secman-dev/egress/allowlist.local.txt
+
+# Ports published by scripts/container/secman-container.sh.
+#   443  nginx (TLS) -> 4321 / 8080, mirroring the host reverse proxy
+#   3306 MariaDB
+#   4321 Astro dev server
+#   8080 Micronaut backend
+EXPOSE 443 3306 4321 8080
+
+WORKDIR /workspace
+
+# tini reaps the strays that `container exec` sessions and Gradle daemons leave
+# behind; the entrypoint itself supervises the long-lived services.
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/sbin/secman-dev-entrypoint"]

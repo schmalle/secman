@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# devctl — in-container control for the services the Secman dev container owns.
+#
+# The application itself is still started the canonical way, from /workspace:
+#   ./scripts/startbackenddev.sh      (backend,  :8080)
+#   ./scripts/startfrontenddev.sh     (frontend, :4321)
+# devctl only manages the pieces that belong to the *container* rather than to
+# the repo: MariaDB, the TLS front door on :443, and the egress firewall.
+set -euo pipefail
+
+TLS_DIR=/run/secman-dev/tls
+DB_DATA=/var/lib/mysql
+: "${SECMAN_DEV_TLS_HOST:=localhost}"
+: "${SECMAN_DEV_DB_NAME:=secman}"
+: "${SECMAN_DEV_DB_USER:=secman}"
+: "${SECMAN_DEV_DB_PASSWORD:=secman}"   # local throwaway DB only — see db_start
+
+log()  { printf '[devctl] %s\n' "$*"; }
+die()  { printf '[devctl] error: %s\n' "$*" >&2; exit 1; }
+
+# These values are interpolated into SQL identifiers and into an OpenSSL subject,
+# neither of which can be parameter-bound. A closed character allowlist is the
+# substitute (CLAUDE.md §A03: what cannot be bound goes through an allowlist).
+validate() {
+    printf '%s' "$2" | grep -qE "$3" \
+        || die "$1='$2' is not accepted here — it must match $3"
+}
+validate SECMAN_DEV_DB_NAME     "$SECMAN_DEV_DB_NAME"     '^[A-Za-z0-9_]{1,64}$'
+validate SECMAN_DEV_DB_USER     "$SECMAN_DEV_DB_USER"     '^[A-Za-z0-9_]{1,32}$'
+validate SECMAN_DEV_DB_PASSWORD "$SECMAN_DEV_DB_PASSWORD" '^[A-Za-z0-9_.:@%+=-]{1,64}$'
+validate SECMAN_DEV_TLS_HOST    "$SECMAN_DEV_TLS_HOST"    '^[A-Za-z0-9]([A-Za-z0-9.-]{0,252}[A-Za-z0-9])?$'
+need_root() { [ "$(id -u)" -eq 0 ] || die "'$1' needs root — run it as: container exec -u root secman-dev devctl $*"; }
+
+# --- TLS front door (:443) ----------------------------------------------------
+# Mirrors the host reverse proxy the E2E skills expect: one HTTPS origin that
+# fronts both the Astro dev server and the Micronaut backend, so cookies, CORS
+# and the SSE endpoints behave the way they do outside the container.
+tls_cert() {
+    mkdir -p "$TLS_DIR"
+    if [ -s "$TLS_DIR/dev.crt" ] && grep -qx "$SECMAN_DEV_TLS_HOST" "$TLS_DIR/host" 2>/dev/null; then
+        return 0
+    fi
+    log "generating a self-signed certificate for $SECMAN_DEV_TLS_HOST"
+    openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
+        -keyout "$TLS_DIR/dev.key" -out "$TLS_DIR/dev.crt" \
+        -subj "/CN=$SECMAN_DEV_TLS_HOST" \
+        -addext "subjectAltName=DNS:$SECMAN_DEV_TLS_HOST,DNS:localhost,IP:127.0.0.1" \
+        >/dev/null 2>&1
+    chmod 0640 "$TLS_DIR/dev.key"
+    printf '%s\n' "$SECMAN_DEV_TLS_HOST" > "$TLS_DIR/host"
+}
+
+tls_start() {
+    need_root tls start
+    tls_cert
+    mkdir -p /var/log/nginx /var/lib/nginx/body
+    nginx -c /etc/secman-dev/nginx/secman-dev.conf -t
+    nginx -c /etc/secman-dev/nginx/secman-dev.conf
+    log "TLS front door on :443 -> :4321 (pages) and :8080 (/api, /oauth, /mcp, /health)"
+}
+tls_stop() { need_root tls stop; nginx -c /etc/secman-dev/nginx/secman-dev.conf -s quit 2>/dev/null || pkill -x nginx || true; }
+
+# --- MariaDB (:3306) ----------------------------------------------------------
+db_start() {
+    need_root db start
+    if pgrep -x mariadbd >/dev/null 2>&1; then log "MariaDB already running"; return 0; fi
+    if [ ! -d "$DB_DATA/mysql" ]; then
+        log "initialising a fresh MariaDB data directory"
+        mariadb-install-db --user=mysql --datadir="$DB_DATA" --auth-root-authentication-method=normal >/dev/null
+    fi
+    chown -R mysql:mysql "$DB_DATA"
+    mkdir -p /run/mysqld && chown mysql:mysql /run/mysqld
+    # bind-address 0.0.0.0 is what makes the published :3306 usable from the Mac.
+    # It is not an exposure decision: the container's INPUT chain already limits
+    # who may reach it, and the Apple `container` VM has no other neighbours.
+    mariadbd-safe --user=mysql --datadir="$DB_DATA" --bind-address=0.0.0.0 --port=3306 \
+        >/var/log/mariadb-dev.log 2>&1 &
+    for _ in $(seq 1 60); do
+        mariadb-admin ping --silent >/dev/null 2>&1 && break
+        sleep 1
+    done
+    mariadb-admin ping --silent >/dev/null 2>&1 || die "MariaDB did not come up — see /var/log/mariadb-dev.log"
+    # Idempotent bootstrap. The password is a local development default and is
+    # never read from, or written to, pass-cli; point DB_CONNECT at this instance
+    # only when you want the throwaway in-container database.
+    mariadb -u root <<SQL
+CREATE DATABASE IF NOT EXISTS \`${SECMAN_DEV_DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS \`secman_test\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS '${SECMAN_DEV_DB_USER}'@'%' IDENTIFIED BY '${SECMAN_DEV_DB_PASSWORD}';
+CREATE USER IF NOT EXISTS 'secman_test'@'%' IDENTIFIED BY 'secman_test';
+GRANT ALL PRIVILEGES ON \`${SECMAN_DEV_DB_NAME}\`.* TO '${SECMAN_DEV_DB_USER}'@'%';
+GRANT ALL PRIVILEGES ON \`secman_test\`.* TO 'secman_test'@'%';
+FLUSH PRIVILEGES;
+SQL
+    log "MariaDB on :3306 — databases '${SECMAN_DEV_DB_NAME}' and 'secman_test'"
+}
+db_stop() { need_root db stop; mariadb-admin shutdown >/dev/null 2>&1 || pkill -x mariadbd || true; }
+
+# --- Egress -------------------------------------------------------------------
+egress_refresh() {
+    need_root egress refresh
+    /usr/local/sbin/refresh-egress
+}
+
+usage() {
+    cat <<'USAGE'
+devctl — Secman dev container services
+
+  devctl status                 what is running, and how egress is enforced
+  devctl tls start|stop         TLS front door on :443
+  devctl db  start|stop         MariaDB 11.4 on :3306
+  devctl egress refresh         re-render the allowlist and rebuild the allow-set
+  devctl egress log [N]         recent denials, from the kernel log (default 40)
+  devctl egress unresolved      allowlist names that currently resolve to nothing
+
+The application stack is not managed here — start it from /workspace with
+./scripts/startbackenddev.sh and ./scripts/startfrontenddev.sh, exactly as on
+a Mac. Both need pass-cli to be logged in; see `pass-cli login --interactive`.
+
+Egress is enforced by iptables alone — there is no proxy, and no proxy variables
+to set. `egress-check` shows the policy and probes hosts through the real path.
+USAGE
+}
+
+status() {
+    printf 'egress           : iptables only, backend=%s\n' "$(cat /run/secman-dev/egress/mode 2>/dev/null || echo 'NOT INITIALISED')"
+    printf 'allow-set        : %s addresses/prefixes from %s allowlist entries\n' \
+        "$(cat /run/secman-dev/egress/count 2>/dev/null || echo 0)" \
+        "$(grep -c . /run/secman-dev/egress/allowlist.rendered 2>/dev/null || echo 0)"
+    printf 'nginx (443)      : %s\n' "$(pgrep -x nginx    >/dev/null && echo running || echo stopped)"
+    printf 'mariadb (3306)   : %s\n' "$(pgrep -x mariadbd >/dev/null && echo running || echo stopped)"
+    printf 'backend (8080)   : %s\n' "$(ss -ltn 2>/dev/null | grep -q ':8080 ' && echo running || echo stopped)"
+    printf 'frontend (4321)  : %s\n' "$(ss -ltn 2>/dev/null | grep -q ':4321 ' && echo running || echo stopped)"
+    # Presence of a session directory, not a `whoami` call: the check has to work
+    # for whichever user runs devctl, and must not itself reach the network.
+    session_dir=${PROTON_PASS_SESSION_DIR:-$HOME/.local/share/proton-pass-cli/.session}
+    if [ -d "$session_dir" ] && [ -n "$(ls -A "$session_dir" 2>/dev/null)" ]; then
+        printf 'pass-cli         : session present (%s)\n' "$session_dir"
+    else
+        printf 'pass-cli         : no session — run: pass-cli login --interactive\n'
+    fi
+}
+
+cmd=${1:-status}; shift || true
+case "$cmd" in
+    status)  status ;;
+    tls)     case "${1:-}" in start) tls_start ;; stop) tls_stop ;; restart) tls_stop; tls_start ;; *) usage; exit 2 ;; esac ;;
+    db)      case "${1:-}" in start) db_start  ;; stop) db_stop  ;; restart) db_stop;  db_start  ;; *) usage; exit 2 ;; esac ;;
+    egress)  case "${1:-}" in
+                 refresh)    egress_refresh ;;
+                 log)        egress-check --log "${2:-40}" ;;
+                 unresolved) egress-check --unresolved ;;
+                 *)          egress-check ;;
+             esac ;;
+    -h|--help|help) usage ;;
+    *)       usage; exit 2 ;;
+esac

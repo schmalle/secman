@@ -1,0 +1,114 @@
+# Outbound allowlist for the Secman shielded dev container.
+#
+# Enforcement is pure iptables — there is no proxy. That has one consequence you
+# must keep in mind while editing this file:
+#
+#   *** WRITE EXACT HOSTNAMES. A LEADING DOT MEANS NOTHING HERE. ***
+#
+# Every name below is resolved to its A records and those addresses are what the
+# firewall permits. A wildcard cannot be resolved, so `.example.com` covers
+# nothing that `example.com` does not already cover. If a tool needs
+# `cdn.example.com`, that exact name has to be on this list.
+#
+# Two line shapes are accepted:
+#   host.example.com     resolved at start-up and on every refresh
+#   198.51.100.0/24      an address or CIDR, used verbatim
+#
+# GitHub is handled separately and does not need entries here: the firewall
+# fetches the published ranges from https://api.github.com/meta, which is the
+# only reliable way to cover a service spread over that many addresses.
+#
+# Add site-local entries to allowlist.local.txt — it survives an image rebuild —
+# or pass --allow-domain to scripts/container/secman-container.sh.
+#
+# After editing: `devctl egress refresh` (inside) or
+# `./scripts/container/secman-container.sh egress refresh` (from the Mac).
+
+# --- Claude Code -------------------------------------------------------------
+api.anthropic.com
+console.anthropic.com
+statsig.anthropic.com
+claude.ai
+www.claude.ai
+api.statsig.com
+statsigapi.net
+sentry.io
+
+# --- Kimi CLI (Moonshot AI) --------------------------------------------------
+api.moonshot.ai
+platform.moonshot.ai
+api.moonshot.cn
+code.kimi.com
+www.kimi.com
+kimi.com
+
+# --- Proton Pass (pass-cli secret resolution) --------------------------------
+proton.me
+account.proton.me
+pass.proton.me
+pass-api.proton.me
+api.protonmail.ch
+
+# --- JVM build: Gradle, Maven Central, Google Maven, JetBrains, Adoptium -----
+services.gradle.org
+downloads.gradle.org
+plugins.gradle.org
+plugins-artifacts.gradle.org
+repo.maven.apache.org
+repo1.maven.org
+dl.google.com
+maven.google.com
+download.jetbrains.com
+cache-redirector.jetbrains.com
+api.adoptium.net
+packages.adoptium.net
+
+# --- Node / npm --------------------------------------------------------------
+registry.npmjs.org
+www.npmjs.com
+npmjs.com
+nodejs.org
+
+# --- Go (src/relay is a separate module ./gradlew never builds) --------------
+proxy.golang.org
+sum.golang.org
+go.dev
+golang.org
+storage.googleapis.com
+
+# --- Python / uv (Kimi CLI runtime and upgrades) -----------------------------
+pypi.org
+files.pythonhosted.org
+astral.sh
+
+# --- Playwright (tests/e2e) --------------------------------------------------
+cdn.playwright.dev
+playwright.download.prss.microsoft.com
+
+# --- Debian and MariaDB packages (apt inside the container) ------------------
+deb.debian.org
+security.debian.org
+dlm.mariadb.com
+supplychain.mariadb.com
+
+# --- Secman application outbound calls ---------------------------------------
+# The hosts the backend and CLI reach while you exercise the stack. Each is
+# already SSRF-guarded server-side (CLAUDE.md §A10); this list is the second
+# layer, not the first.
+endoflife.date                          # secman.eol.base-url default
+api.crowdstrike.com                     # Falcon, US-1
+api.us-2.crowdstrike.com                # Falcon, US-2
+api.eu-1.crowdstrike.com                # Falcon, EU-1
+api.laggar.gcw.crowdstrike.com          # Falcon, US-GOV-1
+openrouter.ai                           # AI risk assessment
+hooks.slack.com                         # per-user Slack webhooks
+api.telegram.org                        # Telegram bot notifications
+acme-v02.api.letsencrypt.org            # src/relay ACME
+acme-staging-v02.api.letsencrypt.org
+
+# AWS is regional and cannot be enumerated here — S3 alone has an endpoint per
+# region. Add the exact endpoints you use, e.g.
+#   s3.eu-central-1.amazonaws.com
+#   sts.eu-central-1.amazonaws.com
+sts.amazonaws.com
+s3.amazonaws.com
