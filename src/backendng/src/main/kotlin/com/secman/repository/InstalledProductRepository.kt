@@ -122,6 +122,87 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
     """)
     fun searchWithAsset(search: String?, pageable: Pageable): List<InstalledProduct>
 
+    /**
+     * One ordered page of the table with **no search term and no join** — what
+     * the Installed products page asks for before anything is typed.
+     *
+     * [searchWithAsset] cannot serve that case cheaply. Its `WHERE` reads
+     * `p.asset.name`, which HQL turns into a join, and MariaDB then plans the
+     * whole query by driving from the small `asset` table, so `ORDER BY p.name…`
+     * cannot use `idx_installed_product_name` and every page sorts the entire
+     * ~500k-row join through a temporary table: ~4.8s per page against ~0.45s
+     * here, whatever the page size. Same join-order trap as
+     * [findScanRowsAfter] — see that method for the full measurement.
+     *
+     * The asset is not fetch-joined: callers run inside
+     * `@Transactional(readOnly = true)`, so the lazy `asset` proxies resolve
+     * through the class-level `@BatchSize` on [Asset] — one IN-list select per
+     * page instead of a join or N+1. Same reasoning as
+     * `VulnerabilityRepository.findLatestVulnerabilitiesPerAssetWithFilters`.
+     *
+     * `p.id` is the final sort key so the order is *total*. Without it, rows
+     * sharing name+vendor+version have no defined order between them and
+     * paging can show the same row twice while skipping another.
+     */
+    @Query("""
+        SELECT p FROM InstalledProduct p
+        ORDER BY p.name ASC, p.vendor ASC, p.version ASC, p.id ASC
+    """)
+    fun findOrderedPage(pageable: Pageable): List<InstalledProduct>
+
+    /** Non-admin counterpart of [findOrderedPage], scoped to accessible assets. */
+    @Query("""
+        SELECT p FROM InstalledProduct p
+        WHERE p.asset.id IN (:assetIds)
+        ORDER BY p.name ASC, p.vendor ASC, p.version ASC, p.id ASC
+    """)
+    fun findOrderedPageForAssets(assetIds: Set<Long>, pageable: Pageable): List<InstalledProduct>
+
+    /**
+     * How many products match, for the pager. Distinct from
+     * [countDistinctAssets], which counts *systems* — the page shows both.
+     */
+    @Query("""
+        SELECT COUNT(p) FROM InstalledProduct p
+        WHERE (:search IS NULL OR :search = ''
+            OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
+            OR LOWER(COALESCE(p.vendor, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+            OR LOWER(COALESCE(p.version, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+            OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :search, '%')))
+    """)
+    fun countProducts(search: String?): Long
+
+    /** Non-admin counterpart of [countProducts]. */
+    @Query("""
+        SELECT COUNT(p) FROM InstalledProduct p
+        WHERE p.asset.id IN (:assetIds)
+          AND (:search IS NULL OR :search = ''
+            OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
+            OR LOWER(COALESCE(p.vendor, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+            OR LOWER(COALESCE(p.version, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+            OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :search, '%')))
+    """)
+    fun countProductsForAssets(search: String?, assetIds: Set<Long>): Long
+
+    /** [countProducts] for the "search by server" box. */
+    @Query("""
+        SELECT COUNT(p) FROM InstalledProduct p
+        WHERE (:server IS NULL OR :server = ''
+            OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :server, '%'))
+            OR LOWER(COALESCE(p.asset.ip, '')) LIKE LOWER(CONCAT('%', :server, '%')))
+    """)
+    fun countProductsByServer(server: String?): Long
+
+    /** Non-admin counterpart of [countProductsByServer]. */
+    @Query("""
+        SELECT COUNT(p) FROM InstalledProduct p
+        WHERE p.asset.id IN (:assetIds)
+          AND (:server IS NULL OR :server = ''
+            OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :server, '%'))
+            OR LOWER(COALESCE(p.asset.ip, '')) LIKE LOWER(CONCAT('%', :server, '%')))
+    """)
+    fun countProductsByServerForAssets(server: String?, assetIds: Set<Long>): Long
+
     @Query("""
         SELECT p FROM InstalledProduct p
         JOIN FETCH p.asset

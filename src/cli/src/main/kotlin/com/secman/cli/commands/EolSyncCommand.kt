@@ -136,11 +136,17 @@ class EolSyncCommand : Runnable {
                 }
                 Thread.sleep(POLL_INTERVAL_SECONDS * 1000)
                 waitedSeconds += POLL_INTERVAL_SECONDS
-                if (verbose) println("   ... still running (${waitedSeconds}s elapsed)")
+                // Print progress even without -v. A run can legitimately take
+                // minutes, and a command that prints nothing for that long is
+                // indistinguishable from a hung one — which is exactly how a
+                // slow run was reported. -v keeps the per-poll detail.
+                if (verbose || waitedSeconds % PROGRESS_INTERVAL_SECONDS == 0L) {
+                    println("   ... still running (${waitedSeconds}s elapsed)")
+                }
                 result = cliHttpClient.getMap("$effectiveUrl/api/eol/catalog/sync/$runId", authToken)
                     ?: throw RuntimeException("EOL sync failed - could not read status of run $runId")
             }
-            if (verbose) println()
+            if (waitedSeconds > 0) println()
 
             val status = result["status"]?.toString() ?: "UNKNOWN"
             val productsSynced = intOf(result["productsSynced"])
@@ -211,6 +217,12 @@ class EolSyncCommand : Runnable {
         const val STATUS_RUNNING = "RUNNING"
 
         private const val POLL_INTERVAL_SECONDS = 5L
+
+        /**
+         * How often the wait reports progress without `-v`. A multiple of
+         * [POLL_INTERVAL_SECONDS], or the modulo below never matches.
+         */
+        private const val PROGRESS_INTERVAL_SECONDS = 30L
 
         /**
          * Matches the server's own stale-run threshold: past this point the

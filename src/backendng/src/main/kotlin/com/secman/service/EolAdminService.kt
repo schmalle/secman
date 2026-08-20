@@ -6,6 +6,7 @@ import com.secman.dto.EolSyncRequest
 import com.secman.dto.EolSyncResponse
 import com.secman.repository.EolSyncRunRepository
 import io.micronaut.scheduling.annotation.Async
+import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
@@ -228,8 +229,50 @@ open class EolAdminService(
         eolSyncRunRepository.findByStatusOrderByIdAsc(STATUS_RUNNING).firstOrNull()
 
     /**
+     * Retire every RUNNING row, called once when the application starts.
+     *
+     * A run's worker is a thread inside *this* process ([executeSyncAsync]), so
+     * a row still marked RUNNING while the application is booting belongs to a
+     * process that no longer exists. Age tells us nothing about it: the run
+     * [reclaimStaleRuns] would leave alone for another 59 minutes is exactly as
+     * dead as one that is already an hour old.
+     *
+     * Without this, restarting the backend mid-sync wedged the single-run guard
+     * for up to [STALE_AFTER]. Every `eol-sync` in that window was *deferred to
+     * the dead run* and answered 202 with its handle, so the CLI sat polling a
+     * run that could never finish — indistinguishable from a hang, and the
+     * reason this was reported as one.
+     *
+     * Safe because secman is deployed single-instance (docker-compose / ECS
+     * Fargate / systemd, no horizontal scaling — see the pool sizing note in
+     * `application.yml`). Were a second instance ever to serve the same
+     * database, this would retire *its* live run, and the guard would need a
+     * worker heartbeat or an owner column instead.
+     */
+    @Transactional
+    open fun reclaimRunsOrphanedByRestart(): Int {
+        val orphaned = eolSyncRunRepository.findByStatusOrderByIdAsc(STATUS_RUNNING)
+        orphaned.forEach { run ->
+            log.warn(
+                "Reclaiming EOL sync run {} orphaned by a restart (started {}, triggered by {})",
+                run.runId, run.startedAt, run.triggeredBy
+            )
+            run.status = STATUS_FAILED
+            run.errorSummary = "Worker lost to an application restart before the run finished"
+            run.finishedAt = Instant.now()
+            eolSyncRunRepository.update(run)
+        }
+        return orphaned.size
+    }
+
+    /**
      * Retire RUNNING rows whose worker is demonstrably gone, so a crash mid-run
      * does not disable EOL syncing permanently.
+     *
+     * This is the in-process backstop for a worker that died without unwinding
+     * (OOM-killed thread, container SIGKILL between the insert and the work).
+     * The restart case is handled up front by [reclaimRunsOrphanedByRestart],
+     * which does not have to wait out [STALE_AFTER].
      */
     private fun reclaimStaleRuns() {
         val cutoff = Instant.now().minus(STALE_AFTER)

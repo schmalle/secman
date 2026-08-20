@@ -1,5 +1,12 @@
 import { authenticatedGet } from '../utils/auth';
 
+/**
+ * Rows per page. Matches the backend default
+ * (`InstalledProductListService.DEFAULT_PAGE_SIZE`); the table has ~500k rows,
+ * so the page must never ask for all of them.
+ */
+export const PAGE_SIZE = 100;
+
 export interface InstalledProductResponse {
   id: number;
   assetId: number;
@@ -18,17 +25,26 @@ export interface InstalledProductResponse {
 
 export interface InstalledProductListResponse {
   products: InstalledProductResponse[];
+  /** Total matching products, not the length of `products` — see the pager. */
   totalProducts: number;
   totalSystems: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface InstalledProductNamesResponse {
   names: string[];
 }
 
-export async function getInstalledProducts(search = ''): Promise<InstalledProductListResponse> {
+export async function getInstalledProducts(
+  search = '',
+  page = 0,
+  pageSize = PAGE_SIZE,
+): Promise<InstalledProductListResponse> {
   const params = new URLSearchParams();
   if (search.trim()) params.append('search', search.trim());
+  params.append('page', String(page));
+  params.append('pageSize', String(pageSize));
   const response = await authenticatedGet(`/api/installed-products?${params.toString()}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch installed products: ${response.status}`);
@@ -36,9 +52,15 @@ export async function getInstalledProducts(search = ''): Promise<InstalledProduc
   return response.json();
 }
 
-export async function getInstalledProductsByServer(server = ''): Promise<InstalledProductListResponse> {
+export async function getInstalledProductsByServer(
+  server = '',
+  page = 0,
+  pageSize = PAGE_SIZE,
+): Promise<InstalledProductListResponse> {
   const params = new URLSearchParams();
   if (server.trim()) params.append('server', server.trim());
+  params.append('page', String(page));
+  params.append('pageSize', String(pageSize));
   const response = await authenticatedGet(`/api/installed-products/by-server?${params.toString()}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch installed products for server: ${response.status}`);

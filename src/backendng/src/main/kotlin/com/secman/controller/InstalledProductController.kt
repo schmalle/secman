@@ -32,19 +32,23 @@ open class InstalledProductController(
     open fun list(
         authentication: Authentication,
         @Nullable @QueryValue search: String?,
-        @Nullable @QueryValue limit: Int?
+        @Nullable @QueryValue limit: Int?,
+        @Nullable @QueryValue page: Int?,
+        @Nullable @QueryValue pageSize: Int?
     ): HttpResponse<InstalledProductListResponse> {
-        return HttpResponse.ok(installedProductListService.list(authentication, search, limit))
+        return HttpResponse.ok(installedProductListService.list(authentication, search, limit, page, pageSize))
     }
 
     @Get("/by-server")
     open fun listByServer(
         authentication: Authentication,
         @QueryValue server: String,
-        @Nullable @QueryValue limit: Int?
+        @Nullable @QueryValue limit: Int?,
+        @Nullable @QueryValue page: Int?,
+        @Nullable @QueryValue pageSize: Int?
     ): HttpResponse<*> {
         return try {
-            HttpResponse.ok(installedProductListService.listForServer(authentication, server, limit))
+            HttpResponse.ok(installedProductListService.listForServer(authentication, server, limit, page, pageSize))
         } catch (e: IllegalArgumentException) {
             HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid request")))
         }

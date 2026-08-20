@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import HtmlEditor from './admin/HtmlEditor';
-import { getInstalledProducts, getInstalledProductsByServer, getInstalledProductNames, type InstalledProductResponse } from '../services/installedProductService';
+import { getInstalledProducts, getInstalledProductsByServer, getInstalledProductNames, PAGE_SIZE, type InstalledProductResponse } from '../services/installedProductService';
 import {
   createProductBroadcast,
   getProductRecipientCount,
@@ -18,6 +18,8 @@ const InstalledProducts: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [totalSystems, setTotalSystems] = useState(0);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [page, setPage] = useState(0);
   const [notifyProduct, setNotifyProduct] = useState<string | null>(null);
   const [notifySubject, setNotifySubject] = useState('');
   const [notifyHtml, setNotifyHtml] = useState('');
@@ -37,18 +39,32 @@ const InstalledProducts: React.FC = () => {
   const [eolByComponent, setEolByComponent] = useState<Map<string, EolFinding>>(new Map());
 
   const notifyProductName = products.length > 0 ? products[0].name : search.trim();
+  const totalPages = Math.max(1, Math.ceil(totalProducts / PAGE_SIZE));
+
+  // A new search term restarts at the first page: staying on page 40 of the
+  // previous result set would show an empty table for a term that does have
+  // matches. Adjusted during render rather than in an effect — an effect would
+  // let the fetch below run once with the stale page and again after the reset,
+  // firing two requests and briefly rendering the wrong page.
+  const searchKey = `${search}\u0000${serverSearch}`;
+  const [lastSearchKey, setLastSearchKey] = useState(searchKey);
+  if (searchKey !== lastSearchKey) {
+    setLastSearchKey(searchKey);
+    setPage(0);
+  }
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       setLoading(true);
       const request = serverSearch.trim()
-        ? getInstalledProductsByServer(serverSearch)
-        : getInstalledProducts(search);
+        ? getInstalledProductsByServer(serverSearch, page)
+        : getInstalledProducts(search, page);
 
       request
         .then((response) => {
           setProducts(response.products ?? []);
           setTotalSystems(response.totalSystems);
+          setTotalProducts(response.totalProducts ?? 0);
           setError(null);
         })
         .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load installed products'))
@@ -56,7 +72,7 @@ const InstalledProducts: React.FC = () => {
     }, 250);
 
     return () => window.clearTimeout(timeout);
-  }, [search, serverSearch]);
+  }, [search, serverSearch, page]);
 
   useEffect(() => {
     getInstalledProductNames()
@@ -142,8 +158,10 @@ const InstalledProducts: React.FC = () => {
           <p className="text-muted mb-0">Products imported from CrowdStrike Discover for systems known in Secman. Search a server to return the products installed on matching systems.</p>
         </div>
         <div className="text-end">
-          <div className="fw-semibold">{products.length}</div>
-          <div className="text-muted small">rows shown across {totalSystems} systems</div>
+          <div className="fw-semibold">{totalProducts.toLocaleString()}</div>
+          <div className="text-muted small">
+            products across {totalSystems.toLocaleString()} systems
+          </div>
         </div>
       </div>
 
@@ -210,7 +228,7 @@ const InstalledProducts: React.FC = () => {
         <div className="col-12">
           <div className="card">
             <div className="card-body">
-              <h5 className="card-title">Products ({products.length})</h5>
+              <h5 className="card-title">Products ({totalProducts.toLocaleString()})</h5>
               <div className="table-responsive">
                 <table className="table table-striped table-hover">
                   <thead>
@@ -251,6 +269,37 @@ const InstalledProducts: React.FC = () => {
                     })}
                   </tbody>
                 </table>
+              </div>
+              <div className="d-flex justify-content-between align-items-center pt-2">
+                <span className="text-muted small">
+                  {totalProducts > 0 ? (
+                    <>
+                      Showing {(page * PAGE_SIZE + 1).toLocaleString()}–
+                      {Math.min((page + 1) * PAGE_SIZE, totalProducts).toLocaleString()} of{' '}
+                      {totalProducts.toLocaleString()} · page {page + 1} of {totalPages.toLocaleString()}
+                    </>
+                  ) : (
+                    'No products'
+                  )}
+                </span>
+                <div className="btn-group">
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    disabled={loading || page === 0}
+                    onClick={() => setPage((current) => Math.max(0, current - 1))}
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    disabled={loading || page + 1 >= totalPages}
+                    onClick={() => setPage((current) => current + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             </div>
           </div>

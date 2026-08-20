@@ -225,6 +225,41 @@ class EolAdminServiceTest {
     }
 
     @Test
+    @DisplayName("EAS-007: startup reclaims a RUNNING row a restart orphaned, without waiting out the stale window")
+    fun restartOrphanedRunIsReclaimedAtStartup() {
+        // Deliberately *fresh*: reclaimStaleRuns would leave this alone for
+        // another hour. A worker only lives inside the process, so a row still
+        // RUNNING while the application boots is dead regardless of its age.
+        val orphan = EolSyncRun(
+            id = 9L,
+            runId = "33333333-3333-3333-3333-333333333333",
+            triggeredBy = "admin",
+            status = EolAdminService.STATUS_RUNNING,
+            startedAt = Instant.now().minusSeconds(30)
+        )
+        every { repository.findByStatusOrderByIdAsc(EolAdminService.STATUS_RUNNING) } returns listOf(orphan)
+
+        val reclaimed = buildService(mockk(relaxed = true)).reclaimRunsOrphanedByRestart()
+
+        assertThat(reclaimed).isEqualTo(1)
+        assertThat(orphan.status).isEqualTo(EolAdminService.STATUS_FAILED)
+        assertThat(orphan.finishedAt).isNotNull()
+        assertThat(orphan.errorSummary).contains("restart")
+        verify { repository.update(orphan) }
+    }
+
+    @Test
+    @DisplayName("EAS-008: startup reclaim leaves already-terminal runs untouched")
+    fun startupReclaimTouchesOnlyRunningRows() {
+        every { repository.findByStatusOrderByIdAsc(EolAdminService.STATUS_RUNNING) } returns emptyList()
+
+        val reclaimed = buildService(mockk(relaxed = true)).reclaimRunsOrphanedByRestart()
+
+        assertThat(reclaimed).isZero()
+        verify(exactly = 0) { repository.update(any()) }
+    }
+
+    @Test
     @DisplayName("EAS-006: a RUNNING row still inside the stale window is left alone")
     fun freshRunningRowIsNotReclaimed() {
         val live = EolSyncRun(

@@ -51,8 +51,16 @@ data class InstalledProductResponse(
 @Serdeable
 data class InstalledProductListResponse(
     val products: List<InstalledProductResponse>,
-    val totalProducts: Int,
-    val totalSystems: Long
+    /**
+     * How many products match in total — **not** how many are in [products].
+     * It used to be `products.size`, which silently reported the truncation cap
+     * (50,000) as if it were the real figure once the table outgrew it.
+     */
+    val totalProducts: Long,
+    val totalSystems: Long,
+    /** Zero-based index of the page in [products]. */
+    val page: Int,
+    val pageSize: Int
 )
 
 @Serdeable

@@ -47,9 +47,35 @@ test('installed products supports server-specific product lookup', () => {
     const serviceSource = readFileSync(new URL('../services/installedProductService.ts', import.meta.url), 'utf8');
 
     assert.match(componentSource, /Search by server/);
-    assert.match(componentSource, /getInstalledProductsByServer\(serverSearch\)/);
+    // Arity-agnostic: the point is that serverSearch is what gets looked up,
+    // not how many pagination arguments follow it.
+    assert.match(componentSource, /getInstalledProductsByServer\(serverSearch[,)]/);
     assert.match(serviceSource, /getInstalledProductsByServer/);
     assert.match(serviceSource, /\/api\/installed-products\/by-server/);
+});
+
+test('installed products pages the table instead of requesting the whole inventory', () => {
+    const componentSource = readFileSync(new URL('./InstalledProducts.tsx', import.meta.url), 'utf8');
+    const serviceSource = readFileSync(new URL('../services/installedProductService.ts', import.meta.url), 'utf8');
+
+    // The table has ~500k rows behind it. Asking for all of them returned a
+    // 12.9 MB body and locked the browser up rendering 50,000 <tr>s, which is
+    // what "Loading installed products..." never getting past looked like.
+    assert.match(serviceSource, /export const PAGE_SIZE/);
+    assert.match(serviceSource, /params\.append\('page'/);
+    assert.match(serviceSource, /params\.append\('pageSize'/);
+
+    // Both list calls must carry the page, or the pager moves nothing.
+    assert.match(componentSource, /getInstalledProducts\(search, page\)/);
+    assert.match(componentSource, /getInstalledProductsByServer\(serverSearch, page\)/);
+
+    // The count must come from the server's total, never products.length —
+    // that reported the truncation cap as if it were the real figure.
+    assert.match(componentSource, /setTotalProducts\(response\.totalProducts/);
+    assert.doesNotMatch(componentSource, /Products \(\{products\.length\}\)/);
+
+    assert.match(componentSource, /Previous/);
+    assert.match(componentSource, /Next/);
 });
 
 test('installed products renders product, version, system, and AWS account columns', () => {
