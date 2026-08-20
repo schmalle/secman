@@ -92,12 +92,12 @@ open class ResponseController(
         return try {
             val username = authentication.name
             val userOptional = userRepository.findByUsername(username)
-            
+
             if (userOptional.isEmpty) {
                 log.error("User not found for username: {}", username)
                 return null
             }
-            
+
             val user = userOptional.get()
             log.debug("Found user email: {} for username: {}", user.email, username)
             user.email
@@ -105,6 +105,22 @@ open class ResponseController(
             log.error("Error getting current user email", e)
             null
         }
+    }
+
+    /**
+     * A01 access boundary for assessment-scoped endpoints below: ADMIN/RISK/SECCHAMPION
+     * (mirrors RiskAssessmentController's class-level @Secured) or the assessment's own
+     * assessor/requestor/respondent, since those can be regular users with no RISK role.
+     */
+    private fun canAccessAssessment(assessment: RiskAssessment, authentication: Authentication): Boolean {
+        val roles = authentication.roles
+        if (roles.contains("ADMIN") || roles.contains("RISK") || roles.contains("SECCHAMPION")) {
+            return true
+        }
+        val username = authentication.name
+        return username == assessment.assessor.username ||
+            username == assessment.requestor.username ||
+            username == assessment.respondent?.username
     }
 
     @Get("/assessment/{token:[a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9]}")
@@ -264,13 +280,16 @@ open class ResponseController(
     @Get("/assessment/{id}")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     @Transactional(readOnly = true)
-    open fun getAllResponses(id: Long): HttpResponse<*> {
+    open fun getAllResponses(id: Long, authentication: Authentication): HttpResponse<*> {
         return try {
             log.debug("Fetching all responses for assessment: {}", id)
-            
+
             val assessment = riskAssessmentRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
-            
+            if (!canAccessAssessment(assessment, authentication)) {
+                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
+            }
+
             val responses = responseRepository.findByRiskAssessmentId(id)
             
             // Force loading of related entities
@@ -289,10 +308,16 @@ open class ResponseController(
     @Get("/assessment/{id}/email/{email}")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     @Transactional(readOnly = true)
-    open fun getResponsesByEmail(id: Long, email: String): HttpResponse<*> {
+    open fun getResponsesByEmail(id: Long, email: String, authentication: Authentication): HttpResponse<*> {
         return try {
             log.debug("Fetching responses for assessment: {} and email: {}", id, email)
-            
+
+            val assessment = riskAssessmentRepository.findById(id).orElse(null)
+                ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
+            if (!canAccessAssessment(assessment, authentication)) {
+                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
+            }
+
             val responses = responseRepository.findByRiskAssessmentIdAndEmail(id, email)
             
             // Force loading of related entities
@@ -311,29 +336,34 @@ open class ResponseController(
     @Get("/assessment/{id}/authenticated")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     @Transactional(readOnly = true)
-    open fun getAssessmentAuthenticated(id: Long): HttpResponse<*> {
+    open fun getAssessmentAuthenticated(id: Long, authentication: Authentication): HttpResponse<*> {
         return try {
             log.debug("Fetching assessment for authenticated user: {}", id)
-            
+
             val assessment = riskAssessmentRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
-            
+            if (!canAccessAssessment(assessment, authentication)) {
+                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
+            }
+
             // Get requirements for this assessment
             val requirements = getRequirementsForAssessment(assessment)
-            
+
             // Get existing responses
             val responses = responseRepository.findByRiskAssessmentId(assessment.id!!)
-            
+
             // Calculate completion
             val completionPercentage = if (requirements.isNotEmpty()) {
                 (responses.size * 100) / requirements.size
             } else {
                 0
             }
-            
+
             // Check permissions - can edit if assessor or respondent, can review if requestor or admin
             val canEdit = assessment.status == "STARTED"
-            val canReview = true // In production, check if user is requestor or admin
+            val canReview = authentication.roles.let {
+                it.contains("ADMIN") || it.contains("SECCHAMPION")
+            } || authentication.name == assessment.requestor.username
             
             val assessmentData = AssessmentData(
                 assessment = assessment,
@@ -369,19 +399,22 @@ open class ResponseController(
             
             val assessment = riskAssessmentRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
-            
+            if (!canAccessAssessment(assessment, authentication)) {
+                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
+            }
+
             if (assessment.status != "STARTED") {
                 return HttpResponse.badRequest(ErrorResponse("ASSESSMENT_LOCKED", "Assessment is not open for editing"))
             }
-            
+
             // Validate requirement exists
             val requirement = requirementRepository.findById(request.requirementId).orElse(null)
                 ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Requirement not found"))
-            
+
             // Check if response already exists for this requirement and assessment
             val existingResponse = responseRepository
                 .findByRiskAssessmentIdAndRequirementId(assessment.id!!, request.requirementId)
-            
+
             val response = if (existingResponse != null) {
                 // Feature 088 provenance flip: see bulkSaveResponsesAuthenticated.
                 val incomingComment = request.comment?.trim()?.takeIf { it.isNotBlank() }
@@ -432,11 +465,14 @@ open class ResponseController(
             
             val assessment = riskAssessmentRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
-            
+            if (!canAccessAssessment(assessment, authentication)) {
+                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
+            }
+
             if (assessment.status != "STARTED") {
                 return HttpResponse.badRequest(ErrorResponse("ASSESSMENT_LOCKED", "Assessment is not open for editing"))
             }
-            
+
             val savedResponses = mutableListOf<Response>()
             val errors = mutableListOf<String>()
             
@@ -513,13 +549,16 @@ open class ResponseController(
     @Get("/assessment/{id}/requirements-with-responses")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     @Transactional(readOnly = true)
-    open fun getRequirementsWithResponses(id: Long): HttpResponse<*> {
+    open fun getRequirementsWithResponses(id: Long, authentication: Authentication): HttpResponse<*> {
         return try {
             log.debug("Fetching requirements with responses for assessment: {}", id)
-            
+
             val assessment = riskAssessmentRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
-            
+            if (!canAccessAssessment(assessment, authentication)) {
+                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
+            }
+
             val requirements = getRequirementsForAssessment(assessment)
             val responses = responseRepository.findByRiskAssessmentId(id)
             val responseMap = responses.associateBy { it.requirement.id }
@@ -544,13 +583,16 @@ open class ResponseController(
     @Post("/assessment/{id}/create-risk")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     @Transactional
-    open fun createRiskFromAssessment(id: Long, @Valid @Body request: CreateRiskFromResponseRequest): HttpResponse<*> {
+    open fun createRiskFromAssessment(id: Long, @Valid @Body request: CreateRiskFromResponseRequest, authentication: Authentication): HttpResponse<*> {
         return try {
             log.debug("Creating risk from assessment: {} for requirement: {}", id, request.requirementId)
-            
+
             val assessment = riskAssessmentRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
-            
+            if (!canAccessAssessment(assessment, authentication)) {
+                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
+            }
+
             val requirement = requirementRepository.findById(request.requirementId).orElse(null)
                 ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Requirement not found"))
             
