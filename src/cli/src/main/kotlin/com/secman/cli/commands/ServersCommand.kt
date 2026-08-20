@@ -7,6 +7,7 @@ import com.secman.cli.service.ServerVulnerabilityBatch
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
 import com.secman.crowdstrike.dto.DeviceType
 import com.secman.crowdstrike.dto.FalconConfigDto
+import com.secman.crowdstrike.dto.resolveHostIp
 import com.secman.crowdstrike.exception.AuthenticationException
 import com.secman.crowdstrike.exception.CrowdStrikeException
 import com.secman.crowdstrike.exception.NotFoundException
@@ -205,7 +206,7 @@ class ServersCommand {
                                     cloudInstanceId = latestCloudInstanceId ?: firstVuln?.cloudInstanceId,
                                     adDomain = firstVuln?.adDomain,
                                     osVersion = latestOsVersion ?: firstVuln?.osVersion,
-                                    ip = firstVuln?.ip
+                                    ip = vulns.resolveHostIp()
                                 )
                             }.toMap()
 
@@ -453,7 +454,7 @@ class ServersCommand {
                     cloudInstanceId = latestCloudInstanceId ?: firstVuln?.cloudInstanceId,
                     adDomain = firstVuln?.adDomain,
                     osVersion = null,
-                    ip = firstVuln?.ip
+                    ip = vulns.resolveHostIp()
                 )
             }.toMap()
 
