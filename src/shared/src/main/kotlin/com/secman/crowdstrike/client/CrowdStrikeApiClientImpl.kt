@@ -179,8 +179,13 @@ open class CrowdStrikeApiClientImpl(
                 val uri = UriBuilder.of("/spotlight/combined/vulnerabilities/v1")
                     .queryParam("filter", fqlFilter)
                     .queryParam("limit", limit.coerceAtMost(5000))
-                    // Request CVE facet so severity/CVSS fields are present in the response
-                    .queryParam("facet", "cve")
+                    // Request CVE facet so severity/CVSS fields are present in the response,
+                    // and host_info so local_ip / machine_domain / instance_id /
+                    // service_provider_account_id / os_version are present at all. Spotlight omits
+                    // the whole host_info object unless the facet is asked for, so dropping it
+                    // silently NULLs the asset IP (and the domain / cloud metadata) instead of
+                    // failing - the same failure mode as the Discover install_usage facet.
+                    .queryParam("facet", "cve", "host_info")
                     .apply {
                         if (afterToken != null) {
                             queryParam("after", afterToken)
@@ -1294,7 +1299,9 @@ open class CrowdStrikeApiClientImpl(
             val uri = UriBuilder.of("/spotlight/combined/vulnerabilities/v1")
                 .queryParam("filter", fqlFilter)
                 .queryParam("limit", effectiveLimit)
-                .queryParam("facet", "cve")
+                // host_info carries local_ip and the cloud/domain metadata; without the facet
+                // Spotlight omits the object entirely (see queryAllVulnerabilitiesBulk).
+                .queryParam("facet", "cve", "host_info")
                 .apply {
                     if (afterToken != null) {
                         queryParam("after", afterToken)
@@ -1655,7 +1662,10 @@ open class CrowdStrikeApiClientImpl(
                     val uri = UriBuilder.of("/spotlight/combined/vulnerabilities/v1")
                         .queryParam("filter", filter)
                         .queryParam("limit", currentLimit)
-                        .queryParam("facet", "cve")
+                        // host_info carries local_ip and the cloud/domain metadata; this path maps
+                        // straight off the vulnerability record, so without the facet the asset is
+                        // stored with no IP at all (see queryAllVulnerabilitiesBulk).
+                        .queryParam("facet", "cve", "host_info")
                         .apply {
                             if (afterToken != null) {
                                 queryParam("after", afterToken)

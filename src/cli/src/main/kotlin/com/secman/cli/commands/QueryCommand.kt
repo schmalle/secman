@@ -7,6 +7,7 @@ import com.secman.cli.service.VulnerabilityStorageService
 import com.secman.cli.service.ServerVulnerabilityBatch
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
 import com.secman.crowdstrike.dto.FalconConfigDto
+import com.secman.crowdstrike.dto.resolveHostIp
 import com.secman.crowdstrike.exception.AuthenticationException
 import com.secman.crowdstrike.exception.CrowdStrikeException
 import com.secman.crowdstrike.exception.NotFoundException
@@ -148,7 +149,7 @@ class QueryCommand {
                     cloudInstanceId = latestCloudInstanceId ?: firstVuln?.cloudInstanceId,
                     adDomain = firstVuln?.adDomain,
                     osVersion = null,
-                    ip = firstVuln?.ip
+                    ip = finalResponse.vulnerabilities.resolveHostIp()
                 )
 
                 val result = storageService.storeServerVulnerabilities(

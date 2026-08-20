@@ -578,7 +578,9 @@ open class CrowdStrikeQueryService(
                 name = response.hostname,
                 type = "SERVER",
                 owner = "",
-                ip = response.vulnerabilities.firstOrNull()?.ip,
+                // First row can be missing local_ip while a sibling row carries it - take the
+                // first non-blank so IP-scoped exceptions still match (see resolveHostIp).
+                ip = response.vulnerabilities.firstNotNullOfOrNull { v -> v.ip?.takeIf { it.isNotBlank() } },
                 cloudInstanceId = response.instanceId,
                 cloudAccountId = response.cloudAccountId
             )
