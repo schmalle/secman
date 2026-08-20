@@ -10,10 +10,20 @@ set -euo pipefail
 
 TLS_DIR=/run/secman-dev/tls
 DB_DATA=/var/lib/mysql
+DB_ENV=/run/secman-dev/db/env
 : "${SECMAN_DEV_TLS_HOST:=localhost}"
 : "${SECMAN_DEV_DB_NAME:=secman}"
 : "${SECMAN_DEV_DB_USER:=secman}"
 : "${SECMAN_DEV_DB_PASSWORD:=secman}"   # local throwaway DB only — see db_start
+
+# Which database this container was started for. The entrypoint settled it once
+# and wrote it here; every reader takes it from that one file rather than
+# re-deriving it, which is how the firewall rule and the JDBC URL stay in step.
+db_field() { sed -n "s/^$1='\\(.*\\)'\$/\\1/p" "$DB_ENV" 2>/dev/null || true; }
+db_mode()  { db_field SECMAN_DEV_DB_MODE; }
+db_host()  { db_field SECMAN_DEV_DB_HOST; }
+db_port()  { db_field SECMAN_DEV_DB_PORT; }
+db_url()   { db_field SECMAN_DEV_DB_URL;  }
 
 log()  { printf '[devctl] %s\n' "$*"; }
 die()  { printf '[devctl] error: %s\n' "$*" >&2; exit 1; }
@@ -63,6 +73,14 @@ tls_stop() { need_root tls stop; nginx -c /etc/secman-dev/nginx/secman-dev.conf 
 # --- MariaDB (:3306) ----------------------------------------------------------
 db_start() {
     need_root db start
+    # Starting a second MariaDB here when the container was pointed at the Mac's
+    # would give the stack two databases with the same name and no error — the
+    # backend would connect to whichever the URL names and the other would fill
+    # a volume with nothing. Refuse instead.
+    case "$(db_mode)" in
+        host) die "this container was started with '--db host': the database is the one on your Mac at $(db_host):$(db_port). Restart with '--db container' to run one in here." ;;
+        none) die "this container was started with '--db none' and has no database of its own. Restart with '--db container', or point DB_CONNECT wherever you want it." ;;
+    esac
     if pgrep -x mariadbd >/dev/null 2>&1; then log "MariaDB already running"; return 0; fi
     if [ ! -d "$DB_DATA/mysql" ]; then
         log "initialising a fresh MariaDB data directory"
@@ -96,6 +114,45 @@ SQL
 }
 db_stop() { need_root db stop; mariadb-admin shutdown >/dev/null 2>&1 || pkill -x mariadbd || true; }
 
+# Which database, where, and does it actually answer. Deliberately reachable
+# without root: it is the first thing to run when the backend cannot connect.
+db_status() {
+    local mode host port url
+    mode=$(db_mode); host=$(db_host); port=$(db_port); url=$(db_url)
+    case "${mode:-}" in
+        container)
+            printf 'database mode    : container — MariaDB 11.4 running in here, on its own volume\n' ;;
+        host)
+            printf 'database mode    : host — the MariaDB installed on your Mac, reached across the VM boundary\n'
+            printf '                   (one egress rule permits exactly %s:%s)\n' "$host" "$port" ;;
+        none)
+            printf 'database mode    : none — nothing started here; DB_CONNECT is whatever pass-cli resolves\n'
+            return 0 ;;
+        *)
+            printf 'database mode    : unknown (%s missing — is this container from an older image?)\n' "$DB_ENV"
+            return 1 ;;
+    esac
+    printf 'DB_CONNECT       : %s\n' "${url:-<unset>}"
+    if [ "$mode" = container ]; then
+        printf 'server           : %s\n' "$(pgrep -x mariadbd >/dev/null && echo 'running' || echo 'stopped — devctl db start')"
+    fi
+    if nc -z -w 3 "$host" "$port" >/dev/null 2>&1; then
+        printf 'reachable        : yes (%s:%s accepts connections)\n' "$host" "$port"
+    else
+        printf 'reachable        : NO — %s:%s does not answer\n' "$host" "$port"
+        if [ "$mode" = host ]; then
+            cat <<'HINT'
+                   The three usual causes, in order:
+                     1. the server is not running on the Mac  (brew services start mariadb)
+                     2. it is bound to 127.0.0.1 only         (bind-address = 0.0.0.0 in my.cnf)
+                     3. the user has no grant for this container's subnet
+                        (CREATE USER 'secman'@'192.168.64.%' IDENTIFIED BY '...'; GRANT ...)
+HINT
+        fi
+        return 1
+    fi
+}
+
 # --- Egress -------------------------------------------------------------------
 egress_refresh() {
     need_root egress refresh
@@ -108,10 +165,15 @@ devctl — Secman dev container services
 
   devctl status                 what is running, and how egress is enforced
   devctl tls start|stop         TLS front door on :443
-  devctl db  start|stop         MariaDB 11.4 on :3306
+  devctl db  status             which database this container uses, and whether it answers
+  devctl db  start|stop         the in-container MariaDB 11.4 on :3306 ('--db container' only)
   devctl egress refresh         re-render the allowlist and rebuild the allow-set
   devctl egress log [N]         recent denials, from the kernel log (default 40)
   devctl egress unresolved      allowlist names that currently resolve to nothing
+
+Which database the stack talks to is chosen on the Mac, when the container is
+started: `secman-container.sh up --db container|host|none`. `devctl db status`
+shows what that resolved to.
 
 The application stack is not managed here — start it from /workspace with
 ./scripts/startbackenddev.sh and ./scripts/startfrontenddev.sh, exactly as on
@@ -128,7 +190,13 @@ status() {
         "$(cat /run/secman-dev/egress/count 2>/dev/null || echo 0)" \
         "$(grep -c . /run/secman-dev/egress/allowlist.rendered 2>/dev/null || echo 0)"
     printf 'nginx (443)      : %s\n' "$(pgrep -x nginx    >/dev/null && echo running || echo stopped)"
-    printf 'mariadb (3306)   : %s\n' "$(pgrep -x mariadbd >/dev/null && echo running || echo stopped)"
+    case "$(db_mode)" in
+        container) printf 'database         : container — in-container MariaDB, %s\n' \
+                       "$(pgrep -x mariadbd >/dev/null && echo running || echo 'stopped')" ;;
+        host)      printf 'database         : host — the Mac at %s:%s (devctl db status probes it)\n' "$(db_host)" "$(db_port)" ;;
+        none)      printf 'database         : none — DB_CONNECT is whatever pass-cli resolves\n' ;;
+        *)         printf 'mariadb (3306)   : %s\n' "$(pgrep -x mariadbd >/dev/null && echo running || echo stopped)" ;;
+    esac
     printf 'backend (8080)   : %s\n' "$(ss -ltn 2>/dev/null | grep -q ':8080 ' && echo running || echo stopped)"
     printf 'frontend (4321)  : %s\n' "$(ss -ltn 2>/dev/null | grep -q ':4321 ' && echo running || echo stopped)"
     # Presence of a session directory, not a `whoami` call: the check has to work
@@ -145,7 +213,13 @@ cmd=${1:-status}; shift || true
 case "$cmd" in
     status)  status ;;
     tls)     case "${1:-}" in start) tls_start ;; stop) tls_stop ;; restart) tls_stop; tls_start ;; *) usage; exit 2 ;; esac ;;
-    db)      case "${1:-}" in start) db_start  ;; stop) db_stop  ;; restart) db_stop;  db_start  ;; *) usage; exit 2 ;; esac ;;
+    db)      case "${1:-status}" in
+                 status)  db_status ;;
+                 start)   db_start  ;;
+                 stop)    db_stop   ;;
+                 restart) db_stop; db_start ;;
+                 *)       usage; exit 2 ;;
+             esac ;;
     egress)  case "${1:-}" in
                  refresh)    egress_refresh ;;
                  log)        egress-check --log "${2:-40}" ;;

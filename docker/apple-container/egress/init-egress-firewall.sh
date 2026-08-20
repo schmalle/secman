@@ -9,7 +9,10 @@
 #     1. loopback,
 #     2. replies on connections the container already established,
 #     3. DNS to the resolvers in /etc/resolv.conf,
-#     4. TCP to an address in the allow-set, on $EGRESS_PORTS.
+#     4. TCP to an address in the allow-set, on $EGRESS_PORTS,
+#     5. with `--db host`, TCP to exactly one address on exactly one port: the
+#        MariaDB installed on the Mac. Not part of the allow-set — that set is
+#        only ever matched on $EGRESS_PORTS, and a database is not on those.
 #   INPUT policy DROP, opened only for the published dev ports and for replies.
 #
 # The allow-set is built from
@@ -37,11 +40,34 @@ EGRESS_PORTS=${SECMAN_EGRESS_PORTS:-80,443,22}
 INBOUND_PORTS=${SECMAN_EGRESS_INBOUND_PORTS:-443,3306,4321,8080}
 GITHUB_META=${SECMAN_EGRESS_GITHUB_META:-1}
 
+# The database selection, as the entrypoint settled it. Read from the file
+# rather than the environment because `refresh-egress` rebuilds this ruleset
+# later, from a root shell that inherited none of the entrypoint's variables —
+# and a refresh that quietly dropped the database rule would take the stack down
+# half an hour after it started working.
+DB_ENV=${SECMAN_DEV_DB_ENV:-/run/secman-dev/db/env}
+DB_MODE=""; DB_HOST=""; DB_PORT=""
+if [ -r "$DB_ENV" ]; then
+    DB_MODE=$(sed -n "s/^SECMAN_DEV_DB_MODE='\\(.*\\)'\$/\\1/p" "$DB_ENV")
+    DB_HOST=$(sed -n "s/^SECMAN_DEV_DB_HOST='\\(.*\\)'\$/\\1/p" "$DB_ENV")
+    DB_PORT=$(sed -n "s/^SECMAN_DEV_DB_PORT='\\(.*\\)'\$/\\1/p" "$DB_ENV")
+fi
+
 log() { printf '[egress] %s\n' "$*"; }
 die() { printf '[egress] FATAL: %s\n' "$*" >&2; exit 1; }
 
 [ "$(id -u)" -eq 0 ] || die "must run as root"
 mkdir -p "$STATE_DIR"
+
+# Re-validated here even though the entrypoint already checked: this is where
+# the values reach `iptables`, and a rule built from an unchecked string is the
+# one that ends up permitting something nobody asked for (CLAUDE.md §A03).
+if [ "$DB_MODE" = "host" ]; then
+    printf '%s\n' "$DB_HOST" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$' \
+        || die "database host '$DB_HOST' in $DB_ENV is not an IPv4 address"
+    printf '%s\n' "$DB_PORT" | grep -qE '^[0-9]{1,5}$' \
+        || die "database port '$DB_PORT' in $DB_ENV is not a TCP port"
+fi
 
 # Apple's container kernel has no usable nftables backend, so the nft-flavoured
 # wrappers fail in confusing ways. Pin xtables explicitly — a silent
@@ -223,6 +249,15 @@ fi
 "$IPT" -A INPUT -p tcp -m multiport --dports "$INBOUND_PORTS" -j ACCEPT
 log "inbound TCP permitted on $INBOUND_PORTS"
 
+# The database on the Mac, when the container was started with `--db host`.
+# One address, one port, and nothing else: this is deliberately not folded into
+# the allow-set, so widening the allowlist can never widen database reach and
+# vice versa.
+if [ "$DB_MODE" = "host" ]; then
+    "$IPT" -A OUTPUT -p tcp -d "$DB_HOST" --dport "$DB_PORT" -j ACCEPT
+    log "host database permitted: $DB_HOST:$DB_PORT (--db host)"
+fi
+
 # --- The allow-set, applied ---------------------------------------------------
 if [ "$USE_IPSET" -eq 1 ]; then
     "$IPT" -A OUTPUT -p tcp -m multiport --dports "$EGRESS_PORTS" \
@@ -249,3 +284,6 @@ fi
 printf '%s\n' "$MODE" > "$STATE_DIR/mode"
 printf '%s\n' "$TOTAL" > "$STATE_DIR/count"
 log "firewall active — $TOTAL addresses/prefixes from $names names and $literals literals (backend=$MODE, ports=$EGRESS_PORTS)"
+if [ "$DB_MODE" = "host" ]; then
+    log "                 plus one database rule: $DB_HOST:$DB_PORT"
+fi

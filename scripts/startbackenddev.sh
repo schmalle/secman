@@ -3,7 +3,13 @@
 
 export MICRONAUT_ENVIRONMENTS=dev
 export SECMAN_BACKEND_URL="pass://Test/SECMAN//SECMAN_BACKEND_BASE_URL"
-export DB_CONNECT="pass://Test/SECMAN/DB_CONNECT"
+# pass-cli is the source of truth for the database, unless the environment
+# already names one. The shielded dev container (docs/APPLE_CONTAINER_DEV.md)
+# is what sets it: `up --db container|host` decides whether the stack talks to
+# the container's own MariaDB or to the one installed on the Mac, and exports
+# the resulting DB_CONNECT into every shell inside. Unset — the normal case on a
+# Mac — this resolves through pass-cli exactly as before.
+export DB_CONNECT="${DB_CONNECT:-pass://Test/SECMAN/DB_CONNECT}"
 export SECMAN_DEBUG=true
 
 # Verbose logging is a dev-only default; application.yml ships these at INFO so production

@@ -5,8 +5,8 @@
 # It builds and starts one long-lived container that
 #
 #   * sees exactly one host path — the source tree you pass in, and nothing else;
-#   * publishes 8080 (backend), 4321 (frontend), 443 (TLS front door) and
-#     3306 (MariaDB) back to the Mac;
+#   * publishes 8080 (backend), 4321 (frontend), 443 (TLS front door) and,
+#     with `--db container`, 3306 (MariaDB) back to the Mac;
 #   * can reach only the addresses on the egress allowlist, enforced by an
 #     iptables policy inside the container — there is no proxy;
 #   * carries Claude Code, Kimi CLI and pass-cli, so the agents run inside the
@@ -33,10 +33,22 @@ CPUS=${SECMAN_DEV_CPUS:-6}
 
 TLS_PORT=${SECMAN_DEV_TLS_PORT:-443}
 TLS_HOST=${SECMAN_DEV_TLS_HOST:-localhost}
-WITH_DB=1
 WITH_TLS=1
 EXTRA_DOMAINS=${SECMAN_EGRESS_EXTRA_DOMAINS:-}
 SRC=""
+
+# Which database the stack inside the shield talks to. One of:
+#   container  the MariaDB 11.4 this container runs itself, on its own volume
+#   host       the MariaDB you installed on macOS, reached across the VM boundary
+#   none       neither — DB_CONNECT stays whatever pass-cli resolves
+# It is a mode rather than a boolean because the three differ in more than
+# whether a server starts: 'host' additionally needs a hole in the egress
+# firewall (3306 is not on the allowlist's port set, and the Mac is not on the
+# allowlist), which 'none' must not get.
+DB_MODE=${SECMAN_DEV_DB_MODE:-container}
+DB_HOST=${SECMAN_DEV_DB_HOST:-}      # empty in 'host' mode = auto-detect the Mac
+DB_PORT=${SECMAN_DEV_DB_PORT:-3306}
+DB_NAME=${SECMAN_DEV_DB_NAME:-secman}
 
 VOL_HOME="${NAME}-home"     # agent config, pass-cli session, Gradle/npm caches
 VOL_DB="${NAME}-db"         # MariaDB data directory
@@ -120,6 +132,53 @@ can_bind_privileged_port() {
 }
 
 # -----------------------------------------------------------------------------
+# Database selection
+# -----------------------------------------------------------------------------
+# These values are interpolated into a JDBC URL inside the container and, in
+# 'host' mode, into an `iptables -d ... --dport ...` rule. Neither can be
+# parameter-bound, so a closed character allowlist is the substitute
+# (CLAUDE.md §A03: what cannot be bound goes through an allowlist). Checked here
+# as well as in the container so a typo is refused before anything starts.
+validate_db_selection() {
+    case "$DB_MODE" in
+        container|host|none) ;;
+        *) die "--db must be one of: container, host, none (got '$DB_MODE')" ;;
+    esac
+    printf '%s\n' "$DB_PORT" | grep -qE '^[0-9]{1,5}$' && [ "$DB_PORT" -ge 1 ] && [ "$DB_PORT" -le 65535 ] \
+        || die "--db-port must be a TCP port between 1 and 65535 (got '$DB_PORT')"
+    printf '%s\n' "$DB_NAME" | grep -qE '^[A-Za-z0-9_]{1,64}$' \
+        || die "--db-name must match ^[A-Za-z0-9_]{1,64}$ (got '$DB_NAME')"
+
+    # The container's own server is fixed on 3306 — that is the port devctl
+    # starts it on and the one published back to the Mac — so a --db-port there
+    # would only produce a DB_CONNECT nothing is listening on.
+    if [ "$DB_PORT" != 3306 ] && [ "$DB_MODE" != host ]; then
+        die "--db-port applies to '--db host' only; the in-container database is fixed on 3306 (mode is '$DB_MODE')"
+    fi
+
+    if [ -n "$DB_HOST" ]; then
+        [ "$DB_MODE" = host ] || die "--db-host applies to '--db host' only (mode is '$DB_MODE')"
+        printf '%s\n' "$DB_HOST" \
+            | grep -qE '^([0-9]{1,3}(\.[0-9]{1,3}){3}|[A-Za-z0-9]([A-Za-z0-9.-]{0,252}[A-Za-z0-9])?)$' \
+            || die "--db-host must be an IPv4 address or a hostname (got '$DB_HOST')"
+    fi
+
+    [ "$DB_MODE" = host ] || return 0
+
+    # The Mac's own MariaDB has to be listening before the container can use it,
+    # and the usual reason it is not reachable is that it is bound to 127.0.0.1
+    # only — which serves the Mac fine and the container VM not at all. Warn
+    # rather than refuse: the server may simply be started after the container.
+    if command -v nc >/dev/null 2>&1 && ! nc -z -G 2 127.0.0.1 "$DB_PORT" >/dev/null 2>&1; then
+        warn "nothing is listening on 127.0.0.1:$DB_PORT on this Mac — start your local MariaDB"
+        warn "(e.g. \`brew services start mariadb\`) before the stack inside the container needs it."
+    fi
+    note "the Mac's MariaDB must accept connections from the container VM's subnet:"
+    note "  bind-address = 0.0.0.0 in my.cnf, and a grant for the container, e.g."
+    note "  CREATE USER 'secman'@'192.168.64.%' IDENTIFIED BY '...'; GRANT ... ;"
+}
+
+# -----------------------------------------------------------------------------
 # build
 # -----------------------------------------------------------------------------
 cmd_build() {
@@ -145,8 +204,13 @@ cmd_up() {
             --cpus|-c)      CPUS=$2; shift 2 ;;
             --tls-host)     TLS_HOST=$2; shift 2 ;;
             --tls-port)     TLS_PORT=$2; shift 2 ;;
-            --with-db)      WITH_DB=1; shift ;;
-            --no-db)        WITH_DB=0; shift ;;
+            --db)           DB_MODE=$2; shift 2 ;;
+            --db-host)      DB_HOST=$2; shift 2 ;;
+            --db-port)      DB_PORT=$2; shift 2 ;;
+            --db-name)      DB_NAME=$2; shift 2 ;;
+            # Kept because they predate --db and are in people's shell history.
+            --with-db)      DB_MODE=container; shift ;;
+            --no-db)        DB_MODE=none; shift ;;
             --no-tls)       WITH_TLS=0; shift ;;
             --allow-domain) EXTRA_DOMAINS="${EXTRA_DOMAINS:+$EXTRA_DOMAINS,}$2"; shift 2 ;;
             *)              die "unknown option for 'up': $1" ;;
@@ -154,6 +218,7 @@ cmd_up() {
     done
 
     preflight
+    validate_db_selection
     SRC=$(resolve_src "$SRC")
 
     container image inspect "$IMAGE" >/dev/null 2>&1 \
@@ -173,7 +238,7 @@ cmd_up() {
     # narrow. They are also sparse ext4 images, so Gradle and npm stop paying the
     # virtiofs cost they would on a shared directory.
     container volume create "$VOL_HOME" >/dev/null 2>&1 || true
-    if [ "$WITH_DB" -eq 1 ]; then container volume create "$VOL_DB" >/dev/null 2>&1 || true; fi
+    if [ "$DB_MODE" = container ]; then container volume create "$VOL_DB" >/dev/null 2>&1 || true; fi
 
     local publish_tls=$TLS_PORT
     if [ "$TLS_PORT" -lt 1024 ] && ! can_bind_privileged_port "$TLS_PORT"; then
@@ -187,7 +252,14 @@ cmd_up() {
     log "starting '$NAME'"
     note "source   : $SRC  ->  /workspace   (the only host path shared)"
     note "memory   : $MEMORY   cpus: $CPUS"
-    note "ports    : 8080 backend · 4321 frontend · ${publish_tls}->443 TLS · 3306 mariadb"
+    case "$DB_MODE" in
+        container) note "ports    : 8080 backend · 4321 frontend · ${publish_tls}->443 TLS · 3306 mariadb"
+                   note "database : in-container MariaDB 11.4 on :3306 (volume $VOL_DB)" ;;
+        host)      note "ports    : 8080 backend · 4321 frontend · ${publish_tls}->443 TLS  (no :3306 — nothing listens)"
+                   note "database : the Mac's MariaDB on ${DB_HOST:-the container default gateway}:$DB_PORT/$DB_NAME" ;;
+        none)      note "ports    : 8080 backend · 4321 frontend · ${publish_tls}->443 TLS  (no :3306 — nothing listens)"
+                   note "database : none started; DB_CONNECT stays whatever pass-cli resolves" ;;
+    esac
 
     # --publish and every other option must precede the image name; `container`
     # treats anything after it as arguments for the container process.
@@ -205,11 +277,17 @@ cmd_up() {
         --publish "4321:4321"
         --publish "${publish_tls}:443"
         --env "SECMAN_DEV_WITH_TLS=$WITH_TLS"
-        --env "SECMAN_DEV_WITH_DB=$WITH_DB"
         --env "SECMAN_DEV_TLS_HOST=$TLS_HOST"
         --env "SECMAN_EGRESS_EXTRA_DOMAINS=$EXTRA_DOMAINS"
+        --env "SECMAN_DEV_DB_MODE=$DB_MODE"
+        --env "SECMAN_DEV_DB_HOST=$DB_HOST"
+        --env "SECMAN_DEV_DB_PORT=$DB_PORT"
+        --env "SECMAN_DEV_DB_NAME=$DB_NAME"
+        # Kept alongside SECMAN_DEV_DB_MODE so a newer script still drives an
+        # image built before --db existed, and vice versa.
+        --env "SECMAN_DEV_WITH_DB=$([ "$DB_MODE" = container ] && echo 1 || echo 0)"
     )
-    if [ "$WITH_DB" -eq 1 ]; then
+    if [ "$DB_MODE" = container ]; then
         args+=(--volume "$VOL_DB:/var/lib/mysql" --publish "3306:3306")
     fi
     # A Proton Pass personal access token, if the host shell exports one, so the
@@ -243,7 +321,11 @@ cmd_up() {
     note "$0 shell            # a login shell inside the shield"
     note "$0 claude           # Claude Code, inside the shield"
     note "$0 kimi             # Kimi CLI, inside the shield"
+    note "$0 db               # which database the stack will use, and whether it answers"
     note "then, from /workspace: ./scripts/startbackenddev.sh and ./scripts/startfrontenddev.sh"
+    if [ "$DB_MODE" != none ]; then
+        note "(DB_CONNECT is already exported inside the container for the '--db $DB_MODE' choice)"
+    fi
 }
 
 # -----------------------------------------------------------------------------
@@ -312,6 +394,23 @@ cmd_egress() {
     esac
 }
 
+# -----------------------------------------------------------------------------
+# db
+# -----------------------------------------------------------------------------
+# Which database the running container is wired to, and whether it answers.
+# The container is the only place that knows: 'host' mode resolves the Mac's
+# address from inside (it is the container's default gateway, which the Mac
+# cannot name for itself), and the entrypoint records the result.
+cmd_db() {
+    require_running
+    case "${1:-status}" in
+        status) container exec --user dev "$NAME" bash -lc 'devctl db status' ;;
+        start|stop|restart)
+                container exec --user root "$NAME" bash -lc "devctl db $1" ;;
+        *)      die "usage: $0 db [status|start|stop|restart]" ;;
+    esac
+}
+
 usage() {
     cat <<USAGE
 secman-container.sh — shielded Secman dev environment on Apple \`container\`
@@ -325,6 +424,7 @@ secman-container.sh — shielded Secman dev environment on Apple \`container\`
   root [cmd...]                     root shell inside it (for devctl)
   status                            services, ports and egress mode
   logs [-f]                         container start-up log
+  db [status|start|stop]            which database is in use, and whether it answers
   egress [show|log|refresh|test]   inspect or rebuild the egress policy
   down                              stop and remove the container, keep volumes
   destroy                           down, and delete the volumes too
@@ -335,9 +435,20 @@ Options for 'up':
   --name NAME       container name (default: $NAME)
   --memory SIZE     default $MEMORY — Gradle's daemon alone is configured for 5632m
   --cpus N          default $CPUS
-  --no-db           do not run the in-container MariaDB 11.4 (:3306 stays closed).
-                    Use this when DB_CONNECT from pass-cli points at a database
-                    that already exists elsewhere.
+  --db MODE         which database the stack inside talks to (default: container)
+                      container  the MariaDB 11.4 this container runs itself, on
+                                 its own volume, published back on :3306
+                      host       the MariaDB installed on this Mac, reached across
+                                 the VM boundary. Opens exactly one extra hole in
+                                 the egress firewall: TCP to the Mac on --db-port
+                      none       start none; DB_CONNECT stays whatever pass-cli
+                                 resolves (this is the old --no-db)
+  --db-host ADDR    'host' mode only: where the Mac is, as seen from inside the
+                    container. Default: auto-detected (the default gateway)
+  --db-port PORT    database port (default: $DB_PORT)
+  --db-name NAME    database name for the generated DB_CONNECT (default: $DB_NAME)
+  --with-db         alias for --db container
+  --no-db           alias for --db none
   --no-tls          do not start the :443 TLS front door
   --tls-host HOST   certificate subject / SAN (default: $TLS_HOST)
   --tls-port PORT   host port for the container's :443 (default: $TLS_PORT)
@@ -345,7 +456,8 @@ Options for 'up':
                     only — filtering is by address, so a wildcard matches nothing
 
 Environment: SECMAN_DEV_IMAGE, SECMAN_DEV_NAME, SECMAN_DEV_MEMORY, SECMAN_DEV_CPUS,
-SECMAN_DEV_TLS_HOST, SECMAN_DEV_TLS_PORT, SECMAN_EGRESS_EXTRA_DOMAINS,
+SECMAN_DEV_TLS_HOST, SECMAN_DEV_TLS_PORT, SECMAN_DEV_DB_MODE, SECMAN_DEV_DB_HOST,
+SECMAN_DEV_DB_PORT, SECMAN_DEV_DB_NAME, SECMAN_EGRESS_EXTRA_DOMAINS,
 PROTON_PASS_PERSONAL_ACCESS_TOKEN.
 
 Full documentation: docs/APPLE_CONTAINER_DEV.md
@@ -364,6 +476,7 @@ case "$cmd" in
     status)  cmd_status ;;
     logs)    cmd_logs "${1:-}" ;;
     egress)  cmd_egress "$@" ;;
+    db)      cmd_db "$@" ;;
     down|stop) cmd_down ;;
     destroy) cmd_destroy ;;
     help|-h|--help) usage ;;
