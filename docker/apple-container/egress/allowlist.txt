@@ -1,0 +1,92 @@
+# Outbound domain allowlist for the Secman shielded dev container.
+#
+# Squid ACL type `dstdomain` syntax:
+#   .example.com   matches example.com and every subdomain
+#   example.com    matches that exact name only
+#
+# Everything not listed here (or in allowlist.local.txt) is refused with a 403
+# from the proxy, and the container's iptables OUTPUT policy refuses any attempt
+# to bypass the proxy. Add site-local entries to allowlist.local.txt — it is
+# never overwritten by an image rebuild — or pass --allow-domain to
+# scripts/container/secman-container.sh.
+#
+# Keep this list ordered by purpose; a bare domain with no comment is a domain
+# nobody can later justify removing.
+
+# --- Claude Code -------------------------------------------------------------
+.anthropic.com              # api.anthropic.com, statsig.anthropic.com, console.anthropic.com
+.claude.ai                  # OAuth / subscription login
+.claude.com                 # docs + install redirects
+.statsig.com                # feature flags used by the CLI
+.sentry.io                  # crash reporting
+
+# --- Kimi CLI (Moonshot AI) --------------------------------------------------
+.kimi.com                   # code.kimi.com (installer/updates), OAuth login
+.moonshot.ai                # api.moonshot.ai, platform.moonshot.ai
+.moonshot.cn                # api.moonshot.cn (CN endpoint)
+
+# --- Proton Pass (pass-cli secret resolution) --------------------------------
+.proton.me                  # account.proton.me, pass-api.proton.me, download endpoints
+.protonmail.ch              # legacy API host still used by the auth flow
+
+# --- Source control ----------------------------------------------------------
+.github.com                 # api.github.com, codeload is separate below
+github.com
+codeload.github.com         # tarball/zipball downloads
+.githubusercontent.com      # raw, objects, avatars, pkg-containers
+ghcr.io                     # GitHub Container Registry
+.ghcr.io
+
+# --- JVM build: Gradle, Maven Central, Google Maven, Adoptium ----------------
+.gradle.org                 # services.gradle.org, plugins.gradle.org, plugins-artifacts.gradle.org
+repo.maven.apache.org       # mavenCentral()
+repo1.maven.org             # mavenCentral() CDN alias
+.maven.apache.org
+dl.google.com               # google() — Android/Google Maven artifacts
+maven.google.com
+.jetbrains.com              # Kotlin/KSP compiler artifacts and toolchain downloads
+.adoptium.net               # JDK toolchain auto-provisioning
+
+# --- Node / npm --------------------------------------------------------------
+registry.npmjs.org
+.npmjs.org
+.npmjs.com
+nodejs.org
+
+# --- Go (src/relay) ----------------------------------------------------------
+proxy.golang.org
+sum.golang.org
+.golang.org
+go.dev
+storage.googleapis.com      # the module proxy's backing store
+
+# --- Python / uv (Kimi CLI runtime and upgrades) -----------------------------
+pypi.org
+files.pythonhosted.org
+.astral.sh                  # uv itself and its managed CPython builds
+
+# --- Playwright (tests/e2e) --------------------------------------------------
+cdn.playwright.dev
+.playwright.dev
+playwright.download.prss.microsoft.com
+.prss.microsoft.com
+
+# --- Debian packages (apt inside the container) ------------------------------
+deb.debian.org
+security.debian.org
+.debian.org
+dlm.mariadb.com             # MariaDB 11.4 packages
+supplychain.mariadb.com     # MariaDB signing key
+
+# --- Secman application outbound calls ---------------------------------------
+# These are the hosts the backend and CLI reach while you exercise the stack.
+# Each one is already SSRF-guarded server-side (§A10); the allowlist is the
+# second layer, not the first.
+endoflife.date              # secman.eol.base-url default (docs/EOL.md)
+.crowdstrike.com            # Falcon Spotlight / Discover (docs/CROWDSTRIKE_IMPORT.md)
+openrouter.ai               # AI risk assessment (SECMAN_OPENROUTER_API_KEY)
+hooks.slack.com             # per-user Slack webhooks
+.slack.com
+api.telegram.org            # Telegram bot notifications
+.amazonaws.com              # S3 user-mapping import, AWS SDK endpoints
+.letsencrypt.org            # src/relay ACME (RFC 8555) staging + production

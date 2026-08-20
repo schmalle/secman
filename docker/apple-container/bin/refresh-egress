@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Re-render the allowlist and put it into effect without restarting the container.
+#
+# Needed in two situations:
+#   * a domain was added (allowlist.local.txt, or --allow-domain then a restart);
+#   * the firewall is in address mode and an allowlisted host moved to new
+#     addresses, which is normal for anything CDN-hosted.
+set -euo pipefail
+[ "$(id -u)" -eq 0 ] || { echo "refresh-egress must run as root" >&2; exit 1; }
+
+count=$(/usr/local/sbin/render-egress-allowlist)
+echo "[egress] allowlist rendered: $count domains"
+
+# Squid re-reads the ACL file on reconfigure; nothing else has to move.
+squid -k reconfigure -f /etc/secman-dev/egress/squid.conf
+echo "[egress] proxy reconfigured"
+
+# Address mode pins IPs into iptables, so it has to be rebuilt from the new list.
+# Owner mode does not depend on addresses at all and needs no rebuild.
+if [ "$(cat /run/secman-dev/egress/mode 2>/dev/null || echo)" = "address" ]; then
+    /usr/local/sbin/init-egress-firewall
+fi

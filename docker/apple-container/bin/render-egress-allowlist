@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Render the effective egress allowlist.
+#
+# Three sources, one output. Squid's handling of comments inside an ACL file
+# differs between builds, and the firewall's address-mode fallback needs to
+# resolve exactly the same names squid enforces — so both read this rendered
+# file rather than parsing the annotated sources themselves.
+#
+#   /etc/secman-dev/egress/allowlist.txt        image default, replaced on rebuild
+#   /etc/secman-dev/egress/allowlist.local.txt  site-local, survives a rebuild
+#   $SECMAN_EGRESS_EXTRA_DOMAINS                --allow-domain from the host script
+set -euo pipefail
+
+OUT=${1:-/run/secman-dev/egress/allowlist.rendered}
+BASE=${SECMAN_EGRESS_ALLOWLIST:-/etc/secman-dev/egress/allowlist.txt}
+LOCAL=${SECMAN_EGRESS_ALLOWLIST_LOCAL:-/etc/secman-dev/egress/allowlist.local.txt}
+mkdir -p "$(dirname "$OUT")"
+
+[ -r "$BASE" ] || { echo "render-egress-allowlist: cannot read $BASE" >&2; exit 1; }
+
+# `|| true` on the optional sources: a missing or unreadable local allowlist is a
+# normal state, and `set -e` plus pipefail would otherwise turn it into a failed
+# start with no diagnostic. The mandatory source is checked separately below.
+{
+    cat "$BASE" || true
+    cat "$LOCAL" 2>/dev/null || true
+    printf '%s\n' "${SECMAN_EGRESS_EXTRA_DOMAINS:-}" | tr ',' '\n' | tr ' ' '\n'
+} \
+  | sed -e 's/#.*$//' -e 's/[[:space:]]//g' \
+  | { grep -E '^\.?[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,}$' || true; } \
+  | sort -u > "$OUT.tmp"
+
+# Never install an empty policy: squid treats an empty dstdomain file as "matches
+# nothing", which would silently take the whole toolchain offline.
+if [ ! -s "$OUT.tmp" ]; then
+    rm -f "$OUT.tmp"
+    echo "render-egress-allowlist: refusing to write an empty allowlist" >&2
+    exit 1
+fi
+mv "$OUT.tmp" "$OUT"
+wc -l < "$OUT" | tr -d ' '

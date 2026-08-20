@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# egress-check — show, and optionally test, what this container may reach.
+#
+#   egress-check                 summary + the enforcement mode in effect
+#   egress-check <host>...       probe specific hosts through the gate
+#   egress-check --log [N]       last N proxy decisions
+set -euo pipefail
+
+RENDERED=/run/secman-dev/egress/allowlist.rendered
+MODE_FILE=/run/secman-dev/egress/mode
+
+if [ "${1:-}" = "--log" ]; then
+    exec tail -n "${2:-40}" /var/log/squid/access.log
+fi
+
+mode=$(cat "$MODE_FILE" 2>/dev/null || echo 'not initialised')
+echo "enforcement : proxy allowlist (squid, 127.0.0.1:3128) + iptables ($mode mode)"
+case "$mode" in
+    owner)
+        echo "              only squid's uid may open outbound sockets, so nothing can"
+        echo "              route around the domain allowlist."
+        ;;
+    address)
+        echo "              this kernel has no xt_owner match, so iptables permits the"
+        echo "              *addresses* the allowlisted names resolve to. Domain-level"
+        echo "              filtering still applies to anything using the proxy; a"
+        echo "              process opening a raw socket could reach another site that"
+        echo "              shares an allowlisted address. Run 'devctl egress refresh'"
+        echo "              after a DNS change."
+        ;;
+esac
+echo "domains     : $(wc -l < "$RENDERED" 2>/dev/null | tr -d ' ' || echo 0)"
+echo
+
+if [ "$#" -eq 0 ]; then
+    echo "allowlisted:"
+    sed 's/^/  /' "$RENDERED" 2>/dev/null || echo "  (none — the container is not initialised)"
+    echo
+    echo "probe a host with: egress-check https://example.com"
+    exit 0
+fi
+
+rc=0
+for target in "$@"; do
+    case "$target" in http://*|https://*) url=$target ;; *) url="https://$target" ;; esac
+    code=$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' -x http://127.0.0.1:3128 "$url" 2>/dev/null || echo 000)
+    case "$code" in
+        403) printf '  %-50s BLOCKED (proxy 403 — not in the allowlist)\n' "$url"; rc=1 ;;
+        000) printf '  %-50s UNREACHABLE (no response through the gate)\n'  "$url"; rc=1 ;;
+        *)   printf '  %-50s allowed (HTTP %s)\n' "$url" "$code" ;;
+    esac
+done
+exit "$rc"
