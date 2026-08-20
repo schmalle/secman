@@ -58,6 +58,17 @@ class AddRequirementTool(
     )
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
+        // Mirrors RequirementController's own @Secured("ADMIN", "REQ", "SECCHAMPION") boundary —
+        // the requirement corpus is not asset/owner-scoped, so a role gate is the right control
+        // here rather than a row-scope check. Without this, any delegated caller holding only
+        // the coarse REQUIREMENTS_WRITE MCP permission (McpToolPermissions.LISTING/.CALLING)
+        // could create arbitrary requirements, bypassing the controller's role restriction.
+        requireAnyRole(
+            context, "ADMIN", "REQ", "SECCHAMPION",
+            code = "ROLE_REQUIRED",
+            message = "ADMIN, REQ or SECCHAMPION role required to add requirements"
+        )?.let { return it }
+
         val shortreq = arguments["shortreq"] as? String
             ?: return McpToolResult.error("VALIDATION_ERROR", "Short requirement text is required")
 
