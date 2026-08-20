@@ -33,12 +33,14 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LC_ALL=C.UTF-8
 
 # --- Base packages ------------------------------------------------------------
-# iptables: the egress firewall. On Apple's default container kernel nftables is
-# NOT available (missing kernel bits), so the legacy xtables backend is the one
-# that works — see docs/APPLE_CONTAINER_DEV.md §Apple-specific behaviour.
-# squid:    the domain-allowlisting forward proxy that all agent/build traffic
-#           has to pass through.
-# dnsutils: `dig`, used by the firewall's IP-allowlist fallback path.
+# iptables: the egress firewall, and the only egress control there is — there is
+#           no proxy. On Apple's default container kernel nftables is NOT
+#           available (missing kernel bits), so the legacy xtables backend is
+#           the one that works — see docs/APPLE_CONTAINER_DEV.md.
+# ipset:    holds the allow-set as one hash instead of a few hundred linear
+#           rules. Probed at run time; the firewall falls back to plain rules on
+#           a kernel without it.
+# dnsutils: `dig`, which is how the allowlist's names become addresses.
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -47,8 +49,8 @@ RUN set -eux; \
         bash bash-completion less nano vim-tiny procps psmisc lsof \
         jq ripgrep fd-find bc file tree \
         build-essential pkg-config \
-        iptables iproute2 dnsutils netcat-openbsd \
-        squid nginx openssl \
+        iptables ipset iproute2 dnsutils netcat-openbsd \
+        nginx openssl \
         python3 python3-venv \
         sudo tini locales; \
     rm -rf /var/lib/apt/lists/*
@@ -169,7 +171,6 @@ RUN set -eux; \
     kimi --version
 
 # --- Container configuration --------------------------------------------------
-COPY egress/squid.conf              /etc/secman-dev/egress/squid.conf
 COPY egress/allowlist.txt           /etc/secman-dev/egress/allowlist.txt
 COPY egress/init-egress-firewall.sh /usr/local/sbin/init-egress-firewall
 COPY nginx/secman-dev.conf          /etc/secman-dev/nginx/secman-dev.conf

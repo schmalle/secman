@@ -1,41 +1,78 @@
 #!/usr/bin/env bash
 # egress-check — show, and optionally test, what this container may reach.
 #
-#   egress-check                 summary + the enforcement mode in effect
-#   egress-check <host>...       probe specific hosts through the gate
-#   egress-check --log [N]       last N proxy decisions
+#   egress-check                 what is enforced, and the allowlist
+#   egress-check <host>...       probe specific hosts through the real path
+#   egress-check --log [N]       recent denials (the kernel's record, not a proxy log)
+#   egress-check --unresolved    allowlist names that currently resolve to nothing
 set -euo pipefail
 
-RENDERED=/run/secman-dev/egress/allowlist.rendered
-MODE_FILE=/run/secman-dev/egress/mode
+STATE=/run/secman-dev/egress
+RENDERED="$STATE/allowlist.rendered"
 
-if [ "${1:-}" = "--log" ]; then
-    exec tail -n "${2:-40}" /var/log/squid/access.log
-fi
-
-mode=$(cat "$MODE_FILE" 2>/dev/null || echo 'not initialised')
-echo "enforcement : proxy allowlist (squid, 127.0.0.1:3128) + iptables ($mode mode)"
-case "$mode" in
-    owner)
-        echo "              only squid's uid may open outbound sockets, so nothing can"
-        echo "              route around the domain allowlist."
-        ;;
-    address)
-        echo "              this kernel has no xt_owner match, so iptables permits the"
-        echo "              *addresses* the allowlisted names resolve to. Domain-level"
-        echo "              filtering still applies to anything using the proxy; a"
-        echo "              process opening a raw socket could reach another site that"
-        echo "              shares an allowlisted address. Run 'devctl egress refresh'"
-        echo "              after a DNS change."
-        ;;
+case "${1:-}" in
+    --log)
+        # There is no proxy access log, so denials are read back two ways.
+        #
+        # The counter first, because it always works: netfilter's LOG target is
+        # suppressed outside a kernel's initial network namespace, so the
+        # per-packet text can be missing while the rule is plainly matching. A
+        # rule counter is never suppressed.
+        if command -v iptables-legacy >/dev/null 2>&1; then IPT=iptables-legacy; else IPT=iptables; fi
+        denied=$($IPT -L OUTPUT -n -v -x 2>/dev/null | awk '/REJECT/ {print $1; exit}')
+        printf 'denied since the last refresh: %s packet(s)\n\n' "${denied:-unknown}"
+        if dmesg 2>/dev/null | grep -q secman-egress-deny; then
+            dmesg 2>/dev/null | grep secman-egress-deny | tail -n "${2:-40}"
+        else
+            echo "No per-packet detail available (the kernel log is empty or unreadable here)."
+            echo "The counter above still tells you whether anything is being refused."
+        fi
+        echo
+        echo "Note: the LOG rule is rate limited to 12/min, so a burst is sampled, not complete."
+        exit 0 ;;
+    --unresolved)
+        if [ -s "$STATE/unresolved" ]; then
+            echo "allowlist names that resolved to nothing at the last refresh:"
+            sed 's/^/  /' "$STATE/unresolved"
+            echo
+            echo "a name here is unreachable. Either it is wrong, or DNS was failing —"
+            echo "run 'devctl egress refresh' and look again."
+        else
+            echo "every allowlist name resolved."
+        fi
+        exit 0 ;;
 esac
-echo "domains     : $(wc -l < "$RENDERED" 2>/dev/null | tr -d ' ' || echo 0)"
+
+mode=$(cat "$STATE/mode"  2>/dev/null || echo 'not initialised')
+count=$(cat "$STATE/count" 2>/dev/null || echo 0)
+
+echo "enforcement : iptables only — no proxy"
+case "$mode" in
+    ipset) echo "              allow-set held in an ipset ($count addresses/prefixes), matched in one" ;
+           echo "              hash lookup per packet; refreshes are an atomic swap." ;;
+    rules) echo "              allow-set held as $count iptables rules (this kernel has no ipset);" ;
+           echo "              matching is linear and a refresh briefly refuses new connections." ;;
+    *)     echo "              NOT INITIALISED — the container is not shielded." ;;
+esac
+cat <<'CAVEAT'
+
+              Filtering is by address, not by name. Two consequences worth
+              keeping in mind: anything else answering on an allowlisted
+              address is also reachable, and an address that rotates out of
+              DNS stays permitted until the next refresh while its
+              replacement is not.
+CAVEAT
+
+if [ -s "$STATE/unresolved" ]; then
+    echo "unresolved  : $(grep -c . "$STATE/unresolved") name(s) — see 'egress-check --unresolved'"
+fi
 echo
 
 if [ "$#" -eq 0 ]; then
-    echo "allowlisted:"
+    echo "allowlist ($(grep -c . "$RENDERED" 2>/dev/null || echo 0) entries):"
     sed 's/^/  /' "$RENDERED" 2>/dev/null || echo "  (none — the container is not initialised)"
     echo
+    echo "GitHub is covered separately by the ranges from api.github.com/meta."
     echo "probe a host with: egress-check https://example.com"
     exit 0
 fi
@@ -43,11 +80,13 @@ fi
 rc=0
 for target in "$@"; do
     case "$target" in http://*|https://*) url=$target ;; *) url="https://$target" ;; esac
-    code=$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' -x http://127.0.0.1:3128 "$url" 2>/dev/null || echo 000)
-    case "$code" in
-        403) printf '  %-50s BLOCKED (proxy 403 — not in the allowlist)\n' "$url"; rc=1 ;;
-        000) printf '  %-50s UNREACHABLE (no response through the gate)\n'  "$url"; rc=1 ;;
-        *)   printf '  %-50s allowed (HTTP %s)\n' "$url" "$code" ;;
-    esac
+    # No -x: this goes out the same way every other tool does, so the result is
+    # the real answer rather than a proxy's opinion of it.
+    code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || echo 000)
+    if [ "$code" = "000" ]; then
+        printf '  %-50s BLOCKED or unreachable\n' "$url"; rc=1
+    else
+        printf '  %-50s allowed (HTTP %s)\n' "$url" "$code"
+    fi
 done
 exit "$rc"

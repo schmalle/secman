@@ -4,7 +4,7 @@ A development environment that runs the coding agents — Claude Code and Kimi C
 and the whole Secman stack inside one Apple `container` VM, so that:
 
 - the container sees **exactly one host path**, the source tree you name;
-- outbound traffic reaches **only** an explicit domain allowlist;
+- outbound traffic reaches **only** an explicit allowlist, enforced by iptables — no proxy;
 - ports **8080**, **4321**, **443** and **3306** come back to the Mac;
 - `pass-cli` works inside, so the canonical secret path (`docs/PASS_CLI.md`) is unchanged.
 
@@ -62,12 +62,12 @@ Reach them from the Mac at `http://localhost:8080`, `http://localhost:4321`,
 | DB | MariaDB **11.4** server + client |
 | Agents | Claude Code (`claude`), Kimi CLI (`kimi`) |
 | Secrets | `pass-cli` (Proton Pass) |
-| Shield | `squid` (domain allowlist) + `iptables` (egress policy) |
+| Shield | `iptables` (+ `ipset` where the kernel has it) — no proxy |
 | TLS | `nginx` on :443 fronting :4321 and :8080 |
 
-Everything runs as the unprivileged user `dev`. There is no `sudo`: the firewall,
-the proxy and their configuration are root-owned, so an agent session cannot
-dismantle the shield it is running in. When you genuinely need root,
+Everything runs as the unprivileged user `dev`. There is no `sudo`: the firewall
+and its allowlist are root-owned, so an agent session cannot dismantle the shield
+it is running in. When you genuinely need root,
 `./scripts/container/secman-container.sh root` gets you there from the Mac.
 
 ---
@@ -102,80 +102,134 @@ To throw everything away, volumes included:
 
 ## Egress control
 
-Two layers, and they do different jobs.
+**iptables is the whole enforcement layer. There is no proxy**, so nothing in the
+container needs `HTTP_PROXY`, no JVM needs `-Dhttps.proxyHost`, and no tool can
+behave differently by ignoring those variables. It also means one thing has to be
+said plainly rather than buried:
 
-### Layer 1 — squid, filtering by name
+> **Filtering is by address, not by name.** The kernel sees packets, not
+> hostnames. Two consequences follow, and neither has a fix at this layer:
+> anything else answering on an allowlisted address is also reachable (CDNs host
+> many sites per address), and an address that rotates out of DNS stays permitted
+> until the next refresh while its replacement is not.
+>
+> The second is handled — see [Refreshing](#refreshing). The first is inherent:
+> if you need "this name and nothing else that shares its address", only a
+> name-aware gate can give you that, and this container does not run one.
 
-All HTTP and HTTPS traffic goes through `squid` on `127.0.0.1:3128`, which
-enforces a `dstdomain` allowlist and answers everything else with `403`.
+### How the allow-set is built
 
-Name-level filtering is the point. `api.anthropic.com`, `registry.npmjs.org` and
-a large share of the internet sit on shared CDN address space, so an
-address-based allowlist cannot express *"Anthropic yes, everything else on that
-CDN no"*. A name-based one can.
+At start-up, and on every refresh:
 
-The proxy's access log is the audit trail of everything the agents and the build
-reached:
+1. every **hostname** in the allowlist is resolved to its A records;
+2. every **address or CIDR literal** in the allowlist is taken verbatim;
+3. **GitHub's published ranges** are fetched from `https://api.github.com/meta`.
+   GitHub is spread across dozens of prefixes — `github.com`, `codeload`,
+   `objects.githubusercontent.com`, releases, packages — and resolving a few
+   names covers a fraction of it. `SECMAN_EGRESS_GITHUB_META=0` turns this off.
+
+The result goes into an **ipset** where the kernel supports it (one hash lookup
+per packet, and refreshes are an atomic swap), or into a chain of plain rules
+where it does not. `egress-check` tells you which.
+
+### The ruleset
+
+`OUTPUT` policy is `DROP`. The only ways out are:
+
+- loopback;
+- replies on connections the container already established;
+- DNS to the resolvers in `/etc/resolv.conf` — and resolution alone reaches
+  nothing, because the address it returns still has to be in the allow-set;
+- TCP to an allow-set address on ports **80, 443 and 22** (`SECMAN_EGRESS_PORTS`;
+  22 is there so `git push` over SSH works — drop it if you only use HTTPS
+  remotes).
+
+`INPUT` policy is `DROP`, opened only for the four published ports and for
+replies. The last rule before the reject is a rate-limited `LOG`, which is the
+only record of what was refused now that there is no proxy log.
+
+Denials `REJECT` rather than `DROP`, so a blocked tool gets an immediate
+`connection refused` instead of hanging for a two-minute timeout — the difference
+between an obvious allowlist gap and a mystery.
+
+### Refreshing
+
+Because the policy is a snapshot of DNS, and `registry.npmjs.org`,
+`api.anthropic.com` and `repo.maven.apache.org` all move between addresses within
+hours, the entrypoint re-resolves and rebuilds **every 30 minutes**
+(`SECMAN_EGRESS_REFRESH_MINUTES`, `0` disables). Without it, a container left
+running overnight starts failing downloads for reasons that look nothing like a
+firewall.
+
+On demand:
 
 ```bash
-./scripts/container/secman-container.sh egress log 100
+./scripts/container/secman-container.sh egress refresh
 ```
 
-### Layer 2 — iptables, making the proxy unavoidable
+With ipset the rebuild is an atomic swap and never interrupts traffic. With plain
+rules there is a sub-second window in which *new* connections are refused;
+established ones are unaffected. A failed refresh leaves the previous ruleset in
+place — the safe direction.
 
-`OUTPUT` policy is `DROP`. The only ways out are loopback, DNS to the
-container's own resolvers, and traffic **owned by squid's uid**. A process that
-ignores `$HTTPS_PROXY`, or a library that opens a raw socket, does not get past
-it — it gets an immediate `connection refused` rather than a two-minute hang, so
-an allowlist gap looks like an allowlist gap.
-
-`INPUT` policy is `DROP` too, opened only for the four published ports and for
-replies to connections the container itself opened.
-
-**Fallback.** The uid rule needs the kernel's `xt_owner` match, and Apple's
-default container kernel is trimmed. If it is absent, the firewall falls back to
-resolving every allowlisted name and permitting only those addresses. That is
-weaker — addresses are shared and they move — but it is still a closed default,
-never an open one. Which mode is in effect is printed at start and reported by:
+### Inspecting
 
 ```bash
-./scripts/container/secman-container.sh egress show
+./scripts/container/secman-container.sh egress show         # policy, backend, allowlist
+./scripts/container/secman-container.sh egress test HOST... # probe, through the real path
+./scripts/container/secman-container.sh egress log          # what was refused
+./scripts/container/secman-container.sh egress unresolved   # names that resolve to nothing
 ```
 
-In address mode, re-resolve after a DNS change with
-`./scripts/container/secman-container.sh egress refresh`.
+`egress unresolved` is worth a look after any allowlist edit: a name that resolves
+to nothing is a name the container cannot reach, whether because it is misspelt
+or because DNS was failing when the set was built.
+
+> The per-packet `LOG` output is suppressed by the kernel outside its initial
+> network namespace, so `egress log` may show only the **deny counter** and no
+> detail. The counter is a rule statistic and is never suppressed, so it still
+> answers "is anything being refused?".
 
 ### The self-test
 
-The container **refuses to start** if a non-allowlisted host is reachable through
-the gate. A firewall nobody tested is a firewall nobody has, and starting anyway
+The container **refuses to start** if a host nobody allowlisted turns out to be
+reachable. A firewall nobody tested is a firewall nobody has, and starting anyway
 would hand the agents an environment whose containment is a guess.
+
+Two further guards fail closed rather than quietly degrading: an allowlist that
+renders to nothing is refused, and if more than half the names fail to resolve
+the firewall refuses to install (that is DNS being broken, not an allowlist
+problem, and the resulting policy would reach almost nothing).
+`SECMAN_EGRESS_ALLOW_PARTIAL_DNS=1` overrides the latter.
 
 ### What is allowed, and why
 
 `docker/apple-container/egress/allowlist.txt` is the list, grouped by purpose and
-annotated line by line. In summary:
+annotated. In summary:
 
 | Purpose | Examples |
 |---|---|
-| Claude Code | `.anthropic.com`, `.claude.ai`, `.statsig.com`, `.sentry.io` |
-| Kimi CLI | `.kimi.com`, `.moonshot.ai`, `.moonshot.cn` |
-| Proton Pass | `.proton.me`, `.protonmail.ch` |
-| Git / GitHub | `github.com`, `.github.com`, `codeload.github.com`, `.githubusercontent.com`, `ghcr.io` |
-| Gradle / Maven | `.gradle.org`, `repo.maven.apache.org`, `repo1.maven.org`, `dl.google.com`, `.jetbrains.com`, `.adoptium.net` |
-| Node / npm | `registry.npmjs.org`, `.npmjs.org`, `nodejs.org` |
-| Go | `proxy.golang.org`, `sum.golang.org`, `go.dev` |
-| Python / uv | `pypi.org`, `files.pythonhosted.org`, `.astral.sh` |
-| Playwright | `cdn.playwright.dev`, `.prss.microsoft.com` |
+| Claude Code | `api.anthropic.com`, `console.anthropic.com`, `statsig.anthropic.com`, `claude.ai`, `sentry.io` |
+| Kimi CLI | `api.moonshot.ai`, `api.moonshot.cn`, `code.kimi.com` |
+| Proton Pass | `account.proton.me`, `pass-api.proton.me`, `api.protonmail.ch` |
+| Git / GitHub | the published ranges from `api.github.com/meta` |
+| Gradle / Maven | `services.gradle.org`, `plugins.gradle.org`, `repo.maven.apache.org`, `repo1.maven.org`, `dl.google.com`, `download.jetbrains.com`, `packages.adoptium.net` |
+| Node / npm | `registry.npmjs.org`, `nodejs.org` |
+| Go | `proxy.golang.org`, `sum.golang.org`, `storage.googleapis.com` |
+| Python / uv | `pypi.org`, `files.pythonhosted.org`, `astral.sh` |
+| Playwright | `cdn.playwright.dev`, `playwright.download.prss.microsoft.com` |
 | Debian / MariaDB apt | `deb.debian.org`, `dlm.mariadb.com` |
-| Secman's own outbound calls | `endoflife.date`, `.crowdstrike.com`, `openrouter.ai`, `hooks.slack.com`, `api.telegram.org`, `.amazonaws.com`, `.letsencrypt.org` |
+| Secman's own outbound calls | `endoflife.date`, `api.crowdstrike.com` (+ regional), `openrouter.ai`, `hooks.slack.com`, `api.telegram.org`, `acme-v02.api.letsencrypt.org` |
 
-Those last entries are the hosts the *application* reaches while you exercise it
-(EOL catalogue, CrowdStrike Spotlight/Discover, AI risk assessment, chat
-notifications, S3 imports, the relay's ACME client). Each is already SSRF-guarded
-server-side (`CLAUDE.md` §A10); the allowlist is the second layer, not the first.
+Those last entries are the hosts the *application* reaches while you exercise it.
+Each is already SSRF-guarded server-side (`CLAUDE.md` §A10); the allowlist is the
+second layer, not the first.
 
-### Adding a domain
+### Adding an entry
+
+**Write exact hostnames.** A leading dot means nothing here — there is no
+wildcard matching to attach it to, so `.example.com` covers no subdomain that
+`example.com` does not. Addresses and CIDRs are accepted verbatim.
 
 Three ways, in increasing permanence:
 
@@ -183,25 +237,18 @@ Three ways, in increasing permanence:
 # one container lifetime
 ./scripts/container/secman-container.sh up --src "$PWD" --allow-domain nexus.example.com
 
-# persistent, survives an image rebuild — edit inside the container
+# persistent, survives an image rebuild
 ./scripts/container/secman-container.sh root
-root@secman-box:/# echo '.nexus.example.com' >> /etc/secman-dev/egress/allowlist.local.txt
+root@secman-box:/# echo 'nexus.example.com' >> /etc/secman-dev/egress/allowlist.local.txt
 root@secman-box:/# refresh-egress
 
 # permanent for everyone — edit docker/apple-container/egress/allowlist.txt and rebuild
 ```
 
-**Your `SECMAN_HOST` is not allowlisted by default.** If `pass-cli` points the CLI
-and the tests at a shared instance rather than at the container's own stack, add
-that host with `--allow-domain`.
-
-Check what a specific host does before you guess:
-
-```bash
-./scripts/container/secman-container.sh egress test api.anthropic.com some-other-host.example
-```
-
----
+**Two things are deliberately not allowlisted by default.** Your `SECMAN_HOST`,
+if `pass-cli` points the CLI and the tests at a shared instance rather than at the
+container's own stack; and AWS, which is regional and cannot be enumerated — add
+the exact endpoints you use (`s3.eu-central-1.amazonaws.com`, and so on).
 
 ## Ports
 
@@ -275,7 +322,8 @@ setup either handles or works around:
    has no neighbours to be exposed to.
 2. **No nftables.** The default kernel omits the pieces `nft` needs. The
    firewall pins `iptables-legacy` explicitly, because a silent fall-through to
-   the nft backend would fail *open*.
+   the nft backend would fail *open*. `ipset` is probed the same way and the
+   firewall degrades to plain rules without it.
 3. **Incomplete IPv6.** The entrypoint disables IPv6 and sets all `ip6tables`
    policies to `DROP`. Half-working IPv6 is worse than none: it creates egress
    paths the v4 ruleset does not cover.
@@ -363,8 +411,10 @@ host's network services.
 
 - anything reachable *through* an allowlisted host — an agent can still push to
   GitHub, and an npm package it installs still runs with the container's reach;
-- a compromise of the container itself in address-mode fallback, where a raw
-  socket could reach another site sharing an allowlisted address;
+- **anything else sharing an allowlisted address.** Filtering is by address, so
+  allowing `api.anthropic.com` allows whatever else answers on that CDN address.
+  This is the cost of running without a name-aware gate, and it is not fixable
+  at the packet layer;
 - secrets you put into the container — `pass-cli` resolves real credentials
   inside it, and anything running there can read what a shell can read;
 - the source tree. `/workspace` is read-write by design; that is the point.
@@ -378,9 +428,11 @@ sandbox for hostile code.
 
 | Symptom | Cause / fix |
 |---|---|
-| `egress self-test FAILED` and the container exits | The gate is not enforcing. Check `container logs secman-dev`; almost always squid failed to start — `... root` then `cat /var/log/squid/cache.log`. |
-| A build fails with `connection refused` to a real host | The host is not allowlisted. Confirm with `... egress test <host>`, then add it (see [Adding a domain](#adding-a-domain)). |
-| `... egress show` reports **address** mode | The kernel has no `xt_owner`. Expected on trimmed kernels; run `... egress refresh` after DNS changes. |
+| `egress self-test FAILED` and the container exits | A non-allowlisted host was reachable, so the firewall is not containing the container. Check `container logs secman-dev` — usually `iptables` could not install rules because `NET_ADMIN` was not granted. |
+| `refusing to install a policy that reaches almost nothing` | More than half the allowlist names failed to resolve — DNS is broken, not the allowlist. Fix DNS, or override with `SECMAN_EGRESS_ALLOW_PARTIAL_DNS=1`. |
+| A download that worked an hour ago now fails | The address rotated out of the allow-set. `... egress refresh`. If it keeps happening, lower `SECMAN_EGRESS_REFRESH_MINUTES`. |
+| A build fails with `connection refused` to a real host | The host is not allowlisted. Confirm with `... egress test <host>`, then add it (see [Adding an entry](#adding-an-entry)). |
+| `... egress show` reports backend **rules** | The kernel has no `ipset`. Expected on a trimmed kernel; the policy is identical, matching is just linear. |
 | `pass-cli: not signed in` | `... shell` then `pass-cli login --interactive`. The session persists after that. |
 | Host port 443 not listening | macOS reserves it for root; the script published 8443 instead and said so. Use the container IP from `... status` for real 443. |
 | `./gradlew build` OOMs | `--memory` below ~8 GB. Restart with `--memory 10g`. |
@@ -395,15 +447,14 @@ sandbox for hostile code.
 ```
 docker/apple-container/
   Containerfile                     the image
-  entrypoint.sh                     PID 1: user alignment, firewall, proxy, self-test
-  egress/allowlist.txt              the domain allowlist, annotated
-  egress/squid.conf                 the name-filtering gate
-  egress/init-egress-firewall.sh    the iptables policy (owner mode / address fallback)
+  entrypoint.sh                     PID 1: user alignment, firewall, self-test, refresher
+  egress/allowlist.txt              the allowlist, annotated
+  egress/init-egress-firewall.sh    the iptables policy (ipset or plain rules)
   nginx/secman-dev.conf             the :443 front door
-  profile.d/secman-dev.sh           proxy, toolchain and pass-cli environment
+  profile.d/secman-dev.sh           toolchain and pass-cli environment
   bin/devctl                        in-container service control
   bin/egress-check                  inspect and probe the egress policy
-  bin/render-egress-allowlist       the one list both layers read
-  bin/refresh-egress                reload it without a restart
+  bin/render-egress-allowlist       the one list the firewall reads
+  bin/refresh-egress                re-resolve and rebuild without a restart
 scripts/container/secman-container.sh   the host-side driver (macOS)
 ```

@@ -6,14 +6,14 @@
 #   1. align the in-container `dev` user with the owner of the bind-mounted
 #      /workspace, so files written from inside stay usable on the Mac;
 #   2. render the egress allowlist;
-#   3. raise the firewall;
-#   4. start squid behind it;
-#   5. prove the gate works (one allowed host, one denied host);
-#   6. optionally start MariaDB and the TLS front door;
+#   3. raise the firewall — the only egress control there is, no proxy;
+#   4. prove it works (one allowed host, one denied host);
+#   5. optionally start MariaDB and the TLS front door;
+#   6. keep the allow-set fresh, because the addresses behind those names move;
 #   7. hand over to whatever the operator asked for, or idle so that
 #      `container exec` sessions can attach.
 #
-# Steps 3-5 run before any agent or build process can exist. There is no window
+# Steps 3-4 run before any agent or build process can exist. There is no window
 # in which the container has unrestricted egress.
 # =============================================================================
 set -euo pipefail
@@ -69,9 +69,9 @@ if ! id -u "$SECMAN_DEV_USER" >/dev/null 2>&1; then
     # would leave the account without a .bashrc or .profile. Populate it below
     # instead, and only when it is genuinely empty.
     useradd -u "$WS_UID" -g "$WS_GID" -M -d "/home/$SECMAN_DEV_USER" -s /bin/bash "$SECMAN_DEV_USER"
-    # Deliberately no sudo: the firewall and the proxy are root-owned, and an
-    # agent that can sudo can take them down. `container exec -u root` from the
-    # Mac remains available to the human when something genuinely needs root.
+    # Deliberately no sudo: the firewall and its allowlist are root-owned, and
+    # an agent that can sudo can take them down. `container exec -u root` from
+    # the Mac remains available when something genuinely needs root.
     log "created user $SECMAN_DEV_USER (uid=$WS_UID gid=$WS_GID) to match $SECMAN_DEV_WORKSPACE"
 fi
 DEV_HOME=$(getent passwd "$SECMAN_DEV_USER" | cut -d: -f6)
@@ -95,8 +95,8 @@ chown "$WS_UID:$WS_GID" "$DEV_HOME" 2>/dev/null || true
 # 2. Render the egress allowlist
 # -----------------------------------------------------------------------------
 # Rendering is a separate script because `devctl egress refresh` has to produce
-# byte-identical output later, and because both enforcement layers — squid's ACL
-# and the firewall's address-mode fallback — must read exactly one list.
+# byte-identical output later, and because the firewall and every inspection
+# command must read exactly one list rather than each re-parsing the sources.
 ALLOWED_COUNT=$(/usr/local/sbin/render-egress-allowlist "$ALLOWLIST_RENDERED") \
     || die "could not render the egress allowlist — refusing to start with an unusable policy"
 log "egress allowlist: $ALLOWED_COUNT domains"
@@ -107,45 +107,37 @@ log "egress allowlist: $ALLOWED_COUNT domains"
 ALLOWLIST_RENDERED="$ALLOWLIST_RENDERED" /usr/local/sbin/init-egress-firewall
 
 # -----------------------------------------------------------------------------
-# 4. Squid
-# -----------------------------------------------------------------------------
-install -d -o proxy -g proxy /var/log/squid /var/spool/squid /var/cache/squid
-squid -N -f /etc/secman-dev/egress/squid.conf -z >/dev/null 2>&1 || true
-squid -f /etc/secman-dev/egress/squid.conf
-for _ in $(seq 1 30); do
-    if (exec 3<>/dev/tcp/127.0.0.1/3128) 2>/dev/null; then exec 3>&- 2>/dev/null || true; break; fi
-    sleep 0.5
-done
-(exec 3<>/dev/tcp/127.0.0.1/3128) 2>/dev/null || die "squid did not come up on 127.0.0.1:3128 — see /var/log/squid/cache.log"
-exec 3>&- 2>/dev/null || true
-log "egress proxy listening on 127.0.0.1:3128"
-
-# -----------------------------------------------------------------------------
-# 5. Prove the gate
+# 4. Prove the firewall
 # -----------------------------------------------------------------------------
 # A firewall nobody tested is a firewall nobody has. Two probes: one host that
-# must work and one that must not. The negative probe is the load-bearing one —
-# if a non-allowlisted host is reachable the containment is not there, and
-# starting anyway would hand the agents an environment whose shielding is a
-# guess. So that one is fatal; the positive probe only warns, because a
-# temporarily unreachable GitHub is a network problem, not a policy failure.
+# must work and one that must not.
+#
+# The negative probe is the load-bearing one — if a host nobody allowlisted is
+# reachable then the containment is not there, and starting anyway would hand the
+# agents an environment whose shielding is a guess. That one is fatal. The
+# positive probe only warns: a momentarily unreachable GitHub is a network
+# problem, not a policy failure.
+#
+# `--max-time 8` on the denied probe because a REJECT answers immediately; if it
+# takes longer than that, something is silently dropping instead, which is worth
+# knowing but is still a refusal.
 if [ "${SECMAN_DEV_SKIP_EGRESS_SELFTEST:-0}" != "1" ]; then
-    probe() { curl -sS --max-time 20 -o /dev/null -w '%{http_code}' -x http://127.0.0.1:3128 "$1" 2>/dev/null || echo 000; }
-    allowed_code=$(probe https://api.github.com/meta)
-    denied_code=$(probe https://www.google.com/)
+    allowed_code=$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' https://api.github.com/meta 2>/dev/null || echo 000)
+    denied_out=$(curl -sS --max-time 8 -o /dev/null https://www.google.com/ 2>&1 || true)
+    denied_code=$(curl -sS --max-time 8 -o /dev/null -w '%{http_code}' https://www.google.com/ 2>/dev/null || echo 000)
     case "$allowed_code" in
         2*|3*|4*) log "egress self-test: allowlisted host reachable (HTTP $allowed_code)" ;;
-        *)        warn "egress self-test: allowlisted host unreachable (HTTP $allowed_code) — check DNS and the allowlist" ;;
+        *)        warn "egress self-test: allowlisted host unreachable — check DNS and the allowlist ('egress-check')" ;;
     esac
-    if [ "$denied_code" = "403" ]; then
-        log "egress self-test: non-allowlisted host refused by the proxy (HTTP 403)"
+    if [ "$denied_code" = "000" ]; then
+        log "egress self-test: non-allowlisted host refused by the firewall"
     else
-        die "egress self-test FAILED: a non-allowlisted host returned HTTP $denied_code instead of 403. Refusing to start."
+        die "egress self-test FAILED: a non-allowlisted host answered with HTTP $denied_code. The firewall is not containing this container. Refusing to start. ($denied_out)"
     fi
 fi
 
 # -----------------------------------------------------------------------------
-# 6. Optional services
+# 5. Optional services
 # -----------------------------------------------------------------------------
 if [ "$SECMAN_DEV_WITH_DB" = "1" ]; then
     devctl db start || warn "MariaDB failed to start — run 'devctl db start' for the log"
@@ -155,13 +147,39 @@ if [ "$SECMAN_DEV_WITH_TLS" = "1" ]; then
 fi
 
 # -----------------------------------------------------------------------------
+# 6. Keep the allow-set fresh
+# -----------------------------------------------------------------------------
+# Filtering by address means the policy is a snapshot of DNS, and the services
+# this container depends on are CDN-hosted: registry.npmjs.org, api.anthropic.com
+# and repo.maven.apache.org all move between addresses within hours. Without this
+# loop a container left running overnight starts failing downloads for reasons
+# that look nothing like a firewall. With ipset the update is an atomic swap, so
+# a refresh never interrupts traffic; with plain rules there is a sub-second
+# window in which new connections are refused (established ones are unaffected).
+REFRESH_MINUTES=${SECMAN_EGRESS_REFRESH_MINUTES:-30}
+if [ "$REFRESH_MINUTES" -gt 0 ] 2>/dev/null; then
+    (
+        while :; do
+            sleep $((REFRESH_MINUTES * 60))
+            /usr/local/sbin/refresh-egress >>/var/log/secman-egress-refresh.log 2>&1 \
+                || echo "[egress] refresh failed — previous ruleset still in effect" >&2
+        done
+    ) &
+    REFRESHER_PID=$!
+    log "allow-set refresh every ${REFRESH_MINUTES}m (SECMAN_EGRESS_REFRESH_MINUTES=0 disables)"
+else
+    REFRESHER_PID=
+    log "allow-set refresh disabled — run 'devctl egress refresh' when a download starts failing"
+fi
+
+# -----------------------------------------------------------------------------
 # 7. Hand over
 # -----------------------------------------------------------------------------
 shutdown() {
     log "shutting down"
-    devctl tls stop  >/dev/null 2>&1 || true
-    devctl db stop   >/dev/null 2>&1 || true
-    squid -k shutdown -f /etc/secman-dev/egress/squid.conf >/dev/null 2>&1 || true
+    [ -n "$REFRESHER_PID" ] && kill "$REFRESHER_PID" 2>/dev/null || true
+    devctl tls stop >/dev/null 2>&1 || true
+    devctl db stop  >/dev/null 2>&1 || true
     exit 0
 }
 trap shutdown TERM INT

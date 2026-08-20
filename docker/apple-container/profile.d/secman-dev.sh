@@ -1,31 +1,11 @@
 # Environment for every shell in the Secman shielded dev container.
 # Sourced from /etc/profile.d, so `container exec ... bash -l` picks it up.
-
-# --- Egress ------------------------------------------------------------------
-# Everything that speaks HTTP goes through the allowlisting proxy. The firewall
-# refuses direct egress anyway; these variables are what turns that refusal into
-# a working connection instead of a confusing one.
-export HTTP_PROXY=http://127.0.0.1:3128
-export HTTPS_PROXY=http://127.0.0.1:3128
-export http_proxy=$HTTP_PROXY
-export https_proxy=$HTTPS_PROXY
-export NO_PROXY=localhost,127.0.0.1,::1,0.0.0.0
-export no_proxy=$NO_PROXY
-
-# JVMs do not read $HTTPS_PROXY. JAVA_TOOL_OPTIONS is the only setting that
-# reaches every one of them — the Gradle daemon, the in-process Kotlin compiler,
-# the forked `run` task and the test JVMs alike — which matters because
-# dependency resolution and the backend's own outbound calls (EOL, CrowdStrike,
-# S3, OpenRouter) all happen inside those JVMs. It costs one banner line on
-# stderr per JVM start; set SECMAN_DEV_JAVA_PROXY=0 before login to opt out.
-if [ "${SECMAN_DEV_JAVA_PROXY:-1}" = "1" ]; then
-    export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:+$JAVA_TOOL_OPTIONS }-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=3128 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=3128 -Dhttp.nonProxyHosts=localhost|127.0.0.1|0.0.0.0"
-fi
-
-# Go's module fetcher honours the proxy variables above, but its default
-# GOPROXY/GOSUMDB hosts must stay reachable; src/relay has no third-party
-# dependencies, so this only matters for toolchain downloads.
-export GOFLAGS="${GOFLAGS:-}"
+#
+# Note what is NOT here: no HTTP_PROXY, no HTTPS_PROXY, no -Dhttps.proxyHost.
+# Egress is filtered by the kernel, not by a proxy, so every tool connects
+# directly and needs no proxy awareness — which also means no JAVA_TOOL_OPTIONS
+# banner on every JVM start, and no tool that quietly ignores the variables and
+# behaves differently from the rest.
 
 # --- Toolchains ---------------------------------------------------------------
 export JAVA_HOME=/opt/java

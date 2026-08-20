@@ -5,7 +5,7 @@
 #   ./scripts/startbackenddev.sh      (backend,  :8080)
 #   ./scripts/startfrontenddev.sh     (frontend, :4321)
 # devctl only manages the pieces that belong to the *container* rather than to
-# the repo: MariaDB, the TLS front door on :443, and the egress gate.
+# the repo: MariaDB, the TLS front door on :443, and the egress firewall.
 set -euo pipefail
 
 TLS_DIR=/run/secman-dev/tls
@@ -109,19 +109,24 @@ devctl — Secman dev container services
   devctl status                 what is running, and how egress is enforced
   devctl tls start|stop         TLS front door on :443
   devctl db  start|stop         MariaDB 11.4 on :3306
-  devctl egress refresh         re-render the allowlist and reload the gate
-  devctl egress log [N]         last N proxy decisions (default 40)
+  devctl egress refresh         re-render the allowlist and rebuild the allow-set
+  devctl egress log [N]         recent denials, from the kernel log (default 40)
+  devctl egress unresolved      allowlist names that currently resolve to nothing
 
 The application stack is not managed here — start it from /workspace with
 ./scripts/startbackenddev.sh and ./scripts/startfrontenddev.sh, exactly as on
 a Mac. Both need pass-cli to be logged in; see `pass-cli login --interactive`.
+
+Egress is enforced by iptables alone — there is no proxy, and no proxy variables
+to set. `egress-check` shows the policy and probes hosts through the real path.
 USAGE
 }
 
 status() {
-    printf 'egress mode      : %s\n' "$(cat /run/secman-dev/egress/mode 2>/dev/null || echo 'not initialised')"
-    printf 'allowlisted names: %s\n' "$(wc -l < /run/secman-dev/egress/allowlist.rendered 2>/dev/null | tr -d ' ' || echo 0)"
-    printf 'proxy (3128)     : %s\n' "$(pgrep -x squid    >/dev/null && echo running || echo stopped)"
+    printf 'egress           : iptables only, backend=%s\n' "$(cat /run/secman-dev/egress/mode 2>/dev/null || echo 'NOT INITIALISED')"
+    printf 'allow-set        : %s addresses/prefixes from %s allowlist entries\n' \
+        "$(cat /run/secman-dev/egress/count 2>/dev/null || echo 0)" \
+        "$(grep -c . /run/secman-dev/egress/allowlist.rendered 2>/dev/null || echo 0)"
     printf 'nginx (443)      : %s\n' "$(pgrep -x nginx    >/dev/null && echo running || echo stopped)"
     printf 'mariadb (3306)   : %s\n' "$(pgrep -x mariadbd >/dev/null && echo running || echo stopped)"
     printf 'backend (8080)   : %s\n' "$(ss -ltn 2>/dev/null | grep -q ':8080 ' && echo running || echo stopped)"
@@ -142,9 +147,10 @@ case "$cmd" in
     tls)     case "${1:-}" in start) tls_start ;; stop) tls_stop ;; restart) tls_stop; tls_start ;; *) usage; exit 2 ;; esac ;;
     db)      case "${1:-}" in start) db_start  ;; stop) db_stop  ;; restart) db_stop;  db_start  ;; *) usage; exit 2 ;; esac ;;
     egress)  case "${1:-}" in
-                 refresh) egress_refresh ;;
-                 log)     tail -n "${2:-40}" /var/log/squid/access.log ;;
-                 *)       egress-check ;;
+                 refresh)    egress_refresh ;;
+                 log)        egress-check --log "${2:-40}" ;;
+                 unresolved) egress-check --unresolved ;;
+                 *)          egress-check ;;
              esac ;;
     -h|--help|help) usage ;;
     *)       usage; exit 2 ;;

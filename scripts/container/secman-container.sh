@@ -7,8 +7,8 @@
 #   * sees exactly one host path — the source tree you pass in, and nothing else;
 #   * publishes 8080 (backend), 4321 (frontend), 443 (TLS front door) and
 #     3306 (MariaDB) back to the Mac;
-#   * can reach only the hosts on the egress allowlist, enforced by a proxy and
-#     an iptables policy inside the container;
+#   * can reach only the addresses on the egress allowlist, enforced by an
+#     iptables policy inside the container — there is no proxy;
 #   * carries Claude Code, Kimi CLI and pass-cli, so the agents run inside the
 #     shield rather than on your Mac.
 #
@@ -249,8 +249,8 @@ cmd_up() {
 # -----------------------------------------------------------------------------
 # exec-style commands
 # -----------------------------------------------------------------------------
-# Everything runs as `dev`, never root: the firewall, the proxy and their configs
-# are root-owned, so an agent session cannot dismantle the shield it runs in.
+# Everything runs as `dev`, never root: the firewall and its allowlist are
+# root-owned, so an agent session cannot dismantle the shield it runs in.
 in_container() {
     require_running
     container exec --interactive --tty --user dev --workdir /workspace "$NAME" "$@"
@@ -303,11 +303,12 @@ cmd_destroy() {
 cmd_egress() {
     require_running
     case "${1:-show}" in
-        show)    container exec --user dev  "$NAME" bash -lc 'egress-check' ;;
-        log)     container exec --user dev  "$NAME" bash -lc "egress-check --log ${2:-40}" ;;
-        refresh) container exec --user root "$NAME" bash -lc 'refresh-egress' ;;
-        test)    shift; container exec --user dev "$NAME" bash -lc 'exec egress-check "$@"' -- "$@" ;;
-        *)       die "usage: $0 egress [show|log [N]|refresh|test <host>...]" ;;
+        show)       container exec --user dev  "$NAME" bash -lc 'egress-check' ;;
+        log)        container exec --user root "$NAME" bash -lc "egress-check --log ${2:-40}" ;;
+        unresolved) container exec --user dev  "$NAME" bash -lc 'egress-check --unresolved' ;;
+        refresh)    container exec --user root "$NAME" bash -lc 'refresh-egress' ;;
+        test)       shift; container exec --user dev "$NAME" bash -lc 'exec egress-check "$@"' -- "$@" ;;
+        *)          die "usage: $0 egress [show|log [N]|unresolved|refresh|test <host>...]" ;;
     esac
 }
 
@@ -324,7 +325,7 @@ secman-container.sh — shielded Secman dev environment on Apple \`container\`
   root [cmd...]                     root shell inside it (for devctl)
   status                            services, ports and egress mode
   logs [-f]                         container start-up log
-  egress [show|log|refresh|test]    inspect or reload the egress policy
+  egress [show|log|refresh|test]   inspect or rebuild the egress policy
   down                              stop and remove the container, keep volumes
   destroy                           down, and delete the volumes too
 
@@ -340,7 +341,8 @@ Options for 'up':
   --no-tls          do not start the :443 TLS front door
   --tls-host HOST   certificate subject / SAN (default: $TLS_HOST)
   --tls-port PORT   host port for the container's :443 (default: $TLS_PORT)
-  --allow-domain D  add D to the egress allowlist (repeatable)
+  --allow-domain D  add D to the egress allowlist (repeatable). Exact hostnames
+                    only — filtering is by address, so a wildcard matches nothing
 
 Environment: SECMAN_DEV_IMAGE, SECMAN_DEV_NAME, SECMAN_DEV_MEMORY, SECMAN_DEV_CPUS,
 SECMAN_DEV_TLS_HOST, SECMAN_DEV_TLS_PORT, SECMAN_EGRESS_EXTRA_DOMAINS,

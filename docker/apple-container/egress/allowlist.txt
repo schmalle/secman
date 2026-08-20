@@ -1,92 +1,114 @@
-# Outbound domain allowlist for the Secman shielded dev container.
+# Outbound allowlist for the Secman shielded dev container.
 #
-# Squid ACL type `dstdomain` syntax:
-#   .example.com   matches example.com and every subdomain
-#   example.com    matches that exact name only
+# Enforcement is pure iptables — there is no proxy. That has one consequence you
+# must keep in mind while editing this file:
 #
-# Everything not listed here (or in allowlist.local.txt) is refused with a 403
-# from the proxy, and the container's iptables OUTPUT policy refuses any attempt
-# to bypass the proxy. Add site-local entries to allowlist.local.txt — it is
-# never overwritten by an image rebuild — or pass --allow-domain to
-# scripts/container/secman-container.sh.
+#   *** WRITE EXACT HOSTNAMES. A LEADING DOT MEANS NOTHING HERE. ***
 #
-# Keep this list ordered by purpose; a bare domain with no comment is a domain
-# nobody can later justify removing.
+# Every name below is resolved to its A records and those addresses are what the
+# firewall permits. A wildcard cannot be resolved, so `.example.com` covers
+# nothing that `example.com` does not already cover. If a tool needs
+# `cdn.example.com`, that exact name has to be on this list.
+#
+# Two line shapes are accepted:
+#   host.example.com     resolved at start-up and on every refresh
+#   198.51.100.0/24      an address or CIDR, used verbatim
+#
+# GitHub is handled separately and does not need entries here: the firewall
+# fetches the published ranges from https://api.github.com/meta, which is the
+# only reliable way to cover a service spread over that many addresses.
+#
+# Add site-local entries to allowlist.local.txt — it survives an image rebuild —
+# or pass --allow-domain to scripts/container/secman-container.sh.
+#
+# After editing: `devctl egress refresh` (inside) or
+# `./scripts/container/secman-container.sh egress refresh` (from the Mac).
 
 # --- Claude Code -------------------------------------------------------------
-.anthropic.com              # api.anthropic.com, statsig.anthropic.com, console.anthropic.com
-.claude.ai                  # OAuth / subscription login
-.claude.com                 # docs + install redirects
-.statsig.com                # feature flags used by the CLI
-.sentry.io                  # crash reporting
+api.anthropic.com
+console.anthropic.com
+statsig.anthropic.com
+claude.ai
+www.claude.ai
+api.statsig.com
+statsigapi.net
+sentry.io
 
 # --- Kimi CLI (Moonshot AI) --------------------------------------------------
-.kimi.com                   # code.kimi.com (installer/updates), OAuth login
-.moonshot.ai                # api.moonshot.ai, platform.moonshot.ai
-.moonshot.cn                # api.moonshot.cn (CN endpoint)
+api.moonshot.ai
+platform.moonshot.ai
+api.moonshot.cn
+code.kimi.com
+www.kimi.com
+kimi.com
 
 # --- Proton Pass (pass-cli secret resolution) --------------------------------
-.proton.me                  # account.proton.me, pass-api.proton.me, download endpoints
-.protonmail.ch              # legacy API host still used by the auth flow
+proton.me
+account.proton.me
+pass.proton.me
+pass-api.proton.me
+api.protonmail.ch
 
-# --- Source control ----------------------------------------------------------
-.github.com                 # api.github.com, codeload is separate below
-github.com
-codeload.github.com         # tarball/zipball downloads
-.githubusercontent.com      # raw, objects, avatars, pkg-containers
-ghcr.io                     # GitHub Container Registry
-.ghcr.io
-
-# --- JVM build: Gradle, Maven Central, Google Maven, Adoptium ----------------
-.gradle.org                 # services.gradle.org, plugins.gradle.org, plugins-artifacts.gradle.org
-repo.maven.apache.org       # mavenCentral()
-repo1.maven.org             # mavenCentral() CDN alias
-.maven.apache.org
-dl.google.com               # google() — Android/Google Maven artifacts
+# --- JVM build: Gradle, Maven Central, Google Maven, JetBrains, Adoptium -----
+services.gradle.org
+downloads.gradle.org
+plugins.gradle.org
+plugins-artifacts.gradle.org
+repo.maven.apache.org
+repo1.maven.org
+dl.google.com
 maven.google.com
-.jetbrains.com              # Kotlin/KSP compiler artifacts and toolchain downloads
-.adoptium.net               # JDK toolchain auto-provisioning
+download.jetbrains.com
+cache-redirector.jetbrains.com
+api.adoptium.net
+packages.adoptium.net
 
 # --- Node / npm --------------------------------------------------------------
 registry.npmjs.org
-.npmjs.org
-.npmjs.com
+www.npmjs.com
+npmjs.com
 nodejs.org
 
-# --- Go (src/relay) ----------------------------------------------------------
+# --- Go (src/relay is a separate module ./gradlew never builds) --------------
 proxy.golang.org
 sum.golang.org
-.golang.org
 go.dev
-storage.googleapis.com      # the module proxy's backing store
+golang.org
+storage.googleapis.com
 
 # --- Python / uv (Kimi CLI runtime and upgrades) -----------------------------
 pypi.org
 files.pythonhosted.org
-.astral.sh                  # uv itself and its managed CPython builds
+astral.sh
 
 # --- Playwright (tests/e2e) --------------------------------------------------
 cdn.playwright.dev
-.playwright.dev
 playwright.download.prss.microsoft.com
-.prss.microsoft.com
 
-# --- Debian packages (apt inside the container) ------------------------------
+# --- Debian and MariaDB packages (apt inside the container) ------------------
 deb.debian.org
 security.debian.org
-.debian.org
-dlm.mariadb.com             # MariaDB 11.4 packages
-supplychain.mariadb.com     # MariaDB signing key
+dlm.mariadb.com
+supplychain.mariadb.com
 
 # --- Secman application outbound calls ---------------------------------------
-# These are the hosts the backend and CLI reach while you exercise the stack.
-# Each one is already SSRF-guarded server-side (§A10); the allowlist is the
-# second layer, not the first.
-endoflife.date              # secman.eol.base-url default (docs/EOL.md)
-.crowdstrike.com            # Falcon Spotlight / Discover (docs/CROWDSTRIKE_IMPORT.md)
-openrouter.ai               # AI risk assessment (SECMAN_OPENROUTER_API_KEY)
-hooks.slack.com             # per-user Slack webhooks
-.slack.com
-api.telegram.org            # Telegram bot notifications
-.amazonaws.com              # S3 user-mapping import, AWS SDK endpoints
-.letsencrypt.org            # src/relay ACME (RFC 8555) staging + production
+# The hosts the backend and CLI reach while you exercise the stack. Each is
+# already SSRF-guarded server-side (CLAUDE.md §A10); this list is the second
+# layer, not the first.
+endoflife.date                          # secman.eol.base-url default
+api.crowdstrike.com                     # Falcon, US-1
+api.us-2.crowdstrike.com                # Falcon, US-2
+api.eu-1.crowdstrike.com                # Falcon, EU-1
+api.laggar.gcw.crowdstrike.com          # Falcon, US-GOV-1
+openrouter.ai                           # AI risk assessment
+hooks.slack.com                         # per-user Slack webhooks
+api.telegram.org                        # Telegram bot notifications
+acme-v02.api.letsencrypt.org            # src/relay ACME
+acme-staging-v02.api.letsencrypt.org
+
+# AWS is regional and cannot be enumerated here — S3 alone has an endpoint per
+# region. Add the exact endpoints you use, e.g.
+#   s3.eu-central-1.amazonaws.com
+#   sts.eu-central-1.amazonaws.com
+sts.amazonaws.com
+s3.amazonaws.com
