@@ -6,6 +6,8 @@ and the whole Secman stack inside one Apple `container` VM, so that:
 - the container sees **exactly one host path**, the source tree you name;
 - outbound traffic reaches **only** an explicit allowlist, enforced by iptables — no proxy;
 - ports **8080**, **4321**, **443** and **3306** come back to the Mac;
+- the stack talks to the database you choose — the container's own, or the MariaDB
+  already installed on your Mac (`--db`, see [Choosing the database](#choosing-the-database));
 - `pass-cli` works inside, so the canonical secret path (`docs/PASS_CLI.md`) is unchanged.
 
 It is a shield, not a jail: it protects your Mac and your network from an agent
@@ -27,6 +29,9 @@ not protect](#what-this-does-and-does-not-protect).
 # 3. start the shield, sharing exactly this repository
 ./scripts/container/secman-container.sh up --src "$PWD"
 
+#    ... or point the stack at the MariaDB already installed on your Mac
+./scripts/container/secman-container.sh up --src "$PWD" --db host
+
 # 4. log in to Proton Pass once — the session lives in a named volume and survives restarts
 ./scripts/container/secman-container.sh shell
 dev@secman-box:/workspace$ pass-cli login --interactive
@@ -46,7 +51,8 @@ cd /workspace
 ```
 
 Reach them from the Mac at `http://localhost:8080`, `http://localhost:4321`,
-`https://localhost/` (the TLS front door) and `localhost:3306`.
+`https://localhost/` (the TLS front door) and — with the default `--db container`
+— `localhost:3306`.
 
 ---
 
@@ -142,7 +148,11 @@ where it does not. `egress-check` tells you which.
   nothing, because the address it returns still has to be in the allow-set;
 - TCP to an allow-set address on ports **80, 443 and 22** (`SECMAN_EGRESS_PORTS`;
   22 is there so `git push` over SSH works — drop it if you only use HTTPS
-  remotes).
+  remotes);
+- with `--db host`, TCP to **exactly one address on exactly one port** — the
+  MariaDB on your Mac. It is deliberately *not* part of the allow-set: that set
+  is only ever matched on the ports above, so widening the allowlist can never
+  widen database reach, and vice versa.
 
 `INPUT` policy is `DROP`, opened only for the four published ports and for
 replies. The last rule before the reject is a rate-limited `LOG`, which is the
@@ -250,6 +260,120 @@ if `pass-cli` points the CLI and the tests at a shared instance rather than at t
 container's own stack; and AWS, which is regional and cannot be enumerated — add
 the exact endpoints you use (`s3.eu-central-1.amazonaws.com`, and so on).
 
+## Choosing the database
+
+The stack needs a MariaDB, and on a developer Mac there are usually two
+candidates: the one this container can run for you, and the one you already have
+installed. `up --db` picks between them, once, at start-up.
+
+```bash
+./scripts/container/secman-container.sh up --src "$PWD"              # container (default)
+./scripts/container/secman-container.sh up --src "$PWD" --db host    # the Mac's MariaDB
+./scripts/container/secman-container.sh up --src "$PWD" --db none    # neither
+```
+
+| `--db` | What runs | How it is reached | Egress |
+|---|---|---|---|
+| `container` *(default)* | MariaDB 11.4 inside the container, data on the `secman-dev-db` volume, published back on `localhost:3306` | loopback | nothing extra |
+| `host` | nothing — you run the Mac's own server | the container's default gateway *is* the Mac | **one** rule: TCP to that address on `--db-port` |
+| `none` | nothing | whatever `DB_CONNECT` from `pass-cli` names | nothing extra |
+
+`--with-db` and `--no-db` still work; they are aliases for `--db container` and
+`--db none`.
+
+### What the choice actually changes
+
+The entrypoint settles the mode before the firewall is built, and writes the
+result to `/run/secman-dev/db/env`. Everything downstream reads that one file, so
+the firewall rule and the JDBC URL cannot disagree:
+
+- `/etc/profile.d/secman-dev.sh` exports **`DB_CONNECT`** into every shell inside
+  the container. `scripts/startbackenddev.sh` honours a `DB_CONNECT` that is
+  already set and falls back to `pass-cli` when it is not, so the flag reaches the
+  backend without you editing anything. A `DB_CONNECT` you export yourself always
+  wins.
+- in `container` mode `DB_USERNAME`/`DB_PASSWORD` are exported too — the throwaway
+  local account `devctl` creates. In `host` mode they are **not**: your Mac's
+  database has its own credentials, so they come from `pass-cli` or from your
+  shell, exactly as they do outside the container.
+- in `none` mode nothing is exported and `pass-cli` stays the only source. This is
+  the pre-`--db` behaviour.
+- other one-off scripts (`scripts/import.sh`, `scripts/map.sh`, …) still pin their
+  own `DB_CONNECT`; `--db` does not reach them.
+
+Check what it resolved to, from the Mac or from inside:
+
+```bash
+./scripts/container/secman-container.sh db      # or, inside: devctl db status
+```
+
+```
+database mode    : host — the MariaDB installed on your Mac, reached across the VM boundary
+                   (one egress rule permits exactly 192.168.64.1:3306)
+DB_CONNECT       : jdbc:mariadb://192.168.64.1:3306/secman
+reachable        : yes (192.168.64.1:3306 accepts connections)
+```
+
+### Using the Mac's database (`--db host`)
+
+The container is a full VM with its own kernel and its own IP, so "localhost" on
+the Mac is not localhost in here. Three things have to be true, and all three
+fail *silently* from inside — the backend just cannot connect:
+
+1. **The server is running.** `brew services start mariadb`.
+2. **It listens on more than loopback.** A server bound to `127.0.0.1` serves the
+   Mac perfectly and the container not at all. Set `bind-address = 0.0.0.0` in
+   `my.cnf` (Homebrew: `/opt/homebrew/etc/my.cnf`) and restart it.
+3. **The user has a grant for the container's subnet.** Apple's `container`
+   hands out addresses on a vmnet subnet — commonly `192.168.64.0/24`:
+
+   ```sql
+   CREATE USER 'secman'@'192.168.64.%' IDENTIFIED BY '…';
+   GRANT ALL PRIVILEGES ON secman.* TO 'secman'@'192.168.64.%';
+   FLUSH PRIVILEGES;
+   ```
+
+`up` warns about (1) before starting, the entrypoint probes the server once the
+firewall is up, and `devctl db status` re-checks on demand and names these three
+causes in order.
+
+The Mac's address is **auto-detected** — it is the container's default gateway,
+which only the container can see. Override it with `--db-host` when your setup
+differs. Because the firewall matches addresses, a hostname passed there is
+resolved once, at start-up, and the resulting address is used for both the rule
+and the JDBC URL.
+
+> `--db host` opens the only non-HTTP egress hole this container has, so it is
+> deliberately narrow: **one** address, **one** port, and the address must be
+> private (RFC 1918, loopback, link-local or CGNAT). Pointing it at a public
+> address — a managed database somewhere, say — is refused, because that would
+> quietly turn a convenience flag into general port-3306 egress. Set
+> `SECMAN_DEV_DB_ALLOW_PUBLIC=1` if you genuinely mean it.
+
+Other knobs: `--db-port` (default 3306 — `host` mode only; the container's own
+server is fixed on 3306, which is also the port published back to the Mac, so
+passing it elsewhere is refused rather than silently producing a URL nothing
+listens on), `--db-name` (default `secman`, used to build `DB_CONNECT`), and
+`SECMAN_DEV_DB_PARAMS` for a JDBC query string such as `?useSsl=true`.
+
+### Using the container's own database (`--db container`)
+
+The default. MariaDB 11.4 starts with the container, keeps its data on the
+`secman-dev-db` named volume (invisible to the Mac, removed only by `destroy`),
+and creates two databases — `secman` and `secman_test`, the latter for the
+integration-test tier. It is published on `localhost:3306`, so a GUI client on the
+Mac can attach to it.
+
+Its credentials are a local development default, never read from or written to
+`pass-cli`. That is why they can be exported into the container's shells without
+a secret leaving Proton Pass.
+
+`devctl db start|stop` manages it. In `host` or `none` mode `devctl db start`
+**refuses**: starting a second server behind a URL that names a different one is
+how you end up with two half-populated databases and no error.
+
+---
+
 ## Ports
 
 | Container | Purpose | Host |
@@ -257,7 +381,7 @@ the exact endpoints you use (`s3.eu-central-1.amazonaws.com`, and so on).
 | 8080 | Micronaut backend | 8080 |
 | 4321 | Astro dev server | 4321 |
 | 443 | nginx, TLS, fronts both | 443 (see below) |
-| 3306 | MariaDB 11.4 | 3306 (`--no-db` turns it off) |
+| 3306 | MariaDB 11.4 | 3306 — only with `--db container`; `--db host` and `--db none` publish nothing here |
 
 The **443 front door** exists because the app's shape depends on it: the
 `secman_auth` cookie is `Secure`, OAuth redirects and CORS are origin-sensitive,
@@ -372,6 +496,7 @@ not building the backend.
   root [cmd...]                    root shell inside it
   status                           services, ports, egress mode, container IP
   logs [-f]                        start-up log
+  db [status|start|stop]           which database is in use, and whether it answers
   egress [show|log N|refresh|test <host>...]
   down                             stop and remove the container, keep volumes
   destroy                          down, and delete the volumes too
@@ -381,7 +506,13 @@ Options for `up`:
   --name NAME       container name (default: secman-dev)
   --memory SIZE     default 10g
   --cpus N          default 6
-  --no-db           do not run the in-container MariaDB; :3306 stays closed
+  --db MODE         container (default) | host | none — see Choosing the database
+  --db-host ADDR    'host' mode: where the Mac is (default: auto-detected)
+  --db-port PORT    'host' mode: database port (default: 3306). The container's
+                    own server is fixed on 3306, so it is refused elsewhere
+  --db-name NAME    database name used to build DB_CONNECT (default: secman)
+  --with-db         alias for --db container
+  --no-db           alias for --db none
   --no-tls          do not start the :443 front door
   --tls-host HOST   certificate subject / SAN (default: localhost)
   --tls-port PORT   host port for the container's :443 (default: 443)
@@ -393,7 +524,8 @@ Inside the container, `devctl` controls what the container owns:
 ```
 devctl status                  what is running, and how egress is enforced
 devctl tls   start|stop        the :443 front door
-devctl db    start|stop        MariaDB
+devctl db    status            which database is in use, and whether it answers
+devctl db    start|stop        the in-container MariaDB ('--db container' only)
 devctl egress refresh|log      reload or inspect the egress policy
 egress-check [host...]         show the allowlist, or probe specific hosts
 ```
@@ -415,6 +547,10 @@ host's network services.
   allowing `api.anthropic.com` allows whatever else answers on that CDN address.
   This is the cost of running without a name-aware gate, and it is not fixable
   at the packet layer;
+- **your Mac's database, when you start with `--db host`.** That mode opens a
+  path from the container to one address and one port on your machine, and
+  anything inside the container can use it. `--db container` keeps the database
+  inside the shield too;
 - secrets you put into the container — `pass-cli` resolves real credentials
   inside it, and anything running there can read what a shell can read;
 - the source tree. `/workspace` is read-write by design; that is the point.
@@ -435,6 +571,10 @@ sandbox for hostile code.
 | `... egress show` reports backend **rules** | The kernel has no `ipset`. Expected on a trimmed kernel; the policy is identical, matching is just linear. |
 | `pass-cli: not signed in` | `... shell` then `pass-cli login --interactive`. The session persists after that. |
 | Host port 443 not listening | macOS reserves it for root; the script published 8443 instead and said so. Use the container IP from `... status` for real 443. |
+| The backend cannot connect to the database | `... db` (or `devctl db status` inside) names the mode, the URL and whether the server answers. With `--db host` the three usual causes, in order: the server is not running, it is bound to `127.0.0.1` only, or the user has no grant for the container's subnet. |
+| `--db host` refused: *not a private address* | `--db host` is for the database on your Mac and permits only private addresses, so it cannot become general 3306 egress. Use `--db none` and your own `DB_CONNECT` for anything else, or `SECMAN_DEV_DB_ALLOW_PUBLIC=1` if you really mean it. |
+| `devctl db start` refused | The container was started with `--db host` or `--db none`. Restart it with `--db container` to run a database in here. |
+| `DB_CONNECT` is not what `--db` said | Something already exported it — your own shell wins over the container's choice by design. `echo $DB_CONNECT` in the shell you start the backend from. |
 | `./gradlew build` OOMs | `--memory` below ~8 GB. Restart with `--memory 10g`. |
 | Files written inside show as owned by someone else on the Mac | `/workspace` was owned by root when the container started. Recreate it with `down` + `up`. |
 | Nothing forwards, macOS 15 | `--publish` needs macOS 26. Use the container IP. |
@@ -447,7 +587,8 @@ sandbox for hostile code.
 ```
 docker/apple-container/
   Containerfile                     the image
-  entrypoint.sh                     PID 1: user alignment, firewall, self-test, refresher
+  entrypoint.sh                     PID 1: user alignment, database selection, firewall,
+                                    self-test, refresher
   egress/allowlist.txt              the allowlist, annotated
   egress/init-egress-firewall.sh    the iptables policy (ipset or plain rules)
   nginx/secman-dev.conf             the :443 front door
