@@ -75,6 +75,8 @@ class ServersCommand {
     var lastSeenDays: Int = 0
     var overdueThreshold: Int = 30
     var backendUrl: String? = null
+    /** Run the post-import reconcile sweep in report-only mode (counts, deletes nothing). */
+    var reconcileDryRun: Boolean = false
 
     fun execute(): Int {
         return try {
@@ -162,9 +164,13 @@ class ServersCommand {
                 var totalVulnsWithPatchDate = 0
                 var totalVulnsSkipped = 0
                 val allErrors = mutableListOf<String>()
+                // Hosts whose POST/persist failed: excluded from the reconcile sweep's scope
+                // below, or the sweep would delete their un-refreshed rows as "stale".
+                val allFailedHostnames = mutableSetOf<String>()
                 var totalErrorCount = 0
                 var streamBatchNum = 0
                 var totalSystemsWithOverdueVulns = 0
+                val runSeveritiesList = severity.split(",").map { it.trim() }.filter { it.isNotBlank() }
 
                 // Producer/consumer pipeline: Falcon fetch (producer) hands batches to a single
                 // consumer thread that does the backend POST. Bounded queue (capacity=2) caps
@@ -214,7 +220,10 @@ class ServersCommand {
                                 batch.vulnerabilities.any { parseDaysOpenToInt(it.daysOpen) > overdueThreshold }
                             }
 
-                            val result = storageService.storeServerVulnerabilities(serverBatches, backendUrl = resolvedBackendUrl, authToken = authToken)
+                            val result = storageService.storeServerVulnerabilities(
+                                serverBatches, backendUrl = resolvedBackendUrl, authToken = authToken,
+                                runSeverities = runSeveritiesList
+                            )
                             totalServersProcessed += result.serversProcessed
                             totalServersCreated += result.serversCreated
                             totalServersUpdated += result.serversUpdated
@@ -222,6 +231,7 @@ class ServersCommand {
                             totalVulnsWithPatchDate += result.vulnerabilitiesWithPatchDate
                             totalVulnsSkipped += result.vulnerabilitiesSkipped
                             totalErrorCount += result.errors.size
+                            allFailedHostnames.addAll(result.failedHostnames)
                             if (allErrors.size < MAX_RETAINED_ERRORS) {
                                 val remaining = MAX_RETAINED_ERRORS - allErrors.size
                                 allErrors.addAll(result.errors.take(remaining))
@@ -294,22 +304,47 @@ class ServersCommand {
                 // (union'd with prior runs' severities, V214) whose importTimestamp predates
                 // runStartedAt. A failure here is fatal — silently leaving stale rows defeats
                 // the safeguard.
-                val severitiesList = severity.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                val severitiesList = runSeveritiesList
                 var reconcileFailed = false
                 if (severitiesList.isNotEmpty() && authToken != null) {
+                    // Exclude every host whose fetch OR persist failed this run from the
+                    // sweep's scope: their rows were never re-stamped, so sweeping them
+                    // would delete their entire population with nothing reinserted.
+                    // Matching is by short name (case-insensitive), consistent with the
+                    // backend's findPotentialDuplicates resolution.
+                    val failedShortNames = allFailedHostnames
+                        .map { it.substringBefore(".").lowercase() }
+                        .toSet()
+                    val effectiveHosts = streamResult.queriedHosts
+                        .minus(streamResult.failedHosts)
+                        .filterNot { host ->
+                            val short = host.hostname?.substringBefore(".")?.lowercase()
+                            short != null && short in failedShortNames
+                        }
+                        .toSet()
+                    val excludedCount = streamResult.queriedHosts.size - effectiveHosts.size
+                    if (excludedCount > 0) {
+                        System.out.println("Excluding $excludedCount host(s) with failed fetch/persist from reconcile scope " +
+                            "(${streamResult.failedHosts.size} fetch-side, ${allFailedHostnames.size} persist-side)")
+                    }
                     try {
                         val reconcileResult = storageService.reconcileStaleVulnerabilities(
                             importStartedAt = runStartedAt,
                             severities = severitiesList,
-                            queriedHosts = streamResult.queriedHosts,
+                            queriedHosts = effectiveHosts,
                             backendUrl = resolvedBackendUrl,
-                            authToken = authToken
+                            authToken = authToken,
+                            dryRun = reconcileDryRun,
+                            excludedFailedHostCount = excludedCount.takeIf { it > 0 }
                         )
                         System.out.println("\n--- Reconciliation ---")
                         if (reconcileResult != null) {
                             if (reconcileResult.aborted) {
                                 System.err.println("WARNING: reconcile ABORTED by safety brake — ${reconcileResult.abortReason ?: "run refreshed 0 rows"}.")
                                 System.err.println("No stale rows were deleted. Investigate the import run before trusting query results.")
+                            } else if (reconcileResult.dryRun) {
+                                System.out.println("[DRY-RUN] Reconcile would clear ${reconcileResult.wouldDelete ?: 0} stale row(s) " +
+                                    "(severities=${severitiesList.joinToString(",")}, cutoff=$runStartedAt). Nothing was deleted.")
                             } else {
                                 System.out.println("Stale rows cleared (severities=${severitiesList.joinToString(",")}, cutoff=$runStartedAt): ${reconcileResult.rowsDeleted}")
                             }

@@ -40,10 +40,26 @@ class CrowdStrikeAssetCleanupServiceTest {
     }
 
     @Test
+    fun `cutoff override is used verbatim for candidate selection`() {
+        // The audit service computes ONE cutoff per run and passes it here, so the
+        // safety brake and the deletion select the same population.
+        val override = LocalDateTime.of(2026, 1, 1, 0, 0)
+        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(override) } returns emptyList()
+
+        val result = service.cleanup(
+            days = 30, dryRun = true, username = "admin",
+            includeLegacy = false, cutoffOverride = override
+        )
+
+        assertThat(result.cutoff).isEqualTo(override)
+        verify(exactly = 1) { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(override) }
+    }
+
+    @Test
     fun `dry run returns stale CrowdStrike assets without deleting them`() {
         val stale = asset(1L, "server-old", LocalDateTime.of(2026, 5, 1, 9, 0))
         every {
-            assetRepository.findByCrowdStrikeLastImportedAtBefore(LocalDateTime.of(2026, 5, 4, 10, 0))
+            assetRepository.findCrowdStrikeStaleExcludingAgentSeen(LocalDateTime.of(2026, 5, 4, 10, 0))
         } returns listOf(stale)
 
         val result = service.cleanup(days = 3, dryRun = true, username = "admin", includeLegacy = false)
@@ -59,7 +75,7 @@ class CrowdStrikeAssetCleanupServiceTest {
     fun `delete mode deletes stale CrowdStrike assets through cascade service`() {
         val stale = asset(2L, "server-delete", LocalDateTime.of(2026, 4, 30, 10, 0))
         every {
-            assetRepository.findByCrowdStrikeLastImportedAtBefore(LocalDateTime.of(2026, 5, 2, 10, 0))
+            assetRepository.findCrowdStrikeStaleExcludingAgentSeen(LocalDateTime.of(2026, 5, 2, 10, 0))
         } returns listOf(stale)
         every {
             assetCascadeDeleteService.deleteAsset(2L, "admin", forceTimeout = true, bulkOperationId = any())
@@ -79,7 +95,7 @@ class CrowdStrikeAssetCleanupServiceTest {
     @Test
     fun `ignores assets without CrowdStrike import timestamp even if repository returns them`() {
         val withoutTimestamp = asset(3L, "manual-server", null)
-        every { assetRepository.findByCrowdStrikeLastImportedAtBefore(any()) } returns listOf(withoutTimestamp)
+        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any()) } returns listOf(withoutTimestamp)
 
         val result = service.cleanup(days = 3, dryRun = true, username = "admin", includeLegacy = false)
 
@@ -91,7 +107,7 @@ class CrowdStrikeAssetCleanupServiceTest {
     fun `reports per asset deletion failures without aborting later deletions`() {
         val blocked = asset(4L, "server-blocked", LocalDateTime.of(2026, 4, 20, 10, 0))
         val deleted = asset(5L, "server-deleted", LocalDateTime.of(2026, 4, 21, 10, 0))
-        every { assetRepository.findByCrowdStrikeLastImportedAtBefore(any()) } returns listOf(blocked, deleted)
+        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any()) } returns listOf(blocked, deleted)
         every {
             assetCascadeDeleteService.deleteAsset(4L, "admin", forceTimeout = true, bulkOperationId = any())
         } throws IllegalStateException("referenced by risk")
@@ -117,7 +133,7 @@ class CrowdStrikeAssetCleanupServiceTest {
     @Test
     fun `includeLegacy=true picks rule-B candidates with LEGACY_NULL_TIMESTAMP reason`() {
         val legacy = legacyAsset(10L, "legacy-host")
-        every { assetRepository.findByCrowdStrikeLastImportedAtBefore(any()) } returns emptyList()
+        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any()) } returns emptyList()
         every {
             assetRepository.findLegacyCrowdStrikeStale(AssetOwners.CROWDSTRIKE_IMPORT, any())
         } returns listOf(legacy)
@@ -138,7 +154,7 @@ class CrowdStrikeAssetCleanupServiceTest {
     @Test
     fun `includeLegacy=false ignores rule-B even if repository would return legacy assets`() {
         val legacy = legacyAsset(11L, "would-be-legacy")
-        every { assetRepository.findByCrowdStrikeLastImportedAtBefore(any()) } returns emptyList()
+        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any()) } returns emptyList()
 
         val result = service.cleanup(days = 30, dryRun = true, username = "admin", includeLegacy = false)
 
@@ -162,7 +178,7 @@ class CrowdStrikeAssetCleanupServiceTest {
         val timestampStale = asset(sharedId, "shared-host", LocalDateTime.of(2026, 4, 1, 10, 0))
         val legacyDup = legacyAsset(sharedId, "shared-host")
 
-        every { assetRepository.findByCrowdStrikeLastImportedAtBefore(any()) } returns listOf(timestampStale)
+        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any()) } returns listOf(timestampStale)
         every {
             assetRepository.findLegacyCrowdStrikeStale(AssetOwners.CROWDSTRIKE_IMPORT, any())
         } returns listOf(legacyDup)
@@ -180,7 +196,7 @@ class CrowdStrikeAssetCleanupServiceTest {
     fun `mixed batch with distinct ids surfaces both rules' candidates with their reasons`() {
         val timestampStale = asset(20L, "ts-host", LocalDateTime.of(2026, 4, 1, 10, 0))
         val legacy = legacyAsset(21L, "legacy-host")
-        every { assetRepository.findByCrowdStrikeLastImportedAtBefore(any()) } returns listOf(timestampStale)
+        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any()) } returns listOf(timestampStale)
         every {
             assetRepository.findLegacyCrowdStrikeStale(AssetOwners.CROWDSTRIKE_IMPORT, any())
         } returns listOf(legacy)
@@ -200,7 +216,7 @@ class CrowdStrikeAssetCleanupServiceTest {
     fun `real run with legacy candidates populates legacyDeletedCount per rule attribution`() {
         val legacy1 = legacyAsset(100L, "legacy-a")
         val legacy2 = legacyAsset(101L, "legacy-b")
-        every { assetRepository.findByCrowdStrikeLastImportedAtBefore(any()) } returns emptyList()
+        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any()) } returns emptyList()
         every {
             assetRepository.findLegacyCrowdStrikeStale(AssetOwners.CROWDSTRIKE_IMPORT, any())
         } returns listOf(legacy1, legacy2)

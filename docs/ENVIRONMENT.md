@@ -129,6 +129,22 @@ Daily scheduled job (02:30 server TZ) that deletes assets whose `crowdStrikeLast
 
 Notifications: ADMIN users receive an email whenever a run deletes ≥1 asset, hits errors, or trips the safety brake. "Boring" runs (0 deletions, 0 errors) are silent.
 
+Rule A is **agent-seen aware**: an asset whose `crowdStrikeAgentSeenAt` is within the window is never a candidate, even when `crowdStrikeLastImportedAt` is stale — that column is only stamped for hosts with findings, so a fully-patched host with a live Falcon sensor would otherwise age into the delete window. The brake also **fails closed**: an unverifiable tracked-asset count (0 while candidates exist) aborts the run as `ABORTED_SAFETY_BRAKE` instead of silently running unbraked.
+
+### CrowdStrike reconcile sweep (post-import stale-row cleanup)
+
+The CLI's `query servers --save` ends with `POST /api/crowdstrike/servers/reconcile-stale`, which deletes CrowdStrike-sourced vulnerability **rows** (never assets) that this run's queried hosts did not refresh. Every sweep is recorded in `crowdstrike_reconcile_job` with its scope statistics (`queried_host_count`, `resolved_asset_count`, `excluded_failed_host_count`, `stale_candidates`, `refreshed`, `dry_run`).
+
+Safety measures (2026-08-21 incident: a timezone-skewed cutoff's fallback deleted 727,637 rows the run had just imported):
+- **Cutoff translation**: new CLIs send `clientNow`; the backend measures the clock offset and translates the cutoff into its own clock. Without `clientNow`, a future cutoff **aborts** the sweep (delete nothing) instead of guessing a fallback.
+- **Failure-aware scope**: hosts whose Falcon fetch failed/truncated or whose backend persist failed are excluded from the sweep's scope — their un-refreshed rows are not "stale", they were simply never fetched.
+- **Percentage brake** (below) plus the existing zero-refresh and empty-scope brakes; the percentage brake fails closed on count errors.
+- **Dry run**: `secman query servers --save --reconcile-dry-run` reports what the sweep would delete without deleting.
+
+| Var | Default | Effect |
+|---|---|---|
+| `CROWDSTRIKE_RECONCILE_MAX_DELETE_PERCENT` | `20` | abort the sweep when stale candidates exceed this % of ALL in-scope rows (source + swept severities + resolved assets); set `100` to disable |
+
 ### AI-assisted risk assessment answers (Feature 088)
 Opt-in. Lets ADMIN/SECCHAMPION users trigger an LLM (OpenRouter, web search enabled via the `:online` model suffix) to pre-fill compliance answers as draft `Response` rows. Each answer carries a confidence score and citations; the human reviews and edits before submitting.
 

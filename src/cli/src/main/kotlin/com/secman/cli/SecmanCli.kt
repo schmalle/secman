@@ -151,6 +151,7 @@ class SecmanCli {
                         }
                         args[i] == "--save" -> serversCommand.save = true
                         args[i] == "--dry-run" -> serversCommand.dryRun = true
+                        args[i] == "--reconcile-dry-run" -> serversCommand.reconcileDryRun = true
                         args[i] == "--verbose" -> serversCommand.verbose = true
                     }
                     i++

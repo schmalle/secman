@@ -474,13 +474,15 @@ open class CrowdStrikeApiClientImpl(
         // outside the --last-seen-days window (not in serverDeviceIds) is never swept, and
         // a fully-remediated host that returns no vulns this run is still cleaned up.
         // Best-effort: a device that fails metadata resolution simply isn't in the scope.
-        val queriedHosts = resolveDeviceMetadata(serverDeviceIds, token).values
-            .mapNotNull { md ->
-                val h = md.hostname?.trim()?.takeIf { it.isNotBlank() }
-                val i = md.cloudInstanceId?.trim()?.takeIf { it.isNotBlank() }
-                if (h == null && i == null) null else QueriedHost(hostname = h, instanceId = i)
-            }
-            .toSet()
+        // The deviceId keys are kept so failed Stage-2 batches can be mapped back to their
+        // QueriedHosts and reported in failedHosts.
+        val metadataByDeviceId = resolveDeviceMetadata(serverDeviceIds, token)
+        fun toQueriedHost(md: DeviceMetadata): QueriedHost? {
+            val h = md.hostname?.trim()?.takeIf { it.isNotBlank() }
+            val i = md.cloudInstanceId?.trim()?.takeIf { it.isNotBlank() }
+            return if (h == null && i == null) null else QueriedHost(hostname = h, instanceId = i)
+        }
+        val queriedHosts = metadataByDeviceId.values.mapNotNull(::toQueriedHost).toSet()
         log.info("Resolved {} queried host(s) from {} device id(s) for reconcile scoping",
             queriedHosts.size, serverDeviceIds.size)
 
@@ -489,18 +491,21 @@ open class CrowdStrikeApiClientImpl(
         // Stage 2: Process device IDs in streaming batches
         val deviceChunks = serverDeviceIds.chunked(deviceBatchSize)
         var totalVulnerabilities = 0
+        val failedDeviceIds = mutableSetOf<String>()
 
         deviceChunks.forEachIndexed { index, chunk ->
             log.info("Streaming batch {}/{}: querying vulnerabilities for {} devices",
                 index + 1, deviceChunks.size, chunk.size)
 
-            val batchVulns = queryVulnerabilitiesByDeviceIds(
+            val outcome = queryVulnerabilitiesByDeviceIdsDetailed(
                 deviceIds = chunk,
                 severity = severity,
                 minDaysOpen = minDaysOpen,
                 config = config,
                 limit = limit
             )
+            failedDeviceIds.addAll(outcome.failedDeviceIds)
+            val batchVulns = outcome.vulnerabilities
 
             if (batchVulns.isNotEmpty()) {
                 totalVulnerabilities += batchVulns.size
@@ -510,12 +515,24 @@ open class CrowdStrikeApiClientImpl(
             }
         }
 
+        // A device that failed metadata resolution AND failed its vuln batch has no
+        // QueriedHost to report — harmless: it is not in queriedHosts either, so the
+        // sweep never touches it.
+        val failedHosts = failedDeviceIds
+            .mapNotNull { metadataByDeviceId[it]?.let(::toQueriedHost) }
+            .toSet()
+
+        if (failedHosts.isNotEmpty()) {
+            log.warn("Streaming query completed with {} host(s) in failed/truncated batches — " +
+                "these are excluded from reconcile scope", failedHosts.size)
+        }
         log.info("Streaming query completed: {} total vulnerabilities across {} batches",
             totalVulnerabilities, deviceChunks.size)
 
         return StreamingImportResult(
             totalVulnerabilities = totalVulnerabilities,
-            queriedHosts = queriedHosts
+            queriedHosts = queriedHosts,
+            failedHosts = failedHosts
         )
     }
 
@@ -1149,10 +1166,31 @@ open class CrowdStrikeApiClientImpl(
         minDaysOpen: Int,
         config: FalconConfigDto,
         limit: Int = 1000
-    ): List<CrowdStrikeVulnerabilityDto> {
+    ): List<CrowdStrikeVulnerabilityDto> =
+        queryVulnerabilitiesByDeviceIdsDetailed(deviceIds, severity, minDaysOpen, config, limit).vulnerabilities
+
+    /**
+     * Result of [queryVulnerabilitiesByDeviceIdsDetailed]: the collected vulnerabilities
+     * plus the device ids whose batch FAILED or was truncated. The fault-tolerant batch
+     * collection continues past failed batches by design — but a caller that later
+     * reconciles "hosts with no refreshed rows" must know which hosts were simply never
+     * fetched, or it will delete their entire population as stale.
+     */
+    data class DeviceVulnerabilityQueryResult(
+        val vulnerabilities: List<CrowdStrikeVulnerabilityDto>,
+        val failedDeviceIds: Set<String>
+    )
+
+    open fun queryVulnerabilitiesByDeviceIdsDetailed(
+        deviceIds: List<String>,
+        severity: String,
+        minDaysOpen: Int,
+        config: FalconConfigDto,
+        limit: Int = 1000
+    ): DeviceVulnerabilityQueryResult {
         if (deviceIds.isEmpty()) {
             log.info("No device IDs provided, returning empty list")
-            return emptyList()
+            return DeviceVulnerabilityQueryResult(emptyList(), emptySet())
         }
 
         val batchSize = configuredBatchSize.coerceIn(5, 200)
@@ -1167,19 +1205,20 @@ open class CrowdStrikeApiClientImpl(
         log.info(">>> Stage 2: Split {} device IDs into {} batches", deviceIds.size, batches.size)
 
         val allVulnerabilities = mutableListOf<CrowdStrikeVulnerabilityDto>()
+        val failedDeviceIds = mutableSetOf<String>()
 
         if (batches.size == 1) {
-            allVulnerabilities.addAll(
-                queryBatchVulnerabilities(
-                    batchIndex = 0,
-                    totalBatches = 1,
-                    deviceIds = batches.first(),
-                    severity = severity,
-                    minDaysOpen = minDaysOpen,
-                    limit = limit,
-                    config = config
-                )
+            val outcome = queryBatchVulnerabilities(
+                batchIndex = 0,
+                totalBatches = 1,
+                deviceIds = batches.first(),
+                severity = severity,
+                minDaysOpen = minDaysOpen,
+                limit = limit,
+                config = config
             )
+            allVulnerabilities.addAll(outcome.vulnerabilities)
+            if (outcome.truncated) failedDeviceIds.addAll(batches.first())
         } else {
             val executor = createBatchExecutor(parallelism)
             val futures = batches.mapIndexed { index, batch ->
@@ -1196,47 +1235,70 @@ open class CrowdStrikeApiClientImpl(
                 })
             }
 
-            // Collect results with fault tolerance - continue even if some batches fail
+            // Collect results with fault tolerance - continue even if some batches fail.
+            // Every failed/cancelled/truncated batch's device ids are recorded so callers
+            // can exclude those hosts from any staleness-based reconciliation.
             val failedBatches = mutableListOf<Int>()
             val errors = mutableListOf<String>()
 
             try {
                 futures.forEachIndexed { index, future ->
                     try {
-                        allVulnerabilities.addAll(future.get())
+                        val outcome = future.get()
+                        allVulnerabilities.addAll(outcome.vulnerabilities)
+                        if (outcome.truncated) {
+                            failedBatches.add(index + 1)
+                            failedDeviceIds.addAll(batches[index])
+                        }
                     } catch (e: ExecutionException) {
                         val cause = e.cause
                         val errorMsg = "Batch ${index + 1}/${batches.size} failed: ${cause?.message ?: e.message}"
                         log.warn(">>> $errorMsg")
                         failedBatches.add(index + 1)
                         errors.add(errorMsg)
+                        failedDeviceIds.addAll(batches[index])
                         // Continue with other batches instead of failing entirely
                     } catch (e: java.util.concurrent.CancellationException) {
                         log.warn(">>> Batch ${index + 1}/${batches.size} was cancelled")
                         failedBatches.add(index + 1)
+                        failedDeviceIds.addAll(batches[index])
                     }
                 }
             } catch (e: InterruptedException) {
                 log.warn(">>> Batch processing interrupted, cancelling remaining futures")
                 futures.forEach { it.cancel(true) }
                 Thread.currentThread().interrupt()
-                // Don't throw - return partial results
+                // Don't throw - return partial results. Interrupted mid-collection means we
+                // cannot tell which batches completed: conservatively mark every device
+                // failed so a later reconcile sweeps none of them.
+                failedDeviceIds.addAll(batches.flatten())
             } finally {
                 executor.shutdown()
             }
 
             // Log summary of failures
             if (failedBatches.isNotEmpty()) {
-                log.warn(">>> {} of {} batches failed: {}", failedBatches.size, batches.size, failedBatches.joinToString(", "))
+                log.warn(">>> {} of {} batches failed or were truncated: {}", failedBatches.size, batches.size, failedBatches.joinToString(", "))
                 log.warn(">>> Continuing with {} vulnerabilities from successful batches", allVulnerabilities.size)
             }
         }
 
-        log.info(">>> Stage 2 complete: {} total vulnerabilities found across {} batches",
-            allVulnerabilities.size, batches.size)
+        log.info(">>> Stage 2 complete: {} total vulnerabilities found across {} batches ({} device(s) in failed/truncated batches)",
+            allVulnerabilities.size, batches.size, failedDeviceIds.size)
 
-        return allVulnerabilities
+        return DeviceVulnerabilityQueryResult(allVulnerabilities, failedDeviceIds)
     }
+
+    /**
+     * One Stage-2 batch's collected vulnerabilities plus whether its pagination was cut
+     * short (page cap, or a broken/repeating pagination token). A truncated batch's
+     * devices have incomplete data and must be treated like a failed batch by callers
+     * that reconcile on staleness.
+     */
+    private data class BatchQueryOutcome(
+        val vulnerabilities: List<CrowdStrikeVulnerabilityDto>,
+        val truncated: Boolean
+    )
 
     private fun queryBatchVulnerabilities(
         batchIndex: Int,
@@ -1246,7 +1308,7 @@ open class CrowdStrikeApiClientImpl(
         minDaysOpen: Int,
         limit: Int,
         config: FalconConfigDto
-    ): List<CrowdStrikeVulnerabilityDto> {
+    ): BatchQueryOutcome {
         var token = getAuthToken(config)
         val metadataByDeviceId = resolveDeviceMetadata(deviceIds, token)
         val severityFilter = buildSeverityFilter(severity)
@@ -1258,6 +1320,7 @@ open class CrowdStrikeApiClientImpl(
         var afterToken: String? = null
         var hasMore = true
         var pageCount = 0
+        var truncated = false
 
         log.debug(">>> Batch {}/{} starting with {} device IDs", batchIndex + 1, totalBatches, deviceIds.size)
 
@@ -1352,6 +1415,7 @@ open class CrowdStrikeApiClientImpl(
                             log.warn(">>> Batch {}/{} page {}: afterToken unchanged - breaking pagination loop",
                                 batchIndex + 1, totalBatches, pageCount)
                             hasMore = false
+                            truncated = true
                         }
 
                         if (hasMore && filtered.isEmpty() && vulns.isNotEmpty() && pageCount >= 3) {
@@ -1431,15 +1495,16 @@ open class CrowdStrikeApiClientImpl(
             }
         }
 
-        if (pageCount >= maxPagesPerBatch) {
-            log.warn(">>> Batch {}/{}: Reached max page limit ({} pages) - stopping pagination for this batch",
+        if (hasMore && pageCount >= maxPagesPerBatch) {
+            log.warn(">>> Batch {}/{}: Reached max page limit ({} pages) with more data pending - stopping pagination for this batch",
                 batchIndex + 1, totalBatches, maxPagesPerBatch)
+            truncated = true
         }
 
-        log.debug(">>> Batch {}/{} complete: {} vulnerabilities collected",
-            batchIndex + 1, totalBatches, batchVulnerabilities.size)
+        log.debug(">>> Batch {}/{} complete: {} vulnerabilities collected (truncated={})",
+            batchIndex + 1, totalBatches, batchVulnerabilities.size, truncated)
 
-        return batchVulnerabilities
+        return BatchQueryOutcome(batchVulnerabilities, truncated)
     }
 
     private fun createBatchExecutor(parallelism: Int): ExecutorService {

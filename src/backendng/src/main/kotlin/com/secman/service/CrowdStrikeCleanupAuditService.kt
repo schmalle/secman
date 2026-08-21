@@ -74,27 +74,38 @@ open class CrowdStrikeCleanupAuditService @Inject constructor(
 
         val effectiveIncludeLegacy = includeLegacy ?: includeLegacyDefault
 
+        // ONE clock read per run: the same cutoff feeds the safety brake's candidate
+        // count and the actual selection, so the brake can never approve one
+        // population and the cleanup delete a different one.
+        val startedAt = LocalDateTime.now(clock)
+        val cutoff = startedAt.minusDays(days.toLong())
+
         if (dryRun) {
-            return cleanupService.cleanup(days, dryRun = true, username = triggeredBy, includeLegacy = effectiveIncludeLegacy)
+            return cleanupService.cleanup(
+                days, dryRun = true, username = triggeredBy,
+                includeLegacy = effectiveIncludeLegacy, cutoffOverride = cutoff
+            )
         }
 
-        val startedAt = LocalDateTime.now(clock)
         val totalTrackedAtStart = safeTotalCombined(effectiveIncludeLegacy)
 
         if (maxDeletePercent != null) {
-            val brakeOutcome = checkSafetyBrake(days, triggeredBy, startedAt, maxDeletePercent, effectiveIncludeLegacy)
+            val brakeOutcome = checkSafetyBrake(days, triggeredBy, startedAt, cutoff, maxDeletePercent, effectiveIncludeLegacy)
             if (brakeOutcome != null) return brakeOutcome
         }
 
         val response = try {
-            cleanupService.cleanup(days, dryRun = false, username = triggeredBy, includeLegacy = effectiveIncludeLegacy)
+            cleanupService.cleanup(
+                days, dryRun = false, username = triggeredBy,
+                includeLegacy = effectiveIncludeLegacy, cutoffOverride = cutoff
+            )
         } catch (e: Exception) {
             logger.error("CrowdStrike cleanup run failed (triggeredBy={})", triggeredBy, e)
             val failed = persistRun(
                 status = CrowdStrikeCleanupStatus.FAILED,
                 triggeredBy = triggeredBy,
                 staleDays = days,
-                cutoff = LocalDateTime.now(clock).minusDays(days.toLong()),
+                cutoff = cutoff,
                 candidateCount = 0,
                 deletedCount = 0,
                 errorCount = 1,
@@ -156,15 +167,15 @@ open class CrowdStrikeCleanupAuditService @Inject constructor(
         days: Int,
         triggeredBy: String,
         startedAt: LocalDateTime,
+        cutoff: LocalDateTime,
         maxDeletePercent: Int,
         includeLegacy: Boolean
     ): CrowdStrikeAssetCleanupResponse? {
         if (maxDeletePercent >= 100) return null
 
-        val cutoff = LocalDateTime.now(clock).minusDays(days.toLong())
-
-        // Rule A — timestamped CrowdStrike-stale assets.
-        val timestampCandidates = assetRepository.findByCrowdStrikeLastImportedAtBefore(cutoff)
+        // Same query as the cleanup's own rule-A selection (agent-seen aware) and the
+        // SAME cutoff instant — numerator and deletion set are one population.
+        val timestampCandidates = assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff)
             .count { it.crowdStrikeLastImportedAt != null && it.id != null }
 
         // Rule B — legacy CrowdStrike-origin stale rows. Only counted into the
@@ -179,16 +190,54 @@ open class CrowdStrikeCleanupAuditService @Inject constructor(
 
         // Denominator widens to include the rule-B population so the
         // percentage stays meaningful when rule B is active.
+        //
+        // FAIL CLOSED: a denominator of 0 while candidates exist means the count
+        // failed (safeTotalCombined swallows exceptions into 0) or the data is
+        // inconsistent — either way the percentage is unverifiable, and silently
+        // skipping the brake here is exactly how an import outage becomes a mass
+        // deletion. Abort the run instead of running unbraked.
         val totalTracked = safeTotalCombined(includeLegacy)
-        if (totalTracked <= 0L) return null
+        if (totalTracked <= 0L) {
+            if (candidates == 0) return null // genuinely nothing tracked, nothing to delete
+            return abortRun(
+                days, triggeredBy, startedAt, cutoff, candidates, legacyCandidates,
+                totalTracked, maxDeletePercent,
+                "Safety brake: could not verify candidate percentage " +
+                    "($candidates candidate(s), tracked-asset count unavailable). " +
+                    "Refusing to delete; investigate before re-running."
+            )
+        }
 
         val percent = (candidates.toDouble() / totalTracked.toDouble()) * 100.0
         if (percent <= maxDeletePercent.toDouble()) return null
 
+        return abortRun(
+            days, triggeredBy, startedAt, cutoff, candidates, legacyCandidates,
+            totalTracked, maxDeletePercent,
+            "Safety brake: ${"%.2f".format(percent)}% of CrowdStrike-tracked assets " +
+                "would be deleted (limit ${maxDeletePercent}%). Investigate before re-running."
+        )
+    }
+
+    /**
+     * Persist an ABORTED_SAFETY_BRAKE run, notify admins and build the aborted
+     * response. Shared by the over-percentage trip and the fail-closed
+     * unverifiable-denominator trip.
+     */
+    private fun abortRun(
+        days: Int,
+        triggeredBy: String,
+        startedAt: LocalDateTime,
+        cutoff: LocalDateTime,
+        candidates: Int,
+        legacyCandidates: Int,
+        totalTracked: Long,
+        maxDeletePercent: Int,
+        message: String
+    ): CrowdStrikeAssetCleanupResponse {
         logger.warn(
-            "CrowdStrike cleanup safety brake tripped: {} (timestamp: {}, legacy: {}) of {} tracked assets ({}%) exceeds max {}%",
-            candidates, timestampCandidates, legacyCandidates,
-            totalTracked, "%.2f".format(percent), maxDeletePercent
+            "CrowdStrike cleanup safety brake tripped: {} candidate(s) (legacy: {}) of {} tracked assets, limit {}% — {}",
+            candidates, legacyCandidates, totalTracked, maxDeletePercent, message
         )
 
         val saved = persistRun(
@@ -205,8 +254,7 @@ open class CrowdStrikeCleanupAuditService @Inject constructor(
             legacyDeletedCount = 0,
             totalTracked = totalTracked,
             startedAt = startedAt,
-            errorMessage = "Safety brake: ${"%.2f".format(percent)}% of CrowdStrike-tracked assets " +
-                "would be deleted (limit ${maxDeletePercent}%). Investigate before re-running."
+            errorMessage = message
         )
         notificationService.notifyAdmins(saved)
 

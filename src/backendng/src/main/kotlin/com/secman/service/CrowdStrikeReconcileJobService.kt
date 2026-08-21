@@ -2,7 +2,11 @@ package com.secman.service
 
 import com.secman.constants.AssetOwners
 import com.secman.domain.CrowdStrikeReconcileJob
+import com.secman.domain.NotificationEventType
 import com.secman.domain.ReconcileJobStatus
+import com.secman.event.ChatNotificationEvent
+import com.secman.event.ChatNotificationEvent.ChatField
+import io.micronaut.context.event.ApplicationEventPublisher
 import com.secman.dto.ReconcileJobStartedResponse
 import com.secman.dto.ReconcileJobStatusResponse
 import com.secman.dto.ReconcileStaleResult
@@ -46,7 +50,8 @@ open class CrowdStrikeReconcileJobService(
     private val jobRepository: CrowdStrikeReconcileJobRepository,
     private val importService: CrowdStrikeVulnerabilityImportService,
     @Named(TaskExecutors.IO) private val executorService: ExecutorService,
-    private val entityManager: EntityManager
+    private val entityManager: EntityManager,
+    private val eventPublisher: ApplicationEventPublisher<ChatNotificationEvent>
 ) {
     private val log = LoggerFactory.getLogger(CrowdStrikeReconcileJobService::class.java)
 
@@ -111,7 +116,9 @@ open class CrowdStrikeReconcileJobService(
                 severities = job.severities?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
                 owner = AssetOwners.CROWDSTRIKE_IMPORT,
                 aborted = job.aborted ?: false,
-                abortReason = job.abortReason
+                abortReason = job.abortReason,
+                dryRun = job.dryRun ?: false,
+                wouldDelete = if (job.dryRun == true) job.staleCandidates else null
             )
         } else null
         return ReconcileJobStatusResponse(
@@ -130,8 +137,14 @@ open class CrowdStrikeReconcileJobService(
         try {
             selfProvider.get().markJobAsRunning(jobId)
             val result = selfProvider.get().runReconcileInNewTransaction(request)
-            selfProvider.get().markJobAsCompleted(jobId, result, request.importStartedAt, request.severities)
+            selfProvider.get().markJobAsCompleted(
+                jobId, result, request.importStartedAt, request.severities,
+                request.excludedFailedHostCount
+            )
             log.info("[reconcile {}] completed: rowsDeleted={}, aborted={}", shortId, result.rowsDeleted, result.aborted)
+            if (result.aborted) {
+                publishAbortNotification(jobId, result)
+            }
         } catch (e: Exception) {
             log.error("[reconcile {}] failed", shortId, e)
             try {
@@ -139,6 +152,32 @@ open class CrowdStrikeReconcileJobService(
             } catch (updateEx: Exception) {
                 log.error("[reconcile {}] failed to update status after error", shortId, updateEx)
             }
+        }
+    }
+
+    /**
+     * Publish the opt-in chat notification for a brake-aborted sweep. Transport,
+     * subscription filtering and rendering happen downstream (ChatNotificationEventListener);
+     * failure to publish never fails the job.
+     */
+    private fun publishAbortNotification(jobId: String, result: ReconcileStaleResult) {
+        try {
+            eventPublisher.publishEvent(
+                ChatNotificationEvent(
+                    eventType = NotificationEventType.CROWDSTRIKE_RECONCILE_ABORTED,
+                    title = "CrowdStrike reconcile sweep aborted",
+                    summary = result.abortReason ?: "A safety brake refused the sweep; no rows were deleted.",
+                    fields = listOfNotNull(
+                        ChatField("Job", jobId.take(8)),
+                        result.queriedHostCount?.let { ChatField("Queried hosts", it.toString()) },
+                        result.resolvedAssetCount?.let { ChatField("Resolved assets", it.toString()) },
+                        result.staleCandidates?.let { ChatField("Stale candidates", it.toString()) },
+                        result.refreshed?.let { ChatField("Rows refreshed by run", it.toString()) }
+                    )
+                )
+            )
+        } catch (e: Exception) {
+            log.error("Failed to publish reconcile-abort chat notification for job {}", jobId, e)
         }
     }
 
@@ -156,7 +195,9 @@ open class CrowdStrikeReconcileJobService(
         return importService.reconcileStaleCrowdStrikeImports(
             cutoff = request.importStartedAt,
             severities = request.severities,
-            queriedHosts = request.queriedHosts ?: emptyList()
+            queriedHosts = request.queriedHosts ?: emptyList(),
+            dryRun = request.dryRun,
+            clientNow = request.clientNow
         )
     }
 
@@ -199,7 +240,8 @@ open class CrowdStrikeReconcileJobService(
         jobId: String,
         result: ReconcileStaleResult,
         cutoff: LocalDateTime,
-        severities: List<String>
+        severities: List<String>,
+        excludedFailedHostCount: Int? = null
     ) {
         val job = jobRepository.findById(jobId).orElse(null) ?: return
         // Status guard: never resurrect a job auto-failed as stuck while the sweep ran.
@@ -214,6 +256,12 @@ open class CrowdStrikeReconcileJobService(
         job.severities = severities.joinToString(",").take(500)
         job.aborted = result.aborted
         job.abortReason = result.abortReason?.take(500)
+        job.queriedHostCount = result.queriedHostCount
+        job.resolvedAssetCount = result.resolvedAssetCount
+        job.excludedFailedHostCount = excludedFailedHostCount
+        job.staleCandidates = result.staleCandidates ?: result.wouldDelete
+        job.refreshed = result.refreshed
+        job.dryRun = result.dryRun
         jobRepository.update(job)
     }
 
