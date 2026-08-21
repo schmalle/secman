@@ -498,6 +498,12 @@ secman:
       # COALESCE(lastSeen, updatedAt, createdAt)) selects these rows for
       # deletion. Default off — flip to true once you've reviewed a dry-run.
       include-legacy: ${CROWDSTRIKE_CLEANUP_INCLUDE_LEGACY:false}
+    # Percentage safety brake for the post-import reconcile sweep: abort when the
+    # stale candidates within the sweep's resolved asset scope exceed this percent
+    # of ALL in-scope rows (source + swept severities + resolved assets). Catches
+    # partial-failure runs the zero-refresh brake cannot see. 100 disables it.
+    reconcile:
+      max-delete-percent: ${CROWDSTRIKE_RECONCILE_MAX_DELETE_PERCENT:20}
   http:
     services:
       translation:

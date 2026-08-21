@@ -42,6 +42,15 @@ jpa:
 flyway:
   enabled: false
 
+# The reconcile percentage brake is unit-tested with explicit thresholds; the
+# integration scenarios exercise sweep semantics with small fixtures whose
+# stale/total ratios routinely exceed any realistic threshold, so the brake is
+# disabled (100) for @MicronautTest runs only.
+secman:
+  crowdstrike:
+    reconcile:
+      max-delete-percent: 100
+
 # Reduce logging verbosity in tests
 logger:
   levels:

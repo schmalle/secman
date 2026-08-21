@@ -211,9 +211,12 @@ open class MaterializedViewRefreshService(
             }
         }
 
-        // Create job entity
+        // Create job entity. triggered_by is VARCHAR(50): callers pass free-form reasons
+        // (e.g. "Reconcile stale CrowdStrike vulns - 727637 rows cleared, 2074 agent-seen
+        // stamps"), and an over-length value fails the INSERT with SQLState 22001 and kills
+        // the whole refresh (real incident 2026-08-21) — truncate at the single write site.
         val job = MaterializedViewRefreshJob(
-            triggeredBy = triggeredBy,
+            triggeredBy = triggeredBy.take(50),
             totalAssets = 0  // Will be calculated during refresh
         )
         val savedJob = refreshJobRepository.save(job)

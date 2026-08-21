@@ -46,7 +46,30 @@ data class ReconcileStaleVulnerabilitiesRequest(
      * deploy (new backend + old CLI that doesn't send this) to "no cleanup" rather than
      * the previous "delete every stale row across all assets".
      */
-    val queriedHosts: List<QueriedHostDto>? = null
+    val queriedHosts: List<QueriedHostDto>? = null,
+    /**
+     * When true the sweep runs in report-only mode: candidates are counted with the
+     * exact DELETE predicate but nothing is deleted and no materialized-view refresh
+     * is requested. Agent-seen stamping still happens (it never deletes anything and
+     * the queried population is valid EDR-presence evidence either way).
+     */
+    val dryRun: Boolean = false,
+    /**
+     * The caller's OWN current wall-clock time, captured when this request is built.
+     * Lets the backend measure the clock offset between the two machines and translate
+     * [importStartedAt] into its own clock, so a timezone/NTP skew can never place the
+     * staleness fence inside the run's own inserts (2026-08-21 incident: a skewed cutoff's
+     * 30-minute fallback deleted 727,637 rows the run had just imported). When absent
+     * (old CLI) a future cutoff aborts the sweep instead of guessing.
+     */
+    val clientNow: LocalDateTime? = null,
+    /**
+     * Number of hosts the CLI excluded from [queriedHosts] because their vulnerability
+     * fetch or persist failed this run (failed Falcon batch, failed backend POST, or a
+     * per-server import error). Informational — recorded in the sweep's audit row so a
+     * shrunken sweep scope is attributable. Old CLIs omit it.
+     */
+    val excludedFailedHostCount: Int? = null
 )
 
 @Serdeable
@@ -63,19 +86,35 @@ data class ReconcileStaleVulnerabilitiesResponse(
      * clean" (aborted=false, rowsDeleted=0) from a refused-dangerous sweep.
      */
     val aborted: Boolean = false,
-    val abortReason: String? = null
+    val abortReason: String? = null,
+    /** True when the sweep ran in report-only mode; [wouldDelete] carries the candidate count. */
+    val dryRun: Boolean = false,
+    /** Rows the sweep would have deleted (populated on dry runs; null otherwise). */
+    val wouldDelete: Long? = null
 )
 
 /**
  * Service-layer result of a reconcile sweep. Carries the deleted-row count plus whether
- * the zero-refresh brake aborted the sweep, so the controller can surface it to the CLI
- * without leaning on a sentinel count.
+ * one of the safety brakes (zero-refresh or max-delete-percent) aborted the sweep, so
+ * the controller can surface it to the CLI without leaning on a sentinel count. The
+ * remaining fields are audit statistics persisted on the job row.
  */
 @Serdeable
 data class ReconcileStaleResult(
     val rowsDeleted: Int,
     val aborted: Boolean = false,
-    val abortReason: String? = null
+    val abortReason: String? = null,
+    val dryRun: Boolean = false,
+    /** Rows the sweep would have deleted (dry runs only; null otherwise). */
+    val wouldDelete: Long? = null,
+    /** Size of the Stage-1 queried-host population the caller sent. */
+    val queriedHostCount: Int? = null,
+    /** Persisted asset ids the queried population resolved to (the sweep's scope). */
+    val resolvedAssetCount: Int? = null,
+    /** Stale candidates within the resolved scope at sweep time. */
+    val staleCandidates: Long? = null,
+    /** Rows this run refreshed (importTimestamp >= cutoff) for the swept severities. */
+    val refreshed: Long? = null
 )
 
 /**

@@ -27,6 +27,13 @@ enum class NotificationEventType(
         "New AWS account import completed",
         "An AWS account / user-mapping import finished. Reports how many mappings were " +
             "processed and which AWS accounts SecMan had never seen before."
+    ),
+
+    CROWDSTRIKE_RECONCILE_ABORTED(
+        "CrowdStrike reconcile sweep aborted",
+        "A post-import stale-row reconcile sweep was refused by a safety brake " +
+            "(suspected empty/partial import or an untranslatable clock skew). No rows " +
+            "were deleted — the import run should be investigated."
     );
 
     companion object {

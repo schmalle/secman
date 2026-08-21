@@ -32,5 +32,12 @@ data class ImportStatisticsDto(
     val vulnerabilitiesWithPatchDate: Int,
     val uniqueDomainCount: Int = 0,
     val discoveredDomains: List<String> = emptyList(),
-    val errors: List<String>
+    val errors: List<String>,
+    /**
+     * Hostnames whose per-server import transaction rolled back. Their old rows
+     * survived (the rollback restored them) but were NOT re-stamped, so the CLI
+     * must exclude these hosts from the reconcile sweep's scope or the sweep
+     * would delete their rows with nothing reinserted.
+     */
+    val failedHostnames: List<String> = emptyList()
 )

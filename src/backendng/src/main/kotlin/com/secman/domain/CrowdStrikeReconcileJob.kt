@@ -60,7 +60,30 @@ class CrowdStrikeReconcileJob(
     var aborted: Boolean? = null,
 
     @Column(length = 500)
-    var abortReason: String? = null
+    var abortReason: String? = null,
+
+    // Audit statistics (V257): make every sweep's scope and outcome attributable
+    // from the DB alone — which population was queried, what it resolved to, how
+    // many rows were stale vs freshly refreshed, and whether this was a dry run.
+
+    @Column
+    var queriedHostCount: Int? = null,
+
+    @Column
+    var resolvedAssetCount: Int? = null,
+
+    /** Hosts the CLI excluded from the sweep scope because their fetch/persist failed. */
+    @Column
+    var excludedFailedHostCount: Int? = null,
+
+    @Column
+    var staleCandidates: Long? = null,
+
+    @Column
+    var refreshed: Long? = null,
+
+    @Column
+    var dryRun: Boolean? = null
 ) {
     fun isRunning(): Boolean {
         return status == ReconcileJobStatus.PENDING || status == ReconcileJobStatus.RUNNING

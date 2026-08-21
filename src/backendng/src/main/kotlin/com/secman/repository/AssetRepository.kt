@@ -245,6 +245,26 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     fun findByCrowdStrikeLastImportedAtBefore(cutoff: LocalDateTime): List<Asset>
 
     /**
+     * Stale-asset cleanup rule A, agent-seen aware: stale by
+     * `crowdStrikeLastImportedAt` AND not recently confirmed as a managed device
+     * via `crowdStrikeAgentSeenAt`.
+     *
+     * `crowdStrikeLastImportedAt` alone is a false staleness signal: it is only
+     * written for hosts that returned findings, so a fully-patched host with a
+     * healthy Falcon sensor never sets it and ages into the delete window while
+     * being demonstrably alive. `crowdStrikeAgentSeenAt` is stamped for the whole
+     * Stage-1 queried population on every reconcile (see stampCrowdStrikeAgentSeenAt)
+     * and is therefore the EDR-presence veto: an asset CrowdStrike reported within
+     * the window is never a cleanup candidate.
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT a FROM Asset a
+        WHERE a.crowdStrikeLastImportedAt < :cutoff
+          AND (a.crowdStrikeAgentSeenAt IS NULL OR a.crowdStrikeAgentSeenAt < :cutoff)
+    """)
+    fun findCrowdStrikeStaleExcludingAgentSeen(cutoff: LocalDateTime): List<Asset>
+
+    /**
      * Record that CrowdStrike reported these assets as managed devices.
      *
      * Written from the reconcile-stale call's Stage-1 queried-host population, which — unlike

@@ -37,7 +37,15 @@ data class QueriedHost(
  */
 data class StreamingImportResult(
     val totalVulnerabilities: Int,
-    val queriedHosts: Set<QueriedHost>
+    val queriedHosts: Set<QueriedHost>,
+    /**
+     * Hosts whose vulnerability fetch FAILED or was truncated this run (failed Stage-2
+     * batch, cancelled batch, page-limit truncation, or a broken pagination loop).
+     * Their rows were never refreshed, so the caller MUST exclude them from the
+     * stale-reconcile sweep's scope — sweeping them deletes their entire population
+     * with nothing reinserted. Empty on a fully healthy run.
+     */
+    val failedHosts: Set<QueriedHost> = emptySet()
 )
 
 /**

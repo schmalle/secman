@@ -59,7 +59,8 @@ class CrowdStrikeReconcileJobServiceTest {
             jobRepository = jobRepository,
             importService = importService,
             executorService = DirectExecutorService(),
-            entityManager = mockk(relaxed = true)
+            entityManager = mockk(relaxed = true),
+            eventPublisher = mockk(relaxed = true)
         )
         injectSelfProvider()
     }
@@ -80,7 +81,7 @@ class CrowdStrikeReconcileJobServiceTest {
 
     @Test
     fun `successful sweep completes job with result fields`() {
-        every { importService.reconcileStaleCrowdStrikeImports(any(), any(), any()) } returns
+        every { importService.reconcileStaleCrowdStrikeImports(any(), any(), any(), any(), any()) } returns
             ReconcileStaleResult(rowsDeleted = 42)
 
         val started = service.startReconcile("adminuser", request())
@@ -96,7 +97,7 @@ class CrowdStrikeReconcileJobServiceTest {
 
     @Test
     fun `aborted sweep is COMPLETED with aborted flag, not FAILED`() {
-        every { importService.reconcileStaleCrowdStrikeImports(any(), any(), any()) } returns
+        every { importService.reconcileStaleCrowdStrikeImports(any(), any(), any(), any(), any()) } returns
             ReconcileStaleResult(rowsDeleted = 0, aborted = true, abortReason = "suspected empty run")
 
         val started = service.startReconcile("adminuser", request())
@@ -110,7 +111,7 @@ class CrowdStrikeReconcileJobServiceTest {
 
     @Test
     fun `sweep exception marks job FAILED with message`() {
-        every { importService.reconcileStaleCrowdStrikeImports(any(), any(), any()) } throws
+        every { importService.reconcileStaleCrowdStrikeImports(any(), any(), any(), any(), any()) } throws
             RuntimeException("db connection lost")
 
         val started = service.startReconcile("adminuser", request())
@@ -142,7 +143,7 @@ class CrowdStrikeReconcileJobServiceTest {
             createdAt = LocalDateTime.now().minusMinutes(CrowdStrikeReconcileJobService.STUCK_JOB_TIMEOUT_MIN + 1)
         ).apply { status = ReconcileJobStatus.RUNNING }
         jobs[stuck.id] = stuck
-        every { importService.reconcileStaleCrowdStrikeImports(any(), any(), any()) } returns
+        every { importService.reconcileStaleCrowdStrikeImports(any(), any(), any(), any(), any()) } returns
             ReconcileStaleResult(rowsDeleted = 0)
 
         val started = service.startReconcile("adminuser", request())

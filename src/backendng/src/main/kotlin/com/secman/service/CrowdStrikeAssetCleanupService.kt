@@ -51,13 +51,22 @@ open class CrowdStrikeAssetCleanupService(
         days: Int,
         dryRun: Boolean,
         username: String,
-        includeLegacy: Boolean
+        includeLegacy: Boolean,
+        cutoffOverride: LocalDateTime? = null
     ): CrowdStrikeAssetCleanupResponse {
         require(days > 0) { "Days must be greater than zero" }
 
-        val cutoff = LocalDateTime.now(clock).minusDays(days.toLong())
+        // cutoffOverride lets the audit service compute ONE cutoff per run and share it
+        // between the safety brake and this selection — two separate clock reads made the
+        // brake's candidate set and the deleted set measurably different populations.
+        val cutoff = cutoffOverride ?: LocalDateTime.now(clock).minusDays(days.toLong())
 
-        val timestampCandidates = assetRepository.findByCrowdStrikeLastImportedAtBefore(cutoff)
+        // Rule A is agent-seen aware: an asset CrowdStrike reported as a managed device
+        // within the window (crowdStrikeAgentSeenAt >= cutoff) is never a candidate, even
+        // when it has no recent findings import. A fully-patched host with a live sensor
+        // never refreshes crowdStrikeLastImportedAt — deleting it would destroy a healthy,
+        // remediated asset.
+        val timestampCandidates = assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff)
             .mapNotNull { asset ->
                 val importedAt = asset.crowdStrikeLastImportedAt ?: return@mapNotNull null
                 val assetId = asset.id ?: return@mapNotNull null
