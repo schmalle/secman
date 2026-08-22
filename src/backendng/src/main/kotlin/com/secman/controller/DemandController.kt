@@ -20,6 +20,7 @@ import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
+import com.secman.service.AssetFilterService
 
 @Controller("/api/demands")
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -28,7 +29,8 @@ open class DemandController(
     private val demandRepository: DemandRepository,
     private val assetRepository: AssetRepository,
     private val userRepository: UserRepository,
-    private val entityManager: EntityManager
+    private val entityManager: EntityManager,
+    private val assetFilterService: AssetFilterService
 ) {
     
     private val log = LoggerFactory.getLogger(DemandController::class.java)
@@ -237,6 +239,14 @@ open class DemandController(
             // Validate asset information based on demand type
             val existingAsset = if (request.demandType == DemandType.CHANGE) {
                 request.existingAssetId?.let { assetId ->
+                    // SECURITY (A01): existingAssetId is request-supplied and must be resolved
+                    // through the unified asset-access boundary, not a bare findById — otherwise
+                    // any authenticated user could link a demand (which they can then read back
+                    // via GET /api/demands/{id}, since demand access is requestor-scoped) to an
+                    // asset outside their workgroup/ownership and read its name/ip/owner/etc.
+                    if (!assetFilterService.canAccessAsset(assetId, authentication)) {
+                        return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Existing asset not found"))
+                    }
                     assetRepository.findById(assetId).orElse(null)
                         ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Existing asset not found"))
                 } ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Existing asset ID required for CHANGE demand"))
@@ -317,6 +327,10 @@ open class DemandController(
             // Update asset information based on demand type
             if (demand.demandType == DemandType.CHANGE) {
                 request.existingAssetId?.let { assetId ->
+                    // SECURITY (A01): same unified-access check as createDemand — see comment there.
+                    if (!assetFilterService.canAccessAsset(assetId, authentication)) {
+                        return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Asset not found"))
+                    }
                     val asset = assetRepository.findById(assetId).orElse(null)
                         ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Asset not found"))
                     demand.existingAsset = asset
