@@ -3,6 +3,7 @@ package com.secman.controller
 import com.secman.domain.*
 import com.secman.event.RiskAssessmentCreatedEvent
 import com.secman.repository.*
+import com.secman.service.AssetFilterService
 import com.secman.service.UserResolutionService
 import io.micronaut.context.event.ApplicationEventPublisher
 import io.micronaut.core.annotation.Nullable
@@ -12,6 +13,7 @@ import io.micronaut.http.annotation.*
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
 import io.micronaut.security.annotation.Secured
+import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import io.micronaut.transaction.annotation.Transactional
@@ -28,9 +30,13 @@ import java.time.LocalDateTime
  * Feature: 025-role-based-access-control
  *
  * Access Control:
- * - ADMIN: Full access to all risk assessment operations
- * - RISK: Full access to all risk assessment operations
- * - SECCHAMPION: Full access to all risk assessment operations
+ * - ADMIN, SECCHAMPION: universal access to all risk assessment operations (Unified Asset Access).
+ * - RISK: access to a risk assessment is additionally gated on the caller being able to access
+ *   the assessment's linked asset (its own `asset`, or `demand.existingAsset` for a CHANGE-demand
+ *   basis) via `AssetFilterService`. An assessment with no linked asset (a NEW-demand basis, or a
+ *   basis whose asset was deleted) carries no asset detail and stays visible. This was tightened
+ *   from an earlier "RISK has full access" design once the workgroup-based Unified Asset Access
+ *   model (see project CLAUDE.md) made that a cross-tenant asset-detail disclosure.
  * - Other roles: Access denied (403 Forbidden)
  */
 @Controller("/api/risk-assessments")
@@ -47,10 +53,27 @@ open class RiskAssessmentController(
     private val requirementRepository: RequirementRepository,
     private val entityManager: EntityManager,
     private val eventPublisher: ApplicationEventPublisher<RiskAssessmentCreatedEvent>,
-    private val userResolutionService: UserResolutionService
+    private val userResolutionService: UserResolutionService,
+    private val assetFilterService: AssetFilterService
 ) {
 
     private val log = LoggerFactory.getLogger(RiskAssessmentController::class.java)
+
+    /**
+     * SECURITY (A01): the asset id whose accessibility gates visibility of [assessment] for a
+     * non-universal-access (RISK-only) caller. `null` means the assessment carries no linked
+     * asset detail (e.g. a NEW-demand basis) and is not asset-gated.
+     */
+    @Suppress("DEPRECATION")
+    private fun linkedAssetId(assessment: RiskAssessment): Long? = when (assessment.assessmentBasisType) {
+        AssessmentBasisType.ASSET -> assessment.asset?.id
+        AssessmentBasisType.DEMAND -> assessment.demand?.existingAsset?.id
+    }
+
+    private fun canAccessAssessment(assessment: RiskAssessment, authentication: Authentication): Boolean {
+        val assetId = linkedAssetId(assessment)
+        return assetId == null || assetFilterService.canAccessAsset(assetId, authentication)
+    }
 
     @Serdeable
     data class CreateRiskAssessmentRequest(
@@ -144,28 +167,31 @@ open class RiskAssessmentController(
 
     @Get
     @Transactional(readOnly = true)
-    open fun listRiskAssessments(): HttpResponse<List<RiskAssessment>> {
+    open fun listRiskAssessments(authentication: Authentication): HttpResponse<List<RiskAssessment>> {
         return try {
-            log.debug("Fetching all risk assessments")
-            
+            log.debug("Fetching all risk assessments for user: {}", authentication.name)
+
             val assessments = entityManager.createQuery(
                 """
-                SELECT DISTINCT ra FROM RiskAssessment ra 
+                SELECT DISTINCT ra FROM RiskAssessment ra
                 LEFT JOIN FETCH ra.demand d
-                LEFT JOIN FETCH d.existingAsset 
-                LEFT JOIN FETCH d.requestor 
+                LEFT JOIN FETCH d.existingAsset
+                LEFT JOIN FETCH d.requestor
                 LEFT JOIN FETCH ra.asset a
-                LEFT JOIN FETCH ra.assessor 
-                LEFT JOIN FETCH ra.requestor 
-                LEFT JOIN FETCH ra.respondent 
-                LEFT JOIN FETCH ra.useCases 
+                LEFT JOIN FETCH ra.assessor
+                LEFT JOIN FETCH ra.requestor
+                LEFT JOIN FETCH ra.respondent
+                LEFT JOIN FETCH ra.useCases
                 ORDER BY ra.createdAt DESC
                 """,
                 RiskAssessment::class.java
             ).resultList
-            
-            log.debug("Found {} risk assessments", assessments.size)
-            HttpResponse.ok(assessments)
+
+            // SECURITY (A01): see canAccessAssessment() — RISK is not a universal-asset-access role.
+            val visibleAssessments = assessments.filter { canAccessAssessment(it, authentication) }
+
+            log.debug("Found {} risk assessments ({} visible) for user {}", assessments.size, visibleAssessments.size, authentication.name)
+            HttpResponse.ok(visibleAssessments)
         } catch (e: Exception) {
             log.error("Error fetching risk assessments", e)
             HttpResponse.serverError<List<RiskAssessment>>()
@@ -174,33 +200,40 @@ open class RiskAssessmentController(
 
     @Get("/{id}")
     @Transactional(readOnly = true)
-    open fun getRiskAssessment(id: Long): HttpResponse<*> {
+    open fun getRiskAssessment(id: Long, authentication: Authentication): HttpResponse<*> {
         return try {
             log.debug("Fetching risk assessment with id: {}", id)
-            
+
             val assessment = entityManager.createQuery(
                 """
-                SELECT ra FROM RiskAssessment ra 
+                SELECT ra FROM RiskAssessment ra
                 LEFT JOIN FETCH ra.demand d
-                LEFT JOIN FETCH d.existingAsset 
-                LEFT JOIN FETCH d.requestor 
+                LEFT JOIN FETCH d.existingAsset
+                LEFT JOIN FETCH d.requestor
                 LEFT JOIN FETCH ra.asset a
-                LEFT JOIN FETCH ra.assessor 
-                LEFT JOIN FETCH ra.requestor 
-                LEFT JOIN FETCH ra.respondent 
-                LEFT JOIN FETCH ra.useCases 
+                LEFT JOIN FETCH ra.assessor
+                LEFT JOIN FETCH ra.requestor
+                LEFT JOIN FETCH ra.respondent
+                LEFT JOIN FETCH ra.useCases
                 WHERE ra.id = :id
                 """,
                 RiskAssessment::class.java
             ).setParameter("id", id).resultList.firstOrNull()
-            
-            if (assessment != null) {
-                log.debug("Found risk assessment: {}", assessment.id)
-                HttpResponse.ok(assessment)
-            } else {
+
+            if (assessment == null) {
                 log.debug("Risk assessment not found with id: {}", id)
-                HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
+                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
             }
+
+            // SECURITY (A01): see canAccessAssessment().
+            if (!canAccessAssessment(assessment, authentication)) {
+                log.warn("User {} denied access to risk assessment {} (linked asset {} not accessible)",
+                    authentication.name, id, linkedAssetId(assessment))
+                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
+            }
+
+            log.debug("Found risk assessment: {}", assessment.id)
+            HttpResponse.ok(assessment)
         } catch (e: Exception) {
             log.error("Error fetching risk assessment with id: {}", id, e)
             HttpResponse.serverError<Any>()
@@ -209,12 +242,14 @@ open class RiskAssessmentController(
 
     @Get("/demand/{demandId}")
     @Transactional(readOnly = true)
-    open fun getRiskAssessmentsByDemand(demandId: Long): HttpResponse<*> {
+    open fun getRiskAssessmentsByDemand(demandId: Long, authentication: Authentication): HttpResponse<*> {
         return try {
             log.debug("Fetching risk assessments for demand: {}", demandId)
-            
+
             val assessments = riskAssessmentRepository.findByDemandId(demandId)
-            
+                // SECURITY (A01): see canAccessAssessment().
+                .filter { canAccessAssessment(it, authentication) }
+
             // Force loading of related entities
             assessments.forEach { assessment ->
                 @Suppress("DEPRECATION")
@@ -226,7 +261,7 @@ open class RiskAssessmentController(
                 assessment.respondent?.username // Force loading
                 assessment.useCases.size // Force loading
             }
-            
+
             log.debug("Found {} risk assessments for demand {}", assessments.size, demandId)
             HttpResponse.ok(assessments)
         } catch (e: Exception) {
@@ -237,15 +272,22 @@ open class RiskAssessmentController(
 
     @Get("/asset/{assetId}")
     @Transactional(readOnly = true)
-    open fun getRiskAssessmentsByAsset(assetId: Long): HttpResponse<*> {
+    open fun getRiskAssessmentsByAsset(assetId: Long, authentication: Authentication): HttpResponse<*> {
         return try {
             log.debug("Fetching risk assessments for asset: {}", assetId)
-            
+
+            // SECURITY (A01): assetId is caller-supplied; resolve it through the unified
+            // access boundary before returning anything scoped to it.
+            if (!assetFilterService.canAccessAsset(assetId, authentication)) {
+                log.warn("User {} denied access to risk assessments for asset {}", authentication.name, assetId)
+                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Asset not found"))
+            }
+
             // Find both direct asset assessments and demand-based assessments that involve this asset
             val directAssessments = riskAssessmentRepository.findByAssetId(assetId)
             val demandBasedAssessments = riskAssessmentRepository.findByExistingAssetId(assetId)
             val allAssessments = (directAssessments + demandBasedAssessments).distinctBy { it.id }
-            
+
             // Force loading of related entities
             allAssessments.forEach { assessment ->
                 when (assessment.assessmentBasisType) {
@@ -276,12 +318,14 @@ open class RiskAssessmentController(
 
     @Get("/basis/{basisType}/{basisId}")
     @Transactional(readOnly = true)
-    open fun getRiskAssessmentsByBasis(basisType: AssessmentBasisType, basisId: Long): HttpResponse<*> {
+    open fun getRiskAssessmentsByBasis(basisType: AssessmentBasisType, basisId: Long, authentication: Authentication): HttpResponse<*> {
         return try {
             log.debug("Fetching risk assessments for basis type: {} and ID: {}", basisType, basisId)
-            
+
             val assessments = riskAssessmentRepository.findByAssessmentBasisTypeAndAssessmentBasisId(basisType, basisId)
-            
+                // SECURITY (A01): see canAccessAssessment().
+                .filter { canAccessAssessment(it, authentication) }
+
             // Force loading of related entities
             assessments.forEach { assessment ->
                 when (assessment.assessmentBasisType) {
@@ -312,20 +356,25 @@ open class RiskAssessmentController(
 
     @Post
     @Transactional
-    open fun createRiskAssessment(@Valid @Body request: CreateRiskAssessmentRequest): HttpResponse<*> {
+    open fun createRiskAssessment(@Valid @Body request: CreateRiskAssessmentRequest, authentication: Authentication): HttpResponse<*> {
         return try {
             // Validate request
             val validationError = request.validate()
             if (validationError != null) {
                 return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", validationError))
             }
-            
+
             val basisType = request.getBasisType()
             val basisId = request.getBasisId()
-            
+
             log.debug("Creating risk assessment with basis type: {} and ID: {}", basisType, basisId)
 
             // 1. PRE-VALIDATE BASIS first so a missing basis doesn't orphan a lazy-created User row
+            // SECURITY (A01): basisId is caller-supplied. For an ASSET basis it names an asset
+            // directly; for a DEMAND basis, a CHANGE demand's existingAsset is echoed back in the
+            // response (title/description/asset name) once the assessment is created. Both must be
+            // resolved through the unified asset-access boundary — never a bare findById() whose
+            // result is returned — matching the fix already applied to DemandController.
             val resolvedBasis: Any = when (basisType) {
                 AssessmentBasisType.DEMAND -> {
                     val demand = demandRepository.findById(basisId).orElse(null)
@@ -334,9 +383,16 @@ open class RiskAssessmentController(
                         return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR",
                             "Only approved demands can have risk assessments created"))
                     }
+                    val existingAssetId = demand.existingAsset?.id
+                    if (existingAssetId != null && !assetFilterService.canAccessAsset(existingAssetId, authentication)) {
+                        return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Demand not found"))
+                    }
                     demand
                 }
                 AssessmentBasisType.ASSET -> {
+                    if (!assetFilterService.canAccessAsset(basisId, authentication)) {
+                        return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Asset not found"))
+                    }
                     assetRepository.findById(basisId).orElse(null)
                         ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Asset not found"))
                 }
@@ -479,13 +535,20 @@ open class RiskAssessmentController(
 
     @Put("/{id}")
     @Transactional
-    open fun updateRiskAssessment(id: Long, @Valid @Body request: UpdateRiskAssessmentRequest): HttpResponse<*> {
+    open fun updateRiskAssessment(id: Long, @Valid @Body request: UpdateRiskAssessmentRequest, authentication: Authentication): HttpResponse<*> {
         return try {
             log.debug("Updating risk assessment with id: {}", id)
-            
+
             val assessment = riskAssessmentRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
-            
+
+            // SECURITY (A01): see canAccessAssessment().
+            if (!canAccessAssessment(assessment, authentication)) {
+                log.warn("User {} denied update of risk assessment {} (linked asset {} not accessible)",
+                    authentication.name, id, linkedAssetId(assessment))
+                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
+            }
+
             // Update fields if provided
             request.endDate?.let { assessment.endDate = it }
             request.notes?.let { assessment.notes = it.trim().takeIf { it.isNotBlank() } }
@@ -546,13 +609,20 @@ open class RiskAssessmentController(
 
     @Delete("/{id}")
     @Transactional
-    open fun deleteRiskAssessment(id: Long): HttpResponse<*> {
+    open fun deleteRiskAssessment(id: Long, authentication: Authentication): HttpResponse<*> {
         return try {
             log.debug("Deleting risk assessment with id: {}", id)
-            
+
             val assessment = riskAssessmentRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
-            
+
+            // SECURITY (A01): see canAccessAssessment().
+            if (!canAccessAssessment(assessment, authentication)) {
+                log.warn("User {} denied delete of risk assessment {} (linked asset {} not accessible)",
+                    authentication.name, id, linkedAssetId(assessment))
+                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
+            }
+
             // Delete related responses and tokens first
             responseRepository.deleteByRiskAssessmentId(id)
             assessmentTokenRepository.deleteByRiskAssessmentId(id)
@@ -569,13 +639,20 @@ open class RiskAssessmentController(
 
     @Post("/{id}/token")
     @Transactional
-    open fun generateAssessmentToken(id: Long, @Valid @Body request: NotificationRequest): HttpResponse<*> {
+    open fun generateAssessmentToken(id: Long, @Valid @Body request: NotificationRequest, authentication: Authentication): HttpResponse<*> {
         return try {
             log.debug("Generating assessment token for risk assessment: {}", id)
-            
+
             val assessment = riskAssessmentRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
-            
+
+            // SECURITY (A01): see canAccessAssessment().
+            if (!canAccessAssessment(assessment, authentication)) {
+                log.warn("User {} denied token generation for risk assessment {} (linked asset {} not accessible)",
+                    authentication.name, id, linkedAssetId(assessment))
+                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
+            }
+
             // Check if valid token already exists for this email and assessment
             val existingToken = assessmentTokenRepository
                 .findValidTokensByRiskAssessmentId(id, LocalDateTime.now())
@@ -608,15 +685,22 @@ open class RiskAssessmentController(
 
     @Post("/{id}/notify")
     @Transactional
-    open fun notifyRespondent(id: Long, @Valid @Body request: NotificationRequest): HttpResponse<*> {
+    open fun notifyRespondent(id: Long, @Valid @Body request: NotificationRequest, authentication: Authentication): HttpResponse<*> {
         return try {
             log.debug("Sending notification for risk assessment: {}", id)
-            
+
             val assessment = riskAssessmentRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
-            
+
+            // SECURITY (A01): see canAccessAssessment().
+            if (!canAccessAssessment(assessment, authentication)) {
+                log.warn("User {} denied notification for risk assessment {} (linked asset {} not accessible)",
+                    authentication.name, id, linkedAssetId(assessment))
+                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
+            }
+
             // Generate or get existing token
-            val tokenResponse = generateAssessmentToken(id, request)
+            val tokenResponse = generateAssessmentToken(id, request, authentication)
             if (tokenResponse.status.code != 200 && tokenResponse.status.code != 201) {
                 return tokenResponse
             }
@@ -637,13 +721,20 @@ open class RiskAssessmentController(
 
     @Post("/{id}/remind")
     @Transactional
-    open fun sendReminder(id: Long, @Valid @Body request: NotificationRequest): HttpResponse<*> {
+    open fun sendReminder(id: Long, @Valid @Body request: NotificationRequest, authentication: Authentication): HttpResponse<*> {
         return try {
             log.debug("Sending reminder for risk assessment: {}", id)
-            
+
             val assessment = riskAssessmentRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
-            
+
+            // SECURITY (A01): see canAccessAssessment().
+            if (!canAccessAssessment(assessment, authentication)) {
+                log.warn("User {} denied reminder for risk assessment {} (linked asset {} not accessible)",
+                    authentication.name, id, linkedAssetId(assessment))
+                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
+            }
+
             // TODO: Implement reminder email logic here
             // This would send a reminder email about the pending assessment
             
@@ -663,7 +754,7 @@ open class RiskAssessmentController(
     @Transactional
     @Deprecated("Use main POST /api/risk-assessments endpoint with demandId instead")
     @Suppress("DEPRECATION")
-    open fun createDemandBasedRiskAssessment(@Valid @Body request: CreateRiskAssessmentRequestDemand): HttpResponse<*> {
+    open fun createDemandBasedRiskAssessment(@Valid @Body request: CreateRiskAssessmentRequestDemand, authentication: Authentication): HttpResponse<*> {
         log.debug("Legacy demand-based risk assessment creation called")
         @Suppress("DEPRECATION")
         return createRiskAssessment(CreateRiskAssessmentRequest(
@@ -677,14 +768,14 @@ open class RiskAssessmentController(
             assetId = null,
             assessorRef = request.assessorRef,
             respondentRef = request.respondentRef
-        ))
+        ), authentication)
     }
 
     @Post("/asset-based")
     @Transactional
     @Deprecated("Use main POST /api/risk-assessments endpoint with assetId instead")
     @Suppress("DEPRECATION")
-    open fun createAssetBasedRiskAssessment(@Valid @Body request: CreateRiskAssessmentRequestAsset): HttpResponse<*> {
+    open fun createAssetBasedRiskAssessment(@Valid @Body request: CreateRiskAssessmentRequestAsset, authentication: Authentication): HttpResponse<*> {
         log.debug("Legacy asset-based risk assessment creation called")
         @Suppress("DEPRECATION")
         return createRiskAssessment(CreateRiskAssessmentRequest(
@@ -698,7 +789,7 @@ open class RiskAssessmentController(
             assetId = request.assetId,
             assessorRef = request.assessorRef,
             respondentRef = request.respondentRef
-        ))
+        ), authentication)
     }
 
     /**
