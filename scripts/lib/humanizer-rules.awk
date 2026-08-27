@@ -18,79 +18,10 @@
 # accepted trade — a wrong length shows up as a finding the agent can dismiss
 # in seconds, whereas a real parser per language is a project of its own.
 
-function isBraceLang() { return lang != "py" }
-
-function hasBlockComments() { return (lang != "py" && lang != "sh") }
-
-# Remove the things that contain braces but are not structure: block comments,
-# triple-quoted blocks, string literals, and trailing line comments. Without
-# this a single `println("}")` desynchronises every function length after it.
-function strip(s,   i, j, rest, n) {
-    # A literal that runs past end of line — a heredoc, an embedded awk
-    # program in single quotes, a TS template literal — is the thing that
-    # silently desynchronises brace counting for every function after it.
-    # Each of these blocks closes one such hole.
-    if (inhere) {
-        if (s ~ ("^[[:space:]]*" hereTok "[[:space:]]*$")) inhere = 0
-        return ""
-    }
-    if (inraw) {
-        i = index(s, rawTok)
-        if (i == 0) return ""
-        inraw = 0
-        s = substr(s, i + length(rawTok))
-    }
-    if (intriple) {
-        i = index(s, tripleTok)
-        if (i == 0) return ""
-        intriple = 0
-        s = substr(s, i + length(tripleTok))
-    }
-    if (inblock && hasBlockComments()) {
-        i = index(s, "*/")
-        if (i == 0) return ""
-        inblock = 0
-        s = substr(s, i + 2)
-    }
-    while (hasBlockComments() && (i = index(s, "/*")) > 0) {
-        rest = substr(s, i + 2)
-        j = index(rest, "*/")
-        if (j == 0) { inblock = 1; s = substr(s, 1, i - 1); break }
-        s = substr(s, 1, i - 1) " " substr(rest, j + 2)
-    }
-    if (lang == "kt" || lang == "py") {
-        if ((i = index(s, "\"\"\"")) > 0) {
-            rest = substr(s, i + 3)
-            if (index(rest, "\"\"\"") == 0) { intriple = 1; tripleTok = "\"\"\""; s = substr(s, 1, i - 1) }
-        }
-    }
-    if (lang == "sh" && match(s, /<<-?[[:space:]]*['"'"'"]?[A-Za-z_][A-Za-z0-9_]*/)) {
-        hereTok = substr(s, RSTART, RLENGTH)
-        sub(/^<<-?[[:space:]]*['"'"'"]?/, "", hereTok)
-        inhere = 1
-        s = substr(s, 1, RSTART - 1)
-    }
-
-    gsub(/"(\\.|[^"\\])*"/, "\"\"", s)
-    gsub(/'(\\.|[^'\\])*'/, "''", s)
-    if (lang == "ts" || lang == "java" || lang == "go") gsub(/`(\\.|[^`\\])*`/, "``", s)
-
-    if (lang == "py" || lang == "sh") { if ((i = index(s, "#")) > 0) s = substr(s, 1, i - 1) }
-    else { if ((i = index(s, "//")) > 0) s = substr(s, 1, i - 1) }
-
-    # Whatever delimiter is left over unpaired opens a multi-line literal.
-    if (lang == "ts" || lang == "go" || lang == "java") { n = gsub(/`/, "`", s); if (n % 2 == 1) { inraw = 1; rawTok = "`"; sub(/`[^`]*$/, "", s) } }
-    if (lang == "sh") {
-        n = gsub(/'/, "'", s); if (n % 2 == 1) { inraw = 1; rawTok = "'"; sub(/'[^']*$/, "", s) }
-        else { n = gsub(/"/, "\"", s); if (n % 2 == 1) { inraw = 1; rawTok = "\""; sub(/"[^"]*$/, "", s) } }
-    }
-    return s
-}
-
-function isCommentLine(s) {
-    if (lang == "py" || lang == "sh") return (s ~ /^[[:space:]]*#/)
-    return (s ~ /^[[:space:]]*(\/\/|\/\*|\*)/)
-}
+# The source lexer — strip(), isCommentLine(), hasBlockComments(),
+# isBraceLang() — lives in scripts/lib/source-strip.awk and is loaded ahead of
+# this file. optimizer-scan.sh needs the same lexing, and two copies of it
+# would drift apart silently.
 
 # A declaration counts as documented when the nearest thing above it, ignoring
 # annotations and blank lines, is a comment. That is the shape a human writes;
@@ -287,12 +218,6 @@ function tryStart(code, lineNo,   fn) {
     if (depth > 0) { tracking = 1; return }
     # A signature wrapped across lines: keep looking for the opening brace.
     if (code !~ /=[[:space:]]*[^ ]/ && (code ~ /\($/ || (code ~ /\)/ && code !~ /\{/))) pending = 20
-}
-
-function countBraces(s,   i, c, d) {
-    d = 0
-    for (i = 1; i <= length(s); i++) { c = substr(s, i, 1); if (c == "{") d++; else if (c == "}") d-- }
-    return d
 }
 
 # Everything a function is judged on is known only once its extent is known,

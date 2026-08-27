@@ -45,6 +45,10 @@ open class WorkgroupAwsAccountController(
      * so a non-admin owner of the workgroup can manage their own AWS bindings.
      * Caller must be inside a transaction so the LAZY users collection is readable.
      */
+    /**
+     * Caller must already be inside a transaction: the direct-membership check reads the LAZY
+     * `Workgroup.users` collection, which throws without an open session.
+     */
     private fun isMemberOrAdmin(workgroupId: Long, authentication: Authentication): Boolean {
         if (authentication.roles.contains("ADMIN")) return true
         val workgroup = workgroupRepository.findById(workgroupId).orElse(null) ?: return false
@@ -76,6 +80,7 @@ open class WorkgroupAwsAccountController(
     }
 
     @Get(produces = [MediaType.APPLICATION_JSON])
+    @jakarta.transaction.Transactional
     open fun list(@PathVariable workgroupId: Long, authentication: Authentication): HttpResponse<List<WorkgroupAwsAccountDto>> {
         if (!isMemberOrAdmin(workgroupId, authentication)) {
             return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)

@@ -40,6 +40,7 @@ the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
 |---|---|---|
 | `secure-code` | Write code that satisfies OWASP Top 10:2021 by construction, then verify it (`./scripts/owasp-check.sh`) | no |
 | `humanizer` | Crisp comments, names a stranger can predict, screen-sized functions; verifies with `./scripts/humanizer-scan.sh` and proposes risky renames instead of applying them | no |
+| `optimizer` | Hot-path performance and copy-paste blocks; verifies with `./scripts/optimizer-scan.sh` and proposes extractions instead of applying them | no |
 | `finalizer` | Pre-merge pass: version/doc drift, `extensions/` contract drift, HIGH/CRITICAL security review, skill sync | docs only |
 | `testsuite` | Fast test tier (backend, CLI, frontend) + name-reference coverage gaps | no |
 | `e2ejs` | Scan every page for JS errors as admin *and* normal user | no |

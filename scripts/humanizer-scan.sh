@@ -203,7 +203,9 @@ fi
 # --- Analysis ----------------------------------------------------------------
 
 RULES_AWK="$REPO_ROOT/scripts/lib/humanizer-rules.awk"
+STRIP_AWK="$REPO_ROOT/scripts/lib/source-strip.awk"
 [ -f "$RULES_AWK" ] || { echo "FATAL: missing $RULES_AWK" >&2; exit 2; }
+[ -f "$STRIP_AWK" ] || { echo "FATAL: missing $STRIP_AWK" >&2; exit 2; }
 
 # Everything C-family shares one rule set, so unknown extensions fall through to
 # `ts` rather than being skipped: a wrong-but-close dialect still measures braces.
@@ -224,7 +226,7 @@ while IFS= read -r f; do
     [ -n "$f" ] || continue
     awk -v path="$f" -v lang="$(lang_of "$f")" \
         -v maxfile="$MAX_FILE" -v maxfunc="$MAX_FUNC" -v warnfunc="$WARN_FUNC" \
-        -f "$RULES_AWK" "$f" \
+        -f "$STRIP_AWK" -f "$RULES_AWK" "$f" \
     | while IFS=$'\t' read -r rule line msg; do
         printf '%s\t%s\t%s\t%s\n' "$f" "$rule" "$line" "$msg"
       done >> "$TMP/findings.tsv"

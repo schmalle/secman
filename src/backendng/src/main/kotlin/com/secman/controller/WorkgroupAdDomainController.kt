@@ -36,6 +36,10 @@ open class WorkgroupAdDomainController(
 ) {
     private val logger = LoggerFactory.getLogger(WorkgroupAdDomainController::class.java)
 
+    /**
+     * Caller must already be inside a transaction: the direct-membership check reads the LAZY
+     * `Workgroup.users` collection, which throws without an open session.
+     */
     private fun isMemberOrAdmin(workgroupId: Long, authentication: Authentication): Boolean {
         if (authentication.roles.contains("ADMIN")) return true
         val workgroup = workgroupRepository.findById(workgroupId).orElse(null) ?: return false
@@ -61,6 +65,7 @@ open class WorkgroupAdDomainController(
     }
 
     @Get(produces = [MediaType.APPLICATION_JSON])
+    @jakarta.transaction.Transactional
     open fun list(@PathVariable workgroupId: Long, authentication: Authentication): HttpResponse<List<WorkgroupAdDomainDto>> {
         if (!isMemberOrAdmin(workgroupId, authentication)) {
             return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)

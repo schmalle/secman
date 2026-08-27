@@ -102,6 +102,8 @@ cd src/frontend && npm test                              # frontend unit tier (n
 ./scripts/test/owasp-check-test.sh                       # self-test for the gate above (fires-when-vulnerable, silent-when-correct)
 ./scripts/humanizer-scan.sh                              # code hygiene gate: length, comments, names (diff-scoped; --all audits)
 ./scripts/test/humanizer-scan-test.sh                    # self-test for the gate above (fires-when-violating, silent-when-clean)
+./scripts/optimizer-scan.sh                              # performance + copy-paste gate: unbounded/in-memory queries, N+1, txn-held-across-IO, serial awaits, duplicated blocks (diff-scoped; --all audits)
+./scripts/test/optimizer-scan-test.sh                    # self-test for the gate above (fires-when-slow, silent-when-fine)
 ./tests/e2e/run-e2e.sh                                   # Playwright with pass-cli secrets
 ./scripts/container/secman-container.sh up --src "$PWD"  # macOS: shielded dev container (Apple `container`)
 ```

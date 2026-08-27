@@ -26,8 +26,9 @@ VERBOSE=0
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RULES="$REPO_ROOT/scripts/lib/humanizer-rules.awk"
+STRIP="$REPO_ROOT/scripts/lib/source-strip.awk"
 SCAN="$REPO_ROOT/scripts/humanizer-scan.sh"
-[ -f "$RULES" ] && [ -x "$SCAN" ] || { echo "FATAL: scanner not found at $SCAN" >&2; exit 2; }
+[ -f "$RULES" ] && [ -f "$STRIP" ] && [ -x "$SCAN" ] || { echo "FATAL: scanner not found at $SCAN" >&2; exit 2; }
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -39,7 +40,7 @@ FAIL=0
 # test case is three lines: name, language, fixture, expectation.
 run_rules() {   # run_rules <lang> <file>
     awk -v path="$2" -v lang="$1" -v maxfile=1000 -v maxfunc=100 -v warnfunc=50 \
-        -f "$RULES" "$2"
+        -f "$STRIP" -f "$RULES" "$2"
 }
 
 # Asserts a rule DOES trigger. The failure message prints what came back so a
@@ -201,7 +202,7 @@ echo "humanizer-scan-test: severity model"
 
 REPO="$WORK/repo"
 mkdir -p "$REPO/scripts/lib" "$REPO/pkg"
-cp "$SCAN" "$REPO/scripts/" && cp "$RULES" "$REPO/scripts/lib/"
+cp "$SCAN" "$REPO/scripts/" && cp "$RULES" "$STRIP" "$REPO/scripts/lib/"
 git -C "$REPO" init -q .
 git -C "$REPO" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
 
