@@ -10,6 +10,7 @@
 
 export type RequirementExportFormat = 'docx' | 'xlsx';
 
+/** Scope for the anonymous public download route (no translation variant). */
 export interface RequirementDownloadScope {
     format: RequirementExportFormat;
     /** Narrow to one use case. Takes precedence over standardId if both are somehow set. */
@@ -42,6 +43,45 @@ export function buildRequirementDownloadUrl(scope: RequirementDownloadScope): st
 
     const query = params.toString();
     return query ? `${base}?${query}` : base;
+}
+
+/**
+ * Scope for the authenticated requirement exports on the Export and Import/Export
+ * screens. Differs from RequirementDownloadScope in supporting the translated
+ * endpoint variants (`/translated/{language}`), which the public download does not have.
+ */
+export interface AuthenticatedRequirementExportScope {
+    format: RequirementExportFormat;
+    /** Narrow to one use case (path segment, like the public route). */
+    useCaseId?: number | null;
+    /** Freeze to a release. Null or undefined means the live requirement set. */
+    releaseId?: number | null;
+    /**
+     * Language for a translated export, or null for the plain endpoint.
+     * Callers pass null for 'english' — English is the untranslated source.
+     */
+    translationLanguage?: string | null;
+}
+
+/**
+ * Build the endpoint for an authenticated requirement export.
+ *
+ * One builder for both the Export and Import/Export screens — their four
+ * hand-rolled copies had drifted (the Import/Export side lost the releaseId
+ * parameter on the use-case route and never gained the translated variants).
+ * Route shapes, matching RequirementController:
+ *   /api/requirements/export/{format}[/usecase/{id}][/translated/{language}][?releaseId=N]
+ */
+export function buildAuthenticatedRequirementExportUrl(scope: AuthenticatedRequirementExportScope): string {
+    let base = scope.useCaseId != null
+        ? `/api/requirements/export/${scope.format}/usecase/${scope.useCaseId}`
+        : `/api/requirements/export/${scope.format}`;
+
+    if (scope.translationLanguage) {
+        base += `/translated/${encodeURIComponent(scope.translationLanguage)}`;
+    }
+
+    return scope.releaseId != null ? `${base}?releaseId=${scope.releaseId}` : base;
 }
 
 /**

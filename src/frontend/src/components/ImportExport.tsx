@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { csrfPost } from '../utils/csrf'; // Import the CSRF-enhanced POST helper
 import { authenticatedFetch } from '../utils/auth';
+import { extractErrorMessage } from '../utils/apiJson';
+import { buildAuthenticatedRequirementExportUrl } from './requirementDownloadUrl';
 import ReleaseSelector from './ReleaseSelector';
 import { downloadResponse } from '../utils/download';
 import { summarizeImportResult } from '../services/requirementImport';
@@ -173,14 +175,11 @@ const ImportExport = () => {
         
         // Determine the endpoint based on language selection
         const isTranslated = selectedLanguage !== 'english' && translationConfigured;
-        let endpoint = isTranslated 
-            ? `/api/requirements/export/docx/translated/${selectedLanguage}`
-            : '/api/requirements/export/docx';
-        
-        // Add releaseId parameter if a release is selected
-        if (selectedReleaseId !== null) {
-            endpoint += `?releaseId=${selectedReleaseId}`;
-        }
+        const endpoint = buildAuthenticatedRequirementExportUrl({
+            format: 'docx',
+            translationLanguage: isTranslated ? selectedLanguage : null,
+            releaseId: selectedReleaseId,
+        });
         
         setExportStatus(isTranslated ? `Translating and exporting to ${selectedLanguage}...` : 'Exporting to Word...');
         
@@ -190,14 +189,7 @@ const ImportExport = () => {
             });
 
             if (!response.ok) {
-                let errorMsg = 'Failed to export requirements.';
-                try {
-                    const errorData = await response.json();
-                    errorMsg = errorData.error || errorMsg;
-                } catch (e) {
-                    errorMsg = response.statusText || errorMsg;
-                }
-                throw new Error(errorMsg);
+                throw new Error(await extractErrorMessage(response, 'Failed to export requirements.'));
             }
 
             await downloadResponse(response, 'requirements.docx');
@@ -222,11 +214,16 @@ const ImportExport = () => {
 
         setIsExporting(true);
         
-        // Determine the endpoint based on language selection
+        // Determine the endpoint based on language selection. The shared builder also
+        // carries the selected release here — this handler had drifted from the Export
+        // screen and silently ignored the release for use-case exports.
         const isTranslated = selectedLanguage !== 'english' && translationConfigured;
-        const endpoint = isTranslated 
-            ? `/api/requirements/export/docx/usecase/${selectedUseCase}/translated/${selectedLanguage}`
-            : `/api/requirements/export/docx/usecase/${selectedUseCase}`;
+        const endpoint = buildAuthenticatedRequirementExportUrl({
+            format: 'docx',
+            useCaseId: selectedUseCase,
+            translationLanguage: isTranslated ? selectedLanguage : null,
+            releaseId: selectedReleaseId,
+        });
         
         const statusMsg = isTranslated 
             ? `Translating and exporting requirements for selected use case to ${selectedLanguage}...`
@@ -239,14 +236,7 @@ const ImportExport = () => {
             });
 
             if (!response.ok) {
-                let errorMsg = 'Failed to export requirements.';
-                try {
-                    const errorData = await response.json();
-                    errorMsg = errorData.error || errorMsg;
-                } catch (e) {
-                    errorMsg = response.statusText || errorMsg;
-                }
-                throw new Error(errorMsg);
+                throw new Error(await extractErrorMessage(response, 'Failed to export requirements.'));
             }
 
             await downloadResponse(response, 'requirements_usecase.docx');
@@ -267,11 +257,11 @@ const ImportExport = () => {
         setIsExporting(true);
         setExportStatus('Exporting to Excel...');
         
-        // Add releaseId parameter if a release is selected
-        let endpoint = '/api/requirements/export/xlsx';
-        if (selectedReleaseId !== null) {
-            endpoint += `?releaseId=${selectedReleaseId}`;
-        }
+        // Same builder as the Export screen; xlsx stays untranslated on this page.
+        const endpoint = buildAuthenticatedRequirementExportUrl({
+            format: 'xlsx',
+            releaseId: selectedReleaseId,
+        });
         
         try {
             const response = await authenticatedFetch(endpoint, {
@@ -279,14 +269,7 @@ const ImportExport = () => {
             });
 
             if (!response.ok) {
-                let errorMsg = 'Failed to export requirements to Excel.';
-                try {
-                    const errorData = await response.json();
-                    errorMsg = errorData.error || errorMsg;
-                } catch (e) {
-                    errorMsg = response.statusText || errorMsg;
-                }
-                throw new Error(errorMsg);
+                throw new Error(await extractErrorMessage(response, 'Failed to export requirements to Excel.'));
             }
 
             await downloadResponse(response, 'requirements_export.xlsx');
@@ -309,11 +292,12 @@ const ImportExport = () => {
         setIsExporting(true);
         setExportStatus('Exporting requirements for selected use case to Excel...');
         
-        // Add releaseId parameter if a release is selected
-        let endpoint = `/api/requirements/export/xlsx/usecase/${selectedUseCase}`;
-        if (selectedReleaseId !== null) {
-            endpoint += `?releaseId=${selectedReleaseId}`;
-        }
+        // Same builder as the Export screen; xlsx stays untranslated on this page.
+        const endpoint = buildAuthenticatedRequirementExportUrl({
+            format: 'xlsx',
+            useCaseId: selectedUseCase,
+            releaseId: selectedReleaseId,
+        });
         
         try {
             const response = await authenticatedFetch(endpoint, {
@@ -321,14 +305,7 @@ const ImportExport = () => {
             });
 
             if (!response.ok) {
-                let errorMsg = 'Failed to export requirements to Excel.';
-                try {
-                    const errorData = await response.json();
-                    errorMsg = errorData.error || errorMsg;
-                } catch (e) {
-                    errorMsg = response.statusText || errorMsg;
-                }
-                throw new Error(errorMsg);
+                throw new Error(await extractErrorMessage(response, 'Failed to export requirements to Excel.'));
             }
 
             await downloadResponse(response, 'requirements_usecase.xlsx');

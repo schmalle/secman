@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { authenticatedFetch } from '../utils/auth';
+import { extractErrorMessage } from '../utils/apiJson';
+import { buildAuthenticatedRequirementExportUrl } from './requirementDownloadUrl';
 import ReleaseSelector from './ReleaseSelector';
 import { exportApplications, exportAssets } from '../services/assetService';
 import { downloadBlob, downloadResponse } from '../utils/download';
@@ -176,14 +178,11 @@ const Export = () => {
         setIsExporting(true);
 
         const isTranslated = selectedLanguage !== 'english' && translationConfigured;
-        let endpoint = isTranslated
-            ? `/api/requirements/export/docx/translated/${selectedLanguage}`
-            : '/api/requirements/export/docx';
-
-        // Add releaseId parameter if a release is selected
-        if (selectedReleaseId !== null) {
-            endpoint += `?releaseId=${selectedReleaseId}`;
-        }
+        const endpoint = buildAuthenticatedRequirementExportUrl({
+            format: 'docx',
+            translationLanguage: isTranslated ? selectedLanguage : null,
+            releaseId: selectedReleaseId,
+        });
 
         if (isTranslated && wordTemplateMode === 'ADHOC') {
             setExportStatus('Error: Ad hoc templates are not supported for translated exports yet. Please use a saved/latest template or English export.');
@@ -197,14 +196,7 @@ const Export = () => {
             const response = await requestWordExport(endpoint);
 
             if (!response.ok) {
-                let errorMsg = 'Failed to export requirements.';
-                try {
-                    const errorData = await response.json();
-                    errorMsg = errorData.error || errorMsg;
-                } catch (e) {
-                    errorMsg = response.statusText || errorMsg;
-                }
-                throw new Error(errorMsg);
+                throw new Error(await extractErrorMessage(response, 'Failed to export requirements.'));
             }
 
             await downloadResponse(response, 'requirements.docx');
@@ -230,14 +222,12 @@ const Export = () => {
         setIsExporting(true);
         
         const isTranslated = selectedLanguage !== 'english' && translationConfigured;
-        let endpoint = isTranslated
-            ? `/api/requirements/export/docx/usecase/${selectedUseCase}/translated/${selectedLanguage}`
-            : `/api/requirements/export/docx/usecase/${selectedUseCase}`;
-
-        // Add releaseId parameter if a release is selected
-        if (selectedReleaseId !== null) {
-            endpoint += `?releaseId=${selectedReleaseId}`;
-        }
+        const endpoint = buildAuthenticatedRequirementExportUrl({
+            format: 'docx',
+            useCaseId: selectedUseCase,
+            translationLanguage: isTranslated ? selectedLanguage : null,
+            releaseId: selectedReleaseId,
+        });
         
         if (isTranslated && wordTemplateMode === 'ADHOC') {
             setExportStatus('Error: Ad hoc templates are not supported for translated exports yet. Please use a saved/latest template or English export.');
@@ -254,14 +244,7 @@ const Export = () => {
             const response = await requestWordExport(endpoint);
 
             if (!response.ok) {
-                let errorMsg = 'Failed to export requirements.';
-                try {
-                    const errorData = await response.json();
-                    errorMsg = errorData.error || errorMsg;
-                } catch (e) {
-                    errorMsg = response.statusText || errorMsg;
-                }
-                throw new Error(errorMsg);
+                throw new Error(await extractErrorMessage(response, 'Failed to export requirements.'));
             }
 
             await downloadResponse(response, 'requirements_usecase.docx');
@@ -282,14 +265,11 @@ const Export = () => {
         setIsExporting(true);
 
         const isTranslated = selectedLanguage !== 'english' && translationConfigured;
-        let endpoint = isTranslated
-            ? `/api/requirements/export/xlsx/translated/${selectedLanguage}`
-            : '/api/requirements/export/xlsx';
-
-        // Add releaseId parameter if a release is selected
-        if (selectedReleaseId !== null) {
-            endpoint += `?releaseId=${selectedReleaseId}`;
-        }
+        const endpoint = buildAuthenticatedRequirementExportUrl({
+            format: 'xlsx',
+            translationLanguage: isTranslated ? selectedLanguage : null,
+            releaseId: selectedReleaseId,
+        });
 
         setExportStatus(isTranslated ? `Translating and exporting to Excel in ${selectedLanguage}...` : 'Exporting to Excel...');
         
@@ -299,14 +279,7 @@ const Export = () => {
             });
 
             if (!response.ok) {
-                let errorMsg = 'Failed to export requirements to Excel.';
-                try {
-                    const errorData = await response.json();
-                    errorMsg = errorData.error || errorMsg;
-                } catch (e) {
-                    errorMsg = response.statusText || errorMsg;
-                }
-                throw new Error(errorMsg);
+                throw new Error(await extractErrorMessage(response, 'Failed to export requirements to Excel.'));
             }
 
             await downloadResponse(response, 'requirements_export.xlsx');
@@ -332,14 +305,12 @@ const Export = () => {
         setIsExporting(true);
         
         const isTranslated = selectedLanguage !== 'english' && translationConfigured;
-        let endpoint = isTranslated
-            ? `/api/requirements/export/xlsx/usecase/${selectedUseCase}/translated/${selectedLanguage}`
-            : `/api/requirements/export/xlsx/usecase/${selectedUseCase}`;
-
-        // Add releaseId parameter if a release is selected
-        if (selectedReleaseId !== null) {
-            endpoint += `?releaseId=${selectedReleaseId}`;
-        }
+        const endpoint = buildAuthenticatedRequirementExportUrl({
+            format: 'xlsx',
+            useCaseId: selectedUseCase,
+            translationLanguage: isTranslated ? selectedLanguage : null,
+            releaseId: selectedReleaseId,
+        });
         
         const statusMsg = isTranslated 
             ? `Translating and exporting requirements for selected use case to Excel in ${selectedLanguage}...`
@@ -352,14 +323,7 @@ const Export = () => {
             });
 
             if (!response.ok) {
-                let errorMsg = 'Failed to export requirements to Excel.';
-                try {
-                    const errorData = await response.json();
-                    errorMsg = errorData.error || errorMsg;
-                } catch (e) {
-                    errorMsg = response.statusText || errorMsg;
-                }
-                throw new Error(errorMsg);
+                throw new Error(await extractErrorMessage(response, 'Failed to export requirements to Excel.'));
             }
 
             await downloadResponse(response, 'requirements_usecase.xlsx');
