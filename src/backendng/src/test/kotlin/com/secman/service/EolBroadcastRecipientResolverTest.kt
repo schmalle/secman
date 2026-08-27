@@ -60,7 +60,7 @@ class EolBroadcastRecipientResolverTest {
 
         val recipients = resolver.resolve("Internet Explorer", authentication)
 
-        assertThat(recipients.map { it.email })
+        assertThat(recipients.map { it.user.email })
             .containsExactlyInAnyOrder(
                 "owner@example.com",
                 "aws-user@example.com",
@@ -85,7 +85,7 @@ class EolBroadcastRecipientResolverTest {
 
         val recipients = resolver.resolve("Firefox", authentication)
 
-        assertThat(recipients.map { it.email }).containsExactly("in-scope@example.com")
+        assertThat(recipients.map { it.user.email }).containsExactly("in-scope@example.com")
     }
 
     @Test
@@ -115,6 +115,38 @@ class EolBroadcastRecipientResolverTest {
         val recipients = resolver.resolve("Internet Explorer", authentication)
 
         assertThat(recipients).isEmpty()
+    }
+
+    /**
+     * The linkage this asserts is what scopes the broadcast body: each recipient's
+     * copy of the mail lists only these assets. If owner A's set ever contained
+     * owner B's system, the mail would disclose a system A cannot see in the UI
+     * (CLAUDE.md §A01), so this is a security assertion, not a data-shape one.
+     */
+    @Test
+    fun `each recipient carries only the systems that linked them to the product`() {
+        val ownerA = user(10, "owner-a", "a@example.com", active = true)
+        val ownerB = user(11, "owner-b", "b@example.com", active = true)
+        val sharedCreator = user(12, "creator", "creator@example.com", active = true)
+        val authentication = adminAuthentication()
+
+        every { assetFilterService.getAccessibleAssetIds(authentication) } returns setOf(301L, 302L)
+        every {
+            eolFindingRepository.findAssetIdsByComponentNameForAssets("Amazon Linux", setOf(301L, 302L))
+        } returns listOf(301L, 302L)
+        every { assetRepository.findByIdIn(listOf(301L, 302L)) } returns listOf(
+            asset(owner = "owner-a", manualCreator = sharedCreator).also { it.id = 301 },
+            asset(owner = "owner-b", manualCreator = sharedCreator).also { it.id = 302 }
+        )
+        every { userRepository.findByUsername("owner-a") } returns Optional.of(ownerA)
+        every { userRepository.findByUsername("owner-b") } returns Optional.of(ownerB)
+
+        val byEmail = resolver.resolve("Amazon Linux", authentication).associateBy { it.user.email }
+
+        assertThat(byEmail["a@example.com"]?.assetIds).containsExactly(301L)
+        assertThat(byEmail["b@example.com"]?.assetIds).containsExactly(302L)
+        // The creator of both systems legitimately sees both.
+        assertThat(byEmail["creator@example.com"]?.assetIds).containsExactlyInAnyOrder(301L, 302L)
     }
 
     private fun user(id: Long, username: String, email: String, active: Boolean): User =

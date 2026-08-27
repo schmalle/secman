@@ -14,16 +14,17 @@ import jakarta.inject.Singleton
  *   ./gradlew cli:run --args='manage-user-mappings import --file mappings.csv --dry-run'
  *
  * CSV Format:
- *   email,type,value
+ *   email,type,value[,display_name]
  *   user@example.com,DOMAIN,example.com
- *   user@example.com,AWS_ACCOUNT,123456789012
+ *   user@example.com,AWS_ACCOUNT,123456789012,DevOps-x
  *
  * JSON Format:
  *   [
  *     {
  *       "email": "user@example.com",
  *       "domains": ["example.com", "corp.local"],
- *       "awsAccounts": ["123456789012"]
+ *       "awsAccounts": ["123456789012"],
+ *       "display_name": "DevOps-x"
  *     }
  *   ]
  *
@@ -34,6 +35,9 @@ import jakarta.inject.Singleton
  * - Partial success mode (continues on errors)
  * - Duplicate detection
  * - Pending mapping creation for non-existent users
+ * - An account's display_name is stored on the mapping and links the account to the
+ *   workgroup named "aws-<display_name>", creating that workgroup when it does not
+ *   exist yet. Files without display_name behave exactly as before.
  * - Optional auto-start of risk assessments for owners of brand-new AWS
  *   accounts (--start-risk-assessment --risk-usecase <name>
  *   [--risk-deadline-days <n>, default 7]); the assessor is a user with the
@@ -494,6 +498,9 @@ class ImportCommand(
                 }
             }
 
+            // Workgroup linking (only present when the file carried display_name values).
+            val linkFailures = WorkgroupLinkPrinter.print(result.workgroupLinks)
+
             if (result.errors.isNotEmpty()) {
                 println("❌ Errors: ${result.errors.size} failure(s)")
                 println()
@@ -528,6 +535,12 @@ class ImportCommand(
                     // entries carrying an `error`, never a `skipped`.
                     if (onboardingFailures > 0) {
                         println("⚠️  $onboardingFailures account(s) could not be onboarded")
+                        System.exit(1)
+                    }
+                    // Same rule as the two blocks above: only genuine errors, never the
+                    // idempotent "already linked" no-ops, affect the exit status.
+                    if (linkFailures > 0) {
+                        println("⚠️  $linkFailures account(s) could not be linked to a workgroup")
                         System.exit(1)
                     }
                 }

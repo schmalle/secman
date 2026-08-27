@@ -99,11 +99,22 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
 
       downloadCsv(
         `eol-${slugifyProduct(product)}-${new Date().toISOString().slice(0, 10)}.csv`,
-        ['System', 'Owner', 'Cloud account', 'AD domain', 'Version', 'Release cycle', 'End of support', 'Status'],
+        [
+          'System',
+          'Owner',
+          'Cloud account',
+          'Cloud instance',
+          'AD domain',
+          'Version',
+          'Release cycle',
+          'End of support',
+          'Status',
+        ],
         all.map((finding) => [
           finding.assetName || '',
           finding.assetOwner || '',
           finding.cloudAccountId || '',
+          finding.cloudInstanceId || '',
           finding.adDomain || '',
           finding.componentVersion || '',
           finding.cycle,
@@ -337,6 +348,7 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
                 <th>System</th>
                 <th>Type</th>
                 <th>Cloud account</th>
+                <th>Cloud instance</th>
                 <th>AD domain</th>
                 <th>Version</th>
                 <th>Release cycle</th>
@@ -347,14 +359,14 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={8} className="text-center py-4">
+                  <td colSpan={9} className="text-center py-4">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loading && findings.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center text-muted py-4">
+                  <td colSpan={9} className="text-center text-muted py-4">
                     No systems found for this product in your accessible scope.
                   </td>
                 </tr>
@@ -373,6 +385,7 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
                       </td>
                       <td className="text-muted small">{subjectLabel(finding.subjectType)}</td>
                       <td>{finding.cloudAccountId || '-'}</td>
+                      <td>{finding.cloudInstanceId || '-'}</td>
                       <td>{finding.adDomain || '-'}</td>
                       <td>{finding.componentVersion || '-'}</td>
                       <td>{finding.cycle}</td>
@@ -531,6 +544,11 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
                   <div className="mb-0">
                     <label className="form-label">Message</label>
                     <HtmlEditor value={contactHtml} onChange={setContactHtml} minHeight={220} />
+                    <div className="form-text">
+                      <i className="bi bi-table me-1"></i>
+                      The affected-systems table is appended automatically below your message.
+                      Each recipient only sees the systems they have access to.
+                    </div>
                   </div>
                 </div>
                 <div className="modal-footer">

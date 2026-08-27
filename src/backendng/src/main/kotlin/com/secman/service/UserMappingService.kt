@@ -259,6 +259,9 @@ open class UserMappingService(
          */
         const val MAX_EMAIL_LENGTH = 255
 
+        /** Matches the aws_account_name column width (V260). */
+        const val MAX_ACCOUNT_NAME_LENGTH = 255
+
         private const val MAX_ECHOED_VALUE_LENGTH = 80
 
         /**
@@ -370,12 +373,41 @@ open class UserMappingService(
         // existsBy check, which is fragile if the persistence context skips an
         // auto-flush between iterations.
         val seenKeys = mutableSetOf<Triple<String, String?, String?>>()
+        // (account -> display name) seen in this request. Applied in one statement per
+        // account once the rows are in, so that mappings which already existed — the bulk
+        // of a daily import — also carry the name. Without that the correction path
+        // (WorkgroupAccountLinkService.linkFromStoredMappings) would be blind to every
+        // account whose mappings predate this feature.
+        val accountNames = LinkedHashMap<String, String>()
+        // An over-long name is reported once per account, not once per owner — the same
+        // account can appear on dozens of rows and 40 identical error strings help nobody.
+        val reportedLongNames = mutableSetOf<String>()
         validEntries.forEach { entry ->
             val email = entry.email.lowercase().trim()
             val awsAccountId = entry.awsAccountId?.trim()
             // Match the entity's @PrePersist sentinel coercion so the dedup
             // key here is the same one the unique constraint will see.
             val domain = UserMapping.normalizeNullSentinel(entry.domain?.trim()?.lowercase())
+
+            // Over-long names are dropped rather than truncated (a truncated name would
+            // resolve to the wrong workgroup) and rather than failing the entry (the
+            // mapping itself is valid and useful without one). Said out loud in errors[].
+            val rawDisplayName = entry.displayName?.trim()?.takeIf { it.isNotEmpty() }
+            val displayName = if (rawDisplayName != null && rawDisplayName.length > MAX_ACCOUNT_NAME_LENGTH) {
+                if (reportedLongNames.add(awsAccountId ?: "-")) {
+                    errors.add(
+                        "Display name for account ${awsAccountId ?: "-"} exceeds " +
+                            "$MAX_ACCOUNT_NAME_LENGTH characters and was not stored"
+                    )
+                }
+                null
+            } else {
+                rawDisplayName
+            }
+
+            if (awsAccountId != null && displayName != null) {
+                accountNames[awsAccountId] = displayName
+            }
 
             val key = Triple(email, awsAccountId, domain)
             if (!seenKeys.add(key)) {
@@ -398,6 +430,7 @@ open class UserMappingService(
                 email = email,
                 user = user,
                 awsAccountId = awsAccountId,
+                awsAccountName = displayName,
                 domain = domain
             )
             mapping.status = status
@@ -409,6 +442,8 @@ open class UserMappingService(
 
             if (status == MappingStatus.ACTIVE) created++ else createdPending++
         }
+
+        applyAccountNames(accountNames)
 
         // Bulk import can flip access for many users at once — clear once at the
         // end of the batch rather than per-row to keep the hot path cheap.
@@ -425,6 +460,31 @@ open class UserMappingService(
             comparison = null,
             newAccounts = newAccounts
         )
+    }
+
+    /**
+     * Apply the display names this request carried to every mapping of each account.
+     *
+     * Best-effort by design: the import's real work (the new mappings) has value on its
+     * own, so a failure to write one name is logged and the import continues.
+     */
+    private fun applyAccountNames(accountNames: Map<String, String>) {
+        if (accountNames.isEmpty()) return
+        val now = Instant.now()
+        var updated = 0
+        accountNames.forEach { (awsAccountId, displayName) ->
+            try {
+                updated += userMappingRepository.updateAwsAccountName(awsAccountId, displayName, now)
+            } catch (e: Exception) {
+                log.warn(
+                    "Could not set AWS account display name for {}: {}",
+                    awsAccountId, e.message
+                )
+            }
+        }
+        if (updated > 0) {
+            log.debug("Set AWS account display name on {} mapping row(s)", updated)
+        }
     }
 
     /**

@@ -256,6 +256,55 @@ semicolons and angle brackets are disqualifying. Component names and hostnames
 come from imported inventory and are HTML-escaped and CR/LF-stripped before they
 reach the body or a log line.
 
+### 5.1 The affected-systems table
+
+Both EOL mails — the owner notification above and the "Contact affected owners"
+broadcast (§6) — embed the same table, rendered by the single
+`EolFindingTableRenderer`. Its columns are exactly the ones the product
+drilldown page and its CSV export show, so an operator reading the mail and an
+operator reading the page see the same facts:
+
+| Column | Source |
+|---|---|
+| System | `EolFinding.assetName` |
+| Component | `componentName` — owner notification only; the broadcast is one product, so the column would be a constant |
+| Type | `subjectType` → Operating system / Installed software / Repository dependency |
+| Cloud account | `cloudAccountId` |
+| Cloud instance | `cloudInstanceId` |
+| AD domain | `adDomain` |
+| Version | `componentVersion` |
+| Release cycle | `eolCycle` |
+| End of support | `eolDate` plus "in N days" / "already end of life" |
+| Status | `status` → End of life / Approaching EOL |
+
+`cloudInstanceId` is denormalized onto `eol_finding` at scan time (V258), the
+same way `assetName` / `cloudAccountId` / `assetOwner` already are — the read
+queries stay single-table. It is nullable and **not backfilled**: the scan
+replaces every row on each run, so existing rows acquire it on the next
+`secman eol-sync`. Until then the column reads `-`.
+
+Two properties are security controls rather than formatting:
+
+- **The renderer is the escaping sink** (§A03). Hostnames, component names and
+  instance ids all originate in imported inventory and are attacker-influenceable
+  via a scan upload, so values are escaped where the table is assembled — never
+  at import. The plain-text part strips CR/LF for the same reason a log line
+  does: a crafted hostname must not be able to forge extra rows.
+- **Output is bounded at 200 rows** (`EolFindingTableRenderer.MAX_ROWS`, §A04).
+  A recipient mapped to a large AWS account can be linked to thousands of
+  findings. The remainder is disclosed in the table footer — never silently
+  truncated, so no reader mistakes a capped list for a complete one.
+
+**The broadcast table is scoped per recipient.** `EolBroadcastRecipientResolver`
+returns each recipient together with the asset ids that made them a recipient,
+and only those rows reach their copy of the mail. That linkage — owner, manual
+creator, scan uploader, AWS-account mapping, AD-domain mapping — is criteria 3,
+4, 5, 6 and 8 of §Unified Asset Access, so it is provably a subset of what the
+recipient may already see (§A01). Deriving it from the resolution that produced
+the recipient costs no extra query and cannot drift from the access rule.
+Manually-entered Cc addresses ride along on the owner's message and therefore
+see that owner's rows only.
+
 ---
 
 ## 6. Where it shows up
@@ -266,7 +315,7 @@ reach the body or a log line.
 | Same page, ADMIN/SECCHAMPION only | **Top 10 repositories with the most EOL components** |
 | Same page, ADMIN only | "Sync catalogue & rescan" button |
 | **Vulnerability Statistics** (`/vulnerability-statistics`) | "Top 10 Most Often EOL Products" table; each row links to the drilldown below |
-| **EOL product systems** (`/vulnerabilities/eol/products/{product}`) | every accessible system a product is EOL/approaching-EOL on, plus (ADMIN/SECCHAMPION) a **Contact affected owners** button — compose a message in-browser and mail every owner/creator/uploader/mapped-user of those systems, reusing `HtmlEditor` and the async broadcast-job machinery from the admin product-notify feature. Distinct from `secman send-eol-notifications` (§5): this is ad-hoc, one product, admin-authored copy; that is scheduled, horizon-based, and templated |
+| **EOL product systems** (`/vulnerabilities/eol/products/{product}`) | every accessible system a product is EOL/approaching-EOL on, plus (ADMIN/SECCHAMPION) a **Contact affected owners** button — compose a message in-browser and mail every owner/creator/uploader/mapped-user of those systems, reusing `HtmlEditor` and the async broadcast-job machinery from the admin product-notify feature. Distinct from `secman send-eol-notifications` (§5): this is ad-hoc, one product, admin-authored copy; that is scheduled, horizon-based, and templated. Both append the affected-systems table of §5.1 automatically; the admin writes only the covering message |
 | **Installed products** (`/installed-products`) | a **Lifecycle** badge per row, linking through to the EOL view |
 | Sidebar → Vulnerability Management | "End of life" entry |
 
@@ -327,6 +376,7 @@ closed — that is the SSRF guard working, not a bug.
   number; EVM-022 the maintainer-vendor refusal; EVM-023 the .NET desktop runtime
   not resolving to Windows
 - `EolCatalogClientTest` — SSRF URL validation and product-key sanitization
+- `EolFindingTableRendererTest` — mail-table escaping, dash-for-null, row cap
 - `EolNotificationBoundaryTest` — recipient address boundary
 - `EolScanUpperBoundTest` — Dependabot range upper-bound selection
 - `eolFormat.test.ts` — frontend presentation helpers

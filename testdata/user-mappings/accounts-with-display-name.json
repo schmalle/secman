@@ -1,0 +1,56 @@
+{
+  "accounts": [
+    {
+      "account_id": "706840063453",
+      "email": "aws-root-706840063453@example.com",
+      "display_name": "Legacy-alpha",
+      "name": "706840063453",
+      "org_id": "o-example00001",
+      "status": "ACTIVE",
+      "tags": ["path:/Legacy"],
+      "vars": {
+        "cov:owner": "legacy-owner@example.com",
+        "cov:account-type": "Legacy",
+        "cov:home-region": "eu-central-1"
+      }
+    },
+    {
+      "account_id": "156674634739",
+      "email": "aws-root-156674634739@example.com",
+      "display_name": "DevOps-beta",
+      "name": "156674634739",
+      "org_id": "o-example00001",
+      "status": "ACTIVE",
+      "tags": ["path:/DevOps"],
+      "vars": {
+        "cov:owner": "devops-owner@example.com",
+        "cov:account-type": "DevOps",
+        "cov:home-region": "eu-central-1"
+      }
+    },
+    {
+      "account_id": "421337195204",
+      "email": "aws-root-421337195204@example.com",
+      "display_name": "DevOps-beta",
+      "name": "421337195204",
+      "org_id": "o-example00001",
+      "status": "ACTIVE",
+      "tags": ["path:/DevOps"],
+      "vars": {
+        "cov:owner": "devops-owner@example.com",
+        "cov:account-type": "DevOps"
+      }
+    },
+    {
+      "account_id": "900112233445",
+      "email": "aws-root-900112233445@example.com",
+      "display_name": "Data_Platform.01",
+      "name": "900112233445",
+      "org_id": "o-example00001",
+      "status": "ACTIVE",
+      "vars": {
+        "cov:owner": "data-owner@example.com"
+      }
+    }
+  ]
+}

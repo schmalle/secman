@@ -20,6 +20,10 @@ import jakarta.inject.Singleton
  *                 through `import`)
  *   remove      - Remove user mappings
  *   import      - Batch import from CSV/JSON file
+ *   link-workgroups - Link AWS accounts to the workgroup named after their
+ *                 display name (aws-<display name>), creating missing
+ *                 workgroups; corrects mappings imported before display
+ *                 names were captured
  *   import-s3   - Batch import from AWS S3 bucket (Feature 065)
  *   list-bucket - List objects in an S3 bucket (Feature 065)
  *   download-s3 - Download an AWS account mapping file directly from S3 to a
@@ -65,6 +69,7 @@ import jakarta.inject.Singleton
         RemoveCommand::class,
         ImportCommand::class,
         ImportS3Command::class,
+        LinkWorkgroupsCommand::class,
         SimulateOnboardingCommand::class,
         ListBucketCommand::class,
         DownloadS3Command::class,

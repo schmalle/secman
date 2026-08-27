@@ -11,6 +11,7 @@ export interface EolFinding {
   assetId?: number | null;
   assetName?: string | null;
   cloudAccountId?: string | null;
+  cloudInstanceId?: string | null;
   adDomain?: string | null;
   assetOwner?: string | null;
   repositoryId?: number | null;

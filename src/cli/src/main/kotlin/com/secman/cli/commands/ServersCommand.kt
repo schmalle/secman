@@ -198,11 +198,11 @@ class ServersCommand {
                                 val firstVuln = vulns.firstOrNull()
                                 val latestCloudInstanceId = vulns
                                     .filter { !it.cloudInstanceId.isNullOrBlank() }
-                                    .maxByOrNull { it.detectedAt }
+                                    .maxByOrNull { it.detectedAt ?: java.time.LocalDateTime.MIN }
                                     ?.cloudInstanceId
                                 val latestOsVersion = vulns
                                     .filter { !it.osVersion.isNullOrBlank() }
-                                    .maxByOrNull { it.detectedAt }
+                                    .maxByOrNull { it.detectedAt ?: java.time.LocalDateTime.MIN }
                                     ?.osVersion
                                 hostname to ServerVulnerabilityBatch(
                                     hostname = hostname,
@@ -426,6 +426,9 @@ class ServersCommand {
             }
 
             // Hostname-specific queries
+            if (lastSeenDays > 0 || parsedDeviceType != DeviceType.SERVER) {
+                System.out.println("Note: --device-type and --last-seen-days are ignored with --hostnames (hosts are resolved directly)")
+            }
             val response = apiClient.queryServersWithFilters(
                 hostnames = hostnames,
                 deviceType = deviceType,
@@ -438,12 +441,32 @@ class ServersCommand {
 
             System.out.println("Found ${response.vulnerabilities.size} vulnerabilities across ${parsedDeviceType.displayName()}")
 
+            val vulnerabilitiesByHostname = response.vulnerabilities.groupBy { it.hostname }
+
+            // Per-host status: distinguish "unknown to Falcon" from "resolved, 0 matching
+            // rows" — before, both collapsed into the same silent count=0/exit-0.
+            val requestedHostnames = hostnames ?: emptyList()
+            val notFound = response.notFoundHostnames.map { it.lowercase() }.toSet()
+            requestedHostnames.forEach { requested ->
+                val vulns = vulnerabilitiesByHostname.entries
+                    .firstOrNull { it.key.equals(requested, ignoreCase = true) }?.value
+                val status = when {
+                    requested.lowercase() in notFound -> "not found in CrowdStrike"
+                    vulns == null -> "resolved, 0 matching vulnerabilities"
+                    else -> "${vulns.size} vulnerabilities"
+                }
+                System.out.println("  - $requested: $status")
+            }
+            if (requestedHostnames.isNotEmpty() && notFound.size >= requestedHostnames.size) {
+                System.err.println("Error: none of the requested hostnames were found in CrowdStrike")
+                return 1
+            }
+
             if (response.vulnerabilities.isEmpty()) {
                 System.out.println("No vulnerabilities found matching criteria")
                 return 0
             }
 
-            val vulnerabilitiesByHostname = response.vulnerabilities.groupBy { it.hostname }
             System.out.println("${parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }} with vulnerabilities: ${vulnerabilitiesByHostname.size}")
 
             if (verbose) {
@@ -479,7 +502,7 @@ class ServersCommand {
                 val firstVuln = vulns.firstOrNull()
                 val latestCloudInstanceId = vulns
                     .filter { !it.cloudInstanceId.isNullOrBlank() }
-                    .maxByOrNull { it.detectedAt }
+                    .maxByOrNull { it.detectedAt ?: java.time.LocalDateTime.MIN }
                     ?.cloudInstanceId
                 hostname to ServerVulnerabilityBatch(
                     hostname = hostname,

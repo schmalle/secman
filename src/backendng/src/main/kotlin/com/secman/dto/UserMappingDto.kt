@@ -15,6 +15,8 @@ data class UserMappingResponse(
     val id: Long,
     val email: String,
     val awsAccountId: String?,
+    /** Human-readable AWS account display name, when the import carried one (V260). */
+    val awsAccountName: String?,
     val domain: String?,
     val ipAddress: String?,
     val ipRangeType: IpRangeType?,
@@ -46,7 +48,17 @@ data class UpdateUserMappingRequest(
 data class BulkUserMappingEntry(
     val email: String,
     val awsAccountId: String? = null,
-    val domain: String? = null
+    val domain: String? = null,
+    /**
+     * Human-readable AWS account display name from the source file
+     * (`display_name` in the Cloud Custodian JSON / the CSV column).
+     *
+     * Two effects, both in [com.secman.service.UserMappingBulkImportService]:
+     * it is persisted on the mapping row, and it links [awsAccountId] to the
+     * workgroup named "aws-<displayName>". Null or blank means neither happens —
+     * which is why every pre-existing caller (Excel, plain CSV) is unaffected.
+     */
+    val displayName: String? = null
 )
 
 @Serdeable
@@ -159,7 +171,13 @@ data class BulkUserMappingResponse(
      * invites, and (in DIRECT mode) a pointer to the assessment also listed in
      * [riskAssessments]. Empty when no onboarding mode was requested.
      */
-    val onboarding: List<AccountOnboardingInfo> = emptyList()
+    val onboarding: List<AccountOnboardingInfo> = emptyList(),
+    /**
+     * What workgroup linking did for the accounts whose entries carried a
+     * [BulkUserMappingEntry.displayName]. Null when the import carried none — which is
+     * every Excel and plain-CSV import, hence unchanged behaviour for them.
+     */
+    val workgroupLinks: WorkgroupAccountLinkSummary? = null
 )
 
 /**
@@ -255,6 +273,7 @@ fun UserMapping.toResponse(): UserMappingResponse {
         id = this.id!!,
         email = this.email,
         awsAccountId = this.awsAccountId,
+        awsAccountName = this.awsAccountName,
         domain = this.domain,
         ipAddress = this.ipAddress,
         ipRangeType = this.ipRangeType,

@@ -50,6 +50,7 @@ import java.time.Instant
     indexes = [
         Index(name = "idx_user_mapping_email", columnList = "email"),
         Index(name = "idx_user_mapping_aws_account", columnList = "aws_account_id"),
+        Index(name = "idx_user_mapping_aws_account_name", columnList = "aws_account_name"), // V260: correction-path scan
         Index(name = "idx_user_mapping_domain", columnList = "domain"),
         Index(name = "idx_user_mapping_email_aws", columnList = "email,aws_account_id"),
         Index(name = "idx_user_mapping_ip_address", columnList = "ip_address"),
@@ -83,6 +84,18 @@ data class UserMapping(
     @Column(name = "aws_account_id", nullable = true, length = 12)
     @Pattern(regexp = "^\\d{12}$", message = "AWS Account ID must be exactly 12 numeric digits")
     var awsAccountId: String?,
+
+    /**
+     * Human-readable display name of the AWS account (V260).
+     *
+     * Deliberately NOT part of uk_user_mapping_composite: it describes the
+     * account, not the identity of the mapping, so a renamed account updates
+     * this row instead of forking a second one. Drives workgroup linking —
+     * display name "DevOps-x" belongs to workgroup "aws-DevOps-x", see
+     * WorkgroupAccountLinkService.
+     */
+    @Column(name = "aws_account_name", nullable = true, length = 255)
+    var awsAccountName: String? = null,
 
     @Column(nullable = true, length = 255)
     @Pattern(regexp = "^[a-zA-Z0-9.-]+$", message = "Domain must contain only letters, numbers, dots, and hyphens")
@@ -133,6 +146,7 @@ data class UserMapping(
         email = email.lowercase().trim()
         domain = normalizeNullSentinel(domain?.lowercase()?.trim())
         awsAccountId = awsAccountId?.trim()
+        awsAccountName = awsAccountName?.trim()?.takeIf { it.isNotEmpty() }
 
         // Feature 049: Set status based on user existence
         // PENDING if user is null (future user mapping), ACTIVE otherwise

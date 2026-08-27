@@ -22,7 +22,8 @@ class EolNotificationBoundaryTest {
         eolFindingRepository = mockk(relaxed = true),
         awsAccountRecipientResolver = mockk(relaxed = true),
         userRepository = mockk(relaxed = true),
-        emailService = mockk(relaxed = true)
+        emailService = mockk(relaxed = true),
+        eolFindingTableRenderer = EolFindingTableRenderer()
     )
 
     @Test

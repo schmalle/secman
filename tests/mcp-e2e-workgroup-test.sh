@@ -31,7 +31,7 @@ export SECMAN_MCP_KEY="pass://test/secman/SECMAN_MCP_KEY"
 export SECMAN_TEST_DOMAIN="pass://test/secman/SECMAN_TEST_DOMAIN"
 
 # Configuration
-BASE_URL="${SECMAN_BASE_URL:-http://localhost:8080}"
+BASE_URL="${SECMAN_BASE_URL:-${SECMAN_BACKEND_URL:-}}"
 TEST_USER_NAME="E2E_TEST_USER_$(date +%s)"
 TEST_USER_EMAIL=""  # Set after SECMAN_TEST_DOMAIN is resolved
 TEST_ASSET_NAME="E2E_TEST_ASSET_$(date +%s)"
@@ -123,6 +123,14 @@ check_prerequisites() {
 
     if [[ -z "${SECMAN_TEST_DOMAIN:-}" ]]; then
         log_error "SECMAN_TEST_DOMAIN environment variable not set"
+        exit 1
+    fi
+
+    # CLAUDE.md Hard Principle 6: the host comes from pass-cli, never a literal.
+    # This used to default to http://localhost:8080, which silently tested the
+    # wrong origin whenever the run was pointed at a real instance.
+    if [[ -z "${BASE_URL}" ]]; then
+        log_error "No backend URL: set SECMAN_BASE_URL or SECMAN_BACKEND_URL (from pass-cli)"
         exit 1
     fi
 

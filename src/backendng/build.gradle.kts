@@ -31,18 +31,18 @@ dependencies {
     implementation("io.micronaut.cache:micronaut-cache-caffeine")
 
     // Database
-    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.1.1")
+    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.1.2")
     implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.1.0")
     implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.1.0")
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.10")
 
-	implementation("io.micronaut.flyway:micronaut-flyway:8.1.0")
-	runtimeOnly("org.flywaydb:flyway-core:12.11.0")
-	runtimeOnly("org.flywaydb:flyway-mysql:12.11.0")
+	implementation("io.micronaut.flyway:micronaut-flyway:8.1.1")
+	runtimeOnly("org.flywaydb:flyway-core:13.3.0")
+	runtimeOnly("org.flywaydb:flyway-mysql:13.3.0")
 
     // Security
-    implementation("io.micronaut.security:micronaut-security-jwt:5.3.1")
-    implementation("io.micronaut.security:micronaut-security-oauth2:5.3.1")
+    implementation("io.micronaut.security:micronaut-security-jwt:5.3.2")
+    implementation("io.micronaut.security:micronaut-security-oauth2:5.3.2")
 
     // WebAuthn/Passkey support
     implementation("com.webauthn4j:webauthn4j-core:0.31.9.RELEASE")
@@ -64,7 +64,7 @@ dependencies {
     implementation("org.thymeleaf:thymeleaf:3.1.5.RELEASE")
 
     // Serialization
-    implementation("io.micronaut.serde:micronaut-serde-jackson:3.1.0")
+    implementation("io.micronaut.serde:micronaut-serde-jackson:3.1.1")
     
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-reflect:${kotlinVersion}")
@@ -77,13 +77,13 @@ dependencies {
     // Explicit version: the Micronaut platform BOM manages the Jackson 3 coordinate
     // (tools.jackson.module), not this Jackson 2 one. It previously resolved only via a
     // transitive jackson-bom that micronaut-micrometer-bom 6.0.1 dropped.
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.1")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation("io.micronaut.reactor:micronaut-reactor")
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.6.1")
+    runtimeOnly("ch.qos.logback:logback-classic:1.6.3")
     // Bridge Log4j to Logback (required for Apache POI)
     runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.26.1")
     // Logstash encoder for JSON logging (Feature 046)
@@ -122,11 +122,11 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.2")
     testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.2")
-    testImplementation("io.micronaut.test:micronaut-test-junit5:5.1.0")
+    testImplementation("io.micronaut.test:micronaut-test-junit5:5.1.1")
     testImplementation("io.mockk:mockk:1.14.11")
     // Tests assert on log output via Logback's ListAppender; main code stays
     // slf4j-only (logback-classic is runtimeOnly above).
-    testImplementation("ch.qos.logback:logback-classic:1.6.1")
+    testImplementation("ch.qos.logback:logback-classic:1.6.3")
     testImplementation("org.assertj:assertj-core:3.27.7")
 }
 

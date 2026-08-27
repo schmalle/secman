@@ -331,4 +331,56 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
         ORDER BY m.email, m.awsAccountId
     """)
     fun findRecentAwsAccountMappings(since: java.time.Instant): List<UserMapping>
+
+    /**
+     * Distinct (awsAccountId, awsAccountName, newest updatedAt) triples for every mapping
+     * that carries both an account id and a display name (V260).
+     *
+     * Feeds the correction path — `WorkgroupAccountLinkService.linkFromStoredMappings` —
+     * which links each account to the workgroup named after its display name without the
+     * operator re-supplying the source file.
+     *
+     * Grouped, so the row count is distinct (account, name) combinations rather than
+     * mappings: one account owned by 40 people yields one row, and an account renamed
+     * between imports yields one row per name with its own newest timestamp, letting the
+     * caller pick the current one. Paged at the query rather than sliced in Kotlin
+     * (A04: unbounded is a design bug).
+     */
+    @Query("""
+        SELECT m.awsAccountId, m.awsAccountName, MAX(m.updatedAt)
+        FROM UserMapping m
+        WHERE m.awsAccountId IS NOT NULL
+          AND m.awsAccountName IS NOT NULL
+        GROUP BY m.awsAccountId, m.awsAccountName
+        ORDER BY m.awsAccountId
+    """)
+    fun findAwsAccountDisplayNames(
+        pageable: io.micronaut.data.model.Pageable
+    ): List<Array<Any>>
+
+    /**
+     * Set the display name on every mapping of one AWS account (V260).
+     *
+     * One statement per account rather than a read-modify-write per row: a daily import is
+     * mostly duplicate rows, and an account owned by 40 people would otherwise cost 40
+     * SELECT+UPDATE pairs to write the same value. The name describes the account, so
+     * updating every mapping of it — including owners absent from this particular file —
+     * is the intended reach, not a side effect.
+     *
+     * The `<>` guard makes a re-import of an unchanged file a no-op, which keeps
+     * `updatedAt` meaningful: [findAwsAccountDisplayNames] uses it to pick the current
+     * name for a renamed account. `updatedAt` is set explicitly because a bulk JPQL
+     * update does not fire `@PreUpdate`.
+     */
+    @Query("""
+        UPDATE UserMapping m
+        SET m.awsAccountName = :displayName, m.updatedAt = :now
+        WHERE m.awsAccountId = :awsAccountId
+          AND (m.awsAccountName IS NULL OR m.awsAccountName <> :displayName)
+    """)
+    fun updateAwsAccountName(
+        awsAccountId: String,
+        displayName: String,
+        now: java.time.Instant
+    ): Int
 }

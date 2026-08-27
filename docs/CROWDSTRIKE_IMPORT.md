@@ -202,8 +202,91 @@ val (scanTimestamp, daysOpenText) = if (usePatchPublicationDate && patchPublicat
 Example: now = 2025-11-17, CrowdStrike `daysOpen=901` → `scanTimestamp = 2023-04-16` → overdue = 901 days → red badge ✅.
 
 Toggles via env (`docs/ENVIRONMENT.md`):
-- `VULN_USE_PATCH_PUBLICATION_DATE=false` (default): days_open = now − discovery
-- `VULN_USE_PATCH_PUBLICATION_DATE=true`: days_open = scan_ts − patch_publication_date
+- `VULN_USE_PATCH_PUBLICATION_DATE=true` (**default since 2026-08-24**): the SLA
+  anchor is when a **fix became available**, per row, falling back to detection age
+  when no patch date is published.
+- `VULN_USE_PATCH_PUBLICATION_DATE=false`: anchor is CrowdStrike detection time.
+
+### Why remediation age, and what enabling it costs
+
+Detection age answers "how long have we known", which resets whenever a host is
+rebuilt or newly onboarded — a 2023 CVE on a host added last month reads as a month
+old. Remediation age answers "how long could we have fixed this and did not", which
+is the number an auditor means and the only one that does not reward re-imaging.
+
+Two consequences to plan for:
+
+1. **Ages jump, so overdue counts jump.** A patch date is normally much earlier than
+   the detection date, so rows get older the moment they are re-imported, and more of
+   them cross the reminder threshold at once. Expect a larger-than-usual notification
+   run after the first import following the change.
+2. **It is a one-way door.** `first_seen_at` is preserved as `min(prior, new)` across
+   re-imports (that is what stops a re-import resetting the SLA clock), so once an
+   import writes the older patch date, setting the flag back to `false` does **not**
+   restore the previous anchors — the earlier date keeps winning. A genuine revert is:
+
+   ```sql
+   UPDATE vulnerability SET first_seen_at = NULL WHERE source = 'CROWDSTRIKE';
+   ```
+   then set `VULN_USE_PATCH_PUBLICATION_DATE=false` and run a full re-import, which
+   re-anchors from detection time. Take a backup first.
+
+Nothing changes until the next import: existing rows keep their current anchors.
+
+### The three dates, and why they differ (2026-08-24)
+
+Falcon hands us three dates that mean three different things. Conflating any two
+of them produces numbers that look wrong to a reader and cannot be argued with:
+
+| Date | Field | Meaning |
+|---|---|---|
+| `created_timestamp` | `detectedAt` → `scan_timestamp` / `first_seen_at` | when **Falcon created this finding on this host** |
+| `cve.published_date` | `cve_published_date` (V259) | when the **CVE was disclosed** |
+| `remediation.vendor_release_date` | `patch_publication_date` | when a **fix became available** |
+
+**Detection dates cluster; publication dates do not.** Falcon creates every
+finding against a package in one batch when that version is first scanned, so a
+host shows one identical "days open" for dozens of CVEs — including CVEs whose
+IDs carry different years. That is genuine Falcon semantics, not an import bug.
+
+**A CVE's ID year is its reservation year, not its publication year.** Live
+example from this estate: `CVE-2023-53178` has `cve.published_date =
+2025-09-15`. Linux kernel CVEs are routinely assigned an old-year ID and
+published much later, so "a 2023 CVE can't be only 62 days old" is not a sound
+inference. The UI now shows the publication date next to the detection age so
+this is visible rather than guessed at.
+
+Four defects were fixed alongside (see `docs/CHANGELOG.md` 2026-08-24):
+
+1. `extractPatchPublicationDate` asked `cve.published_date` **first**, so the
+   field named for a patch — and used as the SLA anchor when the toggle above is
+   on — usually held the CVE disclosure date. Genuine remediation dates now win;
+   the CVE fields stay as the **last** resort because
+   `require-patch-publication-date` filters imports on this field being non-null.
+2. The ad-hoc lookup path parsed `"…Z"` by **stripping the Z** and reparsing as
+   local time, relabelling a UTC instant instead of converting it (±1 day on the
+   whole-day age). All four copies of Falcon date parsing now share
+   `FalconTimestamps`.
+2b. An unreadable date silently became `LocalDateTime.now()` — which reads as a
+   zero-day-old finding and therefore **never trips an overdue threshold**.
+   `FalconTimestamps.parse` returns null, and `CrowdStrikeVulnerabilityDto.detectedAt`
+   is nullable so the unknown actually propagates instead of being coerced back at
+   the call site. `scan_timestamp` is `NOT NULL`, so persistence still falls back to
+   the import time — but logs a WARN naming the CVE and asset, because that row's age
+   is then a floor rather than a measurement. `first_seen_at` keeps the earliest
+   value, so a later import supplying a real date corrects it one-way.
+3. The high-volume CLI batch payload (`/api/crowdstrike/servers/import`) sent
+   only `cveId`/`severity`/`affectedProduct`/`daysOpen`. Both publication dates
+   were dropped in transit, which is why `VULN_USE_PATCH_PUBLICATION_DATE` could
+   never take effect on the main import path. It now sends `detectedAt` and both
+   dates, and the backend prefers `detectedAt` over re-deriving a timestamp from
+   `daysOpen` against its own clock.
+4. Saving from the ad-hoc lookup dropped `patch_publication_date` entirely.
+
+`daysOpen` remains a display-only string. Never compute from it: it is a
+whole-day integer measured against whichever clock produced it, and every
+`parseDaysOpenToInt` call site defaults a parse failure to `0` — i.e. "not
+overdue". `first_seen_at` is the SLA anchor.
 
 ### One-shot migration for legacy rows
 
@@ -231,6 +314,31 @@ UI: vulns >30 days should show red OVERDUE badge. Threshold under Admin > Vulner
 - **Concurrent imports for same asset** — serialized by transaction lock. Last commit wins; no duplicates.
 - **Vulns without CVE ID** — filtered out, counted in `ImportStatisticsDto.vulnerabilitiesSkipped`.
 - **Error mid-import** — transaction rolls back; DB unchanged; per-server isolation preserved.
+
+## Per-host mode (`--hostnames`)
+
+`query servers --hostnames a,b,c` bypasses the two-stage bulk enumeration and
+resolves each hostname directly. Each name is resolved to **all** matching device
+ids (5-strategy FQL cascade — exact, prefix, contains, lowercase, uppercase; the
+first strategy that matches returns its complete deduped list) and Spotlight rows
+are merged across those aids. This matters because a re-imaged or re-enrolled host
+keeps its hostname but gets a new aid: the bulk import aggregates across all of a
+hostname's aids naturally (it enumerates devices, then groups by metadata-derived
+hostname — ~2.4 aids per hostname observed in production), so the per-host path
+must do the same or it under-reports (observed 2026-08-25: five hosts read 0 rows
+via their first-returned aid while a sibling aid held thousands). Each host still
+arrives at the backend as ONE batch, so the transactional replace is untouched.
+`--device-type` and `--last-seen-days` are deliberately ignored in this mode (a
+host named explicitly is resolved without device filters, so a stale aid cannot
+silently vanish); the CLI prints a warning and a per-host status line
+(`not found` / `resolved, 0 matching` / `N vulnerabilities`).
+
+Bulk pagination is guarded against cursor loops: every `after` token followed per
+batch is remembered, a repeated token fails the batch into `failedDeviceIds`
+(hosts keep their old rows; the reconcile sweep skips them), continuation requires
+a full page, and Falcon's `meta.pagination.total` bounds the fetch. Prior to this
+guard, a two-token ping-pong re-fetched the same pages up to the 50-page cap and
+inflated single hosts to ~27x their real row count (2026-08-25 incident).
 
 ## Performance
 

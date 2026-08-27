@@ -5,7 +5,9 @@ import com.secman.domain.EmailBroadcastStatus
 import com.secman.domain.EmailBroadcastTargetGroup
 import com.secman.domain.User
 import com.secman.repository.EmailBroadcastJobRepository
+import com.secman.repository.EolFindingRepository
 import com.secman.repository.UserRepository
+import io.micronaut.data.model.Pageable
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
 import io.micronaut.security.authentication.Authentication
@@ -28,7 +30,9 @@ open class EmailBroadcastService(
     private val userRepository: UserRepository,
     private val emailService: EmailService,
     private val productBroadcastRecipientResolver: ProductBroadcastRecipientResolver,
-    private val eolBroadcastRecipientResolver: EolBroadcastRecipientResolver
+    private val eolBroadcastRecipientResolver: EolBroadcastRecipientResolver,
+    private val eolFindingRepository: EolFindingRepository,
+    private val eolFindingTableRenderer: EolFindingTableRenderer
 ) {
     private val log = LoggerFactory.getLogger(EmailBroadcastService::class.java)
     private val broadcastHtmlSafelist = Safelist()
@@ -156,7 +160,22 @@ open class EmailBroadcastService(
 
         markProcessing(jobId)
 
-        val recipients = resolveRecipients(job.targetGroup, job.createdBy, job.targetProduct, productAuthentication)
+        // An EOL product broadcast resolves recipients through its own resolver so the
+        // asset linkage survives: each recipient's copy of the mail lists only the
+        // affected systems that made *them* a recipient (§A01). Every other target
+        // group has no per-recipient data and shares one rendered body.
+        val eolRecipients = job.targetProduct
+            ?.takeIf { job.targetGroup == EmailBroadcastTargetGroup.EOL_PRODUCT_USERS }
+            ?.let { product ->
+                productAuthentication?.let { eolBroadcastRecipientResolver.resolve(product, it) }
+            }
+        val assetIdsByUserId = eolRecipients
+            ?.mapNotNull { recipient -> recipient.user.id?.let { it to recipient.assetIds } }
+            ?.toMap()
+            ?: emptyMap()
+
+        val recipients = eolRecipients?.map { it.user }
+            ?: resolveRecipients(job.targetGroup, job.createdBy, job.targetProduct, productAuthentication)
         log.info(
             "Broadcast job {}: dispatching to {} recipients (targetGroup={})",
             jobId, recipients.size, job.targetGroup
@@ -170,12 +189,14 @@ open class EmailBroadcastService(
         var sent = 0
         var failed = 0
         recipients.forEach { user ->
+            val table = assetIdsByUserId[user.id]
+                ?.let { renderAffectedSystems(job.targetProduct, it) }
             val ok = try {
                 emailService.sendEmailWithInlineImages(
                     to = user.email,
                     subject = job.subject,
-                    textContent = textContent,
-                    htmlContent = wrappedHtml,
+                    textContent = table?.let { textContent + it.text } ?: textContent,
+                    htmlContent = table?.let { wrapWithBrand(job.subject, job.htmlContent + it.html) } ?: wrappedHtml,
                     inlineImages = logo,
                     cc = ccRecipients
                 ).get()
@@ -284,12 +305,53 @@ open class EmailBroadcastService(
                 }
             EmailBroadcastTargetGroup.EOL_PRODUCT_USERS ->
                 if (targetProduct != null && productAuthentication != null) {
-                    eolBroadcastRecipientResolver.resolve(targetProduct, productAuthentication)
+                    eolBroadcastRecipientResolver.resolve(targetProduct, productAuthentication).map { it.user }
                 } else {
                     emptyList()
                 }
         }
     }
+
+    /**
+     * Renders the affected-systems table for one recipient of an EOL product
+     * broadcast, or null when there is nothing to show.
+     *
+     * Both the row page and the count are bounded at the query
+     * (`findByComponentNameForAssets` / `countByComponentNameForAssets`) rather
+     * than fetched whole and sliced in Kotlin — a recipient mapped to a large AWS
+     * account can be linked to thousands of findings (§A04). The count is read
+     * separately so the renderer's overflow line can name the real remainder
+     * instead of understating it.
+     *
+     * A failure here must not lose the message: the mail still goes out with the
+     * admin's text, and the failure is logged rather than swallowed (§A09).
+     */
+    private fun renderAffectedSystems(product: String?, assetIds: Set<Long>): RenderedTable? {
+        if (product.isNullOrBlank() || assetIds.isEmpty()) return null
+        return try {
+            val findings = eolFindingRepository.findByComponentNameForAssets(
+                product, assetIds, Pageable.from(0, EolFindingTableRenderer.MAX_ROWS)
+            )
+            if (findings.isEmpty()) return null
+            val total = eolFindingRepository.countByComponentNameForAssets(product, assetIds).toInt()
+            val html = eolFindingTableRenderer.renderHtml(findings, totalCount = total)
+            val text = eolFindingTableRenderer.renderText(findings, totalCount = total)
+            RenderedTable(
+                html = "<h3 style=\"font-size:15px;margin:24px 0 8px 0;\">Affected systems</h3>$html",
+                text = "\n\nAffected systems:\n\n$text"
+            )
+        } catch (e: Exception) {
+            log.warn("Failed to render affected-systems table for product broadcast: {}", e.message, e)
+            null
+        }
+    }
+
+    /**
+     * The affected-systems table in both bodies one mail carries. Rendered from a
+     * single query so the HTML and plain-text copies cannot drift apart — a reader
+     * comparing the two would otherwise see different rows for the same product.
+     */
+    private data class RenderedTable(val html: String, val text: String)
 
     internal fun sanitizeBroadcastHtml(html: String): String =
         Jsoup.clean(html, broadcastHtmlSafelist)

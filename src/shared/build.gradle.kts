@@ -24,14 +24,14 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:${kotlinVersion}")
     
     // Jackson for JSON
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.1")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.2")
     
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")
     implementation("jakarta.validation:jakarta.validation-api")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.6.1")
+    runtimeOnly("ch.qos.logback:logback-classic:1.6.3")
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")

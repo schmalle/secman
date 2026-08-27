@@ -32,6 +32,9 @@ class InstalledProductListServiceTest {
         val chrome = product(100L, asset, "Chrome", "120.0")
         every { installedProductRepository.searchByServerWithAsset("server01", any<Pageable>()) } returns listOf(chrome)
         every { installedProductRepository.countDistinctAssetsByServer("server01") } returns 1L
+        // The service gained a product-count call; the mock was never updated, so these
+        // tests failed with MockKException rather than asserting anything.
+        every { installedProductRepository.countProductsByServer("server01") } returns 1L
 
         val result = service.listForServer(authentication, " server01 ", 50)
 
@@ -51,6 +54,7 @@ class InstalledProductListServiceTest {
         every { accessibleAssetIdsCache.get(authentication) } returns setOf(7L)
         every { installedProductRepository.searchByServerForAssetsWithAsset("app", setOf(7L), any<Pageable>()) } returns listOf(product)
         every { installedProductRepository.countDistinctAssetsByServerForAssets("app", setOf(7L)) } returns 1L
+        every { installedProductRepository.countProductsByServerForAssets("app", setOf(7L)) } returns 1L
 
         val result = service.listForServer(authentication, "app", 25)
 

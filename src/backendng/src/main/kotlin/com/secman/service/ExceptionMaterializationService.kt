@@ -4,8 +4,6 @@ import com.secman.domain.VulnerabilityException.Scope
 import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
 import io.micronaut.scheduling.annotation.Scheduled
-import jakarta.inject.Inject
-import jakarta.inject.Provider
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
 import org.slf4j.LoggerFactory
@@ -37,13 +35,6 @@ open class ExceptionMaterializationService(
     private val asyncExceptionRecompute: AsyncExceptionRecompute,
 ) {
     private val log = LoggerFactory.getLogger(ExceptionMaterializationService::class.java)
-
-    /**
-     * Provider for self-reference so [DeadlockRetry] in [recomputeAllExceptedScheduled] gets a
-     * fresh `@Transactional` transaction per attempt, via the AOP proxy.
-     */
-    @Inject
-    private lateinit var selfProvider: Provider<ExceptionMaterializationService>
 
     companion object {
         /** Asset ids per recompute statement. See [recomputeChunked]. */
@@ -129,20 +120,16 @@ open class ExceptionMaterializationService(
     @Scheduled(cron = "0 0 3 * * ?")
     open fun recomputeAllExceptedScheduled() {
         try {
-            val updated = DeadlockRetry.withRetry("daily full excepted recompute") {
-                selfProvider.get().recomputeAllExceptedOnce()
-            }
+            // Delegates to the chunked driver rather than issuing one whole-table UPDATE.
+            // Retry now lives per chunk inside it, so a deadlock replays a bounded id range
+            // instead of the entire multi-minute statement. See AsyncExceptionRecompute for
+            // why the lock hold, not the total work, was the problem.
+            val updated = asyncExceptionRecompute.recomputeAllChunked("daily full excepted recompute")
             if (updated > 0) log.info("Scheduled full excepted-flag recompute updated {} rows", updated)
         } catch (e: Exception) {
             log.error("Scheduled full excepted-flag recompute failed (non-fatal): {}", e.message, e)
         }
     }
-
-    // REQUIRES_NEW for the same reason as AsyncExceptionRecompute.recomputeAllOnce(): must always
-    // be a genuinely fresh, independent transaction per DeadlockRetry attempt, never joined to any
-    // ambient caller transaction (default REQUIRED propagation would do that).
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
-    open fun recomputeAllExceptedOnce(): Long = vulnerabilityRepository.recomputeExceptedAll()
 
     /**
      * Recompute `excepted` for a single asset's rows — called by importers after they replace an

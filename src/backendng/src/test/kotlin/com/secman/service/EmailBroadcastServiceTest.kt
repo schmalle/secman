@@ -3,7 +3,11 @@ package com.secman.service
 import com.secman.domain.EmailBroadcastJob
 import com.secman.domain.EmailBroadcastTargetGroup
 import com.secman.domain.User
+import com.secman.domain.EolFinding
+import com.secman.domain.EolStatus
+import com.secman.domain.EolSubjectType
 import com.secman.repository.EmailBroadcastJobRepository
+import com.secman.repository.EolFindingRepository
 import com.secman.repository.UserRepository
 import io.micronaut.security.authentication.Authentication
 import io.mockk.every
@@ -21,12 +25,15 @@ class EmailBroadcastServiceTest {
     private val emailService = mockk<EmailService>()
     private val productBroadcastRecipientResolver = mockk<ProductBroadcastRecipientResolver>()
     private val eolBroadcastRecipientResolver = mockk<EolBroadcastRecipientResolver>()
+    private val eolFindingRepository = mockk<EolFindingRepository>(relaxed = true)
     private val service = EmailBroadcastService(
         emailBroadcastJobRepository = emailBroadcastJobRepository,
         userRepository = userRepository,
         emailService = emailService,
         productBroadcastRecipientResolver = productBroadcastRecipientResolver,
-        eolBroadcastRecipientResolver = eolBroadcastRecipientResolver
+        eolBroadcastRecipientResolver = eolBroadcastRecipientResolver,
+        eolFindingRepository = eolFindingRepository,
+        eolFindingTableRenderer = EolFindingTableRenderer()
     )
 
     @Test
@@ -99,7 +106,8 @@ class EmailBroadcastServiceTest {
     fun `createEolProductJob stores sanitized html and scoped recipient total`() {
         val authentication = Authentication.build("champion", listOf("SECCHAMPION"), mapOf("userId" to 2L))
         val jobSlot = slot<EmailBroadcastJob>()
-        every { eolBroadcastRecipientResolver.resolve("Internet Explorer", authentication) } returns listOf(activeUser())
+        every { eolBroadcastRecipientResolver.resolve("Internet Explorer", authentication) } returns
+            listOf(EolBroadcastRecipient(activeUser(), setOf(701L)))
         every { emailBroadcastJobRepository.save(capture(jobSlot)) } answers { jobSlot.captured }
 
         val job = service.createEolProductJob(
@@ -131,7 +139,8 @@ class EmailBroadcastServiceTest {
         )
         every { emailBroadcastJobRepository.findById(43) } returns Optional.of(job)
         every { emailBroadcastJobRepository.update(any<EmailBroadcastJob>()) } answers { firstArg() }
-        every { eolBroadcastRecipientResolver.resolve("Internet Explorer", authentication) } returns listOf(activeUser())
+        every { eolBroadcastRecipientResolver.resolve("Internet Explorer", authentication) } returns
+            listOf(EolBroadcastRecipient(activeUser(), setOf(701L)))
         every {
             emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any(), any())
         } returns CompletableFuture.completedFuture(true)
@@ -143,11 +152,96 @@ class EmailBroadcastServiceTest {
         }
     }
 
+    /**
+     * The body an EOL recipient receives must list the affected systems that linked
+     * *them* to the product and no others — the scoping assertion lives in
+     * [EolBroadcastRecipientResolverTest]; this asserts the scoped rows actually
+     * reach the message rather than being resolved and discarded.
+     */
+    @Test
+    fun `runEolProductJobAsync appends the affected-systems table scoped to the recipient`() {
+        val authentication = Authentication.build("champion", listOf("SECCHAMPION"), mapOf("userId" to 2L))
+        val job = EmailBroadcastJob(
+            id = 45,
+            subject = "EOL notice",
+            htmlContent = "<p>Update</p>",
+            totalRecipients = 1,
+            createdBy = "champion",
+            targetGroup = EmailBroadcastTargetGroup.EOL_PRODUCT_USERS,
+            targetProduct = "Internet Explorer"
+        )
+        val htmlSlot = slot<String>()
+        val textSlot = slot<String>()
+        every { emailBroadcastJobRepository.findById(45) } returns Optional.of(job)
+        every { emailBroadcastJobRepository.update(any<EmailBroadcastJob>()) } answers { firstArg() }
+        every { eolBroadcastRecipientResolver.resolve("Internet Explorer", authentication) } returns
+            listOf(EolBroadcastRecipient(activeUser(), setOf(701L)))
+        every {
+            eolFindingRepository.findByComponentNameForAssets("Internet Explorer", setOf(701L), any())
+        } returns listOf(eolFinding())
+        every {
+            eolFindingRepository.countByComponentNameForAssets("Internet Explorer", setOf(701L))
+        } returns 1L
+        every {
+            emailService.sendEmailWithInlineImages(any(), any(), capture(textSlot), capture(htmlSlot), any(), any())
+        } returns CompletableFuture.completedFuture(true)
+
+        service.runEolProductJobAsync(45, authentication).get()
+
+        assertThat(htmlSlot.captured)
+            .contains("<p>Update</p>")
+            .contains("Affected systems")
+            .contains("web-01")
+            .contains("123456789012")
+            .contains("i-0abc123")
+        assertThat(textSlot.captured).contains("web-01").contains("i-0abc123")
+    }
+
+    @Test
+    fun `a non-EOL broadcast carries no affected-systems table`() {
+        val job = EmailBroadcastJob(
+            id = 46,
+            subject = "Notice",
+            htmlContent = "<p>Update</p>",
+            totalRecipients = 1,
+            createdBy = "admin",
+            targetGroup = EmailBroadcastTargetGroup.ALL_USERS
+        )
+        val htmlSlot = slot<String>()
+        every { emailBroadcastJobRepository.findById(46) } returns Optional.of(job)
+        every { emailBroadcastJobRepository.update(any<EmailBroadcastJob>()) } answers { firstArg() }
+        every { userRepository.findByLastLoginIsNotNull() } returns listOf(activeUser())
+        every {
+            emailService.sendEmailWithInlineImages(any(), any(), any(), capture(htmlSlot), any(), any())
+        } returns CompletableFuture.completedFuture(true)
+
+        service.runJobAsync(46).get()
+
+        assertThat(htmlSlot.captured).contains("<p>Update</p>").doesNotContain("Affected systems")
+    }
+
+    private fun eolFinding() = EolFinding(
+        id = 1L,
+        subjectType = EolSubjectType.ASSET_PRODUCT,
+        assetId = 701L,
+        assetName = "web-01",
+        cloudAccountId = "123456789012",
+        cloudInstanceId = "i-0abc123",
+        adDomain = "corp.example.com",
+        assetOwner = "owner",
+        componentName = "Internet Explorer",
+        componentVersion = "11",
+        eolCycle = "11",
+        eolDate = java.time.LocalDate.of(2022, 6, 15),
+        status = EolStatus.EOL
+    )
+
     @Test
     fun `createEolProductJob serializes manually-added cc addresses`() {
         val authentication = Authentication.build("champion", listOf("SECCHAMPION"), mapOf("userId" to 2L))
         val jobSlot = slot<EmailBroadcastJob>()
-        every { eolBroadcastRecipientResolver.resolve("Internet Explorer", authentication) } returns listOf(activeUser())
+        every { eolBroadcastRecipientResolver.resolve("Internet Explorer", authentication) } returns
+            listOf(EolBroadcastRecipient(activeUser(), setOf(701L)))
         every { emailBroadcastJobRepository.save(capture(jobSlot)) } answers { jobSlot.captured }
 
         val job = service.createEolProductJob(
@@ -178,7 +272,8 @@ class EmailBroadcastServiceTest {
         val ccSlot = slot<List<String>>()
         every { emailBroadcastJobRepository.findById(44) } returns Optional.of(job)
         every { emailBroadcastJobRepository.update(any<EmailBroadcastJob>()) } answers { firstArg() }
-        every { eolBroadcastRecipientResolver.resolve("Internet Explorer", authentication) } returns listOf(activeUser())
+        every { eolBroadcastRecipientResolver.resolve("Internet Explorer", authentication) } returns
+            listOf(EolBroadcastRecipient(activeUser(), setOf(701L)))
         every {
             emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any(), capture(ccSlot))
         } returns CompletableFuture.completedFuture(true)

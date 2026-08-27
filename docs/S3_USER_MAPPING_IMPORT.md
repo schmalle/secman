@@ -130,15 +130,18 @@ Exit codes: `0` ok / `1` parse errors found (valid rows still printed) / `2` fat
 
 ### CSV (header required, case-insensitive)
 ```csv
-email,type,value
-alice@company.com,DOMAIN,corp.local
-alice@company.com,DOMAIN,prod.company.com
-alice@company.com,AWS_ACCOUNT,123456789012
-bob@company.com,DOMAIN,dev.company.com
-bob@company.com,AWS_ACCOUNT,987654321098
+email,type,value,display_name
+alice@company.com,DOMAIN,corp.local,
+alice@company.com,DOMAIN,prod.company.com,
+alice@company.com,AWS_ACCOUNT,123456789012,DevOps-x
+bob@company.com,DOMAIN,dev.company.com,
+bob@company.com,AWS_ACCOUNT,987654321098,Legacy-y
 ```
 - `type` = `DOMAIN` or `AWS_ACCOUNT`.
 - `AWS_ACCOUNT` value = exactly 12 digits.
+- `display_name` optional, AWS_ACCOUNT rows only — links the account to the workgroup
+  `aws-<display_name>` (created when missing). Omit the column entirely and nothing
+  changes. See `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`.
 - Empty lines skipped.
 - ≤100,000 rows per file.
 
@@ -147,12 +150,19 @@ bob@company.com,AWS_ACCOUNT,987654321098
 [
   { "email":"alice@company.com",
     "domains":["corp.local","prod.company.com"],
-    "awsAccounts":["123456789012"] },
+    "awsAccounts":["123456789012"],
+    "display_name":"DevOps-x" },
   { "email":"bob@company.com",
     "domains":["dev.company.com"],
     "awsAccounts":["987654321098"] }
 ]
 ```
+
+The Cloud Custodian export shape is also accepted — a root object with an `accounts`
+array whose entries carry `account_id`, `display_name` and `vars["cov:owner"]` (which
+wins over the root `email`). `display_name` links the account to the workgroup
+`aws-<display_name>`; entries without one import exactly as before. Sample:
+`testdata/user-mappings/accounts-with-display-name.json`.
 
 ## E2E test
 

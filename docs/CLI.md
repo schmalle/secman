@@ -53,24 +53,35 @@ Full env reference: `docs/ENVIRONMENT.md`.
 ### `query servers` — CrowdStrike vulnerability query
 
 ```bash
-./scripts/secman query servers --hostname web-01 --severity HIGH,CRITICAL --min-days-open 30 --save
+./scripts/secman query servers --hostnames web-01,web-02 --severity HIGH,CRITICAL --min-days-open 30 --save
 ./scripts/secmanng query servers --severity CRITICAL,HIGH --save --device-type SERVER \
   --last-seen-days 1 --min-days-open 1 --insecure --verbose
 ```
 
 | Option | Default | Notes |
 |---|---|---|
-| `--hostname` | required (unless filtering by other criteria) | exact host |
-| `--severity` | all | `CRITICAL,HIGH,MEDIUM,LOW` |
-| `--device-type` | all | `SERVER`, `WORKSTATION`, … |
-| `--min-days-open` | 0 | |
-| `--last-seen-days` | — | recent-checkin window |
-| `--limit` | 100 | |
+| `--hostnames` | — (all devices) | comma-separated; switches to per-host mode, see below |
+| `--severity` | `HIGH,CRITICAL` | `CRITICAL,HIGH,MEDIUM,LOW` |
+| `--device-type` | `SERVER` | `SERVER`, `WORKSTATION`, `ALL`; **ignored with `--hostnames`** |
+| `--min-days-open` | 30 | |
+| `--last-seen-days` | 0 (= all) | recent-checkin window; **ignored with `--hostnames`** |
+| `--limit` | 800 | Spotlight page size |
 | `--save` | false | POST to backend |
 | `--username` / `--password` | — | required with `--save` |
 | `--backend-url` | `http://localhost:8080` | |
 | `--output-file` / `--format` | — / `json` | `json|csv` |
 | `--verbose` / `--insecure` | false | `--insecure` allows self-signed TLS |
+
+**Per-host mode (`--hostnames`)**: each hostname is resolved to **all** matching
+CrowdStrike device ids (5-strategy FQL cascade; the first strategy that matches
+returns its complete result list) and vulnerabilities are merged across those aids —
+a re-imaged/re-enrolled host keeps its hostname but gets a new aid, so a single-aid
+lookup under-reports. The CLI prints one status line per requested host
+(`not found in CrowdStrike` / `resolved, 0 matching vulnerabilities` /
+`N vulnerabilities`) and warns that `--device-type` and `--last-seen-days` are
+ignored (hosts named explicitly are resolved directly, without device filters).
+Exit code is `1` only when **none** of the requested hostnames exist in CrowdStrike;
+partial resolution exits `0` with the per-host report.
 
 After a `--save` run the CLI triggers the backend's stale-vulnerability
 reconcile as an async job (POST returns `202` + jobId, then status polling —
@@ -396,7 +407,7 @@ Mirrored by MCP tool `send_exception_expiry_reminders`.
 
 ### `manage-user-mappings`
 
-Subcommands: `list`, `add-aws`, `add-domain`, `import`, `import-s3`, `download-s3`, `print-s3`, `remove`.
+Subcommands: `list`, `add-aws`, `add-domain`, `import`, `import-s3`, `download-s3`, `print-s3`, `link-workgroups`, `remove`.
 
 ```bash
 # list (default table; supports --format json|csv, --output FILE, --type AWS|DOMAIN|ALL)
@@ -412,9 +423,39 @@ Subcommands: `list`, `add-aws`, `add-domain`, `import`, `import-s3`, `download-s
 ./scripts/secman manage-user-mappings import --file mappings.csv  --format csv  --dry-run
 ./scripts/secman manage-user-mappings import --file mappings.json --format json
 
+# link AWS accounts to the workgroup named after their display name
+./scripts/secman manage-user-mappings link-workgroups --dry-run
+./scripts/secman manage-user-mappings link-workgroups
+
 # remove
 ./scripts/secman manage-user-mappings remove --id 42
 ```
+
+#### `display_name` → workgroup linking
+
+An account whose display name is `DevOps-x` belongs to the workgroup `aws-DevOps-x`.
+`import` links every account the file names; `link-workgroups` links from what is
+already stored, for everything an import did not cover.
+
+| Source | Field |
+|---|---|
+| Cloud Custodian JSON | `display_name` on each `accounts[]` entry |
+| CLI CSV | optional 4th column `display_name` (AWS_ACCOUNT rows only) |
+
+Matching is exact on `"aws-" + display_name`, case-insensitive. A missing workgroup is
+**created**; a display name that cannot be a workgroup name (`_`, `.`, `/`, or over 100
+characters with the prefix) is reported as an error and nothing is created. Accounts
+already linked are reported as such and never affect the exit status. Full rules,
+including what happens to renamed accounts: `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`.
+
+```bash
+# preview both halves without changing anything
+./scripts/secman manage-user-mappings import -f accounts.json --dry-run
+./scripts/secman manage-user-mappings link-workgroups --dry-run
+```
+
+**`link-workgroups` exit codes:** `0` success (accounts already linked are **not**
+failures), `1` one or more accounts could not be linked.
 
 #### `list --send-email` (Feature 085)
 

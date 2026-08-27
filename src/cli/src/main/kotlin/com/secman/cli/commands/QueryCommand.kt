@@ -138,7 +138,7 @@ class QueryCommand {
                 val firstVuln = finalResponse.vulnerabilities.firstOrNull()
                 val latestCloudInstanceId = finalResponse.vulnerabilities
                     .filter { !it.cloudInstanceId.isNullOrBlank() }
-                    .maxByOrNull { it.detectedAt }
+                    .maxByOrNull { it.detectedAt ?: java.time.LocalDateTime.MIN }
                     ?.cloudInstanceId
 
                 val serverBatch = ServerVulnerabilityBatch(

@@ -19,8 +19,14 @@ export interface CrowdStrikeVulnerabilityDto {
     severity: string;
     cvssScore: number | null;
     affectedProduct: string | null;
+    /** Days since Falcon created this finding for this host. Not the CVE's age. */
     daysOpen: string | null;
-    detectedAt: string;
+    /** Null when Falcon published no readable detection date. */
+    detectedAt: string | null;
+    /** When a fix became available (prefers a vendor/remediation date). */
+    patchPublicationDate?: string | null;
+    /** When the CVE itself was disclosed — the date a reader of "CVE-2023-…" expects. */
+    cvePublishedDate?: string | null;
     status: string;
     hasException: boolean;
     exceptionReason: string | null;

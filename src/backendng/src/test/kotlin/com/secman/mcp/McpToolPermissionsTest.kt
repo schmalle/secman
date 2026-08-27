@@ -111,4 +111,34 @@ class McpToolPermissionsTest {
             assertThat(empty).describedAs("$name entries with no permissions").isEmpty()
         }
     }
+
+    @Test
+    fun `the workgroup AWS account tools are in BOTH tables`() {
+        // A missing CALLING entry fails closed: the tool is listed by tools/list and then
+        // refused by tools/call, which reads as a broken tool rather than as a permission
+        // decision. These six were in exactly that state until link_workgroup_aws_accounts
+        // was added beside them.
+        for (tool in listOf(
+            "list_workgroup_aws_accounts",
+            "add_workgroup_aws_account",
+            "remove_workgroup_aws_account",
+            "list_workgroup_ad_domains",
+            "add_workgroup_ad_domain",
+            "remove_workgroup_ad_domain",
+            "link_workgroup_aws_accounts"
+        )) {
+            assertThat(McpToolPermissions.LISTING).containsKey(tool)
+            assertThat(McpToolPermissions.CALLING).containsKey(tool)
+        }
+    }
+
+    @Test
+    fun `link_workgroup_aws_accounts requires the same permission as assigning an account by hand`() {
+        // It has the same effect — a workgroup gains access to an account's assets
+        // (unified asset access rule #9) — so it must not be reachable with less.
+        assertThat(McpToolPermissions.CALLING["link_workgroup_aws_accounts"])
+            .isEqualTo(McpToolPermissions.CALLING["add_workgroup_aws_account"])
+        assertThat(McpToolPermissions.CALLING["link_workgroup_aws_accounts"])
+            .isEqualTo(setOf(McpPermission.WORKGROUPS_WRITE))
+    }
 }

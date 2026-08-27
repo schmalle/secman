@@ -27,7 +27,7 @@ dependencies {
     // Jackson for YAML/JSON
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.1")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.2")
     
     // CSV export
     implementation("org.apache.commons:commons-csv:1.14.1")
@@ -41,7 +41,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.4.10")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.6.1")
+    runtimeOnly("ch.qos.logback:logback-classic:1.6.3")
     runtimeOnly("org.yaml:snakeyaml:2.6")
     
     // KSP

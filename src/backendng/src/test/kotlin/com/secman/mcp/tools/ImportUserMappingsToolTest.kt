@@ -187,4 +187,90 @@ class ImportUserMappingsToolTest {
         assertThat((result as McpToolResult.Error).code).isEqualTo("EXECUTION_ERROR")
         assertThat(result.message).contains("db down")
     }
+
+    // --- display name / workgroup linking -------------------------------------
+
+    @Test
+    fun `displayName is passed through to the shared import service`() = runBlocking<Unit> {
+        val request = slot<BulkUserMappingRequest>()
+        every { bulkImportService.execute(capture(request), any(), any()) } returns BulkUserMappingResponse(
+            totalProcessed = 1, created = 1, createdPending = 0, skipped = 0, errors = emptyList()
+        )
+
+        tool.execute(
+            mapOf(
+                "mappings" to listOf(
+                    mapOf(
+                        "email" to "alice@corp.com",
+                        "awsAccountId" to "111111111111",
+                        "displayName" to "  DevOps-x  "
+                    )
+                )
+            ),
+            ctx()
+        )
+
+        assertThat(request.captured.mappings.single().displayName).isEqualTo("DevOps-x")
+    }
+
+    @Test
+    fun `a blank displayName becomes null so nothing is linked`() = runBlocking<Unit> {
+        val request = slot<BulkUserMappingRequest>()
+        every { bulkImportService.execute(capture(request), any(), any()) } returns BulkUserMappingResponse(
+            totalProcessed = 1, created = 1, createdPending = 0, skipped = 0, errors = emptyList()
+        )
+
+        tool.execute(
+            mapOf(
+                "mappings" to listOf(
+                    mapOf("email" to "alice@corp.com", "awsAccountId" to "111111111111", "displayName" to "   ")
+                )
+            ),
+            ctx()
+        )
+
+        assertThat(request.captured.mappings.single().displayName).isNull()
+    }
+
+    @Test
+    fun `workgroup linking results are reported back`() = runBlocking<Unit> {
+        every { bulkImportService.execute(any(), any(), any()) } returns BulkUserMappingResponse(
+            totalProcessed = 1, created = 1, createdPending = 0, skipped = 0, errors = emptyList(),
+            workgroupLinks = com.secman.dto.WorkgroupAccountLinkSummary(
+                processed = 1, workgroupsCreated = 1, linked = 1,
+                links = listOf(
+                    com.secman.dto.WorkgroupAccountLinkInfo(
+                        awsAccountId = "111111111111",
+                        displayName = "DevOps-x",
+                        workgroupName = "aws-DevOps-x",
+                        workgroupId = 42L,
+                        workgroupCreated = true,
+                        linked = true
+                    )
+                )
+            )
+        )
+
+        val result = content(tool.execute(mapOf("mappings" to listOf(mapping())), ctx()))
+
+        @Suppress("UNCHECKED_CAST")
+        val links = result["workgroupLinks"] as Map<String, Any?>
+        assertThat(links["workgroupsCreated"]).isEqualTo(1)
+        assertThat(links["linked"]).isEqualTo(1)
+
+        @Suppress("UNCHECKED_CAST")
+        val rows = links["links"] as List<Map<String, Any?>>
+        assertThat(rows.single()["workgroupName"]).isEqualTo("aws-DevOps-x")
+    }
+
+    @Test
+    fun `an import without display names reports no workgroupLinks at all`() = runBlocking<Unit> {
+        every { bulkImportService.execute(any(), any(), any()) } returns BulkUserMappingResponse(
+            totalProcessed = 1, created = 1, createdPending = 0, skipped = 0, errors = emptyList()
+        )
+
+        val result = content(tool.execute(mapOf("mappings" to listOf(mapping())), ctx()))
+
+        assertThat(result["workgroupLinks"]).isNull()
+    }
 }

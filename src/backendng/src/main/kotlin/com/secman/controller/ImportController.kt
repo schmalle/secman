@@ -171,6 +171,19 @@ open class ImportController(
     }
 
     /** Strips line breaks and bounds length before a filename reaches a log line (log forging). */
+    /**
+     * The authenticated user's database id, or null when it cannot be determined.
+     * Used only for audit attribution — never for an authorization decision, which
+     * `@Secured("ADMIN")` on the endpoint has already made.
+     */
+    private fun userIdOrNull(authentication: Authentication): Long? =
+        when (val userId = authentication.attributes["userId"]) {
+            is Long -> userId
+            is Int -> userId.toLong()
+            is String -> userId.toLongOrNull()
+            else -> null
+        }
+
     private fun sanitizeForLog(value: String?): String {
         if (value.isNullOrBlank()) return ""
         return value.replace(Regex("[\\p{Cntrl}\\u0085\\u2028\\u2029]"), " ").trim().take(200)
@@ -687,8 +700,9 @@ open class ImportController(
                     }
                 }
 
-                // Parse CSV
-                val result = csvUserMappingParser.parse(tempFile)
+                // Parse CSV. The actor is passed through so that any workgroup the
+                // display_name column causes to be created records who caused it.
+                val result = csvUserMappingParser.parse(tempFile, userIdOrNull(authentication))
 
                 val duration = System.currentTimeMillis() - startTime
                 log.info("CSV upload completed: user={}, imported={}, skipped={}, duration={}ms",

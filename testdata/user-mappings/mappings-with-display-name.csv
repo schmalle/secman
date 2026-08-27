@@ -1,0 +1,6 @@
+email,type,value,display_name
+legacy-owner@example.com,AWS_ACCOUNT,706840063453,Legacy-alpha
+devops-owner@example.com,AWS_ACCOUNT,156674634739,DevOps-beta
+devops-owner@example.com,AWS_ACCOUNT,421337195204,DevOps-beta
+data-owner@example.com,AWS_ACCOUNT,900112233445,Data_Platform.01
+devops-owner@example.com,DOMAIN,example.com,

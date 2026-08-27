@@ -1,7 +1,6 @@
 package com.secman.service
 
 import com.secman.domain.EolFinding
-import com.secman.domain.EolStatus
 import com.secman.dto.EolNotificationRecipientResult
 import com.secman.dto.EolNotificationResponse
 import com.secman.repository.EolFindingRepository
@@ -10,7 +9,6 @@ import io.micronaut.data.model.Pageable
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
@@ -29,7 +27,9 @@ import java.util.regex.Pattern
  *    an address that fails is dropped, not "cleaned up" (§A07/§A03).
  *  - Component names, versions and hostnames come from imported inventory and
  *    are HTML-escaped and CR/LF-stripped before they reach the mail body or a
- *    log line (§A03 log forging, HTML injection).
+ *    log line (§A03 log forging, HTML injection). The body table is rendered by
+ *    [EolFindingTableRenderer], the single escaping sink shared with the
+ *    "Contact affected owners" broadcast, so the two mails cannot drift apart.
  *  - Dispatch is intentionally not `@Transactional`: it performs per-recipient
  *    SMTP with a multi-second timeout.
  */
@@ -38,7 +38,8 @@ open class EolNotificationService(
     private val eolFindingRepository: EolFindingRepository,
     private val awsAccountRecipientResolver: AwsAccountRecipientResolver,
     private val userRepository: UserRepository,
-    private val emailService: EmailService
+    private val emailService: EmailService,
+    private val eolFindingTableRenderer: EolFindingTableRenderer
 ) {
     private val log = LoggerFactory.getLogger(EolNotificationService::class.java)
 
@@ -194,24 +195,18 @@ open class EolNotificationService(
         return "Action required: $assets system(s) run software reaching end of life within $months months"
     }
 
+    /**
+     * Body rows carry the account, cloud instance, AD domain, type and status the
+     * product drilldown page shows, not just the component — a recipient mapped to
+     * a whole AWS account needs to know *which* system and *which* account each
+     * row belongs to before they can act on it.
+     */
     private fun buildTextBody(findings: List<EolFinding>, months: Long, today: LocalDate): String {
         val builder = StringBuilder()
         builder.append("The following software and operating systems on systems you own reach end of life ")
         builder.append("within the next $months months (or already have).\n\n")
-        for ((assetName, rows) in groupByAsset(findings)) {
-            builder.append("System: ").append(sanitizeForText(assetName)).append('\n')
-            for (row in rows) {
-                builder.append("  - ")
-                    .append(sanitizeForText(row.componentName))
-                    .append(" ")
-                    .append(sanitizeForText(row.componentVersion ?: ""))
-                    .append(" (cycle ").append(sanitizeForText(row.eolCycle)).append(") ")
-                    .append(describeDeadline(row, today))
-                    .append('\n')
-            }
-            builder.append('\n')
-        }
-        builder.append("Please plan an upgrade or request an exception in secman.\n")
+        builder.append(eolFindingTableRenderer.renderText(findings, today, includeComponent = true))
+        builder.append("\nPlease plan an upgrade or request an exception in secman.\n")
         return builder.toString()
     }
 
@@ -219,56 +214,12 @@ open class EolNotificationService(
         val builder = StringBuilder()
         builder.append("<p>The following software and operating systems on systems you own reach end of life ")
         builder.append("within the next ").append(months).append(" months (or already have).</p>")
-        for ((assetName, rows) in groupByAsset(findings)) {
-            builder.append("<h3>").append(escapeHtml(assetName)).append("</h3>")
-            builder.append("<table border=\"1\" cellpadding=\"6\" cellspacing=\"0\">")
-            builder.append("<tr><th>Component</th><th>Version</th><th>Release cycle</th><th>End of life</th></tr>")
-            for (row in rows) {
-                builder.append("<tr>")
-                    .append("<td>").append(escapeHtml(row.componentName)).append("</td>")
-                    .append("<td>").append(escapeHtml(row.componentVersion ?: "")).append("</td>")
-                    .append("<td>").append(escapeHtml(row.eolCycle)).append("</td>")
-                    .append("<td>").append(escapeHtml(describeDeadline(row, today))).append("</td>")
-                    .append("</tr>")
-            }
-            builder.append("</table>")
-        }
+        builder.append(eolFindingTableRenderer.renderHtml(findings, today, includeComponent = true))
         builder.append("<p>Please plan an upgrade or request an exception in secman.</p>")
         return builder.toString()
     }
 
-    private fun groupByAsset(findings: List<EolFinding>): List<Pair<String, List<EolFinding>>> =
-        findings.groupBy { it.assetName ?: "(unnamed system)" }
-            .toList()
-            .sortedBy { it.first.lowercase() }
-            .map { (name, rows) ->
-                name to rows.sortedWith(
-                    compareBy<EolFinding> { it.eolDate ?: LocalDate.MAX }.thenBy { it.componentName }
-                )
-            }
-
-    private fun describeDeadline(finding: EolFinding, today: LocalDate): String {
-        val date = finding.eolDate ?: return if (finding.status == EolStatus.EOL) "already end of life" else "unknown"
-        val formatted = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-        return if (date.isAfter(today)) {
-            "$formatted (in ${java.time.temporal.ChronoUnit.DAYS.between(today, date)} days)"
-        } else {
-            "$formatted (already end of life)"
-        }
-    }
-
     // ----------------------------------------------------------------- escaping
-
-    private fun escapeHtml(value: String): String = value
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace("\"", "&quot;")
-        .replace("'", "&#39;")
-        .take(MAX_FIELD_LENGTH)
-
-    private fun sanitizeForText(value: String): String =
-        value.replace(Regex("[\\r\\n]"), " ").take(MAX_FIELD_LENGTH)
 
     private fun sanitizeForLog(value: String): String =
         value.replace(Regex("[\\r\\n\\t]"), "_").take(120)
@@ -286,7 +237,6 @@ open class EolNotificationService(
         private const val MAX_PAGES = 1_000
         private const val MAX_FINDINGS = 200_000
         private const val MAX_EMAIL_LENGTH = 254
-        private const val MAX_FIELD_LENGTH = 512
         private const val EMAIL_TIMEOUT_SECONDS = 60L
         private val EARLIEST_DATE: LocalDate = LocalDate.of(1970, 1, 1)
         private val EMAIL_PATTERN: Pattern =

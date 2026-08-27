@@ -38,13 +38,18 @@ open class WorkgroupAwsAccountService(
     /**
      * Assign an AWS account to a workgroup. Throws on duplicate or invalid input.
      *
-     * @param actorId the database id of the user performing the operation.
+     * @param actorId the database id of the user performing the operation. Nullable
+     *        only for the automated linking path (WorkgroupAccountLinkService driven
+     *        by an import), where no interactive admin may be resolvable; the
+     *        assignment is then recorded with `createdBy = null`, exactly as it is
+     *        after the creator is deleted (V206, ON DELETE SET NULL). Every
+     *        interactive caller passes a real id.
      * @throws IllegalArgumentException if the workgroup or actor user is not found,
      *         or if awsAccountId is not exactly 12 numeric digits.
      * @throws DuplicateAccountException if the (workgroup, account) pair already exists.
      */
     @Transactional
-    open fun add(workgroupId: Long, awsAccountId: String, actorId: Long): WorkgroupAwsAccount {
+    open fun add(workgroupId: Long, awsAccountId: String, actorId: Long?): WorkgroupAwsAccount {
         require(accountIdPattern.matches(awsAccountId)) {
             "AWS Account ID must be exactly 12 numeric digits (got '$awsAccountId')"
         }
@@ -52,8 +57,10 @@ open class WorkgroupAwsAccountService(
         val workgroup = workgroupRepository.findById(workgroupId).orElseThrow {
             IllegalArgumentException("Workgroup not found: $workgroupId")
         }
-        val actor: User = userRepository.findById(actorId).orElseThrow {
-            IllegalArgumentException("Actor user not found: $actorId")
+        val actor: User? = actorId?.let {
+            userRepository.findById(it).orElseThrow {
+                IllegalArgumentException("Actor user not found: $actorId")
+            }
         }
 
         if (workgroupAwsAccountRepository.existsByWorkgroupIdAndAwsAccountId(workgroupId, awsAccountId)) {
@@ -70,7 +77,7 @@ open class WorkgroupAwsAccountService(
         val saved = workgroupAwsAccountRepository.save(entity)
         logger.info(
             "Assigned AWS account {} to workgroup {} (actor={}, id={})",
-            awsAccountId, workgroupId, actor.username, saved.id
+            awsAccountId, workgroupId, actor?.username ?: "system", saved.id
         )
         return saved
     }

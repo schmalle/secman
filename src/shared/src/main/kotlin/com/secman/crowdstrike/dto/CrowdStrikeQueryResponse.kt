@@ -29,12 +29,22 @@ data class CrowdStrikeQueryResponse(
     val instanceId: String? = null,
 
     /**
-     * Number of CrowdStrike devices found with this instance ID (Feature 041)
+     * Number of CrowdStrike devices whose rows are merged into this response
      *
-     * Typically 1, rarely 2+ (during instance lifecycle transitions)
-     * Null for hostname queries
+     * Typically 1, 2+ for instance lifecycle transitions or re-imaged/re-enrolled
+     * hosts (one hostname, several aids). Populated for both instance-ID (Feature
+     * 041) and hostname queries; null only for legacy callers that never set it.
      */
     val deviceCount: Int? = null,
+
+    /**
+     * Requested hostnames that could not be resolved to any CrowdStrike device.
+     *
+     * Only populated by multi-hostname queries (queryServersWithFilters); lets the
+     * CLI distinguish "host unknown to Falcon" from "host resolved but has no
+     * matching vulnerabilities" — previously both surfaced as count=0.
+     */
+    val notFoundHostnames: List<String> = emptyList(),
 
     /**
      * List of vulnerabilities found (empty if none)

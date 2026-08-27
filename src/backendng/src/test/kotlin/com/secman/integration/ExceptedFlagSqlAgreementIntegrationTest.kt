@@ -124,6 +124,59 @@ class ExceptedFlagSqlAgreementIntegrationTest : BaseIntegrationTest() {
         return matching to other
     }
 
+    /**
+     * The production recompute no longer runs as one whole-table `UPDATE`: it is driven as bounded
+     * primary-key chunks so no single transaction locks ~1.8M rows for minutes (see
+     * [com.secman.service.AsyncExceptionRecompute]). That refactor is only safe if the chunked
+     * statement assigns exactly what the atomic one did.
+     *
+     * `AsyncExceptionRecomputeChunkingTest` pins the *traversal* (every id covered once, no gap, no
+     * overlap) against a mocked repository. This pins the other half — that the SQL itself agrees —
+     * against a real database, by running both forms over the same fixture and comparing per row.
+     *
+     * Calls the repository directly rather than the service for the reason documented on
+     * [recomputeAndReload]: the service method is REQUIRES_NEW and would block on this test's own
+     * uncommitted row locks.
+     */
+    @Test
+    @DisplayName("chunked recompute assigns exactly what the whole-table recompute assigns")
+    fun chunkedRecomputeMatchesAtomicRecompute() {
+        val (matching, _) = seedFixture()
+        exceptionRepository.save(
+            VulnerabilityException(
+                subject = VulnerabilityException.Subject.PRODUCT,
+                subjectValue = "OpenSSL",
+                scope = VulnerabilityException.Scope.ASSET,
+                assetId = matching.id,
+                reason = "chunked-vs-atomic equivalence fixture",
+                createdBy = "test"
+            )
+        )
+
+        val atomic = recomputeAndReload().associate { it.id to it.excepted }
+        assertThat(atomic.values).describedAs("fixture must exercise both branches")
+            .contains(true, false)
+
+        // Flip every flag so a chunked run that silently skipped rows cannot coincidentally match.
+        entityManager.flush()
+        vulnerabilityRepository.findAll().forEach { row ->
+            row.excepted = !row.excepted
+            vulnerabilityRepository.update(row)
+        }
+        entityManager.flush()
+
+        // Split mid-table so more than one chunk is genuinely exercised.
+        val ids = atomic.keys.filterNotNull().sorted()
+        val split = ids[ids.size / 2]
+        entityManager.flush()
+        vulnerabilityRepository.recomputeExceptedForIdRange(0L, split)
+        vulnerabilityRepository.recomputeExceptedForIdRange(split, ids.last())
+        entityManager.clear()
+
+        val chunked = vulnerabilityRepository.findAll().associate { it.id to it.excepted }
+        assertThat(chunked).isEqualTo(atomic)
+    }
+
     @Test
     @DisplayName("agrees with VulnerabilityException.matches across the whole subject-scope matrix")
     fun sqlRecomputeAgreesWithEntityPredicate() {

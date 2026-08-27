@@ -421,7 +421,8 @@ class UserMappingCliService(
             notificationRecipient = bulkResponse.notificationRecipient,
             notificationError = bulkResponse.notificationError,
             riskAssessments = bulkResponse.riskAssessments,
-            onboarding = bulkResponse.onboarding
+            onboarding = bulkResponse.onboarding,
+            workgroupLinks = bulkResponse.workgroupLinks
         )
     }
 
@@ -492,6 +493,13 @@ class UserMappingCliService(
                         val email = record.get("email") ?: record.get("Email") ?: record.get("EMAIL")
                         val type = record.get("type") ?: record.get("Type") ?: record.get("TYPE")
                         val value = record.get("value") ?: record.get("Value") ?: record.get("VALUE")
+                        // Optional; only meaningful for AWS_ACCOUNT rows. isMapped() rather
+                        // than get() because commons-csv throws on an absent header.
+                        val displayName = listOf("display_name", "Display_Name", "DISPLAY_NAME")
+                            .firstOrNull { csvParser.headerMap.containsKey(it) }
+                            ?.let { record.get(it) }
+                            ?.trim()
+                            ?.takeIf { it.isNotEmpty() }
 
                         if (email.isNullOrBlank() || type.isNullOrBlank() || value.isNullOrBlank()) {
                             errors.add("Line $lineNumber: Missing required fields (email, type, value)")
@@ -514,7 +522,13 @@ class UserMappingCliService(
                                 } else if (!validator.validateAwsAccountId(value.trim())) {
                                     errors.add("Line $lineNumber: Invalid AWS account ID (must be 12 digits)")
                                 } else {
-                                    entries.add(mapOf("email" to email.trim(), "awsAccountId" to value.trim()))
+                                    entries.add(
+                                        mapOf(
+                                            "email" to email.trim(),
+                                            "awsAccountId" to value.trim(),
+                                            "displayName" to displayName
+                                        )
+                                    )
                                 }
                             }
                             else -> errors.add("Line $lineNumber: Invalid type '$type' (must be DOMAIN or AWS_ACCOUNT)")
@@ -571,6 +585,13 @@ class UserMappingCliService(
                 val rawEmail = (mapping["email"] ?: mapping["Email"]) as? String
                 val email = if (!covOwner.isNullOrBlank()) covOwner else rawEmail
 
+                // Account display name (Cloud Custodian `display_name`). Linked to the
+                // workgroup "aws-<display_name>" by the backend; see
+                // WorkgroupAccountLinkService. Applies to every AWS account in this entry —
+                // in the Cloud Custodian shape that is exactly one.
+                val displayName = (mapping["display_name"] ?: mapping["displayName"] ?: mapping["Display_Name"])
+                    ?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+
                 val domains = (mapping["domains"] ?: mapping["Domains"]) as? List<*>
                 val awsAccounts = (mapping["awsAccounts"] ?: mapping["AwsAccounts"]) as? List<*>
                     ?: mapping["account_id"]?.toString()?.let { listOf(it) }
@@ -600,7 +621,13 @@ class UserMappingCliService(
                     } else if (!validator.validateAwsAccountId(accountStr.trim())) {
                         errors.add("Invalid AWS account ID (must be 12 digits): $accountStr")
                     } else {
-                        entries.add(mapOf("email" to email.trim(), "awsAccountId" to accountStr.trim()))
+                        entries.add(
+                            mapOf(
+                                "email" to email.trim(),
+                                "awsAccountId" to accountStr.trim(),
+                                "displayName" to displayName
+                            )
+                        )
                     }
                 }
             }
@@ -644,6 +671,10 @@ class UserMappingCliService(
                     put("email", entry["email"] as String)
                     (entry["awsAccountId"] as? String)?.let { put("awsAccountId", it) }
                     (entry["domain"] as? String)?.let { put("domain", it) }
+                    // Omitted when absent rather than sent as null: the backend treats a
+                    // missing display name as "no linking", which is what keeps plain
+                    // mapping files behaving exactly as they did.
+                    (entry["displayName"] as? String)?.let { put("displayName", it) }
                 }
             })
             put("dryRun", dryRun)
@@ -737,6 +768,8 @@ class UserMappingCliService(
                         )
                     } ?: emptyList()
 
+                    val workgroupLinks = parseWorkgroupLinks(responseBody["workgroupLinks"])
+
                     return BulkResponse(
                         totalProcessed = (responseBody["totalProcessed"] as? Number)?.toInt() ?: entries.size,
                         created = (responseBody["created"] as? Number)?.toInt() ?: 0,
@@ -749,7 +782,8 @@ class UserMappingCliService(
                         notificationRecipient = responseBody["notificationRecipient"]?.toString(),
                         notificationError = responseBody["notificationError"]?.toString(),
                         riskAssessments = riskAssessments,
-                        onboarding = onboarding
+                        onboarding = onboarding,
+                        workgroupLinks = workgroupLinks
                     )
                 }
                 404 -> {
@@ -979,6 +1013,78 @@ class UserMappingCliService(
         }
     }
 
+    /**
+     * Read a `workgroupLinks` object out of a JSON response body.
+     *
+     * Shared by the import and the correction path so both render the same shape;
+     * returns null when the key is absent, which is how "this file had no display
+     * names" reaches the printout.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun parseWorkgroupLinks(raw: Any?): CliWorkgroupLinkSummary? {
+        val body = raw as? Map<String, Any?> ?: return null
+        val links = (body["links"] as? List<Map<String, Any?>>)?.map {
+            CliWorkgroupLink(
+                awsAccountId = it["awsAccountId"]?.toString() ?: "",
+                displayName = it["displayName"]?.toString() ?: "",
+                workgroupName = it["workgroupName"]?.toString() ?: "",
+                workgroupId = (it["workgroupId"] as? Number)?.toLong(),
+                workgroupCreated = (it["workgroupCreated"] as? Boolean) ?: false,
+                linked = (it["linked"] as? Boolean) ?: false,
+                alreadyLinked = (it["alreadyLinked"] as? Boolean) ?: false,
+                dryRun = (it["dryRun"] as? Boolean) ?: false,
+                error = it["error"]?.toString()
+            )
+        } ?: emptyList()
+
+        return CliWorkgroupLinkSummary(
+            processed = (body["processed"] as? Number)?.toInt() ?: 0,
+            workgroupsCreated = (body["workgroupsCreated"] as? Number)?.toInt() ?: 0,
+            linked = (body["linked"] as? Number)?.toInt() ?: 0,
+            alreadyLinked = (body["alreadyLinked"] as? Number)?.toInt() ?: 0,
+            failed = (body["failed"] as? Number)?.toInt() ?: 0,
+            dryRun = (body["dryRun"] as? Boolean) ?: false,
+            truncated = (body["truncated"] as? Boolean) ?: false,
+            links = links
+        )
+    }
+
+    /**
+     * The correction path: ask the backend to re-link every stored AWS account display
+     * name to its `aws-<display name>` workgroup. No file involved.
+     *
+     * Uses java.net.http directly for the same reason [postBulk] does — Micronaut Serde
+     * cannot introspect the loosely-typed response body.
+     */
+    fun linkWorkgroupAccounts(
+        dryRun: Boolean,
+        backendUrl: String,
+        authToken: String
+    ): CliWorkgroupLinkSummary {
+        val jsonBody = objectMapper.writeValueAsString(mapOf("dryRun" to dryRun))
+        val javaClient = javaHttpClientFactory.create(insecureMode)
+
+        val httpRequest = java.net.http.HttpRequest.newBuilder()
+            .uri(URI.create("$backendUrl/api/user-mappings/link-workgroup-accounts"))
+            .header("Content-Type", "application/json")
+            .header("Authorization", "Bearer $authToken")
+            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(jsonBody))
+            .timeout(Duration.ofSeconds(300))
+            .build()
+
+        val response = javaClient.send(httpRequest, java.net.http.HttpResponse.BodyHandlers.ofString())
+        if (response.statusCode() != 200) {
+            throw IllegalStateException(
+                "Linking failed with HTTP ${response.statusCode()}: ${response.body().take(500)}"
+            )
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        val responseBody = objectMapper.readValue(response.body(), Map::class.java) as Map<String, Any?>
+        return parseWorkgroupLinks(responseBody)
+            ?: throw IllegalStateException("Backend returned an unreadable linking result")
+    }
+
     // --- Internal DTOs for HTTP responses ---
 
     private data class BulkResponse(
@@ -993,7 +1099,8 @@ class UserMappingCliService(
         val notificationRecipient: String? = null,
         val notificationError: String? = null,
         val riskAssessments: List<CliAccountRiskAssessment> = emptyList(),
-        val onboarding: List<CliAccountOnboarding> = emptyList()
+        val onboarding: List<CliAccountOnboarding> = emptyList(),
+        val workgroupLinks: CliWorkgroupLinkSummary? = null
     )
 
     private data class BulkComparisonResponse(
@@ -1047,7 +1154,40 @@ data class MappingResult(
     val notificationRecipient: String? = null,
     val notificationError: String? = null,
     val riskAssessments: List<CliAccountRiskAssessment> = emptyList(),
-    val onboarding: List<CliAccountOnboarding> = emptyList()
+    val onboarding: List<CliAccountOnboarding> = emptyList(),
+    /** Null when the file carried no display_name at all. */
+    val workgroupLinks: CliWorkgroupLinkSummary? = null
+)
+
+/**
+ * Outcome of linking AWS accounts to the workgroups named after their display
+ * names. Mirrors the backend's `WorkgroupAccountLinkSummary`.
+ *
+ * [truncated] means more accounts were processed than [links] reports, or more
+ * exist than one run covers — printed so a capped run never reads as a complete one.
+ */
+data class CliWorkgroupLinkSummary(
+    val processed: Int = 0,
+    val workgroupsCreated: Int = 0,
+    val linked: Int = 0,
+    val alreadyLinked: Int = 0,
+    val failed: Int = 0,
+    val dryRun: Boolean = false,
+    val truncated: Boolean = false,
+    val links: List<CliWorkgroupLink> = emptyList()
+)
+
+/** One account's linking outcome. Three shapes: linked / alreadyLinked / error. */
+data class CliWorkgroupLink(
+    val awsAccountId: String,
+    val displayName: String,
+    val workgroupName: String,
+    val workgroupId: Long? = null,
+    val workgroupCreated: Boolean = false,
+    val linked: Boolean = false,
+    val alreadyLinked: Boolean = false,
+    val dryRun: Boolean = false,
+    val error: String? = null
 )
 
 /**

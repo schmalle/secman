@@ -9,6 +9,7 @@ import com.secman.dto.BulkUserMappingResponse
 import com.secman.dto.NewAccountImportInfo
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import io.mockk.verifyOrder
 import org.assertj.core.api.Assertions.assertThat
@@ -32,9 +33,11 @@ class UserMappingBulkImportServiceTest {
     private val newAccountNotificationService = mockk<NewAccountNotificationService>(relaxed = true)
     private val onboardingService = mockk<AccountOnboardingService>(relaxed = true)
 
+    private val workgroupAccountLinkService = mockk<WorkgroupAccountLinkService>(relaxed = true)
+
     private val service = UserMappingBulkImportService(
         userMappingService, newAccountNotificationService, onboardingService,
-        mockk(relaxed = true)
+        mockk(relaxed = true), workgroupAccountLinkService
     )
 
     private val newAccount = NewAccountImportInfo("111111111111", listOf("alice@corp.com"))
@@ -300,5 +303,97 @@ class UserMappingBulkImportServiceTest {
         assertThat(result.notificationSent).isFalse()
         assertThat(result.notificationError).isNotNull()
         assertThat(result.notificationRecipient).isEqualTo("ops@corp.com")
+    }
+
+    // --- Workgroup linking (display_name) ---
+
+    @Test
+    fun `an entry with no display name links nothing`() {
+        every { userMappingService.bulkCreateMappings(any()) } returns response()
+
+        val result = service.execute(request(), requestorUserId = 7L)
+
+        // Not "linked zero accounts" — not called at all, which is what keeps every
+        // pre-existing Excel/CSV import byte-identical.
+        verify(exactly = 0) { workgroupAccountLinkService.link(any(), any(), any()) }
+        assertThat(result.workgroupLinks).isNull()
+    }
+
+    @Test
+    fun `a display name is linked to its workgroup after the import committed`() {
+        every { userMappingService.bulkCreateMappings(any()) } returns response()
+        every { workgroupAccountLinkService.link(any(), any(), any()) } returns
+            com.secman.dto.WorkgroupAccountLinkSummary(processed = 1, linked = 1)
+
+        val request = BulkUserMappingRequest(
+            mappings = listOf(
+                BulkUserMappingEntry("alice@corp.com", "111111111111", null, "DevOps-x")
+            )
+        )
+
+        val result = service.execute(request, requestorUserId = 7L)
+
+        val pairs = slot<List<WorkgroupAccountLinkService.AccountDisplayName>>()
+        verify { workgroupAccountLinkService.link(capture(pairs), 7L, false) }
+        assertThat(pairs.captured).containsExactly(
+            WorkgroupAccountLinkService.AccountDisplayName("111111111111", "DevOps-x")
+        )
+        assertThat(result.workgroupLinks?.linked).isEqualTo(1)
+
+        // Ordering is the contract: mappings first, linking after they committed.
+        verifyOrder {
+            userMappingService.bulkCreateMappings(any())
+            workgroupAccountLinkService.link(any(), any(), any())
+        }
+    }
+
+    @Test
+    fun `a dry run asks for a dry-run linking too`() {
+        every { userMappingService.bulkCreateMappings(any()) } returns response()
+
+        val request = BulkUserMappingRequest(
+            mappings = listOf(
+                BulkUserMappingEntry("alice@corp.com", "111111111111", null, "DevOps-x")
+            ),
+            dryRun = true
+        )
+
+        service.execute(request, requestorUserId = 7L)
+
+        verify { workgroupAccountLinkService.link(any(), 7L, true) }
+    }
+
+    @Test
+    fun `a linking failure never loses the import result`() {
+        every { userMappingService.bulkCreateMappings(any()) } returns response()
+        every { workgroupAccountLinkService.link(any(), any(), any()) } throws
+            RuntimeException("workgroup table is on fire")
+
+        val request = BulkUserMappingRequest(
+            mappings = listOf(
+                BulkUserMappingEntry("alice@corp.com", "111111111111", null, "DevOps-x")
+            )
+        )
+
+        val result = service.execute(request, requestorUserId = 7L)
+
+        // The mappings are already committed at this point; the failure is reported.
+        assertThat(result.created).isEqualTo(1)
+        assertThat(result.workgroupLinks?.failed).isEqualTo(1)
+    }
+
+    @Test
+    fun `an entry with a display name but no account id is not a linking candidate`() {
+        every { userMappingService.bulkCreateMappings(any()) } returns response()
+
+        val request = BulkUserMappingRequest(
+            mappings = listOf(
+                BulkUserMappingEntry("alice@corp.com", null, "corp.com", "DevOps-x")
+            )
+        )
+
+        service.execute(request, requestorUserId = 7L)
+
+        verify(exactly = 0) { workgroupAccountLinkService.link(any(), any(), any()) }
     }
 }

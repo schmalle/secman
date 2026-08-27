@@ -63,6 +63,15 @@ data class EolFinding(
     @Column(name = "cloud_account_id", length = 64)
     var cloudAccountId: String? = null,
 
+    /**
+     * Cloud instance id recorded on the asset at scan time. Denormalized for the
+     * same reason as [assetName] / [cloudAccountId]: the owner notification mails
+     * and the product drilldown report it per row, and a `@ManyToOne` back to
+     * `Asset` would drag an entity graph into every one of those queries.
+     */
+    @Column(name = "cloud_instance_id", length = 255)
+    var cloudInstanceId: String? = null,
+
     @Column(name = "ad_domain", length = 255)
     var adDomain: String? = null,
 

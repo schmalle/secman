@@ -90,7 +90,7 @@ class ResponseControllerAccessControlTest : BaseIntegrationTest() {
         val cookie = login(outsiderUsername)
 
         val ex = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {
-            client.toBlocking().exchange(
+            client.toBlocking().exchange<Any, Any>(
                 HttpRequest.GET<Any>("/api/responses/assessment/${assessment.id}/authenticated").cookie(cookie)
             )
         }
@@ -103,7 +103,7 @@ class ResponseControllerAccessControlTest : BaseIntegrationTest() {
         val cookie = login(outsiderUsername)
 
         val ex = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {
-            client.toBlocking().exchange(
+            client.toBlocking().exchange<BulkSaveResponseBody, Any>(
                 HttpRequest.POST(
                     "/api/responses/assessment/${assessment.id}/bulk-save",
                     BulkSaveResponseBody(responses = emptyList())
@@ -118,7 +118,7 @@ class ResponseControllerAccessControlTest : BaseIntegrationTest() {
         val (assessment, assessorUsername, _) = setUp(System.nanoTime())
         val cookie = login(assessorUsername)
 
-        val response = client.toBlocking().exchange(
+        val response = client.toBlocking().exchange<Any, Any>(
             HttpRequest.GET<Any>("/api/responses/assessment/${assessment.id}/authenticated").cookie(cookie)
         )
         assertThat(response.status).isEqualTo(HttpStatus.OK)
@@ -132,7 +132,7 @@ class ResponseControllerAccessControlTest : BaseIntegrationTest() {
         )
         val cookie = login(admin.username)
 
-        val response = client.toBlocking().exchange(
+        val response = client.toBlocking().exchange<Any, Any>(
             HttpRequest.GET<Any>("/api/responses/assessment/${assessment.id}/authenticated").cookie(cookie)
         )
         assertThat(response.status).isEqualTo(HttpStatus.OK)

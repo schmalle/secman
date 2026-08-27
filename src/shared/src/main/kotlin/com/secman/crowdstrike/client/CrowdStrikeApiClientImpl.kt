@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.time.Instant
+import com.secman.crowdstrike.FalconTimestamps
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -82,21 +83,40 @@ open class CrowdStrikeApiClientImpl(
             // Authenticate
             val token = getAuthToken(config)
 
-            // Get device ID from hostname
-            val deviceId = getDeviceIdByHostname(hostname, token)
-                ?: throw NotFoundException("Hostname not found in CrowdStrike: $hostname")
+            // Get ALL device IDs for the hostname: a re-imaged/re-enrolled host has
+            // several aids and its open vulnerabilities are spread across them, so
+            // querying only the first aid under-reports (observed: 0 rows while a
+            // sibling aid held thousands). Same per-device loop as
+            // queryVulnerabilitiesByInstanceId — one dead aid must not sink the host.
+            val deviceIds = getDeviceIdsByHostname(hostname, token)
+            if (deviceIds.isEmpty()) {
+                throw NotFoundException("Hostname not found in CrowdStrike: $hostname")
+            }
 
-            log.info("Using device ID '{}' for hostname '{}'", deviceId, hostname)
+            log.info("Hostname '{}' resolved to {} device id(s): {}", hostname, deviceIds.size, deviceIds)
 
-            // Query Spotlight API - pass hostname so it can be included in results
-            val vulnerabilityDtos = querySpotlightApi(deviceId, hostname, token)
+            val vulnerabilityDtos = mutableListOf<CrowdStrikeVulnerabilityDto>()
+            deviceIds.forEach { deviceId ->
+                try {
+                    // Query Spotlight API - pass hostname so it can be included in results
+                    vulnerabilityDtos.addAll(querySpotlightApi(deviceId, hostname, token))
+                } catch (e: Exception) {
+                    log.warn("Failed to query vulnerabilities for device {} of hostname '{}': {}",
+                        deviceId, hostname, e.message)
+                }
+            }
+            // Spotlight vulnerability ids are unique per aid; dedupe by id is
+            // belt-and-braces against overlapping resolutions.
+            val merged = vulnerabilityDtos.distinctBy { it.id }
 
-            log.info("Successfully queried CrowdStrike: hostname={}, count={}", hostname, vulnerabilityDtos.size)
+            log.info("Successfully queried CrowdStrike: hostname={}, devices={}, count={}",
+                hostname, deviceIds.size, merged.size)
 
             CrowdStrikeQueryResponse(
                 hostname = hostname,
-                vulnerabilities = vulnerabilityDtos,
-                totalCount = vulnerabilityDtos.size,
+                vulnerabilities = merged,
+                totalCount = merged.size,
+                deviceCount = deviceIds.size,
                 queriedAt = LocalDateTime.now()
             )
         } catch (e: CrowdStrikeException) {
@@ -160,6 +180,8 @@ open class CrowdStrikeApiClientImpl(
         var afterToken: String? = null
         var hasMore = true
         var pageCount = 0
+        // Anti-loop guard: every cursor followed so far (see queryBatchVulnerabilities).
+        val seenAfterTokens = mutableSetOf<String>()
 
         // Build FQL filter - SIMPLIFIED for maximum compatibility
         // Only use status and severity filters (most reliable)
@@ -238,14 +260,16 @@ open class CrowdStrikeApiClientImpl(
                         // Check for pagination
                         val meta = responseBody["meta"] as? Map<*, *>
                         val pagination = meta?.get("pagination") as? Map<*, *>
-                        val prevAfterToken = afterToken
                         afterToken = pagination?.get("after")?.toString()
 
-                        // Stop when: no token, empty page, short page (< requested = last page), or frozen cursor
+                        // Stop when: no token, empty page, short page (< requested = last page),
+                        // or a cursor we have already followed (Falcon has been observed
+                        // ping-ponging between two cursors, which a consecutive-repeat check
+                        // cannot see — see queryBatchVulnerabilities).
                         hasMore = afterToken != null &&
                                   vulns.isNotEmpty() &&
                                   vulns.size >= limit.coerceAtMost(5000) &&
-                                  afterToken != prevAfterToken
+                                  seenAfterTokens.add(afterToken!!)
 
                         if (hasMore) {
                             log.debug("More results available, fetching next page...")
@@ -359,9 +383,21 @@ open class CrowdStrikeApiClientImpl(
             hostnames?.joinToString(",") ?: "ALL", deviceType, severity, minDaysOpen)
 
         val allVulnerabilities = mutableListOf<CrowdStrikeVulnerabilityDto>()
+        val notFoundHostnames = mutableListOf<String>()
 
         // If specific hostnames provided, query each one
         if (!hostnames.isNullOrEmpty()) {
+            if (lastSeenDays > 0 || DeviceType.fromString(deviceType) != DeviceType.SERVER) {
+                // Deliberately NOT honored here: the user named the hosts explicitly, and
+                // filtering them out server-side by last_seen or product type would
+                // silently reproduce the "0 rows, exit 0" ambiguity this path is meant
+                // to avoid. Severity/minDaysOpen ARE applied — client-side, below; the
+                // per-host FQL stays `aid+status:'open'` because querySpotlightApi is
+                // shared with the instance-id flow, where no severity restriction is
+                // wanted, and per-host row counts are small.
+                log.warn("--device-type and --last-seen-days are ignored for hostname-specific queries " +
+                    "(hostnames are resolved directly, without device filters)")
+            }
             hostnames.forEach { hostname ->
                 try {
                     val response = queryVulnerabilities(hostname, config)
@@ -379,6 +415,9 @@ open class CrowdStrikeApiClientImpl(
                     log.debug("Hostname '{}': found {} vulnerabilities ({} after filtering)",
                         hostname, response.vulnerabilities.size, filtered.size)
                 } catch (e: NotFoundException) {
+                    // Recorded, not just logged: the caller must be able to distinguish
+                    // "unknown to Falcon" from "resolved but no matching rows".
+                    notFoundHostnames.add(hostname)
                     log.warn("Hostname '{}' not found in CrowdStrike, skipping", hostname)
                 } catch (e: Exception) {
                     log.error("Error querying hostname '{}'", hostname, e)
@@ -432,6 +471,7 @@ open class CrowdStrikeApiClientImpl(
             hostname = hostnames?.joinToString(",") ?: "ALL",
             vulnerabilities = allVulnerabilities,
             totalCount = allVulnerabilities.size,
+            notFoundHostnames = notFoundHostnames,
             queriedAt = LocalDateTime.now()
         )
     }
@@ -805,18 +845,12 @@ open class CrowdStrikeApiClientImpl(
         return values.firstNotNullOfOrNull { it as? Map<*, *> }
     }
 
-    private fun parseCrowdStrikeDate(value: String?): LocalDateTime? {
-        if (value.isNullOrBlank()) return null
-        return try {
-            LocalDateTime.ofInstant(Instant.parse(value), ZoneId.systemDefault())
-        } catch (e: Exception) {
-            try {
-                LocalDateTime.parse(value.replace(" ", "T").replace("Z", ""))
-            } catch (e2: Exception) {
-                null
-            }
-        }
-    }
+    /**
+     * Installed-product timestamps. Delegates to [FalconTimestamps] like every other
+     * Falcon date — its old fallback stripped a trailing "Z" and reparsed the value as
+     * a local time, relabelling the instant instead of converting it.
+     */
+    private fun parseCrowdStrikeDate(value: String?): LocalDateTime? = FalconTimestamps.parse(value)
 
     /**
      * Streaming summary: processes device batches incrementally but only retains
@@ -1311,6 +1345,17 @@ open class CrowdStrikeApiClientImpl(
     ): BatchQueryOutcome {
         var token = getAuthToken(config)
         val metadataByDeviceId = resolveDeviceMetadata(deviceIds, token)
+        // Attribution visibility: downstream, vulnerabilities are grouped by the
+        // metadata-derived hostname, so several aids sharing a hostname collapse into
+        // one host bucket (~2.4 aids/hostname observed on 2026-08-25). Log the
+        // collapse so an inflated per-host count can be traced to its aids.
+        metadataByDeviceId.entries
+            .groupBy({ it.value.hostname }, { it.key })
+            .filter { (hostname, aids) -> hostname != null && aids.size > 1 }
+            .forEach { (hostname, aids) ->
+                log.info(">>> Batch {}/{}: hostname '{}' maps to {} aids: {}",
+                    batchIndex + 1, totalBatches, hostname, aids.size, aids)
+            }
         val severityFilter = buildSeverityFilter(severity)
         val deviceIdFilter = buildDeviceIdFilter(deviceIds)
         val fqlFilter = "$deviceIdFilter+status:'open'+$severityFilter"
@@ -1321,6 +1366,16 @@ open class CrowdStrikeApiClientImpl(
         var hasMore = true
         var pageCount = 0
         var truncated = false
+        // Every `after` cursor ever returned for this batch. Falcon has been observed
+        // ping-ponging between two cursors (800/255-row pages alternating for 20+ pages,
+        // 2026-08-25 import), which the old consecutive-repeat check could not see —
+        // the same rows were re-fetched until the page cap and inflated one host to
+        // ~27x its real row count.
+        val seenAfterTokens = mutableSetOf<String>()
+        // Raw (pre-minDaysOpen-filter) rows fetched, checked against Falcon's own
+        // meta.pagination.total so the loop can neither overshoot nor end silently short.
+        var rawFetched = 0
+        var expectedTotal: Int? = null
 
         log.debug(">>> Batch {}/{} starting with {} device IDs", batchIndex + 1, totalBatches, deviceIds.size)
 
@@ -1396,8 +1451,11 @@ open class CrowdStrikeApiClientImpl(
 
                         val meta = responseBody["meta"] as? Map<*, *>
                         val pagination = meta?.get("pagination") as? Map<*, *>
-                        val prevAfterToken = afterToken
                         afterToken = pagination?.get("after")?.toString()
+                        if (expectedTotal == null) {
+                            expectedTotal = (pagination?.get("total") as? Number)?.toInt()
+                        }
+                        rawFetched += vulns.size
 
                         log.info(">>> Batch {}/{} page {}: Retrieved {} vulns, {} after filter (batch total: {})",
                             batchIndex + 1, totalBatches, pageCount, vulns.size, filtered.size,
@@ -1409,19 +1467,44 @@ open class CrowdStrikeApiClientImpl(
 
                         batchVulnerabilities.addAll(filtered)
 
-                        hasMore = afterToken != null && vulns.isNotEmpty()
-
-                        if (hasMore && afterToken == prevAfterToken) {
-                            log.warn(">>> Batch {}/{} page {}: afterToken unchanged - breaking pagination loop",
+                        val liveToken = afterToken
+                        if (liveToken != null && !seenAfterTokens.add(liveToken)) {
+                            // A cursor we have already followed: Falcon is looping (not
+                            // necessarily on consecutive pages). Fail the batch rather than
+                            // keep partial rows — the backend import is a per-host
+                            // delete-then-insert replace, so a partial payload would
+                            // silently delete real rows.
+                            log.warn(">>> Batch {}/{} page {}: pagination cursor loop detected (after-token seen before) - failing batch",
                                 batchIndex + 1, totalBatches, pageCount)
                             hasMore = false
                             truncated = true
-                        }
+                        } else {
+                            // Continue only on a full page: Spotlight returns a live `after`
+                            // token even on the final page, so token presence alone never
+                            // terminates (same rule as querySpotlightApi and
+                            // queryAllVulnerabilitiesBulk). Falcon's own total is a further
+                            // upper bound when it reports one.
+                            val total = expectedTotal
+                            hasMore = liveToken != null && vulns.isNotEmpty() &&
+                                vulns.size >= effectiveLimit &&
+                                (total == null || rawFetched < total)
 
-                        if (hasMore && filtered.isEmpty() && vulns.isNotEmpty() && pageCount >= 3) {
-                            log.warn(">>> Batch {}/{} page {}: Got {} vulns but ALL filtered out for {} pages - stopping pagination (minDaysOpen={} may be too strict)",
-                                batchIndex + 1, totalBatches, pageCount, vulns.size, pageCount, minDaysOpen)
-                            hasMore = false
+                            if (!hasMore && liveToken != null && total != null &&
+                                rawFetched < total && vulns.size < effectiveLimit
+                            ) {
+                                // Short page although Falcon still reports more rows: the
+                                // result set is incomplete, so the batch must not be treated
+                                // as a full refresh of its hosts.
+                                log.warn(">>> Batch {}/{} page {}: short page after {} of {} reported rows - marking batch truncated",
+                                    batchIndex + 1, totalBatches, pageCount, rawFetched, total)
+                                truncated = true
+                            }
+
+                            if (hasMore && filtered.isEmpty() && vulns.isNotEmpty() && pageCount >= 3) {
+                                log.warn(">>> Batch {}/{} page {}: Got {} vulns but ALL filtered out for {} pages - stopping pagination (minDaysOpen={} may be too strict)",
+                                    batchIndex + 1, totalBatches, pageCount, vulns.size, pageCount, minDaysOpen)
+                                hasMore = false
+                            }
                         }
                     }
                     404 -> hasMore = false
@@ -1496,7 +1579,10 @@ open class CrowdStrikeApiClientImpl(
         }
 
         if (hasMore && pageCount >= maxPagesPerBatch) {
-            log.warn(">>> Batch {}/{}: Reached max page limit ({} pages) with more data pending - stopping pagination for this batch",
+            // ERROR on purpose: with the cursor-loop guard in place, 50 full pages
+            // (40,000 raw rows for a ~20-device batch) should never be reached by
+            // genuine data — hitting the cap again means a new pagination defect.
+            log.error(">>> Batch {}/{}: Reached max page limit ({} pages) with more data pending - stopping pagination for this batch",
                 batchIndex + 1, totalBatches, maxPagesPerBatch)
             truncated = true
         }
@@ -1565,67 +1651,71 @@ open class CrowdStrikeApiClientImpl(
         multiplier = "2.0",
         maxDelay = "60s"
     )
-    open fun getDeviceIdByHostname(hostname: String, token: AuthToken): String? {
-        log.debug("Looking up device ID for hostname: {}", hostname)
+    open fun getDeviceIdByHostname(hostname: String, token: AuthToken): String? =
+        // API-stability wrapper: single-aid callers keep working, but per-host flows
+        // should use getDeviceIdsByHostname — one hostname can map to several aids.
+        getDeviceIdsByHostname(hostname, token).firstOrNull()
 
-        // Strategy 1: Exact match (case-sensitive)
-        log.debug("Strategy 1: Trying exact match")
-        val exactResult = tryHostnameFilter(hostname, "hostname:'$hostname'", token)
-        if (exactResult != null) {
-            log.info("Found device ID using exact match: {}", exactResult)
-            return exactResult
-        }
+    /**
+     * Resolve ALL device IDs (aids) for a hostname.
+     *
+     * Same 5-strategy cascade as before, but the first strategy that matches returns
+     * its complete deduped result list instead of only `resources[0]`. Strategies are
+     * NOT unioned: later ones (prefix/contains) are progressively looser, and merging
+     * a loose match into an exact one would over-attribute; first-non-empty preserves
+     * the historical precedence exactly.
+     *
+     * A re-imaged or re-enrolled host keeps its hostname but gets a new aid; Falcon
+     * then holds several device records whose open vulnerabilities are spread across
+     * aids. The bulk import naturally aggregates across all of them (it enumerates
+     * devices, not hostnames), so the per-host path must do the same or it reports
+     * 0 rows whenever the first-returned aid is the stale one (observed 2026-08-25:
+     * five hosts with 0 rows on resources[0] while a sibling aid held thousands).
+     */
+    open fun getDeviceIdsByHostname(hostname: String, token: AuthToken): List<String> {
+        log.debug("Looking up device IDs for hostname: {}", hostname)
 
-        // Strategy 2: Stemmed search (case-insensitive, starts with)
-        log.debug("Strategy 2: Trying stemmed search (starts with)")
-        val stemmedResult = tryHostnameFilter(hostname, "hostname:'$hostname*'", token)
-        if (stemmedResult != null) {
-            log.info("Found device ID using stemmed search: {}", stemmedResult)
-            return stemmedResult
-        }
+        val strategies = listOf(
+            "exact match" to "hostname:'$hostname'",
+            "stemmed search" to "hostname:'$hostname*'",
+            "contains search" to "hostname:'*$hostname*'",
+            "lowercase exact match" to "hostname:'${hostname.lowercase()}'",
+            "uppercase exact match" to "hostname:'${hostname.uppercase()}'"
+        )
 
-        // Strategy 3: Contains search (case-insensitive, wildcards inside quotes)
-        log.debug("Strategy 3: Trying contains search")
-        val containsResult = tryHostnameFilter(hostname, "hostname:'*$hostname*'", token)
-        if (containsResult != null) {
-            log.info("Found device ID using contains search: {}", containsResult)
-            return containsResult
-        }
-
-        // Strategy 4: Lowercase exact match
-        log.debug("Strategy 4: Trying lowercase exact match")
-        val lowerExactResult = tryHostnameFilter(hostname, "hostname:'${hostname.lowercase()}'", token)
-        if (lowerExactResult != null) {
-            log.info("Found device ID using lowercase exact match: {}", lowerExactResult)
-            return lowerExactResult
-        }
-
-        // Strategy 5: Uppercase exact match
-        log.debug("Strategy 5: Trying uppercase exact match")
-        val upperExactResult = tryHostnameFilter(hostname, "hostname:'${hostname.uppercase()}'", token)
-        if (upperExactResult != null) {
-            log.info("Found device ID using uppercase exact match: {}", upperExactResult)
-            return upperExactResult
+        strategies.forEachIndexed { index, (name, filter) ->
+            log.debug("Strategy {}: Trying {}", index + 1, name)
+            val deviceIds = tryHostnameFilter(hostname, filter, token)
+            if (deviceIds.isNotEmpty()) {
+                log.info("Found {} device ID(s) for hostname '{}' using {}: {}",
+                    deviceIds.size, hostname, name, deviceIds)
+                return deviceIds
+            }
         }
 
         log.warn("All hostname strategies exhausted. No device found for: {}", hostname)
-        return null
+        return emptyList()
     }
 
     /**
      * Try a single hostname filter strategy
      *
+     * Returns every matching device id, not just the first: one hostname can map to
+     * several agent records (re-imaged / re-enrolled hosts — the bulk import observed
+     * ~2.4 aids per hostname), and taking only `resources[0]` made the per-host query
+     * report 0 rows for hosts whose vulnerabilities live on a sibling aid.
+     *
      * @param hostname Original hostname (for logging)
      * @param filter FQL filter string
      * @param token OAuth2 access token
-     * @return Device ID or null if not found
+     * @return Matching device IDs, deduped; empty if the strategy found nothing
      * @throws RateLimitException if rate limit hit
      */
-    private fun tryHostnameFilter(hostname: String, filter: String, token: AuthToken): String? = try {
+    private fun tryHostnameFilter(hostname: String, filter: String, token: AuthToken): List<String> = try {
         log.info("Trying filter for hostname '{}': {}", hostname, filter)
         val uri = UriBuilder.of("/devices/queries/devices/v1")
             .queryParam("filter", filter)
-            .queryParam("limit", "10")
+            .queryParam("limit", "100")
             .build()
 
         val request = HttpRequest.GET<Any>(uri.toString())
@@ -1645,11 +1735,11 @@ open class CrowdStrikeApiClientImpl(
                 val resources = responseBody["resources"] as? List<*>
                 if (resources.isNullOrEmpty()) {
                     log.debug("Filter returned no results: {}", filter)
-                    null
+                    emptyList()
                 } else {
-                    val deviceId = resources[0]?.toString()
-                    log.debug("Filter returned {} results. Using first: {}", resources.size, deviceId)
-                    deviceId
+                    val deviceIds = resources.mapNotNull { it?.toString() }.distinct()
+                    log.debug("Filter returned {} result(s): {}", deviceIds.size, deviceIds)
+                    deviceIds
                 }
             }
             429 -> {
@@ -1659,7 +1749,7 @@ open class CrowdStrikeApiClientImpl(
             in 500..599 -> throw CrowdStrikeException("CrowdStrike server error: ${response.status}")
             else -> {
                 log.debug("Filter failed: status={}, filter={}", response.status, filter)
-                null
+                emptyList()
             }
         }
     } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
@@ -1671,14 +1761,14 @@ open class CrowdStrikeApiClientImpl(
             in 500..599 -> throw CrowdStrikeException("CrowdStrike server error: ${e.status}", e)
             else -> {
                 log.debug("Filter failed: status={}", e.status)
-                null
+                emptyList()
             }
         }
     } catch (e: RateLimitException) {
         throw e
     } catch (e: Exception) {
         log.error("Error querying hostname filter: {}", filter, e)
-        null
+        emptyList()
     }
 
     /**
@@ -1709,6 +1799,8 @@ open class CrowdStrikeApiClientImpl(
         var hasMore = true
         var pageCount = 0
         val maxPages = 100  // Safety limit to prevent infinite loops
+        // Anti-loop guard: every cursor followed so far (see queryBatchVulnerabilities).
+        val seenAfterTokens = mutableSetOf<String>()
 
         // Pagination configuration - start with smaller page size for reliability
         var currentLimit = 500  // Start conservative, can handle most systems without pagination
@@ -1766,8 +1858,12 @@ open class CrowdStrikeApiClientImpl(
                                 pageCount, vulns.size, allVulnerabilities.size)
 
                             // Check if there are more results
-                            // Stop when: no token, empty page, short page (< requested = last page), or frozen cursor
-                            hasMore = newAfterToken != null && vulns.isNotEmpty() && vulns.size >= currentLimit && newAfterToken != afterToken
+                            // Stop when: no token, empty page, short page (< requested = last page),
+                            // or a cursor we have already followed (Falcon has been observed
+                            // ping-ponging between two cursors, which a consecutive-repeat check
+                            // cannot see — see queryBatchVulnerabilities).
+                            hasMore = newAfterToken != null && vulns.isNotEmpty() &&
+                                vulns.size >= currentLimit && seenAfterTokens.add(newAfterToken)
                             afterToken = newAfterToken
                             pageSuccess = true
                         }
@@ -1941,22 +2037,16 @@ open class CrowdStrikeApiClientImpl(
 
                 val createdTimestamp = vuln["created_timestamp"]?.toString()
                     ?: vuln["created_on"]?.toString()
-                val detectedAt = if (createdTimestamp != null) {
-                    try {
-                        // Parse ISO-8601 timestamp with 'Z' timezone (e.g., "2024-05-15T22:18:26Z")
-                        val instant = Instant.parse(createdTimestamp)
-                        LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
-                    } catch (e: Exception) {
-                        // Fallback: try parsing without timezone indicator
-                        try {
-                            LocalDateTime.parse(createdTimestamp.replace(" ", "T").replace("Z", ""))
-                        } catch (e2: Exception) {
-                            log.warn("Failed to parse created_timestamp '{}': {}", createdTimestamp, e2.message)
-                            LocalDateTime.now()
-                        }
-                    }
-                } else {
-                    LocalDateTime.now()
+                // Shared with the ad-hoc lookup path so the two cannot drift (see FalconTimestamps).
+                // Deliberately NOT coerced to now(): an unknown detection date stays
+                // unknown, so the row reads "unknown age" rather than "zero days old"
+                // (which would silently never be overdue). See FalconTimestamps.
+                val detectedAt = FalconTimestamps.parse(createdTimestamp)
+                if (detectedAt == null && !createdTimestamp.isNullOrBlank()) {
+                    log.warn(
+                        "Unparseable created_timestamp '{}' — reporting unknown detection date",
+                        FalconTimestamps.sanitizeForLog(createdTimestamp)
+                    )
                 }
 
                 // Extract patch publication date
@@ -1975,6 +2065,7 @@ open class CrowdStrikeApiClientImpl(
                     daysOpen = calculateDaysOpen(detectedAt),
                     detectedAt = detectedAt,
                     patchPublicationDate = patchPublicationDate,
+                    cvePublishedDate = extractCvePublishedDate(vuln),
                     status = vuln["status"]?.toString() ?: "open",
                     hasException = false,
                     exceptionReason = null,
@@ -2033,7 +2124,14 @@ open class CrowdStrikeApiClientImpl(
     /**
      * Calculate days open since detection
      */
-    private fun calculateDaysOpen(detectedAt: LocalDateTime): String {
+    /**
+     * Days since detection, or null when the detection date is unknown.
+     *
+     * Returning null rather than "0 days" is the point: a fabricated zero reads as a
+     * brand-new finding and never trips an overdue threshold.
+     */
+    private fun calculateDaysOpen(detectedAt: LocalDateTime?): String? {
+        if (detectedAt == null) return null
         val days = java.time.temporal.ChronoUnit.DAYS.between(detectedAt, LocalDateTime.now())
         return if (days == 1L) "1 day" else "$days days"
     }
@@ -2049,41 +2147,12 @@ open class CrowdStrikeApiClientImpl(
      * @param vuln The vulnerability response object
      * @return Parsed LocalDateTime or null if not found/parseable
      */
-    private fun extractPatchPublicationDate(vuln: Map<*, *>): LocalDateTime? {
-        val cveObject = vuln["cve"] as? Map<*, *>
-        val remediationObject = vuln["remediation"] as? Map<*, *>
+    private fun extractPatchPublicationDate(vuln: Map<*, *>): LocalDateTime? =
+        FalconTimestamps.patchPublicationDate(vuln)
 
-        // Try multiple possible field locations
-        val dateString = cveObject?.get("published_date")?.toString()
-            ?: cveObject?.get("published")?.toString()
-            ?: remediationObject?.get("published_date")?.toString()
-            ?: remediationObject?.get("vendor_release_date")?.toString()
-            ?: vuln["patch_published_date"]?.toString()
-            ?: vuln["patch_publication_date"]?.toString()
+    private fun extractCvePublishedDate(vuln: Map<*, *>): LocalDateTime? =
+        FalconTimestamps.cvePublishedDate(vuln)
 
-        if (dateString == null) {
-            return null
-        }
-
-        return try {
-            // Try parsing as ISO-8601 timestamp (e.g., "2024-05-15T22:18:26Z")
-            val instant = Instant.parse(dateString)
-            LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
-        } catch (e: Exception) {
-            try {
-                // Fallback: try parsing as date-only (e.g., "2024-05-15")
-                LocalDateTime.parse(dateString + "T00:00:00")
-            } catch (e2: Exception) {
-                try {
-                    // Fallback: try parsing without timezone
-                    LocalDateTime.parse(dateString.replace(" ", "T").replace("Z", ""))
-                } catch (e3: Exception) {
-                    log.debug("Failed to parse patch publication date '{}': {}", dateString, e3.message)
-                    null
-                }
-            }
-        }
-    }
 
     private data class DeviceMetadata(
         val hostname: String?,
@@ -2313,19 +2382,16 @@ open class CrowdStrikeApiClientImpl(
 
                 val createdTimestamp = vuln["created_timestamp"]?.toString()
                     ?: vuln["created_on"]?.toString()
-                val detectedAt = if (createdTimestamp != null) {
-                    try {
-                        val instant = Instant.parse(createdTimestamp)
-                        LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
-                    } catch (e: Exception) {
-                        try {
-                            LocalDateTime.parse(createdTimestamp.replace(" ", "T").replace("Z", ""))
-                        } catch (e2: Exception) {
-                            LocalDateTime.now()
-                        }
-                    }
-                } else {
-                    LocalDateTime.now()
+                // Shared with the ad-hoc lookup path so the two cannot drift (see FalconTimestamps).
+                // Deliberately NOT coerced to now(): an unknown detection date stays
+                // unknown, so the row reads "unknown age" rather than "zero days old"
+                // (which would silently never be overdue). See FalconTimestamps.
+                val detectedAt = FalconTimestamps.parse(createdTimestamp)
+                if (detectedAt == null && !createdTimestamp.isNullOrBlank()) {
+                    log.warn(
+                        "Unparseable created_timestamp '{}' — reporting unknown detection date",
+                        FalconTimestamps.sanitizeForLog(createdTimestamp)
+                    )
                 }
 
                 // Extract patch publication date
@@ -2344,6 +2410,7 @@ open class CrowdStrikeApiClientImpl(
                     daysOpen = calculateDaysOpen(detectedAt),
                     detectedAt = detectedAt,
                     patchPublicationDate = patchPublicationDate,
+                    cvePublishedDate = extractCvePublishedDate(vuln),
                     status = vuln["status"]?.toString() ?: "open",
                     hasException = false,
                     exceptionReason = null,

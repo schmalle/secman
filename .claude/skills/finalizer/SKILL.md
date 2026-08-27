@@ -7,15 +7,15 @@ description: >
   call made by the independent client repos under extensions/ still matches the
   live Kotlin controller contract (path, method, request fields, auth scheme,
   RBAC) and fixes plus commits drift inside those repos, runs a security review
-  of the branch diff reporting only HIGH and CRITICAL findings, and compresses
-  CLAUDE.md by archiving its changelog to docs/CHANGELOG.md while keeping the
-  operational contracts verbatim. Runs entirely offline — no backend, frontend,
-  or pass-cli needed. Use this skill whenever the user says "finalizer", "run
+  of the branch diff reporting only HIGH and CRITICAL findings, re-checks the
+  relay contract the iOS client depends on, and compresses CLAUDE.md by archiving
+  its changelog to docs/CHANGELOG.md while keeping the operational contracts
+  verbatim. Runs entirely offline — no backend, frontend, or pass-cli needed. Use this skill whenever the user says "finalizer", "run
   the finalizer", "finalize", "wrap up this change", "pre-merge check",
   "ready to merge?", "check CLAUDE.md is current", "are the extensions still in
   sync", "tidy up CLAUDE.md", or asks for a final consistency, documentation,
   or contract-drift pass before committing or merging — even if they only
-  mention one of the four jobs.
+  mention one of the five jobs.
 context: fork
 ---
 
@@ -32,7 +32,7 @@ context: fork
 
 # Finalizer — pre-merge consistency, contract, and security pass
 
-You are finishing a piece of work in the secman repo. Four kinds of rot creep
+You are finishing a piece of work in the secman repo. Five kinds of rot creep
 in while a change is being built, and none of them are caught by `./gradlew
 build` or the E2E gates:
 
@@ -48,9 +48,12 @@ build` or the E2E gates:
    compile fine.
 4. **CLAUDE.md grows monotonically.** It is prepended to every session's
    context, so every stale paragraph is a permanent tax on every future task.
+5. **The two skill trees drift apart.** `.claude/skills/` and `.agents/skills/`
+   are required to move together in both directions, and they do not do it on
+   their own.
 
-Work through the steps in order. Steps 1–4 are independent, so a failure in one
-does not excuse skipping the others — do all four, then report once.
+Work through the steps in order. Steps 1–5 are independent, so a failure in one
+does not excuse skipping the others — do all five, then report once.
 
 ## Scope fence
 
@@ -59,10 +62,21 @@ call `pass-cli`, do not run `./gradlew build` or the E2E gates. It reads files,
 edits two things (CLAUDE.md and the extension repos), and reports. Keeping it
 offline is what makes it cheap enough to run at the end of every change.
 
+`./scripts/owasp-check.sh` (step 3) is **in** scope despite the fence: it is a
+static, diff-scoped grep over the working tree that needs no stack and no
+secrets, and CLAUDE.md's review gate requires it before any change is reported
+complete.
+
 If the work you are finalizing touched `src/`, remind the user in the final
-report that CLAUDE.md's mandatory gates (`./gradlew build` clean, backend
-starts cleanly, `/e2ejs`, `/e2evulnexception`) still apply — but do not run
-them.
+report that CLAUDE.md's mandatory gates still apply — but do not run them. The
+full set, conditioned on what the change touched:
+
+| Touched | Gate |
+|---|---|
+| anything under `src/` | `./gradlew build` clean, then `./scripts/startbackenddev.sh` starts cleanly (Principle 5 — compile-clean is not runtime-clean) |
+| `src/frontend/` | `cd src/frontend && npm ci && npm run build` exits 0 (Principle 5a) |
+| `src/relay/` | `go build ./... && go vet ./... && gofmt -l . && go test ./...` all clean (Principle 5a-relay). **`./gradlew build` never compiles this module**, so a break here survives an otherwise-green report |
+| anything under `src/`, `tests/`, `scripts/` | `/e2ejs` and `/e2evulnexception` (Principle 7) |
 
 ---
 
@@ -79,7 +93,7 @@ actually examined:
 3. If that is somehow empty too, say so and skip step 3 rather than inventing
    a target.
 
-Steps 1, 2 and 4 ignore the diff entirely — they verify current state from
+Steps 1, 2, 4 and 5 ignore the diff entirely — they verify current state from
 scratch. This matters: drift introduced three commits ago is exactly the drift
 a diff-based check misses, and it is the drift most likely to still be broken.
 
@@ -96,6 +110,7 @@ echo "--- gradle";   grep distributionUrl gradle/wrapper/gradle-wrapper.properti
 echo "--- java";     grep -nE 'jvmToolchain|JavaVersion' src/backendng/build.gradle.kts src/cli/build.gradle.kts
 echo "--- frontend"; grep -E '"(astro|react|axios|typescript)":' src/frontend/package.json
 echo "--- cli deps"; grep -nE 'picocli|aws|software.amazon' src/cli/build.gradle.kts | head
+echo "--- go";       grep -nE '^go |^toolchain' src/relay/go.mod
 echo "--- mariadb";  grep -rn 'image: mariadb' docker/
 echo "--- claimed";  sed -n '/^## Stack/,/^## Roles/p' CLAUDE.md
 ```
@@ -140,10 +155,16 @@ the user's call, not yours.
 
 ## Step 2 — Extension repos must still match the backend contract
 
-`extensions/` holds independent Python client repos (currently
-`secman_ai_github` and `secman_visual_check`). They are **gitignored by the
+`extensions/` holds independent client repos. They are **gitignored by the
 parent repo** and have **their own GitHub remotes**, so changes you make there
 are invisible to `git status` at the repo root. Be deliberate.
+
+**List them, do not recall them:** `ls -d extensions/*/`. Two are Python backend
+clients (`secman_ai_github`, `secman_visual_check`) and are what steps 2b–2d are
+about. `secman_app_ios` is a **relay** client — it calls no `/api/…` endpoint and
+holds no secman credential, so nothing in 2b–2d applies to it and a Python-only
+grep cannot see it at all. It gets its own step, 2e. If `ls` shows a repo that
+none of these steps covers, say so rather than assuming it is fine.
 
 ### 2a — Record what was already dirty
 
@@ -169,6 +190,11 @@ grep -rnE '/api/[A-Za-z0-9/_.{}$-]+|"/mcp"|X-MCP-User-Email|tools/call' extensio
 Discovery rather than a fixed checklist is deliberate: when someone adds a
 sixth backend call, a hardcoded list silently ignores it, and the missing check
 looks identical to a passing one.
+
+The `*.py` scope is deliberate too: this step is about the backend clients. The
+Swift relay client speaks a different contract and is handled in 2e — widening
+the include here would surface its paths without any of the checks that actually
+apply to them.
 
 As a sanity check on your grep, discovery should surface at least
 `POST /api/auth/login`, `POST /api/vulnerabilities/cli-add`,
@@ -224,13 +250,57 @@ expectations; pushing on the user's behalf publishes work they have not seen.
 
 Report every commit you made, with repo, hash, and the file list.
 
+### 2e — The relay contract (`secman_app_ios`)
+
+The iOS app is a relay client, not a backend client. A renamed `/api/…` endpoint
+cannot break it; what can is the relay contract — `com.secman.relay.RelayDtos`,
+the section names and `SECTION_POLICIES` in `RelaySnapshotBuilder`, or
+`src/relay/internal/api`. Because the 2b grep is scoped to `*.py`, this client is
+invisible to it, which is exactly how it went unchecked.
+
+```bash
+grep -rnE '/api/v1/|/ingest/v1/' extensions/secman_app_ios --include='*.swift'
+grep -rn 'RELAY_SNAPSHOT_SCHEMA_VERSION\|RELAY_CONTROL_SCHEMA_VERSION' \
+  src/backendng/src/main/kotlin/com/secman/relay/RelayDtos.kt
+grep -rn 'relaySupportedSnapshotSchemaVersion' extensions/secman_app_ios --include='*.swift'
+```
+
+Two things to reconcile, and both are mechanical:
+
+- **The schema versions must agree.** Both envelopes carry a `schemaVersion`
+  precisely so a breaking change is visible. The backend's
+  `RELAY_SNAPSHOT_SCHEMA_VERSION` and the app's
+  `relaySupportedSnapshotSchemaVersion` are a pair: if the diff bumped one, the
+  other has to move with it, and the app rejects a snapshot whose version it does
+  not recognise. Report both numbers, even when they match — a version check
+  whose green result is never stated provides no assurance.
+- **The section names and paths the Swift client asks for still exist** in
+  `RelaySnapshotBuilder` and `src/relay/internal/api`.
+
+Treat a mismatch the same way as an RBAC tightening in 2c: **report it, do not
+fix it**. Bumping a schema version is a release decision about which app builds
+keep working, and it is not yours to make silently.
+
 ---
 
 ## Step 3 — Security review, HIGH and CRITICAL only
 
-Review the diff from step 0. The user wants signal, not a catalogue: report
-HIGH and CRITICAL findings in full, and reduce everything below that to a
-single line stating the count. Resist the urge to list the medium ones "just in
+Run the static gate first. It is deterministic, diff-scoped and offline, and
+CLAUDE.md's review gate requires it before any change is reported complete:
+
+```bash
+./scripts/owasp-check.sh          # add --verbose to see the matching lines
+```
+
+State its verdict as one line in the report — the form CLAUDE.md asks for, e.g.
+`OWASP: A01/A03/A09 touched — clean`. A `BLOCK` finding means the change is **not
+complete**; a `REVIEW` finding needs a stated decision, not silence. Do not skip
+this because you intend to read the diff yourself: the scanner and the read catch
+different things, which is why both exist.
+
+Then review the diff from step 0 by hand for what no grep can express. The user
+wants signal, not a catalogue: report HIGH and CRITICAL findings in full, and
+reduce everything below that to a single line stating the count. Resist the urge to list the medium ones "just in
 case" — a report that buries two real findings under fifteen nits gets skimmed
 and ignored, which is worse than not running the review.
 
@@ -301,10 +371,12 @@ The contract is **archive first, summarize second**:
 - Never summarize on the way *into* `docs/CHANGELOG.md`. The point is that the
   detail survives somewhere greppable; a lossy archive is just deletion with
   extra steps.
-- The entries carry no dates, so do not assume file order is chronological —
-  confirm with `git log --follow -p -- CLAUDE.md | grep '^+- \*\*'` (which
-  entry was added last?) before you slice. Getting this backwards drops the
-  summary that mattered most and keeps two stale ones.
+- Entries carry a date in their heading (`**… (2026-08-25)**`), so use it to
+  find the three newest — do not assume file order is chronological. If two
+  entries share a date, or one is undated, fall back to
+  `git log --follow -p -- CLAUDE.md | grep '^+- \*\*'` (which entry was added
+  last?) before you slice. Getting this backwards drops the summary that
+  mattered most and keeps two stale ones.
 
 ### 4b — Never touch these
 
@@ -334,13 +406,13 @@ finds something to trim will eventually trim something load-bearing.
 
 ---
 
-## Step 4b — Skill mirror check
+## Step 5 — Skill mirror check
 
 The repo keeps two skill trees — `.claude/skills/` (Claude Code) and
 `.agents/skills/` (Codex) — that CLAUDE.md requires to move together in both
 directions: whichever tree an agent edited, the other had to change too. They do
-not stay together on their own: 7 of 8 skills had drifted before this check
-existed, one of them into two materially different documents.
+not stay together on their own; the audit that motivated this check found all but
+one skill drifted, one of them into two materially different documents.
 
 ```bash
 ./scripts/check-skill-sync.sh
@@ -359,7 +431,7 @@ Also surface any `WARNING: normalization rule … matched nothing` line. That
 means a rule no longer matches the wording it was written for, so a green result
 from that run is weaker than it looks.
 
-## Step 5 — Report
+## Step 6 — Report
 
 Your final message is the deliverable. Because this skill runs in a forked
 context, nothing you did along the way is visible to the user unless it appears
@@ -376,10 +448,14 @@ Use this structure:
 <or: all claims accurate>
 
 ## 2. Extension contract
-<per repo: calls checked, drift found, fixes applied, commits made (hash + files)>
+Repos found by `ls -d extensions/*/`: <list>
+<per Python repo: calls checked, drift found, fixes applied, commits made (hash + files)>
 <findings reported but not fixed, and why>
+<2e relay: backend schemaVersion <n> vs app relaySupportedSnapshotSchemaVersion <n>;
+ section names / paths checked; agree or mismatch>
 
 ## 3. Security review (HIGH / CRITICAL only)
+OWASP: <categories touched> — <clean | n BLOCK | n REVIEW>
 Scope: <which rung of the step 0 ladder, n files>
 <findings with file:line, exploitability, proposed patch>
 <n medium/low findings not listed>
@@ -388,12 +464,15 @@ Scope: <which rung of the step 0 ladder, n files>
 Before: <n> lines / <n> words → After: <n> lines / <n> words
 <what moved to docs/CHANGELOG.md, what was tightened>
 
-## 4b. Skill mirror
+## 5. Skill mirror
 ./scripts/check-skill-sync.sh → exit <0|1|2>
 <in sync, or the findings verbatim; plus any dead-normalization-rule warnings>
 
 ## Still required
-<the mandatory gates from CLAUDE.md, if src/ was touched>
+<the gates from the scope-fence table, selected by what this change touched>
+
+## Not checked
+<any step you could not complete, and why — omit the heading only if there were none>
 ```
 
 Two reporting rules that matter more than they look:

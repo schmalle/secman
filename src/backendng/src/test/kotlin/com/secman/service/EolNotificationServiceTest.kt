@@ -34,7 +34,8 @@ class EolNotificationServiceTest {
         eolFindingRepository = eolFindingRepository,
         awsAccountRecipientResolver = awsAccountRecipientResolver,
         userRepository = userRepository,
-        emailService = emailService
+        emailService = emailService,
+        eolFindingTableRenderer = EolFindingTableRenderer()
     )
 
     private fun finding(assetId: Long, assetName: String, owner: String, component: String) = EolFinding(

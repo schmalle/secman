@@ -24,15 +24,18 @@ import org.slf4j.LoggerFactory
  * miss both.
  *
  * Input parameters:
- * - mappings (required): Array of {email (required), awsAccountId, domain}
+ * - mappings (required): Array of {email (required), awsAccountId, domain, displayName}
  * - dryRun: validate without persisting. Default false.
  * - startRiskAssessment: start a risk assessment for the owner of every brand-new
  *   AWS account this import introduces. Requires riskAssessmentUseCase.
  * - riskAssessmentUseCase: name of the use case the assessments are scoped to.
  * - riskAssessmentDeadlineDays: days until the deadline. Default 7, max 3650.
  *
+ * An entry's `displayName` links its `awsAccountId` to the workgroup named
+ * "aws-<displayName>" (created when missing) — see [com.secman.service.WorkgroupAccountLinkService].
+ *
  * Returns totalProcessed, created, createdPending, skipped, errors[], dryRun,
- * newAccounts[] and riskAssessments[]. A riskAssessments[] entry carries either
+ * newAccounts[], riskAssessments[] and workgroupLinks. A riskAssessments[] entry carries either
  * `error` (failed) or `skipped`/`skipReason` (an open assessment already existed —
  * an idempotent no-op, not a failure).
  */
@@ -69,6 +72,12 @@ class ImportUserMappingsTool(
                         "domain" to mapOf(
                             "type" to "string",
                             "description" to "AD domain (optional)"
+                        ),
+                        "displayName" to mapOf(
+                            "type" to "string",
+                            "description" to "AWS account display name (optional). Stored on the " +
+                                "mapping and used to link the account to the workgroup named " +
+                                "'aws-<displayName>', creating that workgroup if it does not exist."
                         )
                     ),
                     "required" to listOf("email")
@@ -157,7 +166,8 @@ class ImportUserMappingsTool(
                 BulkUserMappingEntry(
                     email = (entry["email"] as? String)?.trim().orEmpty(),
                     awsAccountId = (entry["awsAccountId"] as? String)?.trim()?.takeIf { it.isNotBlank() },
-                    domain = (entry["domain"] as? String)?.trim()?.takeIf { it.isNotBlank() }
+                    domain = (entry["domain"] as? String)?.trim()?.takeIf { it.isNotBlank() },
+                    displayName = (entry["displayName"] as? String)?.trim()?.takeIf { it.isNotBlank() }
                 )
             },
             dryRun = arguments["dryRun"] as? Boolean ?: false,
@@ -220,6 +230,32 @@ class ImportUserMappingsTool(
                             "skipped" to ra.skipped,
                             "skipReason" to ra.skipReason,
                             "error" to ra.error
+                        )
+                    },
+                    // Null unless at least one entry carried a displayName, which is what
+                    // keeps a plain mapping import's result shape unchanged.
+                    "workgroupLinks" to result.workgroupLinks?.let { links ->
+                        mapOf(
+                            "processed" to links.processed,
+                            "workgroupsCreated" to links.workgroupsCreated,
+                            "linked" to links.linked,
+                            "alreadyLinked" to links.alreadyLinked,
+                            "failed" to links.failed,
+                            "dryRun" to links.dryRun,
+                            "truncated" to links.truncated,
+                            "links" to links.links.map { link ->
+                                mapOf(
+                                    "awsAccountId" to link.awsAccountId,
+                                    "displayName" to link.displayName,
+                                    "workgroupName" to link.workgroupName,
+                                    "workgroupId" to link.workgroupId,
+                                    "workgroupCreated" to link.workgroupCreated,
+                                    "linked" to link.linked,
+                                    "alreadyLinked" to link.alreadyLinked,
+                                    "dryRun" to link.dryRun,
+                                    "error" to link.error
+                                )
+                            }
                         )
                     },
                     // Same three shapes as riskAssessments (done / skipped+skipReason / error),

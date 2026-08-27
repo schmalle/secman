@@ -231,6 +231,7 @@ open class EolQueryService(
         assetId = assetId,
         assetName = assetName,
         cloudAccountId = cloudAccountId,
+        cloudInstanceId = cloudInstanceId,
         adDomain = adDomain,
         assetOwner = assetOwner,
         repositoryId = githubRepositoryId,

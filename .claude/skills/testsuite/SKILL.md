@@ -4,7 +4,8 @@ description: >
   Run and repair secman's fast test tier — the part that does not need a running
   stack: backend unit + integration tests (Gradle, external MariaDB), CLI tests,
   frontend unit tests (node:test), the frontend `npm ci && npm run build` gate,
-  and the `.claude`/`.agents` skill-sync check — then report name-reference
+  the `.claude`/`.agents` skill-sync check, and the self-tests for the OWASP
+  and code-hygiene gates — then report name-reference
   coverage per area via `./scripts/test-coverage-report.sh` and name the biggest
   gaps. Fixes failures it finds, looping up to 5 iterations. Use this skill when
   the user says "run the tests", "run the test suite", "testsuite", "unit tests",
@@ -40,7 +41,8 @@ and it is where a coverage gap is visible at all.
 
 **In scope:** `./gradlew :backendng:test`, `./gradlew :cli:test`, the frontend
 unit tests and build gate, `./scripts/check-skill-sync.sh`,
-`./scripts/test/owasp-check-test.sh`, and `./scripts/test-coverage-report.sh`.
+`./scripts/test/owasp-check-test.sh`, `./scripts/test/humanizer-scan-test.sh`,
+and `./scripts/test-coverage-report.sh`.
 
 **Out of scope:** starting the backend or frontend, `/e2ejs`,
 `/e2evulnexception`, Playwright under `tests/e2e/`, and anything that imports
@@ -122,11 +124,12 @@ All three matter and they fail differently:
 - **`npm run build`** is the type-check gate. A test-only change can still break
   it, so never skip it after editing frontend source.
 
-## Step 5 — Skill sync and the OWASP gate
+## Step 5 — Skill sync and the static gate self-tests
 
 ```bash
 ./scripts/check-skill-sync.sh
 ./scripts/test/owasp-check-test.sh
+./scripts/test/humanizer-scan-test.sh
 ```
 
 The two trees — `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex) —
@@ -143,6 +146,14 @@ repo's *approved* pattern for the same risk and asserts the rule stays silent.
 It runs entirely inside a throwaway git repo under `/tmp` and touches nothing
 here. Treat a failure as a real regression: a scanner rule that stopped matching
 reports OK forever and nobody finds out.
+
+`humanizer-scan-test.sh` is the same arrangement for `./scripts/humanizer-scan.sh`,
+the code-hygiene gate behind `/humanizer`. It asserts both directions per rule —
+a violation fires, and clean code stays silent — and several of its silent cases
+pin house style the scanner once flagged by mistake (`// --- Section ---`
+dividers, Go's short receiver names, emoji in CLI output). Its length assertions
+check the exact measured line count, not merely that a rule fired: every desync
+bug that scanner has had reported a wildly wrong number while still firing.
 
 ## Step 6 — Coverage evaluation
 

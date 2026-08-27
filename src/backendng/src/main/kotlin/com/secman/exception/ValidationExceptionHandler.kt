@@ -29,20 +29,43 @@ class ValidationExceptionHandler : ExceptionHandler<ConstraintViolationException
 
     private val log = LoggerFactory.getLogger(ValidationExceptionHandler::class.java)
 
+    companion object {
+        private const val MAX_RENDERED_VALUE_CHARS = 100
+
+        /**
+         * Render a rejected value for the server-side log, bounded in size.
+         *
+         * A `@Size` violation on a collection carries the **entire collection** as the invalid
+         * value, so rendering it verbatim writes the whole rejected request body to the log:
+         * six oversized CrowdStrike hosts produced 27MB of backend log on 2026-08-25. For a
+         * collection the element count is the only diagnostic that matters, and every other
+         * value is truncated so no single violation can dominate the log.
+         *
+         * Internal only for testing — nothing outside this handler should format violations.
+         */
+        internal fun renderInvalidValue(value: Any?): String = when {
+            value == null -> "null"
+            value is Collection<*> -> "<collection of ${value.size} element(s)>"
+            value is Map<*, *> -> "<map of ${value.size} entry(s)>"
+            value is String && value.length > MAX_RENDERED_VALUE_CHARS ->
+                "${value.take(MAX_RENDERED_VALUE_CHARS)}... (${value.length} chars)"
+            value is String && value.isBlank() -> "\"\" (blank string)"
+            else -> value.toString().let {
+                if (it.length > MAX_RENDERED_VALUE_CHARS) {
+                    "${it.take(MAX_RENDERED_VALUE_CHARS)}... (${it.length} chars)"
+                } else {
+                    it
+                }
+            }
+        }
+    }
+
     override fun handle(request: HttpRequest<*>, exception: ConstraintViolationException): HttpResponse<*> {
         // Extract all constraint violations with detailed information for logging
         val detailedViolations = exception.constraintViolations.map { violation ->
             val path = violation.propertyPath.toString()
             val message = violation.message
-            val invalidValue = violation.invalidValue?.let { value ->
-                when {
-                    value is String && value.length > 100 -> "${value.take(100)}... (${value.length} chars)"
-                    value is String && value.isBlank() -> "\"\" (blank string)"
-                    else -> value.toString()
-                }
-            } ?: "null"
-
-            "$path: $message (value: $invalidValue)"
+            "$path: $message (value: ${renderInvalidValue(violation.invalidValue)})"
         }
 
         // Log detailed validation failure (server-side only, not exposed to client)

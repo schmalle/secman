@@ -15,6 +15,7 @@ data class EolFindingResponse(
     val assetId: Long?,
     val assetName: String?,
     val cloudAccountId: String?,
+    val cloudInstanceId: String?,
     val adDomain: String?,
     val assetOwner: String?,
     val repositoryId: Long?,

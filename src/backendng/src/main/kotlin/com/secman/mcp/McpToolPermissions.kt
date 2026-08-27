@@ -102,6 +102,10 @@ object McpToolPermissions {
             "assign_assets_to_workgroup", "assign_users_to_workgroup",
             "list_workgroup_aws_accounts", "add_workgroup_aws_account", "remove_workgroup_aws_account",
             "list_workgroup_ad_domains", "add_workgroup_ad_domain", "remove_workgroup_ad_domain",
+            // Links AWS accounts to the workgroup named after their display name.
+            // Same permission as add_workgroup_aws_account because it has the same
+            // effect — it grants a workgroup access to an account's assets (rule #9).
+            "link_workgroup_aws_accounts",
         ),
         setOf(NOTIFICATIONS_SEND) to listOf(
             // ADMIN role checked in execute() for all of these
@@ -185,6 +189,12 @@ object McpToolPermissions {
             setOf(WORKGROUPS_WRITE) to listOf(
                 "create_workgroup", "delete_workgroup",
                 "assign_assets_to_workgroup", "assign_users_to_workgroup",
+                // These six were in LISTING but absent here, so tools/call denied them
+                // unconditionally — visible in tools/list yet uncallable. The same
+                // fail-closed shape as the add_requirement bug noted above.
+                "list_workgroup_aws_accounts", "add_workgroup_aws_account", "remove_workgroup_aws_account",
+                "list_workgroup_ad_domains", "add_workgroup_ad_domain", "remove_workgroup_ad_domain",
+                "link_workgroup_aws_accounts",
             ),
             setOf(NOTIFICATIONS_SEND) to listOf(
                 "send_github_repo_alerts",

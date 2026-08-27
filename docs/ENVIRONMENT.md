@@ -87,7 +87,7 @@ transport endpoints and timing.
 ### Vulnerability dating
 | Var | Default | Effect |
 |---|---|---|
-| `VULN_USE_PATCH_PUBLICATION_DATE` | `false` | `false`: `daysOpen = now − detection`. `true`: `now − patchPublicationDate`. |
+| `VULN_USE_PATCH_PUBLICATION_DATE` | `true` | SLA anchor. `true` (default since 2026-08-24): age measured from when a **fix became available**, falling back to detection age per row when no patch date is published. `false`: age measured from CrowdStrike detection. **One-way door** — `first_seen_at` keeps `min(prior, new)`, so reverting the flag alone does not restore the old anchors; see docs/CROWDSTRIKE_IMPORT.md §Timestamp fix. |
 | `VULN_REQUIRE_PATCH_PUBLICATION_DATE` | `false` | only import vulns with patch-publication date |
 
 ### End-of-life catalogue (see `docs/EOL.md`)
@@ -304,7 +304,7 @@ SECMAN_BACKEND_URL=https://api.example.com
 FRONTEND_URL=https://secman.example.com
 SECMAN_AUTH_COOKIE_SECURE=true
 # optional
-# VULN_USE_PATCH_PUBLICATION_DATE=false
+# VULN_USE_PATCH_PUBLICATION_DATE=true
 # VULN_REQUIRE_PATCH_PUBLICATION_DATE=false
 # SECMAN_DEBUG=false
 # SECMAN_LOGGING=

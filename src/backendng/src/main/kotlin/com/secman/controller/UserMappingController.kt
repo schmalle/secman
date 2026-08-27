@@ -29,7 +29,8 @@ import org.slf4j.LoggerFactory
 open class UserMappingController(
     @Inject private val userMappingService: UserMappingService,
     @Inject private val userMappingRepository: UserMappingRepository,
-    @Inject private val bulkImportService: com.secman.service.UserMappingBulkImportService
+    @Inject private val bulkImportService: com.secman.service.UserMappingBulkImportService,
+    @Inject private val workgroupAccountLinkService: com.secman.service.WorkgroupAccountLinkService
 ) {
     private val logger = LoggerFactory.getLogger(UserMappingController::class.java)
 
@@ -191,6 +192,44 @@ open class UserMappingController(
                 mapOf(
                     "error" to "Internal Server Error",
                     "message" to "Failed to process bulk create"
+                )
+            )
+        }
+    }
+
+    /**
+     * POST /api/user-mappings/link-workgroup-accounts - correction path.
+     *
+     * Re-links every AWS account that carries a display name (V260 `aws_account_name`)
+     * to the workgroup named `aws-<display name>`, creating the workgroup when missing.
+     * No file involved — the source is what the mappings already hold, which is what
+     * makes this usable to repair mappings imported before display names existed or
+     * while a workgroup was temporarily absent.
+     *
+     * Idempotent: an account already assigned comes back as `alreadyLinked`.
+     */
+    @Post("/link-workgroup-accounts")
+    @Secured("ADMIN")
+    open fun linkWorkgroupAccounts(
+        @Body request: LinkWorkgroupAccountsRequest?,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        val dryRun = request?.dryRun ?: false
+        val actorId = getUserIdFromAuthenticationOrNull(authentication)
+        logger.info(
+            "AUDIT: operation=LINK_WORKGROUP_ACCOUNTS, actor={}, dryRun={}",
+            authentication.name, dryRun
+        )
+
+        return try {
+            HttpResponse.ok(workgroupAccountLinkService.linkFromStoredMappings(actorId, dryRun))
+        } catch (e: Exception) {
+            // Detail to the log, generic message to the client (A05).
+            logger.error("Failed to link workgroup AWS accounts", e)
+            HttpResponse.serverError(
+                mapOf(
+                    "error" to "Internal Server Error",
+                    "message" to "Failed to link workgroup AWS accounts"
                 )
             )
         }
