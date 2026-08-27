@@ -45,17 +45,16 @@ const McpDashboard: React.FC = () => {
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
-
   useEffect(() => {
     fetchDashboardData();
 
-    // Auto-refresh every 30 seconds
+    // Auto-refresh every 30 seconds. Clear the local handle in cleanup — the
+    // previous version cleared a state variable that was still null when this
+    // effect mounted, so the interval survived unmount and kept polling.
     const interval = setInterval(fetchDashboardData, 30000);
-    setRefreshInterval(interval);
 
     return () => {
-      if (refreshInterval) clearInterval(refreshInterval);
+      clearInterval(interval);
     };
   }, []);
 

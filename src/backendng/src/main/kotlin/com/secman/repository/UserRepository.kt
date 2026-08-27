@@ -94,11 +94,36 @@ interface UserRepository : JpaRepository<User, Long> {
     fun findByRolesContaining(role: User.Role): List<User>
 
     /**
+     * Find users holding any of the given roles (e.g. ADMIN or SECCHAMPION recipients).
+     */
+    @Query("""
+        SELECT DISTINCT u FROM User u
+        JOIN u.roles r
+        WHERE r IN (:roles)
+    """)
+    fun findByRolesContainingAny(roles: Collection<User.Role>): List<User>
+
+    /**
+     * Count users with a specific role without materializing them
+     * (last-admin protection, config-bundle validation).
+     */
+    @Query("""
+        SELECT COUNT(DISTINCT u) FROM User u
+        JOIN u.roles r
+        WHERE r = :role
+    """)
+    fun countByRolesContaining(role: User.Role): Long
+
+    /**
+     * Users belonging to any of the given workgroups, in one query.
+     * Batch variant of [findByWorkgroupsIdOrderByUsernameAsc]; a user in several
+     * of the workgroups appears once per membership — deduplicate by id.
+     */
+    fun findByWorkgroupsIdInOrderByUsernameAsc(workgroupIds: Collection<Long>): List<User>
+
+    /**
      * Find all users that have logged in at least once.
      * Used by the admin broadcast feature to skip pending (never-activated) accounts.
      */
     fun findByLastLoginIsNotNull(): List<User>
-
-    // Note: For other admin user queries, use findAll() and filter in service layer
-    // (e.g., users.filter { it.hasRole(Role.ADMIN) })
 }

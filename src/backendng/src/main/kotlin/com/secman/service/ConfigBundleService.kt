@@ -319,9 +319,9 @@ open class ConfigBundleService(
         }
 
         // Check if import would leave system without ADMIN
-        val existingAdmins = userRepository.findAll().count { it.roles.contains(User.Role.ADMIN) }
+        val existingAdmins = userRepository.countByRolesContaining(User.Role.ADMIN)
         val importingAdmins = bundle.users.count { it.roles.contains("ADMIN") }
-        if (existingAdmins == 0 && importingAdmins == 0) {
+        if (existingAdmins == 0L && importingAdmins == 0) {
             errors.add("Import would leave system without any ADMIN users")
         }
 

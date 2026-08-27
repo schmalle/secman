@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete, getUser, hasVulnAccess } from '../utils/auth';
 import { isAdmin, isSecChampion } from '../utils/permissions';
 import { useClientRoles } from '../utils/useClientAuth';
@@ -426,8 +426,9 @@ const AssetManagement: React.FC = () => {
     setSelectedAssetForVulns(null);
   };
 
-  // Filter assets based on current filter values
-  const getFilteredAssets = () => {
+  // Filter assets based on current filter values. Memoized: the render below reads
+  // this several times, and each call used to re-scan the full asset array.
+  const filteredAssets = useMemo(() => {
     return assets.filter(asset => {
       // Text filters use partial matching
       const nameMatch = !nameFilter || asset.name.toLowerCase().includes(nameFilter.toLowerCase());
@@ -442,7 +443,22 @@ const AssetManagement: React.FC = () => {
 
       return nameMatch && ipMatch && accountIdMatch && ownerMatch && adDomainMatch && workgroupMatch;
     });
-  };
+  }, [assets, nameFilter, ipFilter, accountIdFilter, ownerFilter, adDomainFilter, workgroupFilter]);
+
+  // Dropdown option lists derived from the asset array — memoized so the
+  // Set + sort work runs when assets change, not on every keystroke re-render.
+  const ownerOptions = useMemo(
+    () => [...new Set(assets.map(a => a.owner).filter(Boolean))].sort(),
+    [assets]
+  );
+  const adDomainOptions = useMemo(
+    () => [...new Set(assets.map(a => a.adDomain).filter(Boolean))].sort(),
+    [assets]
+  );
+  const assetWorkgroupOptions = useMemo(
+    () => [...new Set(assets.flatMap(a => a.workgroups?.map(w => w.name) || []))].sort(),
+    [assets]
+  );
 
   if (loading) {
     return (
@@ -521,7 +537,7 @@ const AssetManagement: React.FC = () => {
                 </>
               )}
               {/* Feature 029: Bulk Delete Button (ADMIN only, hidden when no assets) */}
-              {isAdmin(roles) && getFilteredAssets().length > 0 && (
+              {isAdmin(roles) && filteredAssets.length > 0 && (
                 <button
                   type="button"
                   className="btn btn-danger"
@@ -788,7 +804,7 @@ const AssetManagement: React.FC = () => {
                     onChange={(e) => setOwnerFilter(e.target.value)}
                   >
                     <option value="">All Owners</option>
-                    {[...new Set(assets.map(a => a.owner).filter(Boolean))].sort().map(owner => (
+                    {ownerOptions.map(owner => (
                       <option key={owner} value={owner}>{owner}</option>
                     ))}
                   </select>
@@ -802,7 +818,7 @@ const AssetManagement: React.FC = () => {
                     onChange={(e) => setAdDomainFilter(e.target.value)}
                   >
                     <option value="">All Domains</option>
-                    {[...new Set(assets.map(a => a.adDomain).filter(Boolean))].sort().map(domain => (
+                    {adDomainOptions.map(domain => (
                       <option key={domain} value={domain}>{domain}</option>
                     ))}
                   </select>
@@ -823,7 +839,7 @@ const AssetManagement: React.FC = () => {
                         <option key={wg.id} value={wg.name}>{wg.name}</option>
                       ))
                     ) : (
-                      [...new Set(assets.flatMap(a => a.workgroups?.map(w => w.name) || []))].sort().map(name => (
+                      assetWorkgroupOptions.map(name => (
                         <option key={name} value={name}>{name}</option>
                       ))
                     )}
@@ -867,8 +883,8 @@ const AssetManagement: React.FC = () => {
         <div className="col-12">
           <div className="card">
             <div className="card-body">
-              <h5 className="card-title">Assets ({getFilteredAssets().length})</h5>
-              {getFilteredAssets().length === 0 ? (
+              <h5 className="card-title">Assets ({filteredAssets.length})</h5>
+              {filteredAssets.length === 0 ? (
                 <p className="text-muted">
                   {assets.length === 0
                     ? 'No assets found. Click "Add New Asset" to create one.'
@@ -890,7 +906,7 @@ const AssetManagement: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {getFilteredAssets().map((asset) => (
+                      {filteredAssets.map((asset) => (
                         <tr key={asset.id}>
                           <td>{asset.name}</td>
                           <td>{asset.ip || '-'}</td>
@@ -1017,7 +1033,7 @@ const AssetManagement: React.FC = () => {
         onClose={() => setShowBulkDeleteModal(false)}
         onConfirm={handleBulkDelete}
         isDeleting={isDeletingBulk}
-        assetCount={getFilteredAssets().length}
+        assetCount={filteredAssets.length}
       />
 
     </div>

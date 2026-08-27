@@ -28,6 +28,13 @@ interface ScanRepository : JpaRepository<Scan, Long> {
     fun findByUploadedByOrderByScanDateDesc(uploadedBy: String, pageable: Pageable): Page<Scan>
 
     /**
+     * Scans uploaded by any of the given usernames, newest first.
+     * Batch variant used by AssetFilterService to replace a full-table
+     * findAll() followed by in-memory uploader filtering.
+     */
+    fun findByUploadedByInOrderByScanDateDesc(uploadedBy: Collection<String>): List<Scan>
+
+    /**
      * Find all scans with pagination
      * Used for: Admin scan list view
      * Returns: Paginated list ordered by scanDate DESC

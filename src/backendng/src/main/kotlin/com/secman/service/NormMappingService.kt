@@ -22,7 +22,9 @@ open class NormMappingService(
     private val normRepository: NormRepository,
     private val translationConfigRepository: TranslationConfigRepository,
     private val httpClient: HttpClient,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    // Self-proxy so per-requirement apply calls go through AOP and get their own transaction
+    private val selfProvider: jakarta.inject.Provider<NormMappingService>
 ) {
 
     private val logger = LoggerFactory.getLogger(NormMappingService::class.java)
@@ -431,8 +433,13 @@ Rules:
     /**
      * Process requirements one by one, get AI suggestions, and auto-apply mappings.
      * This method is resilient - if one requirement fails, others continue processing.
+     *
+     * Deliberately NOT @Transactional: each iteration makes a multi-second OpenRouter
+     * HTTP call, and a transaction spanning the whole loop held a DB connection across
+     * every one of them. The AI phase runs outside any transaction; each requirement's
+     * mappings are applied in their own short transaction via [applyHighConfidenceSuggestions]
+     * (through the self-proxy, so AOP applies). Per-requirement failure isolation is unchanged.
      */
-    @Transactional
     open fun suggestAndApplyMappings(request: NormMappingSuggestionRequest? = null): AutoApplyMappingsResponse {
         val startTime = System.currentTimeMillis()
         logger.info("Starting auto-apply norm mapping process")
@@ -482,29 +489,17 @@ Rules:
                 val suggestions = parseAIResponse(aiResponse, listOf(requirement))
 
                 if (suggestions.isNotEmpty() && suggestions[0].suggestions.isNotEmpty()) {
-                    // Auto-apply all suggestions with confidence >= 3
+                    // Auto-apply all suggestions with confidence >= 3, in this
+                    // requirement's own short transaction (self-proxy for AOP).
                     val highConfidenceSuggestions = suggestions[0].suggestions.filter { it.confidence >= 3 }
+                    val applied = selfProvider.get()
+                        .applyHighConfidenceSuggestions(requirement.id!!, highConfidenceSuggestions)
 
-                    for (suggestion in highConfidenceSuggestions) {
-                        val norm = findOrCreateNormInternal(suggestion.standard, suggestion.control)
+                    newNormsCreated += applied.newNormsCreated
+                    existingNormsLinked += applied.existingNormsLinked
+                    totalMappingsApplied += applied.mappingsApplied
 
-                        // Check if norm was newly created
-                        if (suggestion.normId == null) {
-                            newNormsCreated++
-                        } else {
-                            existingNormsLinked++
-                        }
-
-                        // Add norm to requirement if not already present
-                        if (!requirement.norms.any { it.id == norm.id }) {
-                            requirement.norms.add(norm)
-                            totalMappingsApplied++
-                        }
-                    }
-
-                    // Save the updated requirement
-                    if (highConfidenceSuggestions.isNotEmpty()) {
-                        requirementRepository.save(requirement)
+                    if (applied.saved) {
                         successfullyMapped++
                         logger.info("Requirement {}/{} mapped with {} norms",
                             index + 1, requirements.size, highConfidenceSuggestions.size)
@@ -560,6 +555,59 @@ Rules:
             existingNormsLinked = existingNormsLinked,
             failedRequirements = failedRequirements,
             processingTimeMs = processingTime
+        )
+    }
+
+    /** Result of applying one requirement's high-confidence suggestions. */
+    data class AppliedSuggestions(
+        val mappingsApplied: Int,
+        val newNormsCreated: Int,
+        val existingNormsLinked: Int,
+        val saved: Boolean
+    )
+
+    /**
+     * Apply one requirement's high-confidence suggestions in a single short transaction.
+     * Reloads the requirement inside the transaction so the entity is managed here,
+     * not carried in detached from the non-transactional AI loop.
+     */
+    @Transactional
+    open fun applyHighConfidenceSuggestions(
+        requirementId: Long,
+        highConfidenceSuggestions: List<NormSuggestion>
+    ): AppliedSuggestions {
+        val requirement = requirementRepository.findById(requirementId).orElseThrow {
+            IllegalStateException("Requirement $requirementId no longer exists; cannot apply mappings")
+        }
+
+        var mappingsApplied = 0
+        var newNormsCreated = 0
+        var existingNormsLinked = 0
+
+        for (suggestion in highConfidenceSuggestions) {
+            val norm = findOrCreateNormInternal(suggestion.standard, suggestion.control)
+
+            if (suggestion.normId == null) {
+                newNormsCreated++
+            } else {
+                existingNormsLinked++
+            }
+
+            if (!requirement.norms.any { it.id == norm.id }) {
+                requirement.norms.add(norm)
+                mappingsApplied++
+            }
+        }
+
+        if (highConfidenceSuggestions.isNotEmpty()) {
+            requirementRepository.save(requirement)
+        }
+
+        return AppliedSuggestions(
+            mappingsApplied = mappingsApplied,
+            newNormsCreated = newNormsCreated,
+            existingNormsLinked = existingNormsLinked,
+            saved = highConfidenceSuggestions.isNotEmpty()
         )
     }
 

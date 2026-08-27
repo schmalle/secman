@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { WorkgroupResponse } from '../services/workgroupApi';
-import { moveWorkgroup, getRootWorkgroups, getWorkgroupChildren } from '../services/workgroupApi';
+import { moveWorkgroup, getWorkgroupTree } from '../services/workgroupApi';
 
 /**
  * Move Workgroup Modal Component
@@ -43,35 +43,14 @@ const MoveWorkgroupModal: React.FC<MoveWorkgroupModalProps> = ({
   const fetchAllWorkgroups = async () => {
     setLoadingWorkgroups(true);
     try {
-      const roots = await getRootWorkgroups();
-
-      // Recursively load all workgroups
-      const allWgs: WorkgroupResponse[] = [...roots];
-      for (const root of roots) {
-        await loadChildren(root, allWgs);
-      }
-
-      setAllWorkgroups(allWgs);
+      // One request for the whole visible tree — the previous recursive walk
+      // made one serial children request per workgroup node.
+      setAllWorkgroups(await getWorkgroupTree());
     } catch (err) {
       console.error('Failed to load workgroups:', err);
       setError('Failed to load workgroups');
     } finally {
       setLoadingWorkgroups(false);
-    }
-  };
-
-  const loadChildren = async (parent: WorkgroupResponse, accumulator: WorkgroupResponse[]) => {
-    if (parent.hasChildren) {
-      try {
-        const children = await getWorkgroupChildren(parent.id);
-        accumulator.push(...children);
-
-        for (const child of children) {
-          await loadChildren(child, accumulator);
-        }
-      } catch (err) {
-        console.error(`Failed to load children for ${parent.name}:`, err);
-      }
     }
   };
 

@@ -185,9 +185,9 @@ open class UserService(
     }
 
     fun getUsersByRole(role: String): List<User> {
-        return userRepository.findAll().filter { user ->
-            user.roles.any { it.name.equals(role, ignoreCase = true) }
-        }
+        val parsedRole = User.Role.entries.firstOrNull { it.name.equals(role, ignoreCase = true) }
+            ?: return emptyList()
+        return userRepository.findByRolesContaining(parsedRole)
     }
 
     /**
@@ -198,8 +198,6 @@ open class UserService(
      * @return count of users with ADMIN role
      */
     fun countAdminUsers(): Int {
-        return userRepository.findAll().count { user ->
-            user.roles.contains(User.Role.ADMIN)
-        }
+        return userRepository.countByRolesContaining(User.Role.ADMIN).toInt()
     }
 }

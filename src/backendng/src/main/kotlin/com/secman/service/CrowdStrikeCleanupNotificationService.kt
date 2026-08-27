@@ -22,7 +22,7 @@ open class CrowdStrikeCleanupNotificationService(
     open fun notifyAdmins(run: CrowdStrikeCleanupRun): CompletableFuture<Void> {
         return CompletableFuture.runAsync {
             try {
-                val admins = userRepository.findAll().filter { it.hasRole(User.Role.ADMIN) }
+                val admins = userRepository.findByRolesContaining(User.Role.ADMIN)
                 if (admins.isEmpty()) {
                     logger.warn("No ADMIN users to notify of CrowdStrike cleanup run {}", run.id)
                     return@runAsync

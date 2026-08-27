@@ -183,7 +183,7 @@ open class AdminNotificationService(
                 logger.info("Sending new user notification for manual creation: user=${newUser.username}, createdBy=$createdByUsername")
 
                 // Get all ADMIN users
-                val adminUsers = userRepository.findAll().filter { it.hasRole(User.Role.ADMIN) }
+                val adminUsers = userRepository.findByRolesContaining(User.Role.ADMIN)
 
                 if (adminUsers.isEmpty()) {
                     logger.warn("No ADMIN users found to notify about new user: ${newUser.username}")
@@ -263,7 +263,7 @@ open class AdminNotificationService(
                 logger.info("Sending new user notification for OAuth registration: user=${newUser.username}, provider=$oauthProvider")
 
                 // Get all ADMIN users
-                val adminUsers = userRepository.findAll().filter { it.hasRole(User.Role.ADMIN) }
+                val adminUsers = userRepository.findByRolesContaining(User.Role.ADMIN)
 
                 if (adminUsers.isEmpty()) {
                     logger.warn("No ADMIN users found to notify about OAuth user: ${newUser.username}")
