@@ -83,7 +83,7 @@ open class AssetFilterService(
 
     fun getScopedAccessibleAssetIds(authentication: Authentication): Set<Long> {
         if (authentication.hasRole("ADMIN")) {
-            return assetRepository.findAll().mapNotNull { it.id }.toSet()
+            return assetRepository.findAllIds().toSet()
         }
         return getAccessibleAssetsForScopedUser(authentication).mapNotNull { it.id }.toSet()
     }
@@ -110,7 +110,7 @@ open class AssetFilterService(
      */
     fun getAccessibleAssetIds(authentication: Authentication): Set<Long> {
         if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
-            return assetRepository.findAll().mapNotNull { it.id }.toSet()
+            return assetRepository.findAllIds().toSet()
         }
         return getAccessibleAssets(authentication).mapNotNull { it.id }.toSet()
     }
@@ -211,37 +211,11 @@ open class AssetFilterService(
             .sortedBy { it.name }
     }
 
-    /**
-     * Get vulnerabilities accessible to the authenticated user
-     * FR-014, FR-016, FR-018: Filter by asset accessibility, ADMIN has full access
-     *
-     * ⚠️ CURRENTLY UNUSED, AND UNSAFE TO CALL AS WRITTEN. Left in place rather than removed
-     * because it is pre-existing dead code, but do not wire it up:
-     *  - the ADMIN branch is `vulnerabilityRepository.findAll()` — every row of a multi-million-row
-     *    table as managed entities;
-     *  - the scoped branch is `findLatestVulnerabilitiesForAssetIds`, which is unbounded for the
-     *    same reason.
-     * Both are the exact shape that ran a 1 GB container out of heap on 2026-07-30 (see the note on
-     * VulnerabilityRepository.findOverdueVulnerabilitiesWithAssets). If a caller ever needs this,
-     * give it a `Pageable` or an aggregate — `countLatestVulnerabilitiesBySeverityForAssetIds` is
-     * the counting equivalent. Otherwise this method should simply be deleted.
-     *
-     * @param authentication Current user authentication
-     * @return List of accessible vulnerabilities
-     */
-    fun getAccessibleVulnerabilities(authentication: Authentication): List<Vulnerability> {
-        // ADMIN and SECCHAMPION have universal access
-        if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
-            return vulnerabilityRepository.findAll()
-        }
-
-        // Regular users and VULN: filter by unified asset accessibility rules.
-        val accessibleAssetIds = getAccessibleAssetIds(authentication)
-        if (accessibleAssetIds.isEmpty()) {
-            return emptyList()
-        }
-        return vulnerabilityRepository.findLatestVulnerabilitiesForAssetIds(accessibleAssetIds)
-    }
+    // getAccessibleVulnerabilities was deleted here: it had no callers, and both of its
+    // branches (findAll() / unbounded findLatestVulnerabilitiesForAssetIds) were the exact
+    // full-table shape that ran a 1 GB container out of heap on 2026-07-30. A future caller
+    // needs a Pageable or an aggregate — `countLatestVulnerabilitiesBySeverityForAssetIds`
+    // is the counting equivalent.
 
     /**
      * Get scans accessible to the authenticated user
@@ -278,18 +252,13 @@ open class AssetFilterService(
             ).content
         }
 
-        // Find all users in the same workgroups
-        val usersInWorkgroups = userWorkgroupIds.flatMap { workgroupId ->
-            userRepository.findByWorkgroupsIdOrderByUsernameAsc(workgroupId)
-        }.distinctBy { it.id }
+        // Find all users in the same workgroups (single batch query)
+        val accessibleUsernames = userRepository.findByWorkgroupsIdInOrderByUsernameAsc(userWorkgroupIds)
+            .map { it.username }
+            .toSet()
 
-        // Get usernames of all users in same workgroups
-        val accessibleUsernames = usersInWorkgroups.map { it.username }.toSet()
-
-        // Filter scans by these usernames
-        return scanRepository.findAll().filter { scan ->
-            accessibleUsernames.contains(scan.uploadedBy)
-        }.sortedByDescending { it.scanDate }
+        // Fetch only those users' scans instead of filtering the full table in memory
+        return scanRepository.findByUploadedByInOrderByScanDateDesc(accessibleUsernames)
     }
 
     /**

@@ -11,6 +11,14 @@ import java.util.Optional
 @Repository
 interface AssetRepository : JpaRepository<Asset, Long> {
 
+    /**
+     * All asset ids as a projection — for the ADMIN/SECCHAMPION short-circuit paths in
+     * AssetFilterService that only need id sets. Avoids materializing the full table
+     * as managed entities the way findAll() does.
+     */
+    @io.micronaut.data.annotation.Query("SELECT a.id FROM Asset a")
+    fun findAllIds(): List<Long>
+
     // Memory Optimization - Feature 073
 
     /**

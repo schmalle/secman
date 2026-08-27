@@ -174,8 +174,7 @@ open class ExceptionRequestNotificationService(
         val cveId = describeSubject(request)
         val assetName = describeScope(request)
         val subject = "New Exception Request: $cveId on $assetName"
-        val adminRecipients: List<AdminRecipient> = userRepository.findAll()
-            .filter { it.hasRole(User.Role.ADMIN) || it.hasRole(User.Role.SECCHAMPION) }
+        val adminRecipients: List<AdminRecipient> = userRepository.findByRolesContainingAny(listOf(User.Role.ADMIN, User.Role.SECCHAMPION))
             .map { user ->
                 AdminRecipient(
                     email = user.email,
@@ -739,8 +738,7 @@ open class ExceptionRequestNotificationService(
         val requesterName = request.requestedByUsername
         val expirationDate = request.expirationDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
         val subject = "Exception Expired: $cveId on $assetName"
-        val recipients: List<AdminRecipient> = userRepository.findAll()
-            .filter { it.hasRole(User.Role.ADMIN) || it.hasRole(User.Role.SECCHAMPION) }
+        val recipients: List<AdminRecipient> = userRepository.findByRolesContainingAny(listOf(User.Role.ADMIN, User.Role.SECCHAMPION))
             .map { user ->
                 AdminRecipient(
                     email = user.email,

@@ -120,6 +120,20 @@ export async function getRootWorkgroups(): Promise<WorkgroupResponse[]> {
 }
 
 /**
+ * Get every workgroup visible to the caller in one flat response.
+ * Each entry carries parentId/hasChildren, so tree views rebuild the
+ * hierarchy locally instead of requesting children node by node.
+ *
+ * @returns All visible workgroups (flat list with parent links)
+ */
+export async function getWorkgroupTree(): Promise<WorkgroupResponse[]> {
+  const response = await authenticatedGet(
+    `/api/workgroups/tree`
+  );
+  return await response.json();
+}
+
+/**
  * Get all ancestors from root to immediate parent
  * Feature 040: Nested Workgroups (User Story 5)
  *

@@ -129,117 +129,145 @@ const HomeStatisticsDashboard: React.FC = () => {
       setPrefs(visible);
       setPrefsLoaded(true);
 
+      // All card fetches run concurrently, so the dashboard waits for the slowest
+      // endpoint instead of the sum of all of them. Each task keeps its own
+      // try/catch on purpose: one failing endpoint must degrade only its own card,
+      // never blank the dashboard or suppress the others — do not collapse these
+      // into a single shared error handler.
+      const tasks: Promise<void>[] = [];
+      const fetchCard = (run: () => Promise<void>) => tasks.push(run());
+
       if (visible.showAssetInventory) {
-        try {
-          const assetsResp = await authenticatedGet('/api/assets/count');
-          if (assetsResp.ok) {
-            const assets = await assetsResp.json();
-            next.assets = typeof assets?.count === 'number' ? assets.count : null;
+        fetchCard(async () => {
+          try {
+            const assetsResp = await authenticatedGet('/api/assets/count');
+            if (assetsResp.ok) {
+              const assets = await assetsResp.json();
+              next.assets = typeof assets?.count === 'number' ? assets.count : null;
+            }
+          } catch (error) {
+            console.warn('Failed to load asset statistics:', error);
           }
-        } catch (error) {
-          console.warn('Failed to load asset statistics:', error);
-        }
+        });
       }
 
       if (visible.showRunningRiskAssessments && hasRole(['ADMIN', 'RISK', 'SECCHAMPION'])) {
-        try {
-          const assessmentsResp = await authenticatedGet('/api/risk-assessments');
-          if (assessmentsResp.ok) {
-            const assessments = await assessmentsResp.json();
-            if (Array.isArray(assessments)) {
-              next.runningAssessments = assessments.filter(a => a?.status === 'IN_PROGRESS').length;
+        fetchCard(async () => {
+          try {
+            const assessmentsResp = await authenticatedGet('/api/risk-assessments');
+            if (assessmentsResp.ok) {
+              const assessments = await assessmentsResp.json();
+              if (Array.isArray(assessments)) {
+                next.runningAssessments = assessments.filter(a => a?.status === 'IN_PROGRESS').length;
+              }
             }
+          } catch (error) {
+            console.warn('Failed to load risk assessment statistics:', error);
           }
-        } catch (error) {
-          console.warn('Failed to load risk assessment statistics:', error);
-        }
+        });
       }
 
       if (visible.showActiveReleases) {
-        try {
-          const releasesResp = await authenticatedGet('/api/releases?status=ACTIVE');
-          if (releasesResp.ok) {
-            const releasesPage = await releasesResp.json();
-            next.releases = typeof releasesPage?.totalItems === 'number' ? releasesPage.totalItems : null;
+        fetchCard(async () => {
+          try {
+            const releasesResp = await authenticatedGet('/api/releases?status=ACTIVE');
+            if (releasesResp.ok) {
+              const releasesPage = await releasesResp.json();
+              next.releases = typeof releasesPage?.totalItems === 'number' ? releasesPage.totalItems : null;
+            }
+          } catch (error) {
+            console.warn('Failed to load release statistics:', error);
           }
-        } catch (error) {
-          console.warn('Failed to load release statistics:', error);
-        }
+        });
       }
 
       if (visible.showLastCrowdStrikeImport) {
-        try {
-          const csResp = await authenticatedGet('/api/crowdstrike/last-checkin');
-          if (csResp.ok) {
-            next.lastCrowdStrikeCheckin = formatDate((await csResp.text()).trim());
+        fetchCard(async () => {
+          try {
+            const csResp = await authenticatedGet('/api/crowdstrike/last-checkin');
+            if (csResp.ok) {
+              next.lastCrowdStrikeCheckin = formatDate((await csResp.text()).trim());
+            }
+          } catch (error) {
+            console.warn('Failed to load CrowdStrike check-in statistics:', error);
           }
-        } catch (error) {
-          console.warn('Failed to load CrowdStrike check-in statistics:', error);
-        }
+        });
       }
 
       if (hasRole(['ADMIN', 'SECCHAMPION'])) {
         if (visible.showAwsCleanServerKpi) {
-          try {
-            const kpiResp = await authenticatedGet('/api/dashboard/aws-clean-server-kpi');
-            if (kpiResp.ok) {
-              next.awsCleanServerKpi = await kpiResp.json();
+          fetchCard(async () => {
+            try {
+              const kpiResp = await authenticatedGet('/api/dashboard/aws-clean-server-kpi');
+              if (kpiResp.ok) {
+                next.awsCleanServerKpi = await kpiResp.json();
+              }
+            } catch (error) {
+              console.warn('Failed to load AWS clean-server KPI:', error);
             }
-          } catch (error) {
-            console.warn('Failed to load AWS clean-server KPI:', error);
-          }
+          });
         }
 
-        // Separate try/catch from the KPI above: either endpoint failing must degrade only
-        // its own card, not blank the dashboard or suppress the other KPI.
         if (visible.showEdrCoverageKpi) {
-          try {
-            const edrResp = await authenticatedGet('/api/dashboard/edr-coverage-kpi');
-            if (edrResp.ok) {
-              next.edrCoverageKpi = await edrResp.json();
+          fetchCard(async () => {
+            try {
+              const edrResp = await authenticatedGet('/api/dashboard/edr-coverage-kpi');
+              if (edrResp.ok) {
+                next.edrCoverageKpi = await edrResp.json();
+              }
+            } catch (error) {
+              console.warn('Failed to load EDR coverage KPI:', error);
             }
-          } catch (error) {
-            console.warn('Failed to load EDR coverage KPI:', error);
-          }
+          });
         }
       }
 
       if (hasRole('ADMIN')) {
         if (visible.showAccountFindingAge) {
-          try {
-            const agingResp = await authenticatedGet('/api/admin/account-finding-age/top?limit=10');
-            if (agingResp.ok) {
-              next.accountFindingAge = await agingResp.json();
+          fetchCard(async () => {
+            try {
+              const agingResp = await authenticatedGet('/api/admin/account-finding-age/top?limit=10');
+              if (agingResp.ok) {
+                next.accountFindingAge = await agingResp.json();
+              }
+            } catch (error) {
+              console.warn('Failed to load account finding-age report:', error);
             }
-          } catch (error) {
-            console.warn('Failed to load account finding-age report:', error);
-          }
+          });
         }
 
         if (visible.showUsers) {
-          try {
-            const usersResp = await authenticatedGet('/api/users');
-            if (usersResp.ok) {
-              const users = await usersResp.json();
-              next.users = Array.isArray(users) ? users.length : null;
+          fetchCard(async () => {
+            try {
+              const usersResp = await authenticatedGet('/api/users');
+              if (usersResp.ok) {
+                const users = await usersResp.json();
+                next.users = Array.isArray(users) ? users.length : null;
+              }
+            } catch (error) {
+              console.warn('Failed to load user statistics:', error);
             }
-          } catch (error) {
-            console.warn('Failed to load user statistics:', error);
-          }
+          });
         }
 
         if (visible.showActiveUsers) {
-          try {
-            const activeUsersResp = await authenticatedGet('/api/auth/activity-summary');
-            if (activeUsersResp.ok) {
-              const activity = await activeUsersResp.json();
-              next.activeUsers = typeof activity?.activeUsers === 'number' ? activity.activeUsers : null;
+          fetchCard(async () => {
+            try {
+              const activeUsersResp = await authenticatedGet('/api/auth/activity-summary');
+              if (activeUsersResp.ok) {
+                const activity = await activeUsersResp.json();
+                next.activeUsers = typeof activity?.activeUsers === 'number' ? activity.activeUsers : null;
+              }
+            } catch (error) {
+              console.warn('Failed to load active user statistics:', error);
             }
-          } catch (error) {
-            console.warn('Failed to load active user statistics:', error);
-          }
+          });
         }
       }
+
+      // Every task resolves (each swallows its own errors), so Promise.all here
+      // is equivalent to allSettled and never rejects.
+      await Promise.all(tasks);
 
       setStats(next);
     };

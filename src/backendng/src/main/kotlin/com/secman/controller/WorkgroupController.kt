@@ -803,6 +803,28 @@ open class WorkgroupController(
     }
 
     /**
+     * Get every workgroup visible to the caller in one flat response.
+     *
+     * Exists so tree views (e.g. the move-workgroup dialog) load the whole hierarchy
+     * in a single request instead of walking it recursively with one children call
+     * per node. Each entry carries parentId/hasChildren, so the client rebuilds the
+     * tree locally. Visibility is exactly the root/children model: privileged callers
+     * (ADMIN/SECCHAMPION) see everything, restricted callers only their accessible set.
+     *
+     * GET /api/workgroups/tree
+     * Returns: 200 OK with all visible workgroups (flat, parent links included)
+     */
+    @Get("/tree")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Transactional
+    open fun getWorkgroupTree(authentication: Authentication): HttpResponse<List<WorkgroupResponse>> {
+        val accessibleIds = accessibleWorkgroupIdsOrNull(authentication)
+        val all = workgroupService.listAllWorkgroups()
+        val visible = if (accessibleIds == null) all else all.filter { it.id in accessibleIds }
+        return HttpResponse.ok(visible.map { toWorkgroupResponse(it) })
+    }
+
+    /**
      * Get all ancestors from root to immediate parent
      * Feature 040: Nested Workgroups (User Story 5)
      *

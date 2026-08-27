@@ -35,7 +35,7 @@ class UserDeletionValidator(
         // Feature 037: Check last admin protection
         val user = userRepository.findById(userId).orElse(null)
         if (user != null && user.isAdmin()) {
-            val adminCount = userRepository.findAll().count { it.roles.contains(com.secman.domain.User.Role.ADMIN) }
+            val adminCount = userRepository.countByRolesContaining(com.secman.domain.User.Role.ADMIN)
             if (adminCount <= 1) {
                 blockingReferences.add(
                     BlockingReference(
@@ -189,7 +189,7 @@ class UserDeletionValidator(
 
         if (hasAdminNow && !willHaveAdmin) {
             // Count total admins
-            val adminCount = userRepository.findAll().count { it.roles.contains(com.secman.domain.User.Role.ADMIN) }
+            val adminCount = userRepository.countByRolesContaining(com.secman.domain.User.Role.ADMIN)
 
             if (adminCount <= 1) {
                 return ValidationResult(
