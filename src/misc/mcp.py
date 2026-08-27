@@ -5,7 +5,7 @@ api_key = "your-api-key-here"
 base_url = "http://localhost:8080/api/mcp"
 
 headers = {
-    "X-MCP-API-Key": "sk-mv5Nioy54KJO4tw1JQYDGQMSTadbFakyLlE1UmrkzNCSYV2M",
+    "X-MCP-API-Key": "YOURKEY",
     "Content-Type": "application/json"
 }
 
