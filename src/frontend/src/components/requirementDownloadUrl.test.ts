@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildPublicStandardUrl, buildRequirementDownloadUrl } from './requirementDownloadUrl';
+import { buildAuthenticatedRequirementExportUrl, buildPublicStandardUrl, buildRequirementDownloadUrl } from './requirementDownloadUrl';
 
 test('an unscoped download keeps the bare export path', () => {
   assert.equal(buildRequirementDownloadUrl({ format: 'docx' }), '/api/requirements/export/docx');
@@ -65,5 +65,43 @@ test('the public standard URL pins an explicit release version when given', () =
   assert.equal(
     buildPublicStandardUrl('https://secman.example.net', 'IT/OT Security', 'xlsx', '98.739714.0'),
     'https://secman.example.net/api/requirements/export/xlsx?standard=IT%2FOT+Security&release=98.739714.0',
+  );
+});
+
+test('authenticated export: plain endpoint with no scope', () => {
+  assert.equal(
+    buildAuthenticatedRequirementExportUrl({ format: 'docx' }),
+    '/api/requirements/export/docx',
+  );
+});
+
+test('authenticated export: use case rides as a path segment', () => {
+  assert.equal(
+    buildAuthenticatedRequirementExportUrl({ format: 'xlsx', useCaseId: 7 }),
+    '/api/requirements/export/xlsx/usecase/7',
+  );
+});
+
+test('authenticated export: translated variant appends the language segment', () => {
+  assert.equal(
+    buildAuthenticatedRequirementExportUrl({ format: 'docx', translationLanguage: 'german' }),
+    '/api/requirements/export/docx/translated/german',
+  );
+});
+
+test('authenticated export: use case + translation + release compose', () => {
+  assert.equal(
+    buildAuthenticatedRequirementExportUrl({
+      format: 'docx', useCaseId: 3, translationLanguage: 'french', releaseId: 12,
+    }),
+    '/api/requirements/export/docx/usecase/3/translated/french?releaseId=12',
+  );
+});
+
+test('authenticated export: releaseId is carried on the use-case route too', () => {
+  // The Import/Export screen had drifted and dropped releaseId here — pinned so it cannot again.
+  assert.equal(
+    buildAuthenticatedRequirementExportUrl({ format: 'xlsx', useCaseId: 5, releaseId: 2 }),
+    '/api/requirements/export/xlsx/usecase/5?releaseId=2',
   );
 });
