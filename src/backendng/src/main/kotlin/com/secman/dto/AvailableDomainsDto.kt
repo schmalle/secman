@@ -8,9 +8,6 @@ import io.micronaut.serde.annotation.Serdeable
  * Returns list of unique AD domains from assets the user has access to.
  * Used to populate the domain selector dropdown on the vulnerability statistics page.
  *
- * Feature: 059-vuln-stats-domain-filter
- * Task: T001
- * Spec reference: spec.md FR-002
  * Contract: contracts/domain-filter-api.yaml
  * Data model: data-model.md Section "AvailableDomainsDto"
  */

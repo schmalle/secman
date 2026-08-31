@@ -28,7 +28,6 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Service for WebAuthn/FIDO2 operations
- * Feature: Passkey MFA Support
  *
  * Handles passkey registration and authentication using WebAuthn4J 0.30.0
  */

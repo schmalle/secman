@@ -20,15 +20,12 @@ import org.slf4j.LoggerFactory
  *
  * Provides endpoint for non-admin users to view vulnerabilities grouped by their AWS accounts.
  *
- * Feature: 018-under-vuln-management
  * Access Control:
  * - Authentication required (JWT)
  * - Admin users are rejected (403 Forbidden - should use System Vulns)
  * - Non-admin users see the cloud assets they can access via the same unified
  *   10-point filter as the Current Vulnerabilities view, grouped by AWS account,
  *   so the two views report reconcilable vulnerability counts
- *
- * Related to: User Story 1 (P1) - View Vulnerabilities for Single AWS Account
  */
 @Controller("/api/account-vulns")
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -65,13 +62,6 @@ open class AccountVulnsController(
      * - 403 Forbidden: Admin users (should use System Vulns instead)
      * - 404 Not Found: User has no AWS account mappings
      * - 500 Internal Server Error: Unexpected error
-     *
-     * Related to:
-     * - Feature: 018-under-vuln-management
-     * - Contract: specs/018-under-vuln-management/contracts/account-vulns-api.yaml
-     * - FR-001: Display assets grouped by AWS account
-     * - FR-003: Sort assets by vulnerability count (descending)
-     * - FR-005: Admin users redirected to System Vulns
      */
     @Get
     @Transactional(readOnly = true)

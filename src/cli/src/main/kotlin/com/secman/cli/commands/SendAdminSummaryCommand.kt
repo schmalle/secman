@@ -7,7 +7,6 @@ import jakarta.inject.Singleton
 
 /**
  * CLI command to send admin summary email to all ADMIN/REPORT users via backend HTTP API.
- * Feature: 070-admin-summary-email
  */
 @Singleton
 @Command(

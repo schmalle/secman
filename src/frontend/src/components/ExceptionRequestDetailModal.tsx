@@ -10,7 +10,6 @@
  * - Auto-approval indicator
  * - Cancel action for pending requests (owner only)
  *
- * Feature: 031-vuln-exception-approval
  * User Story 1: Regular User Requests Exception (P1)
  * Reference: spec.md FR-017
  */

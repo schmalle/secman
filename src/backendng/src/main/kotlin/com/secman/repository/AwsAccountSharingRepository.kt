@@ -9,8 +9,6 @@ import io.micronaut.data.model.Pageable
 
 /**
  * Repository for AwsAccountSharing entity.
- *
- * Feature: AWS Account Sharing
  */
 @Repository
 interface AwsAccountSharingRepository : JpaRepository<AwsAccountSharing, Long> {

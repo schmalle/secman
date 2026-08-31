@@ -11,10 +11,6 @@ import java.util.Optional
  * Repository for MaterializedViewRefreshJob entity
  *
  * Provides queries for job tracking and concurrent refresh prevention.
- *
- * Feature: 034-outdated-assets
- * Task: T008
- * Spec reference: data-model.md
  */
 @Repository
 interface MaterializedViewRefreshJobRepository : JpaRepository<MaterializedViewRefreshJob, Long> {
@@ -23,9 +19,6 @@ interface MaterializedViewRefreshJobRepository : JpaRepository<MaterializedViewR
      * Find currently running refresh job
      *
      * Used for concurrent refresh prevention (return 409 Conflict if exists).
-     *
-     * Task: T008
-     * Spec reference: FR-018, contracts/02-trigger-manual-refresh.md
      */
     @Query("SELECT j FROM MaterializedViewRefreshJob j WHERE j.status = 'RUNNING' ORDER BY j.startedAt DESC")
     fun findRunningJob(): Optional<MaterializedViewRefreshJob>
@@ -40,9 +33,6 @@ interface MaterializedViewRefreshJobRepository : JpaRepository<MaterializedViewR
 
     /**
      * Count jobs by status (for metrics)
-     *
-     * Task: T008
-     * Spec reference: FR-021 (observability metrics)
      */
     fun countByStatus(status: RefreshJobStatus): Long
 }

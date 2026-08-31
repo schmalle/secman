@@ -21,15 +21,8 @@ import java.time.LocalDateTime
 
 /**
  * Service for cascade deletion of assets with all related data
- * Feature: 033-cascade-asset-deletion
  *
  * Related Requirements:
- * - FR-001: System MUST cascade delete vulnerabilities when asset is deleted
- * - FR-002: System MUST cascade delete ASSET-type exceptions
- * - FR-003: System MUST cascade delete vulnerability exception requests
- * - FR-011: Use pessimistic row-level locking
- * - FR-012: Perform pre-flight count check with timeout estimation
- * - FR-013: Provide detailed structured error messages
  *
  * Deletion Order:
  * 1. VulnerabilityExceptionRequests (references vulnerabilities)

@@ -10,7 +10,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for submitting a review on a requirement change.
- * Feature: 068-requirements-alignment-process
  *
  * Allows REQ-role users to submit their assessment (OK/CHANGE/NOGO)
  * and optional comments on requirement changes.

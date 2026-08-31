@@ -5,7 +5,6 @@ import { csrfDelete, csrfPost } from '../utils/csrf';
  * User profile data interface
  * Feature 028: User Profile Page
  * Feature 051: User Password Change (added canChangePassword)
- * Feature: Profile Picture Management (added hasProfilePicture, profilePictureUpdatedAt)
  */
 export interface UserProfileData {
   username: string;
@@ -18,7 +17,6 @@ export interface UserProfileData {
 
 /**
  * Metadata about the current user's avatar
- * Feature: Profile Picture Management
  */
 export interface ProfilePictureMetadata {
   hasProfilePicture: boolean;
@@ -31,7 +29,6 @@ export interface ProfilePictureMetadata {
 
 /**
  * MFA status response
- * Feature: Passkey MFA Support
  */
 export interface MfaStatusResponse {
   enabled: boolean;
@@ -42,7 +39,6 @@ export interface MfaStatusResponse {
 
 /**
  * MFA toggle response
- * Feature: Passkey MFA Support
  */
 export interface MfaToggleResponse {
   success: boolean;
@@ -93,7 +89,6 @@ class UserProfileService {
 
   /**
    * Get MFA status for current user
-   * Feature: Passkey MFA Support
    *
    * @returns Promise<MfaStatusResponse> MFA status information
    * @throws Error if request fails
@@ -105,7 +100,6 @@ class UserProfileService {
 
   /**
    * Toggle MFA on/off for current user
-   * Feature: Passkey MFA Support
    *
    * @param enabled - Whether to enable or disable MFA
    * @returns Promise<MfaToggleResponse> Toggle result
@@ -131,7 +125,6 @@ class UserProfileService {
 
   /**
    * Upload or replace the current user's profile picture
-   * Feature: Profile Picture Management
    *
    * Uses csrfPost rather than bare axios: it adds the Csrf-Token header and is FormData-safe
    * (it does not force a Content-Type, so the browser sets the multipart boundary).
@@ -149,7 +142,6 @@ class UserProfileService {
 
   /**
    * Remove the current user's profile picture
-   * Feature: Profile Picture Management
    *
    * Idempotent server-side: succeeds whether or not a picture was set.
    */
@@ -159,7 +151,6 @@ class UserProfileService {
 
   /**
    * Build the URL for the current user's profile picture
-   * Feature: Profile Picture Management
    *
    * Callers must only use this when the user is known to have a picture - requesting it
    * otherwise produces a 404 on every page load.

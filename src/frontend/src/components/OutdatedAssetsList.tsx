@@ -9,11 +9,6 @@
  * - Severity filter
  * - Last updated timestamp
  * - Refresh button
- *
- * Feature: 034-outdated-assets
- * Task: T027-T028
- * User Story: US1 - View Outdated Assets (P1)
- * Spec reference: spec.md, wireframes/01-outdated-assets-list.md
  */
 
 import React, { useState, useEffect } from 'react';

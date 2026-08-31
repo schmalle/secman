@@ -7,11 +7,6 @@ import java.time.LocalDateTime
  * DTO for asset port history response
  *
  * Returned by GET /api/assets/{id}/ports
- *
- * Related to:
- * - Feature: 002-implement-a-parsing (Nmap Scan Import)
- * - Contract: specs/002-implement-a-parsing/contracts/asset-ports.yaml
- * - FR-011: Display port scan history
  */
 @Serdeable
 data class PortHistoryDTO(

@@ -10,8 +10,6 @@
  * - Handles loading, error, and empty states
  * - Admin redirect handling
  * - No workgroup membership error handling
- *
- * Related to: Feature 022-wg-vulns-handling
  */
 
 import React, { useState, useEffect } from 'react';

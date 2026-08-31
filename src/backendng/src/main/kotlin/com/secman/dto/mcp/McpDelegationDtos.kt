@@ -7,7 +7,6 @@ import java.time.LocalDateTime
 
 /**
  * DTOs for MCP User Delegation feature.
- * Feature: 050-mcp-user-delegation
  */
 
 /**

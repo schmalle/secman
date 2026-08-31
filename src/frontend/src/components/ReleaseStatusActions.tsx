@@ -13,7 +13,6 @@
  * - Loading state during API calls
  * - Error handling with user feedback
  *
- * Related to: Feature 012-build-ui-for, User Story 5 (Status Lifecycle)
  * Updated for: Feature 068-requirements-alignment-process
  */
 

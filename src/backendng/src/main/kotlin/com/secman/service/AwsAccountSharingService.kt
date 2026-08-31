@@ -18,8 +18,6 @@ import org.slf4j.LoggerFactory
 /**
  * Service for managing AWS Account Sharing rules.
  *
- * Feature: AWS Account Sharing (per-account scoping in V207)
- *
  * Provides business logic for creating, listing, updating, and deleting
  * sharing rules, as well as resolving shared AWS account IDs for access
  * control.

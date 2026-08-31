@@ -23,11 +23,6 @@ import java.io.ByteArrayOutputStream
  * - Query materialized view with pagination, sorting, filtering
  * - Apply workgroup-based access control (ADMIN sees all, VULN sees assigned workgroups only)
  * - Support search and severity filtering
- *
- * Feature: 034-outdated-assets
- * Task: T016-T019
- * User Story: US1 - View Outdated Assets (P1)
- * Spec reference: spec.md FR-008, FR-009
  */
 @Singleton
 class OutdatedAssetService(
@@ -194,9 +189,6 @@ class OutdatedAssetService(
     /**
      * Get single outdated asset by ID with access control
      *
-     * Task: T032-T034
-     * User Story: US2 - View Asset Details
-     *
      * @param id Outdated asset materialized view ID
      * @param authentication Current user authentication context
      * @return Outdated asset or null if not found or unauthorized
@@ -218,9 +210,6 @@ class OutdatedAssetService(
 
     /**
      * Get vulnerabilities for an outdated asset
-     *
-     * Task: T037-T038
-     * User Story: US2 - View Asset Details
      *
      * @param assetId The actual asset ID (not materialized view ID)
      * @param pageable Pagination parameters

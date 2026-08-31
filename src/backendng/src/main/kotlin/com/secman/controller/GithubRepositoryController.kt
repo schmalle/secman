@@ -32,7 +32,7 @@ import java.nio.file.attribute.PosixFilePermissions
 import java.time.Instant
 
 /**
- * GitHub repository inventory (Feature: GitHub repo vulnerability management).
+ * GitHub repository inventory.
  *
  * - `GET /api/github/repositories` — the Vulnerability Management → GitHub
  *   view, paginated (`page`/`size`/`sort` query params) with optional

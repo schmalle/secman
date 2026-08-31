@@ -5,16 +5,11 @@ import java.time.LocalDateTime
 
 /**
  * DTO for asset export to Excel format
- * Feature: 029-asset-bulk-operations (User Story 2 - Export Assets to File)
  *
  * Purpose: Flattened representation of Asset for Excel export with workgroup names as strings
  * Used by AssetExportService to convert Asset entities to Excel-friendly format
  *
  * Related Requirements:
- * - FR-010: Export assets to Excel with all fields
- * - FR-012: Format export file with clear column headers
- * - FR-013: Include workgroup names in readable format
- * - Contract: contracts/asset-export.yaml
  *
  * Validation: None (output-only DTO, data already validated in Asset entity)
  *

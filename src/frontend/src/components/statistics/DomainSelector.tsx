@@ -8,11 +8,6 @@
  * - Shows error state with fallback to "All Domains"
  * - Persists selection in sessionStorage
  * - Shows asset count for selected domain
- *
- * Feature: 059-vuln-stats-domain-filter
- * Task: T011 [US1]
- * Spec reference: spec.md FR-001, FR-002, FR-003, FR-009, FR-010
- * User Story: US1 - Filter Statistics by Domain (P1)
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -30,9 +25,6 @@ interface DomainSelectorProps {
 
 /**
  * DomainSelector component for filtering vulnerability statistics by AD domain
- *
- * Feature: 059-vuln-stats-domain-filter
- * Task: T011 [US1], T018-T020 [US2], T021-T022 [US3]
  */
 export default function DomainSelector({ selectedDomain, onDomainChange }: DomainSelectorProps) {
   const [domainsData, setDomainsData] = useState<AvailableDomainsDto | null>(null);

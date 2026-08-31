@@ -1,6 +1,5 @@
 #!/bin/bash
 # MCP E2E Test: Default User Roles
-# Feature: 080-default-user-roles
 #
 # This script validates that creating a user via MCP add_user without
 # specifying roles automatically assigns the default roles: USER, VULN, REQ.

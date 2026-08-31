@@ -34,8 +34,6 @@ import java.io.InputStream
  * - Imported mappings do NOT require users to exist in the system
  * - When users are later created (manual or OAuth), mappings are automatically applied
  * - All imported mappings have user=null and appliedAt=null (future mapping state)
- *
- * Related to: Feature 013 (User Mapping Upload), Feature 042 (Future User Mappings)
  */
 @Singleton
 open class UserMappingImportService(

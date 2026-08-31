@@ -8,11 +8,6 @@
  * - Multiple datasets for total and severity-specific counts
  * - Tooltips showing exact dates and counts
  * - Loading, error, and empty states
- *
- * Feature: 036-vuln-stats-lense
- * Task: T052 [US4]
- * Spec reference: spec.md FR-009, FR-010, FR-011
- * User Story: US4 - View Temporal Trends (P4)
  */
 
 import React, { useState } from 'react';

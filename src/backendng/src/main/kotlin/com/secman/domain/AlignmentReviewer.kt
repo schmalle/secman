@@ -9,7 +9,6 @@ import java.util.UUID
 
 /**
  * Tracks each reviewer's participation in an alignment session.
- * Feature: 068-requirements-alignment-process
  *
  * Each user with REQ role is assigned as a reviewer when an alignment
  * session is started. A unique review token is generated for secure

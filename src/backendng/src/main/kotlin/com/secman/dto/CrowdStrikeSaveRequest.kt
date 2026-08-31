@@ -9,7 +9,6 @@ import jakarta.validation.constraints.Size
 /**
  * Request DTO for saving CrowdStrike vulnerabilities to database
  *
- * Related to:
  * - Feature 015-we-have-currently (CrowdStrike System Vulnerability Lookup)
  * - Feature 041-falcon-instance-lookup (AWS Instance ID Support)
  */
@@ -31,8 +30,6 @@ data class CrowdStrikeSaveRequest(
 
     /**
      * AWS EC2 Instance ID (optional, for instance ID queries)
-     * Feature: 041-falcon-instance-lookup
-     * Task: T047
      *
      * When present, this value will be stored in the asset's cloudInstanceId field
      * for asset enrichment and tracking purposes.

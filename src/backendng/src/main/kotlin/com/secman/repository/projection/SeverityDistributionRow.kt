@@ -9,8 +9,6 @@ import java.math.BigInteger
  *
  * We rely on Micronaut Data to materialize the native query into this DTO,
  * avoiding runtime Map/TypeConverter issues while keeping conversion logic type-safe.
- *
- * Feature: 036-vuln-stats-lense
  */
 @Serdeable
 @Introspected

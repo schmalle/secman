@@ -2,7 +2,6 @@ import React from 'react';
 
 /**
  * Permission Denied Component
- * Feature: 025-role-based-access-control
  *
  * Displays generic error message when user lacks required permissions
  * Per spec: No role disclosure to prevent information leakage

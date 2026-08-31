@@ -16,8 +16,6 @@ import org.slf4j.LoggerFactory
  *
  * Proxies NVD API requests with caching to provide CVE descriptions
  * for hover popovers in the frontend.
- *
- * Feature: 072-cve-link-lookup
  */
 @Controller("/api/cve")
 @Secured(SecurityRule.IS_AUTHENTICATED)

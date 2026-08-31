@@ -10,8 +10,6 @@
  * - Separate sheets for Added, Deleted, Modified requirements
  * - Auto-filter, frozen headers, alternating row colors, data borders
  * - Field-level diff display for modified requirements
- *
- * Related to: Feature 012-build-ui-for, User Story 4 (Compare Releases)
  */
 
 import type ExcelJS from 'exceljs';

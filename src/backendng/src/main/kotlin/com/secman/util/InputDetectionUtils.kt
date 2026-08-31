@@ -4,9 +4,6 @@ import com.secman.service.QueryType
 
 /**
  * Input detection utilities for query type identification
- *
- * Feature: 041-falcon-instance-lookup
- * Task: T007
  */
 object InputDetectionUtils {
     /**

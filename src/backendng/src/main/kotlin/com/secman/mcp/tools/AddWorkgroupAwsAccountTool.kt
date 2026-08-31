@@ -12,8 +12,6 @@ import org.slf4j.LoggerFactory
 /**
  * MCP tool for adding an AWS account ID to a workgroup.
  *
- * Feature: Workgroup AWS Account Assignment
- *
  * ADMIN role is required via User Delegation.
  *
  * Input parameters:

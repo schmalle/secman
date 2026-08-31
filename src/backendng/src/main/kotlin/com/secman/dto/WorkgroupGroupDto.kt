@@ -8,8 +8,6 @@ import io.micronaut.serde.annotation.Serdeable
  * Used in WG Vulns view to group assets by workgroup.
  * Workgroup groups are sorted alphabetically by workgroup name.
  *
- * Feature: 022-wg-vulns-handling - Workgroup-Based Vulnerability View
- *
  * @property workgroupId Unique workgroup identifier
  * @property workgroupName Workgroup name (1-100 characters)
  * @property workgroupDescription Optional workgroup description (max 512 characters)

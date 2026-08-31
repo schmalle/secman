@@ -6,8 +6,6 @@ import java.math.BigInteger
 
 /**
  * Row representation for top products by vulnerability count.
- *
- * Feature: 054-products-overview
  */
 @Serdeable
 @Introspected

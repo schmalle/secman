@@ -18,11 +18,6 @@ import javax.xml.parsers.DocumentBuilderFactory
  * - Host information (IP address, timestamp)
  * - Port details (number, protocol, state - open only)
  *
- * Related to:
- * - Feature: 005-add-funtionality-to (Masscan XML Import)
- * - FR-002: Parse Masscan XML format
- * - FR-013: Import only state="open" ports
- *
  * @see NmapParserService for similar pattern
  */
 @Singleton

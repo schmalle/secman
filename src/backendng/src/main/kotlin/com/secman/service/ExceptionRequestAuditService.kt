@@ -18,7 +18,6 @@ import java.util.concurrent.CompletableFuture
  * Audit logs are immutable - once created, they cannot be modified or deleted
  * (except for manual compliance cleanup after 7 years).
  *
- * Feature: 031-vuln-exception-approval (FR-026b - Audit logging)
  * Reference: research.md lines 169-203, quickstart.md lines 93-133
  */
 @Singleton

@@ -315,7 +315,6 @@ const AssetManagement: React.FC = () => {
 
   /**
    * Handle export of all vulnerabilities to Excel
-   * Feature: Vulnerability Export Performance Optimization - Background Job Pattern
    *
    * Uses background job pattern with progress tracking:
    * - Starts export job asynchronously

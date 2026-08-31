@@ -23,7 +23,6 @@ import java.util.concurrent.Executors
 
 /**
  * Edge case tests for CLI add-vulnerability functionality.
- * Feature: 056-test-suite (Phase 6)
  *
  * Tests boundary conditions and edge cases:
  * - Hostname formats (dots, underscores, max length)

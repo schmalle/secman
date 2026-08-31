@@ -24,8 +24,6 @@ import kotlin.math.ceil
  * Service for product overview operations
  * Aggregates vulnerability data to provide product-centric views
  *
- * Feature: 054-products-overview
- *
  * Products are extracted from the vulnerableProductVersions field in vulnerability data.
  * Access control is applied using AssetFilterService to ensure users only see
  * products and systems they have access to.
@@ -40,7 +38,6 @@ open class ProductService(
 
     /**
      * Get list of unique products from vulnerability data
-     * Task: T008, T020 (search support)
      *
      * @param authentication Current user authentication
      * @param search Optional search term for filtering products (case-insensitive)
@@ -85,7 +82,6 @@ open class ProductService(
 
     /**
      * Get paginated list of systems (assets) running a specific product
-     * Task: T009
      *
      * @param authentication Current user authentication
      * @param product Product name to search for
@@ -162,7 +158,6 @@ open class ProductService(
 
     /**
      * Export all systems running a specific product to Excel format
-     * Task: T025
      *
      * @param authentication Current user authentication
      * @param product Product name to export systems for
@@ -209,7 +204,6 @@ open class ProductService(
 
     /**
      * Write product systems to Excel workbook
-     * Task: T026
      *
      * @param systems List of ProductSystemDto to export
      * @param productName Product name for the export

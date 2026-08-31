@@ -15,7 +15,6 @@ import java.time.Instant
 
 /**
  * Service for managing the Requirements Alignment Process.
- * Feature: 068-requirements-alignment-process
  *
  * Handles:
  * - Starting alignment sessions for PREPARATION releases

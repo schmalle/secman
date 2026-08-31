@@ -1,6 +1,5 @@
 #!/bin/bash
 # MCP E2E Test: User-Asset-Workgroup Workflow
-# Feature: 074-mcp-e2e-test
 #
 # This script validates the complete MCP workflow for user access control:
 # 1. Create a TEST user with VULN role

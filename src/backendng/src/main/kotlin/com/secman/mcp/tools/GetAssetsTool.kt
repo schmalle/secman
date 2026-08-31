@@ -91,7 +91,7 @@ class GetAssetsTool(
         try {
             val pageable = Pageable.from(page, pageSize)
 
-            // Get accessible asset IDs for access control filtering (Feature: 052-mcp-access-control)
+            // Get accessible asset IDs for access control filtering
             val accessibleIds = context.getFilterableAssetIds()
 
             // If delegation is active and user has no accessible assets, return empty result

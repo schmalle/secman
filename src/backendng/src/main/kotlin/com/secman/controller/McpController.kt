@@ -17,7 +17,6 @@ import org.slf4j.LoggerFactory
 
 /**
  * Delegation context passed through the request when X-MCP-User-Email header is present.
- * Feature: 050-mcp-user-delegation
  */
 data class DelegationContext(
     val delegatedUserEmail: String,
@@ -43,7 +42,7 @@ open class McpController(
     private val logger = LoggerFactory.getLogger(McpController::class.java)
 
     companion object {
-        /** Header name for user delegation email. Feature: 050-mcp-user-delegation */
+        /** Header name for user delegation email. Identifies the delegated user; never a credential. */
         const val DELEGATION_HEADER = "X-MCP-User-Email"
 
         const val SERVER_NAME = "Secman MCP Server"
@@ -390,7 +389,7 @@ open class McpController(
                 )
             }
 
-            // Build execution context with access control data (Feature: 052-mcp-access-control)
+            // Build execution context with access control data
             val executionContext = accessControlService.buildExecutionContext(mcpApiKey, delegation)
 
             // Execute tool with context

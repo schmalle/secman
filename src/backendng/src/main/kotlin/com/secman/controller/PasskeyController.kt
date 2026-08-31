@@ -16,7 +16,6 @@ import org.slf4j.LoggerFactory
 
 /**
  * Controller for Passkey/WebAuthn operations
- * Feature: Passkey MFA Support
  */
 @Controller("/api/passkey")
 open class PasskeyController(

@@ -4,7 +4,7 @@ import { formatServerDateTime } from '../utils/dateUtils';
 
 /**
  * Personal todo dashboard shown on the home page for users without the
- * ADMIN or SECCHAMPION role (Feature: role-based dashboard).
+ * ADMIN or SECCHAMPION role.
  *
  * Renders entirely from a single GET /api/user-dashboard response so the
  * page needs exactly one round-trip after login.

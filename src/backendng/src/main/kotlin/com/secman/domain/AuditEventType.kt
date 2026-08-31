@@ -4,8 +4,6 @@ package com.secman.domain
  * Audit event type enumeration for exception request lifecycle events.
  *
  * Defines all types of events that are logged to the audit trail.
- *
- * Related to: Feature 031-vuln-exception-approval (FR-026b - Audit logging)
  */
 enum class AuditEventType {
     /**

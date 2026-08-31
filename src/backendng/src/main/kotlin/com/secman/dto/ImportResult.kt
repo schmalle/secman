@@ -8,8 +8,6 @@ package com.secman.dto
  * Provides summary of import operation with counts and error details
  *
  * Related Requirements:
- * - FR-023: Provide import summary with imported/skipped counts and error messages
- * - Contract: contracts/asset-import.yaml
  *
  * Usage:
  * - Return from POST /api/import/upload-assets-xlsx

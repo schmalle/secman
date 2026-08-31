@@ -187,8 +187,6 @@ class CliHttpClient(
      * the HTTP status code and the parsed body. Used by callers that need to
      * distinguish between auth denials (403), validation errors (400), and
      * server errors (5xx) — e.g. for mapping to distinct CLI exit codes.
-     *
-     * Feature: 085-cli-mappings-email
      */
     fun postMapWithStatus(url: String, body: Any, authToken: String): Pair<Int, Map<*, *>?> {
         val request = HttpRequest.POST(url, body)

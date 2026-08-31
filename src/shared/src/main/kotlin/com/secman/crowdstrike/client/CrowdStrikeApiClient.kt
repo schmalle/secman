@@ -57,8 +57,6 @@ interface CrowdStrikeApiClient {
     /**
      * Query vulnerabilities for a specific hostname
      *
-     * Task: T030
-     *
      * @param hostname System hostname to query
      * @param config CrowdStrike Falcon configuration
      * @return CrowdStrikeQueryResponse with vulnerabilities
@@ -72,8 +70,6 @@ interface CrowdStrikeApiClient {
      * response, so this method does not accept a caller-supplied page size. Callers that need
      * a cap on results should slice the returned list themselves.
      *
-     * Task: T032
-     *
      * @param hostname System hostname to query
      * @param config CrowdStrike Falcon configuration
      * @return CrowdStrikeQueryResponse with all vulnerabilities
@@ -85,10 +81,6 @@ interface CrowdStrikeApiClient {
 
     /**
      * Query servers with filters (device type, severity, days open)
-     *
-     * Feature: 032-servers-query-import
-     * Task: T007, T008
-     * Spec reference: FR-002, FR-003, FR-004, FR-001a
      *
      * @param hostnames Optional list of specific hostnames to query (null = all servers)
      * @param deviceType Device type filter (e.g., "SERVER")
@@ -119,9 +111,6 @@ interface CrowdStrikeApiClient {
     /**
      * Query vulnerabilities by AWS EC2 Instance ID
      *
-     * Feature: 041-falcon-instance-lookup
-     * Task: T011
-     *
      * @param instanceId AWS EC2 Instance ID (format: i-XXXXXXXXX...)
      * @param config CrowdStrike Falcon configuration
      * @return CrowdStrikeQueryResponse with vulnerabilities from all devices with this instance ID
@@ -130,8 +119,6 @@ interface CrowdStrikeApiClient {
 
     /**
      * Query vulnerabilities by Active Directory domains
-     *
-     * Feature: 042-domain-vulnerabilities-view
      *
      * @param domains List of AD domain names (e.g., ["CONTOSO", "EXAMPLE"])
      * @param severity Severity filter (e.g., "HIGH,CRITICAL")

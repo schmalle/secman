@@ -9,7 +9,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for creating a new release with requirement snapshots.
- * Feature: MCP Release Management
  *
  * Creates a release in PREPARATION status with all current requirements snapshotted.
  * Version must follow semantic versioning format (MAJOR.MINOR.PATCH).

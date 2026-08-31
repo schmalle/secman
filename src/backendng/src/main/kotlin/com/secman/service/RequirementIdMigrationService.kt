@@ -19,7 +19,8 @@ import java.time.Instant
  * This service runs on application startup and ensures all requirements have proper
  * ID.Revision format (e.g., REQ-001.1) for Excel exports.
  *
- * Related to: Fix for requirements Excel export showing only revision numbers.
+ * Exists because the Excel export was showing only revision numbers for requirements
+ * whose internalId was never assigned.
  */
 @Requires(notEnv = ["cli"])
 @Singleton

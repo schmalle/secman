@@ -10,7 +10,6 @@ import io.micronaut.data.model.Pageable
 
 /**
  * Repository for AssetComplianceHistory entity.
- * Feature: ec2-vulnerability-tracking
  */
 @Repository
 interface AssetComplianceHistoryRepository : JpaRepository<AssetComplianceHistory, Long> {

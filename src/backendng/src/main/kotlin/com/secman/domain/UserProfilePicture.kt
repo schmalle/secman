@@ -8,8 +8,6 @@ import java.time.Instant
 /**
  * A user's profile picture (avatar).
  *
- * Feature: Profile Picture Management
- *
  * One row per user at most, enforced by a unique constraint on user_id. Held in a side table
  * rather than as a column on [User] because `users` is loaded on every authenticated request and
  * `@Basic(fetch = LAZY)` on a `@Lob` is inert without Hibernate bytecode enhancement (not enabled

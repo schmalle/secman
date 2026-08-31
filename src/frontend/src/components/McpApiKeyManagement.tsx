@@ -11,7 +11,6 @@ interface ApiKey {
   expiresAt: string | null;
   createdAt: string;
   notes: string | null;
-  // Feature: 050-mcp-user-delegation
   delegationEnabled: boolean;
   allowedDelegationDomains: string | null;
   delegationDomainCount: number;
@@ -22,7 +21,6 @@ interface CreateApiKeyRequest {
   permissions: string[];
   expiresAt?: string;
   notes?: string;
-  // Feature: 050-mcp-user-delegation
   delegationEnabled?: boolean;
   allowedDelegationDomains?: string;
 }
@@ -115,7 +113,6 @@ const McpApiKeyManagement: React.FC = () => {
       return;
     }
 
-    // Feature: 050-mcp-user-delegation - Validate delegation domains
     if (createForm.delegationEnabled) {
       if (!createForm.allowedDelegationDomains?.trim()) {
         setError('Allowed delegation domains are required when delegation is enabled');

@@ -13,7 +13,6 @@ import java.time.LocalDateTime
  *
  * Maps to HTTP 409 Conflict in controller layer.
  *
- * Feature: 031-vuln-exception-approval (FR-024b - Concurrency control)
  * Reference: quickstart.md lines 80-91, research.md lines 101-110
  *
  * @param reviewedBy Username of the reviewer who successfully reviewed the request first

@@ -7,11 +7,6 @@ import java.time.LocalDateTime
  * DTO for scan upload response
  *
  * Returned by POST /api/scan/upload-nmap
- *
- * Related to:
- * - Feature: 002-implement-a-parsing (Nmap Scan Import)
- * - Contract: specs/002-implement-a-parsing/contracts/upload-nmap.yaml
- * - FR-002: Automatically create assets
  */
 @Serdeable
 data class ScanSummaryDTO(

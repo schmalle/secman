@@ -9,8 +9,6 @@ import io.micronaut.data.jpa.repository.JpaRepository
  *
  * IMPORTANT: This repository is READ-ONLY and INSERT-ONLY.
  * Audit logs are immutable - no UPDATE or DELETE operations are provided.
- *
- * Related to: Feature 033-cascade-asset-deletion (FR-011 - Audit logging)
  */
 @Repository
 interface AssetDeletionAuditLogRepository : JpaRepository<AssetDeletionAuditLog, Long> {

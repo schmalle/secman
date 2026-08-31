@@ -8,7 +8,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for creating a new workgroup.
- * Feature: 074-mcp-e2e-test
  *
  * ADMIN role is required via User Delegation.
  *

@@ -24,11 +24,6 @@ import java.time.Duration
  * - Trigger manual refresh of outdated assets materialized view
  * - Stream real-time progress updates via Server-Sent Events (SSE)
  * - Get current refresh job status
- *
- * Feature: 034-outdated-assets
- * Task: T046-T057
- * User Story: US3 - Manual Refresh (P2)
- * Spec reference: spec.md FR-014, FR-015, FR-017
  */
 @Controller("/api/materialized-view-refresh")
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -49,9 +44,6 @@ class MaterializedViewRefreshController(
      * - 200 OK: Refresh job created successfully
      * - 409 Conflict: A refresh is already running
      * - 403 Forbidden: User lacks ADMIN role
-     *
-     * Task: T046-T049
-     * Spec reference: FR-014
      */
     @Post("/trigger")
     @Secured("ADMIN")
@@ -77,9 +69,6 @@ class MaterializedViewRefreshController(
      * Access: ADMIN, VULN
      *
      * Response: text/event-stream with RefreshProgressEvent objects
-     *
-     * Task: T050-T053
-     * Spec reference: FR-015
      */
     @Get(value = "/progress", produces = [MediaType.TEXT_EVENT_STREAM])
     @Secured("ADMIN", "VULN")
@@ -110,9 +99,6 @@ class MaterializedViewRefreshController(
      * - 200 OK: Current job details
      * - 204 No Content: No refresh currently running
      * - 403 Forbidden: User lacks ADMIN/VULN role
-     *
-     * Task: T054-T055
-     * Spec reference: FR-017
      */
     @Get("/status")
     @Secured("ADMIN", "VULN")
@@ -136,9 +122,6 @@ class MaterializedViewRefreshController(
      * Response:
      * - 200 OK: List of recent refresh jobs
      * - 403 Forbidden: User lacks ADMIN/VULN role
-     *
-     * Task: T056-T057
-     * Spec reference: FR-016
      */
     @Get("/history")
     @Secured("ADMIN", "VULN")

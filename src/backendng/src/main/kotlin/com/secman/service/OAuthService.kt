@@ -1049,7 +1049,6 @@ open class OAuthService(
 
     /**
      * Audit log role assignment for new OIDC users
-     * Feature: 046-oidc-default-roles (FR-010, NFR-001)
      *
      * Logs role assignment events to security.audit logger with structured JSON format.
      * Uses MDC (Mapped Diagnostic Context) for contextual information.
@@ -1078,7 +1077,6 @@ open class OAuthService(
 
     /**
      * Send email notification to all administrators about new OIDC user creation
-     * Feature: 046-oidc-default-roles (FR-011, FR-012, NFR-003, NFR-004)
      *
      * Executes asynchronously to avoid blocking user creation transaction.
      * Email delivery is best-effort - failures are logged but do not prevent user creation.
@@ -1140,7 +1138,6 @@ open class OAuthService(
 
     /**
      * Create new OIDC user with default roles (USER, VULN, REQ)
-     * Feature: 046-oidc-default-roles (FR-001, FR-002, FR-009)
      *
      * CRITICAL: Uses REQUIRES_NEW to ensure user creation commits independently of the
      * outer handleCallback transaction. This prevents a scenario where the user is created
@@ -1197,7 +1194,6 @@ open class OAuthService(
 
     /**
      * Result of user lookup/creation during OAuth flow
-     * Feature: 027-admin-user-notifications
      */
     private data class UserCreationResult(
         val user: User,

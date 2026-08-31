@@ -15,7 +15,6 @@ import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Service for managing admin notification settings
- * Feature: 027-admin-user-notifications
  *
  * Handles configuration for email notifications sent to ADMIN users when new users are created.
  * Implements in-memory caching for performance with lazy initialization.

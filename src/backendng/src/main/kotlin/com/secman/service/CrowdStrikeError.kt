@@ -3,8 +3,6 @@ package com.secman.service
 /**
  * Sealed class representing CrowdStrike API integration errors
  *
- * Related to: Feature 015-we-have-currently (CrowdStrike System Vulnerability Lookup)
- *
  * Error Handling Strategy:
  * - AuthenticationError: CrowdStrike OAuth2 authentication failed (401/403)
  * - NotFoundError: System hostname not found in CrowdStrike (404)

@@ -4,7 +4,6 @@ import type { AssetInterventionStatus } from './accountVulnsService';
 
 /**
  * Service for WG Vulns (Workgroup Vulnerabilities) API operations
- * Feature: 022-wg-vulns-handling
  */
 
 /**

@@ -5,8 +5,6 @@ import io.micronaut.serde.annotation.Serdeable
 /**
  * Domain Vulnerabilities Summary DTO
  *
- * Feature: 042-domain-vulnerabilities-view
- *
  * Aggregates vulnerabilities from CrowdStrike Falcon API grouped by Active Directory domains
  * for the authenticated user based on their domain mappings.
  *
@@ -87,8 +85,6 @@ data class DeviceVulnCountDto(
 
 /**
  * Domain Sync Result DTO
- *
- * Feature: Domain Vulnerability Sync
  *
  * Result of syncing a domain's vulnerabilities from CrowdStrike Falcon API
  * to the secman database.

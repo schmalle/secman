@@ -9,7 +9,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for listing releases with optional status filtering.
- * Feature: MCP Release Management
  *
  * Accessible by: ADMIN, RELEASE_MANAGER roles (via User Delegation)
  */

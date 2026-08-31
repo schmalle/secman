@@ -108,7 +108,6 @@ data class McpApiKey(
     /**
      * Whether this API key can delegate to users via X-MCP-User-Email header.
      * When enabled, the key acts as a trusted proxy for user authentication.
-     * Feature: 050-mcp-user-delegation
      */
     @Column(name = "delegation_enabled", nullable = false)
     val delegationEnabled: Boolean = false,
@@ -117,7 +116,6 @@ data class McpApiKey(
      * Comma-separated list of allowed email domains for delegation.
      * Required when delegationEnabled is true (e.g., "@company.com,@subsidiary.com").
      * Domain restrictions prevent unauthorized user impersonation.
-     * Feature: 050-mcp-user-delegation
      */
     @Column(name = "allowed_delegation_domains", length = 500)
     @Size(max = 500)
@@ -193,7 +191,6 @@ data class McpApiKey(
     /**
      * Get the list of allowed delegation domains.
      * Returns empty list if delegation is disabled or no domains are configured.
-     * Feature: 050-mcp-user-delegation
      */
     fun getDelegationDomainsList(): List<String> {
         val domains = allowedDelegationDomains
@@ -209,7 +206,6 @@ data class McpApiKey(
     /**
      * Check if delegation is allowed for a given email address.
      * Validates that the email domain matches one of the allowed domains.
-     * Feature: 050-mcp-user-delegation
      *
      * @param email The email address to check
      * @return true if delegation is allowed for this email, false otherwise

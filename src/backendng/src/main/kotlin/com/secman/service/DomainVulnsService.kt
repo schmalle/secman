@@ -21,8 +21,6 @@ import java.time.format.DateTimeFormatter
 /**
  * Domain Vulnerabilities Service
  *
- * Feature: 043-crowdstrike-domain-import
- *
  * Provides domain-based vulnerability view for non-admin users.
  * Queries secman database for vulnerabilities based on user's domain mappings.
  *
@@ -236,8 +234,6 @@ class DomainVulnsService(
 
     /**
      * Sync domain vulnerabilities from CrowdStrike Falcon API to secman database
-     *
-     * Feature: Domain Vulnerability Sync
      *
      * Workflow:
      * 1. Query CrowdStrike Falcon API for all devices in the specified domain

@@ -5,10 +5,6 @@ import io.micronaut.serde.annotation.Serdeable
 /**
  * Response DTO for /api/crowdstrike/vulnerabilities/save endpoint
  *
- * Feature: 032-servers-query-import
- * Feature: 043-crowdstrike-domain-import (added uniqueDomainCount, discoveredDomains)
- * Spec reference: FR-015c
- *
  * Contains import statistics including server counts, vulnerability counts,
  * domain discovery statistics, and error messages for failed imports.
  *

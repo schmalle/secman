@@ -25,8 +25,6 @@ import javax.imageio.ImageIO
 /**
  * Integration tests for the profile picture endpoints.
  *
- * Feature: Profile Picture Management
- *
  * Covers the happy path, replacement, every rejection branch, the idempotent delete, and — most
  * importantly — that one user can never reach another user's picture.
  */

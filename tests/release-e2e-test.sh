@@ -1,6 +1,5 @@
 #!/bin/bash
 # MCP E2E Test: Release Lifecycle Workflow
-# Feature: 078-release-rework
 #
 # This script validates the complete release lifecycle:
 # 1. Create test requirements

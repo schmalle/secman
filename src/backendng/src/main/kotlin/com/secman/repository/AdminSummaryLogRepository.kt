@@ -6,7 +6,6 @@ import io.micronaut.data.jpa.repository.JpaRepository
 
 /**
  * Repository for AdminSummaryLog entity
- * Feature: 070-admin-summary-email
  */
 @Repository
 interface AdminSummaryLogRepository : JpaRepository<AdminSummaryLog, Long>

@@ -21,8 +21,6 @@ import org.slf4j.LoggerFactory
 /**
  * REST controller for AWS Account Sharing management.
  *
- * Feature: AWS Account Sharing
- *
  * - ADMIN / SECCHAMPION: full management — list all rules, create with any source, delete any rule
  * - Everyone else (including VULN): scoped — list only rules where they are source OR target,
  *   create only where they are source, delete only their own outgoing rules

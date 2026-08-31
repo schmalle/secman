@@ -11,9 +11,7 @@
  * - Pre-sorted by vulnerability count (descending)
  * - Bootstrap 5 styling
  *
- * Related to: Feature 018-under-vuln-management (Account Vulns)
  * Feature 019: Account Vulns Severity Breakdown
- * User Story: US1 (P1) - View Vulnerabilities for Single AWS Account
  */
 
 import React, { useState } from 'react';

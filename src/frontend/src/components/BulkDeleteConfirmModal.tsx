@@ -2,11 +2,8 @@ import React, { useState, useEffect } from 'react';
 
 /**
  * Confirmation modal for bulk asset deletion
- * Feature: 029-asset-bulk-operations (User Story 1 - Bulk Delete Assets)
  *
  * Related Requirements:
- * - FR-002: Display confirmation modal with warning about irreversible data loss
- * - FR-004: Display success message after bulk delete completes
  *
  * Pattern: Checkbox acknowledgment (from research.md - React modal patterns)
  * - User must check "I understand" before delete button is enabled

@@ -11,7 +11,6 @@
  * - Cancel pending requests
  * - Empty state handling
  *
- * Feature: 031-vuln-exception-approval
  * User Story 1: Regular User Requests Exception (P1)
  * Reference: spec.md FR-010 to FR-017
  */

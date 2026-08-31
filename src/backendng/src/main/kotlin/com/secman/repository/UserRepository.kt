@@ -15,9 +15,6 @@ interface UserRepository : JpaRepository<User, Long> {
      * Find user by ID with workgroups eagerly loaded
      * Used for authentication/authorization operations when LAZY loading is enabled
      *
-     * Feature: 073-memory-optimization
-     * Task: T007
-     *
      * @param id The user ID
      * @return Optional containing the user with workgroups loaded
      */
@@ -31,8 +28,6 @@ interface UserRepository : JpaRepository<User, Long> {
     /**
      * Find all users with workgroups eagerly loaded
      * Used for export operations when LAZY loading is enabled
-     *
-     * Feature: 073-memory-optimization
      *
      * @return List of all users with workgroups loaded
      */
@@ -61,8 +56,6 @@ interface UserRepository : JpaRepository<User, Long> {
      * Find users in a specific workgroup
      * Used for admin workgroup management views
      *
-     * Related to: Feature 008 (Workgroup-Based Access Control) - FR-010
-     *
      * @param workgroupId The workgroup ID to filter by
      * @return List of users in the specified workgroup
      */
@@ -77,8 +70,6 @@ interface UserRepository : JpaRepository<User, Long> {
     /**
      * Find users with a specific role
      * Used for admin notifications when new OIDC users are created
-     *
-     * Related to: Feature 046 (OIDC Default Roles) - FR-011
      *
      * @param role The role to search for (e.g., User.Role.ADMIN)
      * @return List of users with the specified role

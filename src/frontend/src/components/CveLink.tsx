@@ -4,8 +4,6 @@
  * Renders a CVE ID as a clickable link to NVD.
  * On hover (300ms delay), shows a popover with CVE description fetched from backend.
  * Non-CVE IDs render as plain text.
- *
- * Feature: 072-cve-link-lookup
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';

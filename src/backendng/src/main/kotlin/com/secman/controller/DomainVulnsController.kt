@@ -18,8 +18,6 @@ import org.slf4j.LoggerFactory
 /**
  * Domain Vulnerabilities Controller
  *
- * Feature: 043-crowdstrike-domain-import
- *
  * Provides REST endpoint for domain-based vulnerability view.
  * Queries secman database for vulnerabilities based on user's domain mappings.
  *
@@ -113,8 +111,6 @@ class DomainVulnsController(
 
     /**
      * Sync domain vulnerabilities from CrowdStrike
-     *
-     * Feature: Domain Vulnerability Sync
      *
      * Triggers a sync of vulnerabilities for the specified domain from CrowdStrike Falcon API.
      * This will:

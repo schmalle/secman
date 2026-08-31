@@ -8,7 +8,6 @@ import java.time.LocalDateTime
 /**
  * Response DTO for CrowdStrike vulnerability query
  *
- * Related to:
  * - Feature 015-we-have-currently (CrowdStrike System Vulnerability Lookup)
  * - Feature 041-falcon-instance-lookup (AWS Instance ID queries)
  */

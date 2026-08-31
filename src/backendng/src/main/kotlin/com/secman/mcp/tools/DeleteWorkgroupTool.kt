@@ -8,7 +8,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for deleting a workgroup.
- * Feature: 074-mcp-e2e-test
  *
  * ADMIN role is required via User Delegation.
  * Cascade deletion of user and asset associations is handled by JPA.

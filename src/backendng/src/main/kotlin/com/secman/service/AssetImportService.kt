@@ -20,16 +20,8 @@ import java.time.format.DateTimeFormatter
 
 /**
  * Service for importing assets from Excel files
- * Feature: 029-asset-bulk-operations (User Story 3 - Import Assets from File)
  *
  * Related Requirements:
- * - FR-017: Accept Excel files with validation for file size, format, required fields
- * - FR-018: Validate required fields (name, type, owner)
- * - FR-019: Validate data formats (IP address, type values)
- * - FR-020: Handle duplicate asset names by skipping (no updates)
- * - FR-021: Associate imported assets with workgroups
- * - FR-022: Track importing user as creator
- * - FR-023: Provide import summary with counts and errors
  *
  * Performance Target:
  * - Import 5K assets in <60 seconds with 95%+ success rate (SC-003)

@@ -8,8 +8,6 @@
  * - Total count
  * - Grouping by severity
  * - Confirm/Cancel actions
- *
- * Related to: Feature 021-vulnerability-overdue-exception-logic (Phase 3)
  */
 
 import React from 'react';

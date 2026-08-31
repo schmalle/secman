@@ -28,7 +28,6 @@ import java.util.concurrent.CompletableFuture
  * - Failures are logged but do not throw exceptions (email failures should not block workflow)
  * - Returns CompletableFuture for testing and monitoring
  *
- * Feature: 031-vuln-exception-approval
  * User Story 6: Email Notifications (P3)
  * Phase 10: Email Notifications
  * Reference: spec.md acceptance scenarios US6-1, US6-2, US6-3

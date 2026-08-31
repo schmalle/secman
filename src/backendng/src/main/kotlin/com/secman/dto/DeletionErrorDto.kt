@@ -4,16 +4,11 @@ import io.micronaut.serde.annotation.Serdeable
 
 /**
  * Structured error response for failed deletions
- * Feature: 033-cascade-asset-deletion (User Story 1 & 3 - Error Handling)
  *
  * Purpose: Response for DELETE endpoints when deletion fails
  * Provides detailed, actionable error information to users
  *
  * Related Requirements:
- * - FR-013: System MUST provide detailed structured error messages
- * - FR-011: Pessimistic locking error handling (LOCKED error type)
- * - FR-012: Timeout warning error handling (TIMEOUT_WARNING error type)
- * - Contract: contracts/cascade-delete-api.yaml
  */
 @Serdeable
 data class DeletionErrorDto(

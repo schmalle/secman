@@ -8,12 +8,10 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for listing all users in the system.
- * Feature: 060-mcp-list-users
  *
  * ADMIN role is required via User Delegation.
  * Returns all users with their core attributes (excluding password hash).
  *
- * Spec reference: spec.md FR-001 through FR-011
  * User Stories: US1 (List Users), US2 (Deny Non-Admin)
  */
 @Singleton

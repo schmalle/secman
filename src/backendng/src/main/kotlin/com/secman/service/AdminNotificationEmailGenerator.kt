@@ -8,7 +8,6 @@ import java.time.format.DateTimeFormatter
 
 /**
  * Email template generator for admin notifications
- * Feature: 027-admin-user-notifications
  *
  * Generates professionally formatted HTML email templates for notifying
  * ADMIN users when new users are created.

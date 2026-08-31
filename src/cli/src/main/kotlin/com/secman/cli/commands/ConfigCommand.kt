@@ -11,9 +11,6 @@ import org.slf4j.LoggerFactory
  *   secman config [options]
  *
  * For now, this is a simple class for testing the CLI module structure.
- *
- * Related to: Feature 023-create-in-the
- * Task: T051
  */
 class ConfigCommand {
     private val log = LoggerFactory.getLogger(ConfigCommand::class.java)

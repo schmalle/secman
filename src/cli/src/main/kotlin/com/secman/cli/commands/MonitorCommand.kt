@@ -30,9 +30,6 @@ import kotlin.system.exitProcess
  *   secman monitor --interval 10
  *   secman monitor --hostnames server01,server02
  *   secman monitor --dry-run
- *
- * Related to: Feature 026-crowdstrike-polling-monitor
- * Tasks: T1-T3
  */
 class MonitorCommand {
     private val log = LoggerFactory.getLogger(MonitorCommand::class.java)

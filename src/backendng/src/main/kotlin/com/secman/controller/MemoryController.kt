@@ -6,7 +6,6 @@ import io.micronaut.security.annotation.Secured
 
 /**
  * Management endpoint for JVM memory metrics
- * Feature: 073-memory-optimization
  *
  * Exposes heap memory statistics for monitoring and validation
  * of memory optimization targets:

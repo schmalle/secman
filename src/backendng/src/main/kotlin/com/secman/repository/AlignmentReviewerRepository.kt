@@ -8,7 +8,6 @@ import java.util.*
 
 /**
  * Repository for AlignmentReviewer entity.
- * Feature: 068-requirements-alignment-process
  */
 @Repository
 interface AlignmentReviewerRepository : JpaRepository<AlignmentReviewer, Long> {

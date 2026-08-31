@@ -37,7 +37,6 @@ export function isReleaseManager(roles: string[] | undefined): boolean {
 
 /**
  * Check if user has REQADMIN role
- * Feature: 079-reqadmin-release-role
  */
 export function isReqAdmin(roles: string[] | undefined): boolean {
   if (!roles || !Array.isArray(roles)) return false;
@@ -55,7 +54,6 @@ export function isChampion(roles: string[] | undefined): boolean {
 
 /**
  * Check if user has SECCHAMPION role
- * Feature: 025-role-based-access-control
  */
 export function isSecChampion(roles: string[] | undefined): boolean {
   if (!roles || !Array.isArray(roles)) return false;
@@ -72,7 +70,6 @@ export function isReq(roles: string[] | undefined): boolean {
 
 /**
  * Check if user has RISK role
- * Feature: 025-role-based-access-control
  */
 export function isRisk(roles: string[] | undefined): boolean {
   if (!roles || !Array.isArray(roles)) return false;
@@ -81,7 +78,6 @@ export function isRisk(roles: string[] | undefined): boolean {
 
 /**
  * Check if user has access to Risk Management
- * Feature: 025-role-based-access-control
  *
  * Rules:
  * - ADMIN can access
@@ -94,7 +90,6 @@ export function hasRiskAccess(roles: string[] | undefined): boolean {
 
 /**
  * Check if user has access to Requirements
- * Feature: 025-role-based-access-control
  *
  * Rules:
  * - ADMIN can access
@@ -172,7 +167,6 @@ export function canAccessAccountOnboarding(roles: string[] | undefined): boolean
 
 /**
  * Check if user can access Releases
- * Feature: 067-requirement-releases
  *
  * Rules:
  * - All users with requirements access can view releases (FR-011)
@@ -184,7 +178,6 @@ export function canAccessReleases(roles: string[] | undefined): boolean {
 
 /**
  * Check if user can access Compare Releases
- * Feature: 067-requirement-releases
  *
  * Rules:
  * - All users with requirements access can view/compare releases (FR-011)

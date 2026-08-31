@@ -8,7 +8,6 @@ import java.time.LocalDateTime
 
 /**
  * Entity for storing application-wide settings.
- * Feature: 068-requirements-alignment-process
  *
  * Stores configuration settings that can be managed by ADMIN users,
  * such as the application base URL used in email notifications.

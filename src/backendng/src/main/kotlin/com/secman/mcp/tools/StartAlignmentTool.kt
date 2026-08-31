@@ -9,7 +9,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for starting a requirements alignment process.
- * Feature: 068-requirements-alignment-process
  *
  * Initiates the alignment process for a DRAFT release, notifying all
  * REQ-role users to review requirement changes.

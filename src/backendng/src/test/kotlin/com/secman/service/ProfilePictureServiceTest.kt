@@ -11,8 +11,6 @@ import javax.imageio.ImageIO
 /**
  * Unit tests for [ProfilePictureService].
  *
- * Feature: Profile Picture Management
- *
  * Fixtures are generated in-process so no binary files land in the repo.
  */
 class ProfilePictureServiceTest {

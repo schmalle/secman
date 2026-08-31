@@ -13,8 +13,6 @@ import java.time.LocalDateTime
  * Audit logs are immutable - no UPDATE or DELETE operations are provided.
  *
  * Retention policy: Permanent (manual cleanup after 7 years per compliance requirements)
- *
- * Related to: Feature 031-vuln-exception-approval (FR-026b - Audit logging)
  */
 @Repository
 interface ExceptionRequestAuditLogRepository : JpaRepository<ExceptionRequestAuditLog, Long> {

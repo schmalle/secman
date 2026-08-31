@@ -12,10 +12,6 @@ import java.time.LocalDateTime
  * Repository for Scan entity
  *
  * Provides CRUD operations and custom queries for scan management.
- *
- * Related to:
- * - Feature: 002-implement-a-parsing (Nmap Scan Import)
- * - Contract: GET /api/scans with pagination and filtering
  */
 @Repository
 interface ScanRepository : JpaRepository<Scan, Long> {
@@ -46,14 +42,12 @@ interface ScanRepository : JpaRepository<Scan, Long> {
     /**
      * Find scans within a date range
      * Used for: MCP get_scans tool with date filtering
-     * Related to: Feature 006 (MCP Tools for Security Data)
      */
     fun findByScanDateBetween(start: LocalDateTime, end: LocalDateTime, pageable: Pageable): Page<Scan>
 
     /**
      * Find scans by scan type with pagination (alias for compatibility)
      * Used for: MCP get_scans tool
-     * Related to: Feature 006 (MCP Tools for Security Data)
      */
     fun findByScanType(scanType: String, pageable: Pageable): Page<Scan>
 

@@ -7,7 +7,6 @@ import jakarta.validation.constraints.NotNull
 /**
  * Response DTO for saving CrowdStrike vulnerabilities to database
  *
- * Related to: Feature 015-we-have-currently (CrowdStrike System Vulnerability Lookup)
  * Updated by: Feature 030 (CrowdStrike Asset Auto-Creation) - Added vulnerabilitiesSkipped field
  */
 @Serdeable
@@ -26,7 +25,6 @@ data class CrowdStrikeSaveResponse(
 
     /**
      * Count of vulnerabilities skipped (invalid or duplicate)
-     * Related to: Feature 030 - FR-014, FR-017
      */
     @field:NotNull
     val vulnerabilitiesSkipped: Int = 0,

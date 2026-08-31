@@ -10,16 +10,12 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for rejecting pending exception requests.
- * Feature: 062-mcp-vuln-exceptions
  *
  * Access Control:
  * - Requires User Delegation
  * - ADMIN or SECCHAMPION role required
  * - Rejection comment is REQUIRED (minimum 10 characters)
  * - Uses optimistic locking for concurrent review handling
- *
- * Spec reference: spec.md FR-018, FR-019, FR-020
- * User Story: US6 - Reject Exception Request (P2)
  */
 @Singleton
 class RejectExceptionRequestTool(

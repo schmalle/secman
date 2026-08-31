@@ -12,9 +12,6 @@ import java.util.concurrent.atomic.AtomicLong
  * - Total errors encountered
  * - Poll durations
  * - Runtime
- *
- * Related to: Feature 026-crowdstrike-polling-monitor
- * Task: T18-T20
  */
 class MonitorStatistics {
     private val startTime = System.currentTimeMillis()

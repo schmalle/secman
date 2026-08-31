@@ -8,7 +8,6 @@ import io.micronaut.data.model.Pageable
 
 /**
  * Repository for AlignmentSnapshot entity.
- * Feature: 068-requirements-alignment-process
  */
 @Repository
 interface AlignmentSnapshotRepository : JpaRepository<AlignmentSnapshot, Long> {

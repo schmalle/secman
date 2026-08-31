@@ -10,15 +10,11 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for approving pending exception requests.
- * Feature: 062-mcp-vuln-exceptions
  *
  * Access Control:
  * - Requires User Delegation
  * - ADMIN or SECCHAMPION role required
  * - Uses optimistic locking for concurrent approval handling
- *
- * Spec reference: spec.md FR-017, FR-020, FR-021
- * User Story: US5 - Approve Exception Request (P2)
  */
 @Singleton
 class ApproveExceptionRequestTool(

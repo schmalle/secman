@@ -2,8 +2,6 @@ import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDel
 
 /**
  * Service for AWS Account Sharing API operations.
- *
- * Feature: AWS Account Sharing (per-account scoping in V207)
  */
 
 export interface AwsAccountSharing {

@@ -8,7 +8,6 @@ import io.micronaut.serde.annotation.Serdeable
 
 /**
  * Helper for authentication in integration tests.
- * Feature: 056-test-suite
  *
  * Provides JWT token generation for test users to make authenticated requests.
  */

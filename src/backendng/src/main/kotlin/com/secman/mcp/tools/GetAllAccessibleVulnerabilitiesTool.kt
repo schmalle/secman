@@ -16,8 +16,6 @@ import jakarta.inject.Singleton
  * Returns every current vulnerability across every asset the caller can access, in a single,
  * unpaginated response. Complements get_vulnerabilities/get_all_vulnerabilities_detail (which
  * require manual pagination) for callers that just want "everything I can see" in one call.
- *
- * Feature: MCP Get All Accessible Vulnerabilities Tool
  */
 @Singleton
 class GetAllAccessibleVulnerabilitiesTool(

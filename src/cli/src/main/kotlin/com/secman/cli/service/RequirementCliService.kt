@@ -9,7 +9,6 @@ import org.slf4j.LoggerFactory
 
 /**
  * Service for managing requirements via CLI
- * Feature: 057-cli-mcp-requirements
  *
  * Functionality:
  * - Authenticate with backend API
@@ -381,7 +380,6 @@ class RequirementCliService(
 
 /**
  * Result of export operation
- * Feature: 057-cli-mcp-requirements
  */
 data class ExportResult(
     val success: Boolean,
@@ -420,7 +418,6 @@ data class ExportResult(
 
 /**
  * Result of add requirement operation
- * Feature: 057-cli-mcp-requirements
  */
 data class AddRequirementResult(
     val success: Boolean,
@@ -432,7 +429,6 @@ data class AddRequirementResult(
 
 /**
  * Result of delete all operation
- * Feature: 057-cli-mcp-requirements
  */
 data class DeleteAllResult(
     val success: Boolean,

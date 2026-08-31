@@ -192,7 +192,6 @@ open class UserService(
 
     /**
      * Count the number of users with ADMIN role
-     * Feature: 037-last-admin-protection
      * Used to determine if a user is the last administrator
      *
      * @return count of users with ADMIN role

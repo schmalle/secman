@@ -377,8 +377,6 @@ class CliController(
      * Computes user-mapping statistics (aggregates + per-user detail) for the given
      * filters and emails the report to every ADMIN or REPORT user with a valid email
      * address. Writes one audit row to user_mapping_statistics_log per invocation.
-     *
-     * Feature: 085-cli-mappings-email
      */
     @Post("/user-mappings/send-statistics-email")
     @Produces(MediaType.APPLICATION_JSON)

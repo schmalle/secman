@@ -7,7 +7,6 @@ import io.micronaut.data.jpa.repository.JpaRepository
 
 /**
  * Repository for UserMappingStatisticsLog entity.
- * Feature: 085-cli-mappings-email
  */
 @Repository
 interface UserMappingStatisticsLogRepository : JpaRepository<UserMappingStatisticsLog, Long> {

@@ -10,8 +10,6 @@
  * - Empty state handling
  * - Click to navigate to detail page
  * - RBAC: Show create button for ADMIN/RELEASE_MANAGER only
- *
- * Related to: Feature 012-build-ui-for, User Story 1 (View and Browse Releases)
  */
 
 import React, { useState, useEffect } from 'react';

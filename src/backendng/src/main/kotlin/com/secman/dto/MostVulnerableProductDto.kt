@@ -7,9 +7,6 @@ import io.micronaut.serde.annotation.Serdeable
  *
  * Represents a product ranked by its vulnerability count across
  * all accessible assets. Used for "Top 10 Most Vulnerable Products" display.
- *
- * Feature: 036-vuln-stats-lense
- * Spec reference: spec.md
  */
 @Serdeable
 data class MostVulnerableProductDto(

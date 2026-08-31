@@ -27,7 +27,6 @@ import java.nio.charset.StandardCharsets
  * - GET /api/products/{product}/systems - Get systems running a specific product
  *
  * Access: ADMIN, VULN, and SECCHAMPION roles
- * Feature: 054-products-overview
  */
 @Controller("/api/products")
 @Secured("ADMIN", "VULN", "SECCHAMPION")
@@ -68,7 +67,6 @@ open class ProductController(
 
     /**
      * Get list of unique products from vulnerability data
-     * Task: T010, T021 (search support)
      *
      * GET /api/products?search=term
      * Auth: ADMIN, VULN, or SECCHAMPION role
@@ -94,7 +92,6 @@ open class ProductController(
 
     /**
      * Get paginated list of systems running a specific product
-     * Task: T011
      *
      * GET /api/products/{product}/systems?page=0&size=50
      * Auth: ADMIN, VULN, or SECCHAMPION role
@@ -134,7 +131,6 @@ open class ProductController(
 
     /**
      * Export systems running a specific product to Excel
-     * Task: T027
      *
      * GET /api/products/{product}/export
      * Auth: ADMIN, VULN, or SECCHAMPION role

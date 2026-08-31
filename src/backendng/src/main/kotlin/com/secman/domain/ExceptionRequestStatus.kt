@@ -22,8 +22,6 @@ package com.secman.domain
  * │EXPIRED  │
  * └─────────┘
  * ```
- *
- * Related to: Feature 031-vuln-exception-approval
  */
 enum class ExceptionRequestStatus {
     /**

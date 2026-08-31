@@ -9,7 +9,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for deleting a user.
- * Feature: add-user-deletion-admin
  *
  * ADMIN role is required via User Delegation.
  * Validates that the user can be safely deleted (no blocking references, not last admin).

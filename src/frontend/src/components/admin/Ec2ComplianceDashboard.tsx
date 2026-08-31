@@ -3,8 +3,6 @@
  *
  * Displays summary cards and paginated overview table of asset compliance status.
  * Features: summary cards, search, status filter, pagination, links to detail page.
- *
- * Feature: ec2-vulnerability-tracking
  */
 
 import React, { useState, useEffect } from 'react';

@@ -10,15 +10,11 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for getting all pending exception requests awaiting approval.
- * Feature: 062-mcp-vuln-exceptions
  *
  * Access Control:
  * - Requires User Delegation
  * - ADMIN or SECCHAMPION role required
  * - Returns all pending requests system-wide
- *
- * Spec reference: spec.md FR-014 through FR-016
- * User Story: US4 - View Pending Requests (P2)
  */
 @Singleton
 class GetPendingExceptionRequestsTool(

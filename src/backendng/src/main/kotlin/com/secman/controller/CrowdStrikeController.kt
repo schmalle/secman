@@ -38,10 +38,8 @@ import org.slf4j.LoggerFactory
  * - GET /api/crowdstrike/vulnerabilities - Query vulnerabilities by hostname (legacy)
  * - POST /api/crowdstrike/vulnerabilities/save - Save vulnerabilities to database (single or batch)
  *
- * Related to:
  * - Feature 023-create-in-the (Phase 5: Backend API Integration)
  * - Feature 032-servers-query-import (Batch Import)
- * Tasks: T062-T070, T017-T023
  */
 @Controller("/api")
 @Secured("ADMIN", "VULN")
@@ -58,8 +56,6 @@ open class CrowdStrikeController(
      * Query CrowdStrike for vulnerabilities with filtering and pagination
      *
      * Supports both hostname and AWS EC2 Instance ID queries (Feature 041)
-     *
-     * Tasks: T062-T065, T016, T017, T018, T035
      *
      * @param hostname System hostname or AWS instance ID to query
      * @param severity Optional severity filter (critical, high, medium, low)
@@ -283,7 +279,6 @@ open class CrowdStrikeController(
      * 2. Batch import (Feature 032): List<CrowdStrikeVulnerabilityBatchDto>
      *
      * Features: 030-crowdstrike-asset-auto-creation, 032-servers-query-import
-     * Tasks: T012, T013, T017, T023
      *
      * @param request Save request (single or batch)
      * @param authentication Current authenticated user
@@ -327,10 +322,6 @@ open class CrowdStrikeController(
 
     /**
      * Batch import server vulnerabilities from CrowdStrike
-     *
-     * Feature: 032-servers-query-import
-     * Tasks: T017, T018, T023
-     * Spec reference: FR-008, FR-015
      *
      * @param batches List of server vulnerability batches
      * @param authentication Current authenticated user

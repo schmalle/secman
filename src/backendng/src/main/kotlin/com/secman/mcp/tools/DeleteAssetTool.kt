@@ -8,7 +8,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for deleting a specific asset by ID.
- * Feature: 074-mcp-e2e-test
  *
  * ADMIN role is required via User Delegation.
  * Uses AssetCascadeDeleteService for cascade deletion of:

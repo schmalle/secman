@@ -20,9 +20,6 @@ import java.time.Instant
  * - Token caching (30-minute validity)
  * - Proactive token refresh before expiration
  * - Error handling with retry logic for rate limits
- *
- * Related to: Feature 023-create-in-the (CrowdStrike CLI)
- * Tasks: T026-T028
  */
 @Singleton
 open class CrowdStrikeAuthService(
@@ -38,8 +35,6 @@ open class CrowdStrikeAuthService(
      * Authenticate with CrowdStrike using OAuth2 client credentials flow
      *
      * Returns cached token if still valid. Otherwise, fetches new token and caches it.
-     *
-     * Task: T026
      *
      * @param config Falcon configuration with client credentials
      * @return AuthToken with access token and expiration
@@ -119,8 +114,6 @@ open class CrowdStrikeAuthService(
 
     /**
      * Check if cached token is still valid
-     *
-     * Task: T027 (token caching)
      *
      * @return True if cached token exists and is not expired/expiring soon
      */

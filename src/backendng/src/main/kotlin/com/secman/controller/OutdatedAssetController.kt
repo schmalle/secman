@@ -21,11 +21,6 @@ import org.slf4j.LoggerFactory
  * Provides paginated list of assets with overdue vulnerabilities
  * Access: ADMIN and VULN roles only
  * Returns workgroup-filtered results for VULN users
- *
- * Feature: 034-outdated-assets
- * Task: T020-T022
- * User Story: US1 - View Outdated Assets (P1)
- * Spec reference: contracts/01-get-outdated-assets.md
  */
 @Controller("/api/outdated-assets")
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -58,9 +53,6 @@ class OutdatedAssetController(
      * - 200 OK: Paginated list of outdated assets
      * - 401 Unauthorized: Not authenticated
      * - 403 Forbidden: User lacks ADMIN or VULN role
-     *
-     * Task: T020, T021, T022
-     * Spec reference: FR-001, FR-008, FR-009, FR-011, FR-012, FR-013
      */
     @Get
     @Secured("ADMIN", "VULN")
@@ -127,9 +119,6 @@ class OutdatedAssetController(
      * Response:
      * - 200 OK: { "lastRefreshTimestamp": "2024-10-26T14:30:00" }
      * - 204 No Content: No refresh has occurred yet
-     *
-     * Task: T022
-     * Spec reference: FR-017
      */
     @Get("/last-refresh")
     @Secured("ADMIN", "VULN")
@@ -156,9 +145,6 @@ class OutdatedAssetController(
      *
      * Response:
      * - 200 OK: { "count": 42 }
-     *
-     * Task: T022
-     * Spec reference: FR-016
      */
     @Get("/count")
     @Secured("ADMIN", "VULN")
@@ -239,10 +225,6 @@ class OutdatedAssetController(
      * - 200 OK: OutdatedAssetDto
      * - 404 Not Found: Asset not found or user lacks access
      * - 403 Forbidden: User lacks ADMIN or VULN role
-     *
-     * Task: T035-T036
-     * User Story: US2 - View Asset Details
-     * Spec reference: contracts/02-get-outdated-asset-by-id.md
      */
     @Get("/{id}")
     @Secured("ADMIN", "VULN")
@@ -281,10 +263,6 @@ class OutdatedAssetController(
      * - 200 OK: Page of vulnerabilities
      * - 404 Not Found: Asset not found or user lacks access
      * - 403 Forbidden: User lacks ADMIN or VULN role
-     *
-     * Task: T037-T038
-     * User Story: US2 - View Asset Details
-     * Spec reference: contracts/03-get-asset-vulnerabilities.md
      */
     @Get("/{id}/vulnerabilities")
     @Secured("ADMIN", "VULN")

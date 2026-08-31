@@ -7,7 +7,6 @@ import picocli.CommandLine.Option
 
 /**
  * CLI command to delete all security requirements
- * Feature: 057-cli-mcp-requirements
  *
  * Usage:
  *   secman delete-all-requirements --confirm [options]
@@ -16,7 +15,6 @@ import picocli.CommandLine.Option
  *   secman delete-all-requirements --confirm
  *   secman delete-all-requirements --confirm --verbose
  *
- * User Story:
  * - US4: Delete all requirements from command line (P3)
  *
  * WARNING: This is a destructive operation that requires explicit confirmation

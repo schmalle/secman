@@ -21,10 +21,6 @@ enum class RefreshJobStatus {
  *
  * Tracks state, progress, and result of async refresh jobs.
  * Provides audit trail and observability for refresh operations.
- *
- * Feature: 034-outdated-assets
- * Task: T005
- * Spec reference: data-model.md
  */
 @Entity
 @Serdeable
@@ -71,8 +67,6 @@ data class MaterializedViewRefreshJob(
 ) {
     /**
      * Update progress and calculate percentage
-     *
-     * Task: T005
      */
     fun updateProgress(processed: Int) {
         assetsProcessed = processed
@@ -85,8 +79,6 @@ data class MaterializedViewRefreshJob(
 
     /**
      * Mark job as completed and calculate duration
-     *
-     * Task: T005
      */
     fun markCompleted() {
         status = RefreshJobStatus.COMPLETED
@@ -97,8 +89,6 @@ data class MaterializedViewRefreshJob(
 
     /**
      * Mark job as failed with error message
-     *
-     * Task: T005
      */
     fun markFailed(error: String) {
         status = RefreshJobStatus.FAILED

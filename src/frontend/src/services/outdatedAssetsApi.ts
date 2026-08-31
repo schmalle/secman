@@ -3,11 +3,6 @@
  *
  * Provides methods to fetch outdated assets with pagination, filtering, and sorting
  * Requires authentication (ADMIN or VULN role)
- *
- * Feature: 034-outdated-assets
- * Task: T024-T025
- * User Story: US1 - View Outdated Assets (P1)
- * Spec reference: contracts/01-get-outdated-assets.md
  */
 
 import { authenticatedGet, authenticatedPost } from '../utils/auth';

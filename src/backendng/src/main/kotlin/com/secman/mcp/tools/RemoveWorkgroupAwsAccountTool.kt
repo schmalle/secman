@@ -10,8 +10,6 @@ import org.slf4j.LoggerFactory
 /**
  * MCP tool for removing an AWS account assignment from a workgroup.
  *
- * Feature: Workgroup AWS Account Assignment
- *
  * ADMIN role is required via User Delegation.
  *
  * Input parameters:

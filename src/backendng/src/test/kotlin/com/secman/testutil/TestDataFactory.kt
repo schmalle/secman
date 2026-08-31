@@ -9,7 +9,6 @@ import java.time.LocalDateTime
 
 /**
  * Factory for creating test entities with sensible defaults.
- * Feature: 056-test-suite
  *
  * All factory methods return unsaved entities - caller is responsible for persistence.
  */

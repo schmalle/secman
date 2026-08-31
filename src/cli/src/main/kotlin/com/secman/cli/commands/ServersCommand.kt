@@ -27,8 +27,6 @@ import org.slf4j.LoggerFactory
  * - Optionally filter by specific hostnames
  * - Import discovered servers via backend HTTP API (--save flag)
  * - Support dry-run mode (query without importing)
- *
- * Feature: 032-servers-query-import
  */
 class ServersCommand {
     companion object {

@@ -7,7 +7,6 @@ import jakarta.validation.constraints.Size
 
 /**
  * DTO for admin notification settings
- * Feature: 027-admin-user-notifications
  *
  * Used for both request (PUT) and response (GET/PUT) from /api/settings/notifications
  */

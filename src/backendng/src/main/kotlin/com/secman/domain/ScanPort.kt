@@ -10,11 +10,7 @@ import jakarta.validation.constraints.*
  * Represents a single port discovered on a host during a network scan.
  * Contains port number, protocol, state, and optional service information.
  *
- * Related to:
- * - Feature: 002-implement-a-parsing (Nmap Scan Import)
  * - Data Model: specs/002-implement-a-parsing/data-model.md
- * - FR-004: Persist open port information with scan timestamp
- * - FR-011: Display port history with states and services
  */
 @Entity
 @Table(

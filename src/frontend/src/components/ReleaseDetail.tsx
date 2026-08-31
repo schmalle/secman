@@ -9,8 +9,6 @@
  * - Click snapshot to view complete details
  * - Export button for release requirements
  * - Back navigation to list
- *
- * Related to: Feature 012-build-ui-for, User Story 3 (View Release Details)
  */
 
 import React, { useState, useEffect } from 'react';

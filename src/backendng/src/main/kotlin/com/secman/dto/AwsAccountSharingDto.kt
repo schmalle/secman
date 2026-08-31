@@ -5,8 +5,6 @@ import io.micronaut.serde.annotation.Serdeable
 
 /**
  * Response DTO for AWS Account Sharing rules.
- *
- * Feature: AWS Account Sharing (per-account scoping in V207)
  */
 @Serdeable
 data class AwsAccountSharingResponse(

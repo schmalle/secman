@@ -19,8 +19,6 @@ import java.util.concurrent.ConcurrentLinkedDeque
  * Service for MCP User Delegation feature.
  * Handles email passthrough validation, permission computation, and failure tracking.
  *
- * Feature: 050-mcp-user-delegation
- *
  * Delegation Flow:
  * 1. External tool passes X-MCP-User-Email header with authenticated user email
  * 2. System validates API key has delegation enabled

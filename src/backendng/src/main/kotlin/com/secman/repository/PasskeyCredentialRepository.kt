@@ -7,7 +7,6 @@ import java.util.*
 
 /**
  * Repository for PasskeyCredential entities
- * Feature: Passkey MFA Support
  */
 @Repository
 interface PasskeyCredentialRepository : JpaRepository<PasskeyCredential, Long> {

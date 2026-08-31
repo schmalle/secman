@@ -3,7 +3,6 @@
  *
  * Handles API calls for release management functionality
  *
- * Related to: Feature 012-build-ui-for (Release Management UI Enhancement)
  * Backend APIs from: Feature 011-i-want-to (Release-Based Requirement Version Management)
  */
 

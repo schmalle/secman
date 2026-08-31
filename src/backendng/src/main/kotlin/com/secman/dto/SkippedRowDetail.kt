@@ -7,8 +7,6 @@ import io.micronaut.serde.annotation.Serdeable
  *
  * Used in VulnerabilityImportResponse to provide granular error reporting.
  *
- * Related to: Feature 003-i-want-to (Vulnerability Management System)
- *
  * @property row Row number (1-indexed, excluding header row)
  * @property reason Human-readable reason why the row was skipped
  */

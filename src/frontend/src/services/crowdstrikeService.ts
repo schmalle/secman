@@ -2,9 +2,6 @@
  * CrowdStrike Service
  *
  * Handles API calls for CrowdStrike Falcon vulnerability lookup functionality
- *
- * Related to: Feature 015-we-have-currently (CrowdStrike System Vulnerability Lookup)
- * Tasks: T029-T030 [US1-Impl], T052-T054 [US3-Impl]
  */
 
 /**
@@ -35,7 +32,6 @@ export interface CrowdStrikeVulnerabilityDto {
 /**
  * Query Response
  * Matches backend CrowdStrikeQueryResponse
- * Feature: 041-falcon-instance-lookup
  */
 export interface CrowdStrikeQueryResponse {
     hostname: string;
@@ -63,7 +59,6 @@ export interface CrowdStrikeQueryResponse {
 /**
  * Save Request
  * Matches backend CrowdStrikeSaveRequest
- * Feature: 041-falcon-instance-lookup
  */
 export interface CrowdStrikeSaveRequest {
     hostname: string;
@@ -89,9 +84,6 @@ export interface CrowdStrikeSaveResponse {
 
 /**
  * Query CrowdStrike for system vulnerabilities
- *
- * Feature: 041-falcon-instance-lookup
- * Task: T030 [US1-Impl], T036 [US3-Impl]
  *
  * @param hostname System hostname or AWS instance ID to query
  * @param force If true, bypass cache and fetch fresh data (Feature 041, Task T035)
@@ -196,8 +188,6 @@ export async function queryVulnerabilities(
 
 /**
  * Save CrowdStrike vulnerabilities to database
- *
- * Task: T054 [US3-Impl]
  *
  * @param request Save request with hostname and vulnerabilities
  * @returns Save response with results

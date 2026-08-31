@@ -8,11 +8,6 @@
  * - Click handlers for navigation to system vulnerabilities page
  * - Excel export functionality
  * - Loading, error, and empty states
- *
- * Feature: 036-vuln-stats-lense
- * Task: T040 [US3]
- * Spec reference: spec.md FR-005, FR-006
- * User Story: US3 - View Asset Vulnerability Statistics (P3)
  */
 
 import React, { useState } from 'react';

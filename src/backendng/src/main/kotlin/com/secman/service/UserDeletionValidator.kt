@@ -171,7 +171,6 @@ class UserDeletionValidator(
 
     /**
      * Validate admin role removal for last admin protection
-     * Feature: 037-last-admin-protection (User Story 3)
      *
      * Prevents removing the ADMIN role from the last administrator in the system.
      *

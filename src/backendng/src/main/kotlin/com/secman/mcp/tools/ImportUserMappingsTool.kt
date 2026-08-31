@@ -13,7 +13,6 @@ import org.slf4j.LoggerFactory
 
 /**
  * MCP tool for bulk importing user mappings.
- * Feature: 064-mcp-cli-user-mapping
  *
  * ADMIN role is required via User Delegation.
  *

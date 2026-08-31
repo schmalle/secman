@@ -1,6 +1,5 @@
 #!/bin/bash
 # E2E Test: S3 List Bucket
-# Feature: 065-s3-user-mapping-import (list-bucket subcommand)
 #
 # This script validates the end-to-end flow of listing S3 bucket objects
 # via the CLI list-bucket command.

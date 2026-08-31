@@ -8,16 +8,12 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for cancelling the user's own pending exception request.
- * Feature: 062-mcp-vuln-exceptions
  *
  * Access Control:
  * - Requires User Delegation
  * - Any authenticated user can cancel their own requests
  * - Ownership check: only the original requester can cancel
  * - Only PENDING requests can be cancelled (or auto-approved by same user)
- *
- * Spec reference: spec.md FR-022 through FR-024
- * User Story: US7 - Cancel Exception Request (P3)
  */
 @Singleton
 class CancelExceptionRequestTool(

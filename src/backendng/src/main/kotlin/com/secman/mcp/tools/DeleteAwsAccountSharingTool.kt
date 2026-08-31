@@ -10,8 +10,6 @@ import org.slf4j.LoggerFactory
 /**
  * MCP tool for deleting an AWS account sharing rule.
  *
- * Feature: AWS Account Sharing
- *
  * ADMIN role is required via User Delegation.
  *
  * Input parameters:

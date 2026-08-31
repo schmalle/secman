@@ -25,8 +25,8 @@ class McpAuditService(
     /**
      * Log a tool call execution with comprehensive details.
      *
-     * @param delegatedUserEmail Email of the user on whose behalf the request was made (Feature: 050-mcp-user-delegation)
-     * @param delegatedUserId ID of the delegated user (Feature: 050-mcp-user-delegation)
+     * @param delegatedUserEmail Email of the user on whose behalf the request was made
+     * @param delegatedUserId ID of the delegated user
      */
     fun logToolCall(
         apiKeyId: Long,

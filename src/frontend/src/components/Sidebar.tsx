@@ -103,7 +103,6 @@ const Sidebar = () => {
     };
 
     // Check if user has admin role and access permissions
-    // Feature: 025-role-based-access-control
     useEffect(() => {
         function checkRoles() {
             const user = (window as any).currentUser;
@@ -131,7 +130,6 @@ const Sidebar = () => {
     }, []);
 
     // Connect to real-time SSE updates for exception approval badge
-    // Feature: 031-vuln-exception-approval, Phase 6: Real-Time Badge Updates
     useEffect(() => {
         // Only connect if user has ADMIN or SECCHAMPION role (can approve exceptions)
         const canApprove = userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION');
@@ -232,7 +230,7 @@ const Sidebar = () => {
                 </li>
 
 
-                {/* REQUIREMENTS Section - ADMIN, REQ, or SECCHAMPION only (Feature: 025-role-based-access-control) */}
+                {/* REQUIREMENTS Section - ADMIN, REQ, or SECCHAMPION only */}
                 {hasReq && (
                     <li>
                         <div
@@ -290,7 +288,7 @@ const Sidebar = () => {
                     </li>
                 )}
 
-                {/* RISK MANAGEMENT Section - ADMIN, RISK, or SECCHAMPION only (Feature: 025-role-based-access-control) */}
+                {/* RISK MANAGEMENT Section - ADMIN, RISK, or SECCHAMPION only */}
                 {hasRisk && (
                     <li>
                         <div
@@ -351,7 +349,7 @@ const Sidebar = () => {
                     </li>
                 )}
 
-                {/* VULNERABILITY MANAGEMENT Section - ADMIN or VULN role (Feature: 004-i-want-to) */}
+                {/* VULNERABILITY MANAGEMENT Section - ADMIN or VULN role */}
                 {hasVuln && (
                     <li>
                         <div

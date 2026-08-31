@@ -12,7 +12,6 @@ import java.time.format.DateTimeFormatter
 
 /**
  * MCP tool for listing user mappings with pagination and filtering.
- * Feature: 064-mcp-cli-user-mapping
  *
  * ADMIN role is required via User Delegation.
  * Supports pagination and email filtering.

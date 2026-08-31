@@ -1,7 +1,6 @@
 /**
  * API client for Asset Compliance History endpoints
  * Requires authentication (ADMIN role)
- * Feature: ec2-vulnerability-tracking
  */
 
 import { authenticatedGet, authenticatedPost } from '../utils/auth';

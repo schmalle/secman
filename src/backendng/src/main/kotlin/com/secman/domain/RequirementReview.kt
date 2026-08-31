@@ -8,7 +8,6 @@ import java.time.Instant
 
 /**
  * Individual feedback on a requirement change within an alignment session.
- * Feature: 068-requirements-alignment-process
  *
  * Each reviewer can provide an assessment (OK/Change/NOGO) and optional
  * comments for each changed requirement in the alignment session.

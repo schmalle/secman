@@ -20,7 +20,6 @@ import org.slf4j.LoggerFactory
  *
  * Provides endpoint for non-admin users to view vulnerabilities grouped by their workgroups.
  *
- * Feature: 022-wg-vulns-handling
  * Access Control:
  * - Authentication required (JWT)
  * - Admin users are rejected (403 Forbidden - should use System Vulns)
@@ -62,10 +61,6 @@ open class WorkgroupVulnsController(
      * - 403 Forbidden: Admin users (should use System Vulns instead)
      * - 404 Not Found: User has no workgroup memberships
      * - 500 Internal Server Error: Unexpected error
-     *
-     * Related to:
-     * - Feature: 022-wg-vulns-handling
-     * - Contract: specs/022-wg-vulns-feature/contracts/wg-vulns-api.yaml
      */
     @Get
     @Transactional(readOnly = true)

@@ -9,13 +9,9 @@ import java.util.*
 /**
  * Repository for UserMapping entity
  * 
- * Feature: 013-user-mapping-upload
- * 
  * Provides CRUD operations and query methods for user-to-AWS-account-to-domain mappings.
  * Used by UserMappingImportService for bulk imports and by future RBAC features
  * for access control lookups.
- * 
- * Related to: Feature 013 (User Mapping Upload)
  */
 @Repository
 interface UserMappingRepository : JpaRepository<UserMapping, Long> {
@@ -151,8 +147,6 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      * Check if a specific IP mapping exists (duplicate detection).
      * NULL-safe (see [existsByEmailAndAwsAccountIdAndDomain]).
      *
-     * Related to: Feature 020 (IP Address Mapping)
-     *
      * @param email User's email address (required)
      * @param ipAddress IP address string (nullable)
      * @param domain Organizational domain name (nullable)
@@ -174,8 +168,6 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
     /**
      * Find a specific IP mapping by composite key.
      * NULL-safe (see [findByEmailAndAwsAccountIdAndDomain]).
-     *
-     * Related to: Feature 020 (IP Address Mapping)
      *
      * @param email User's email address (required)
      * @param ipAddress IP address string (nullable)
@@ -202,8 +194,6 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      *
      * Use case: Lookup future user mapping during user creation for automatic application
      *
-     * Related to: Feature 042 (Future User Mappings)
-     *
      * @param email User's email address (case-insensitive)
      * @return Optional containing the first matching mapping (if multiple exist, returns first)
      */
@@ -213,8 +203,6 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      * Find all current mappings (future + active, excluding applied history)
      *
      * Use case: Display "Current Mappings" tab in UI (paginated)
-     *
-     * Related to: Feature 042 (Future User Mappings)
      *
      * @param pageable Pagination parameters (page number, size, sort)
      * @return Page of current mappings (appliedAt IS NULL)
@@ -226,8 +214,6 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      *
      * Use case: Display "Applied History" tab in UI (paginated)
      *
-     * Related to: Feature 042 (Future User Mappings)
-     *
      * @param pageable Pagination parameters (page number, size, sort)
      * @return Page of applied historical mappings (appliedAt IS NOT NULL)
      */
@@ -238,8 +224,6 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      *
      * Use case: Display total count for "Current Mappings" tab pagination
      *
-     * Related to: Feature 042 (Future User Mappings)
-     *
      * @return Number of current mappings (appliedAt IS NULL)
      */
     fun countByAppliedAtIsNull(): Long
@@ -248,8 +232,6 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      * Count applied historical mappings
      *
      * Use case: Display total count for "Applied History" tab pagination
-     *
-     * Related to: Feature 042 (Future User Mappings)
      *
      * @return Number of applied historical mappings (appliedAt IS NOT NULL)
      */
@@ -261,8 +243,6 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      * Find all mappings for a specific email and status
      *
      * Use case: Find pending mappings when user is created for auto-application
-     *
-     * Related to: Feature 049 (CLI User Mapping Management)
      *
      * @param email User's email address (case-insensitive)
      * @param status Mapping status (PENDING or ACTIVE)
@@ -277,8 +257,6 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      *
      * Use case: List all mappings via MCP tool with pagination
      *
-     * Related to: Feature 064 (MCP and CLI User Mapping Upload)
-     *
      * @param pageable Pagination parameters (page number, size, sort)
      * @return Page of all user mappings
      */
@@ -288,8 +266,6 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      * Find mappings by email containing (partial match) with pagination
      *
      * Use case: Filter mappings by email via MCP tool with pagination
-     *
-     * Related to: Feature 064 (MCP and CLI User Mapping Upload)
      *
      * @param email Partial email to search for (case-insensitive)
      * @param pageable Pagination parameters (page number, size, sort)

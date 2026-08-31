@@ -2,8 +2,6 @@ package com.secman.domain
 
 /**
  * Audit severity enumeration for filtering and alerting on audit events.
- *
- * Related to: Feature 031-vuln-exception-approval (FR-026b - Audit logging)
  */
 enum class AuditSeverity {
     /**

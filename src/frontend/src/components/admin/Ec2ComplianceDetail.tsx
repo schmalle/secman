@@ -2,8 +2,6 @@
  * EC2 Compliance Detail Component
  *
  * Displays a vertical timeline of compliance status changes for a single asset.
- *
- * Feature: ec2-vulnerability-tracking
  */
 
 import React, { useState, useEffect } from 'react';

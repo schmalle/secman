@@ -13,7 +13,7 @@ import java.time.Instant
 @Table(
     name = "users",
     indexes = [
-        // Query optimization indexes (Feature: Database Structure Optimization)
+        // Query optimization indexes
         Index(name = "idx_user_email", columnList = "email"),      // Email lookups for OAuth/mappings
         Index(name = "idx_user_username", columnList = "username") // Username lookups
     ]
@@ -51,8 +51,6 @@ data class User(
 
     /**
      * Many-to-many relationship with Workgroup
-     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
-     * Feature: 073-memory-optimization (LAZY loading)
      * Users can belong to 0..n workgroups
      *
      * LAZY fetch: Workgroups loaded on-demand to reduce memory for list operations.
@@ -76,7 +74,6 @@ data class User(
 
     /**
      * Authentication source tracking
-     * Feature: 051-user-password-change
      * Determines if user can change password via self-service
      */
     @Column(name = "auth_source", nullable = false, length = 20)
@@ -92,7 +89,6 @@ data class User(
 
     /**
      * Last login timestamp
-     * Feature: User Management - Last Login Tracking
      * Updated on each successful authentication (local or OAuth)
      */
     @Column(name = "last_login")
@@ -100,7 +96,6 @@ data class User(
 ) {
     /**
      * User roles for access control
-     * Feature: 025-role-based-access-control
      *
      * - USER: Basic authenticated user
      * - ADMIN: Full system access
@@ -118,7 +113,6 @@ data class User(
 
     /**
      * Authentication source for user accounts
-     * Feature: 051-user-password-change
      *
      * - LOCAL: User registered with username/password
      * - OAUTH: User created via OAuth/OIDC provider (no local password)
@@ -148,21 +142,18 @@ data class User(
 
     /**
      * Check if user has RISK role
-     * Feature: 025-role-based-access-control
      * @return true if user has RISK role
      */
     fun isRisk(): Boolean = hasRole(Role.RISK)
 
     /**
      * Check if user has REQ role
-     * Feature: 025-role-based-access-control
      * @return true if user has REQ role
      */
     fun isReq(): Boolean = hasRole(Role.REQ)
 
     /**
      * Check if user has SECCHAMPION role
-     * Feature: 025-role-based-access-control
      * @return true if user has SECCHAMPION role
      */
     fun isSecChampion(): Boolean = hasRole(Role.SECCHAMPION)

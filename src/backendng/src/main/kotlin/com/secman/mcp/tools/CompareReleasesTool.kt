@@ -8,7 +8,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for comparing two releases and showing requirement differences.
- * Feature: MCP Release Management
  *
  * Compares requirement snapshots between two releases and returns added,
  * deleted, modified, and unchanged counts with field-level diffs.

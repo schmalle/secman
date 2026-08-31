@@ -18,7 +18,6 @@ import java.io.StringWriter
 
 /**
  * Service for sending alignment-related email notifications.
- * Feature: 068-requirements-alignment-process
  */
 @Singleton
 open class AlignmentEmailService(

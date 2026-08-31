@@ -8,7 +8,6 @@ import java.time.Instant
 
 /**
  * Captures a changed requirement at the moment alignment starts.
- * Feature: 068-requirements-alignment-process
  *
  * Stores the before/after state of requirements that changed between
  * the baseline release and the current release being reviewed. This

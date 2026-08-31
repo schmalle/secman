@@ -17,7 +17,6 @@ import org.junit.jupiter.api.*
 
 /**
  * Integration tests for AuthController.
- * Feature: 056-test-suite (User Story 3 - P3)
  *
  * Tests authentication flows:
  * - Login with valid credentials

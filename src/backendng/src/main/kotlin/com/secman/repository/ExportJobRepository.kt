@@ -10,7 +10,6 @@ import java.util.Optional
 
 /**
  * Repository for ExportJob entities
- * Feature: Vulnerability Export Performance Optimization - Background Job Pattern
  */
 @Repository
 interface ExportJobRepository : JpaRepository<ExportJob, String> {

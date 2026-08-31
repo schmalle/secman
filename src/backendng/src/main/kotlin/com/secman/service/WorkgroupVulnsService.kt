@@ -20,8 +20,6 @@ import java.time.LocalDateTime
 /**
  * Service for retrieving vulnerability summaries grouped by workgroup.
  *
- * Feature: 022-wg-vulns-handling - Workgroup-Based Vulnerability View
- *
  * Provides business logic for the WG Vulns view, including:
  * - Looking up user's workgroup memberships
  * - Filtering assets by workgroup IDs

@@ -9,7 +9,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for setting a release status.
- * Feature: MCP Release Management
  *
  * Status transitions follow this workflow:
  * - PREPARATION -> ACTIVE: Allowed (direct activation, skipping alignment).

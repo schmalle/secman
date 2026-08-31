@@ -35,7 +35,7 @@ open class McpAdminController(
     /**
      * Create a new MCP API key.
      *
-     * Supports user delegation (Feature: 050-mcp-user-delegation):
+     * Supports user delegation:
      * - delegationEnabled: Enable delegation for this key
      * - allowedDelegationDomains: Required if delegation enabled (comma-separated, e.g. "@company.com")
      */
@@ -60,7 +60,7 @@ open class McpAdminController(
                 )
             }
 
-            // Validate delegation configuration (Feature: 050-mcp-user-delegation)
+            // Validate delegation configuration
             val delegationValidationError = validateDelegationConfig(request.delegationEnabled, request.allowedDelegationDomains)
             if (delegationValidationError != null) {
                 logger.debug("Delegation validation failed: {}", delegationValidationError)
@@ -269,7 +269,7 @@ open class McpAdminController(
     /**
      * Get audit logs with filtering.
      *
-     * Supports filtering by delegated user (Feature: 050-mcp-user-delegation):
+     * Supports filtering by delegated user:
      * - delegatedUserEmail: Filter by requests made on behalf of specific user
      */
     @Get("/audit-logs")
@@ -584,7 +584,6 @@ open class McpAdminController(
 
     /**
      * Validate delegation configuration.
-     * Feature: 050-mcp-user-delegation
      *
      * @param delegationEnabled Whether delegation is enabled
      * @param allowedDomains Comma-separated list of allowed domains

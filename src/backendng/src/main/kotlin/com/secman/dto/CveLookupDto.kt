@@ -4,8 +4,6 @@ import io.micronaut.serde.annotation.Serdeable
 
 /**
  * Response DTO for CVE lookup from NVD API
- *
- * Feature: 072-cve-link-lookup
  */
 @Serdeable
 data class CveLookupDto(

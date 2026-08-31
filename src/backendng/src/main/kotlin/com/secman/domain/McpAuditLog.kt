@@ -167,7 +167,6 @@ data class McpAuditLog(
 
     /**
      * Email of the user on whose behalf the request was made (if delegation was used).
-     * Feature: 050-mcp-user-delegation
      */
     @Column(name = "delegated_user_email", length = 255)
     @Size(max = 255)
@@ -175,7 +174,6 @@ data class McpAuditLog(
 
     /**
      * ID of the delegated user (for joins, if delegation was used).
-     * Feature: 050-mcp-user-delegation
      */
     @Column(name = "delegated_user_id")
     val delegatedUserId: Long? = null
@@ -233,7 +231,6 @@ data class McpAuditLog(
 
     /**
      * Check if this request was made via delegation.
-     * Feature: 050-mcp-user-delegation
      */
     fun isDelegatedRequest(): Boolean {
         return delegatedUserEmail != null

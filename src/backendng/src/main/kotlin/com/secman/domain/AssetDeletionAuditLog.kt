@@ -16,8 +16,6 @@ import java.time.LocalDateTime
  * Immutable audit records - no UPDATE or DELETE operations allowed after creation.
  * Provides complete traceability for compliance, debugging, and data recovery.
  *
- * Related to: Feature 033-cascade-asset-deletion (FR-011 - Audit logging)
- *
  * @property id Unique identifier
  * @property assetId ID of deleted asset (preserved after deletion)
  * @property assetName Name of deleted asset (preserved)

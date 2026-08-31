@@ -3,8 +3,6 @@
  *
  * Handles public API calls for reviewers accessing via token link.
  * These endpoints don't require authentication - the token serves as auth.
- *
- * Feature: 068-requirements-alignment-process
  */
 
 import type { ReviewPageData, AlignmentSnapshot } from './releaseService';

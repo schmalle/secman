@@ -87,8 +87,6 @@ interface PagedResponse {
  * Displays scan history with pagination and detail view.
  * ADMIN-only access enforced by backend.
  *
- * Related to:
- * - Feature: 002-implement-a-parsing (Nmap Scan Import)
  * - FR-007, FR-008: Scans page with admin-only access
  */
 const ScanManagementContent: React.FC = () => {

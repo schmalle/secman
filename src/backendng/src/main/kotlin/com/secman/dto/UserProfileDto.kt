@@ -8,7 +8,6 @@ import java.time.Instant
  * Data Transfer Object for user profile API responses
  * Feature 028: User Profile Page
  * Feature 051: User Password Change (added canChangePassword)
- * Feature: Profile Picture Management (added hasProfilePicture, profilePictureUpdatedAt)
  *
  * Exposes only safe, user-visible fields:
  * - username: User's display name

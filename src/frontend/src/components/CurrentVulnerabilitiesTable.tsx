@@ -9,9 +9,6 @@
  * - Exception and overdue status badges with tooltips
  * - Pagination (50 items per page)
  * - Loading and error states
- *
- * Related to: Feature 004-i-want-to (VULN Role & Vulnerability Management UI)
- * Related to: Feature 021-vulnerability-overdue-exception-logic
  */
 
 import React, { useState, useEffect, useRef } from "react";
@@ -370,7 +367,6 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
 
   /**
    * Handle export of vulnerabilities to Excel
-   * Feature: Vulnerability Export Performance Optimization - Background Job Pattern
    *
    * Uses background job pattern with progress tracking:
    * - Starts export job asynchronously

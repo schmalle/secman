@@ -34,8 +34,6 @@ import java.util.*
 
 /**
  * Service for managing background export jobs
- * Feature: Vulnerability Export Performance Optimization - Background Job Pattern
- * Feature: 073-memory-optimization (configurable batch size)
  *
  * Handles:
  * - Starting export jobs asynchronously

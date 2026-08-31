@@ -1,8 +1,6 @@
 /**
  * Domain Vulns View Component
  *
- * Feature: 043-crowdstrike-domain-import
- *
  * Main component for Domain Vulns feature - displays vulnerabilities grouped by AD domain.
  * Queries secman database based on user's domain mappings.
  *

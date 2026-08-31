@@ -8,7 +8,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for finalizing or cancelling an alignment session.
- * Feature: 068-requirements-alignment-process
  *
  * Completes the alignment process and optionally activates the release,
  * or cancels the alignment returning the release to DRAFT.

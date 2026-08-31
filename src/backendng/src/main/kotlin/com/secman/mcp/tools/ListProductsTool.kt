@@ -8,7 +8,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for listing all installed products in the system.
- * Feature: 061-mcp-list-products
  *
  * Products are derived from vulnerability data (vulnerableProductVersions field).
  * ADMIN or SECCHAMPION role is required via User Delegation.

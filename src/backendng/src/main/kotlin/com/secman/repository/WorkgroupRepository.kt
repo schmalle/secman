@@ -7,7 +7,6 @@ import java.util.Optional
 
 /**
  * Repository for Workgroup entity operations
- * Feature: 008-create-an-additional (Workgroup-Based Access Control)
  *
  * Provides CRUD operations and case-insensitive name queries for workgroups
  */

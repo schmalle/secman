@@ -12,8 +12,6 @@ import java.time.LocalDateTime
  * Links a Scan to an Asset and contains host-specific metadata.
  * Multiple ScanResults can exist for the same Asset (scan history over time).
  *
- * Related to:
- * - Feature: 002-implement-a-parsing (Nmap Scan Import)
  * - Data Model: specs/002-implement-a-parsing/data-model.md
  * - Decision 1: hostname can be null, use IP as fallback for asset name
  * - Decision 2: Skip duplicate IPs within same scan

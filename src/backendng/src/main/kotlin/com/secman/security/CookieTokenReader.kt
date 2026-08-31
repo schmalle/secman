@@ -22,8 +22,6 @@ import java.util.Optional
  * **Priority**:
  * - Micronaut tries all TokenReaders, so both cookie and Authorization header work
  * - Order is determined by @Order annotation if needed
- *
- * Feature: Security Hardening - JWT in HttpOnly Cookies
  */
 @Singleton
 class CookieTokenReader : TokenReader<HttpRequest<*>> {

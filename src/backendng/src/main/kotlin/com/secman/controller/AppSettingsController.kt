@@ -15,7 +15,6 @@ import org.slf4j.LoggerFactory
 
 /**
  * Controller for application-wide settings.
- * Feature: 068-requirements-alignment-process
  *
  * Provides endpoints for ADMIN users to configure application settings
  * such as the base URL used in email notifications.

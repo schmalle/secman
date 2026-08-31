@@ -68,7 +68,7 @@ class GetAssetCompleteProfileTool(
             val includeVulnerabilities = (arguments["includeVulnerabilities"] as? Boolean) ?: true
             val includeScanResults = (arguments["includeScanResults"] as? Boolean) ?: true
 
-            // Access control check (Feature: 052-mcp-access-control)
+            // Access control check
             // Returns generic "not found" to avoid revealing asset existence
             if (!context.canAccessAsset(assetId)) {
                 return McpToolResult.error(

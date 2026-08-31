@@ -9,7 +9,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for getting details of a single release.
- * Feature: MCP Release Management
  *
  * Returns release metadata and optionally the requirement snapshots.
  *

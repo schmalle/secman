@@ -4,8 +4,6 @@
  * Review page for users accessing via email token link.
  * Allows reviewers to assess requirement changes (OK/CHANGE/NOGO).
  * Supports Excel export/import for offline review.
- *
- * Feature: 068-requirements-alignment-process
  */
 
 import React, { useState, useEffect, useRef } from 'react';

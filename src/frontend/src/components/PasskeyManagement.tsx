@@ -6,7 +6,6 @@ import { useIsMounted } from '../utils/useClientAuth';
 
 /**
  * Passkey Management Component
- * Feature: Passkey MFA Support
  *
  * Displays and manages user's registered passkeys:
  * - List all passkeys

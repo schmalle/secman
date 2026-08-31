@@ -2,7 +2,6 @@
 
 /**
  * Service for AI-Powered Norm Mapping API operations
- * Feature: 058-ai-norm-mapping
  *
  * Provides AI-powered suggestions for mapping requirements to ISO 27001 and IEC 62443 controls.
  */
@@ -128,7 +127,6 @@ export interface FailedRequirementInfo {
 
 /**
  * Get AI suggestions for norm mappings
- * Feature: 058-ai-norm-mapping (User Story 1)
  *
  * Analyzes requirements without existing norm mappings and returns AI-generated
  * suggestions for ISO 27001 and IEC 62443 control mappings.
@@ -172,7 +170,6 @@ export async function suggestMappings(
 
 /**
  * Apply selected norm mappings to requirements
- * Feature: 058-ai-norm-mapping (User Story 2)
  *
  * Saves the selected AI-suggested norm mappings to requirements.
  * Creates new norm entries if they don't exist in the database.
@@ -216,7 +213,6 @@ export async function applyMappings(
 
 /**
  * Get count of unmapped requirements
- * Feature: 058-ai-norm-mapping (User Story 4)
  *
  * Returns the number of requirements without any norm mappings.
  *

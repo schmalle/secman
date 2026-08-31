@@ -7,7 +7,6 @@ import picocli.CommandLine.Option
 
 /**
  * CLI command to add a new security requirement
- * Feature: 057-cli-mcp-requirements
  *
  * Usage:
  *   secman add-requirement --shortreq <text> [--chapter <name>] [options]
@@ -16,7 +15,6 @@ import picocli.CommandLine.Option
  *   secman add-requirement --shortreq "All passwords must be at least 12 characters"
  *   secman add-requirement --shortreq "MFA required for admin access" --chapter "Authentication" --norm "ISO 27001"
  *
- * User Story:
  * - US3: Add new requirements from command line (P2)
  */
 @Command(

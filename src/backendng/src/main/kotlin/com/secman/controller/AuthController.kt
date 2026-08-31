@@ -118,7 +118,6 @@ open class AuthController(
         val workgroupCount: Long = 0,
         val awsAccountCount: Long = 0,
         val domainCount: Long = 0,
-        // Feature: Profile Picture Management. This endpoint runs on every page load
         // (Layout.astro) and feeds window.currentUser, so it is the single channel that keeps the
         // header avatar fresh everywhere. hasProfilePicture must gate the <img> - an
         // unconditional request would 404 on every page for users without a picture.

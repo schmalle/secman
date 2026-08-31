@@ -11,7 +11,6 @@ import io.micronaut.serde.annotation.Serdeable
  *
  * Provides counts by status for "at-a-glance" view of request distribution.
  *
- * Feature: 031-vuln-exception-approval (FR-011, FR-019)
  * Reference: spec.md User Story 7 (US7), tasks.md TASK-012
  */
 @Serdeable

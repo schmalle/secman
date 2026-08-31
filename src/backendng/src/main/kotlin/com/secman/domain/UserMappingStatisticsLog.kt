@@ -10,7 +10,6 @@ import java.time.Instant
  * Execution log for the `manage-user-mappings list --send-email` CLI invocation.
  * One row per invocation, including dry-runs and zero-recipient failures.
  *
- * Feature: 085-cli-mappings-email
  * Mirrors the [AdminSummaryLog] audit pattern from feature 070.
  */
 @Entity

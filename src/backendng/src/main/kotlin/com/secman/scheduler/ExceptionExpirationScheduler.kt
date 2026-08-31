@@ -31,7 +31,6 @@ import java.time.LocalDateTime
  * - Each expiration is logged via ExceptionRequestAuditService
  * - Logs include expiration reason and timestamp
  *
- * Feature: 031-vuln-exception-approval
  * User Story 6: Email Notifications (P3)
  * Phase 10: Email Notifications
  * Reference: spec.md FR-027, FR-028, acceptance scenario US6-3

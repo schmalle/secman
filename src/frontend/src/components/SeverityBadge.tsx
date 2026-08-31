@@ -65,9 +65,7 @@ const severityConfig = {
  * - Accessible labels for screen readers
  * - Supports color-blind users through icons + text + patterns
  *
- * Related to: Feature 019 - Account Vulns Severity Breakdown
  * Feature 043 - Domain Vulnerabilities View (added LOW severity)
- * User Story: US1 (P1) - View Severity Breakdown Per Asset
  *
  * @example
  * ```tsx

@@ -8,8 +8,6 @@
  * - Click handlers for drill-down navigation to product details
  * - Loading, error, and empty states
  * - Excel export for affected systems
- *
- * Feature: 036-vuln-stats-lense
  */
 
 import React, { useState } from 'react';
@@ -20,9 +18,6 @@ import { useChartData } from './useChartData';
 
 /**
  * Props for MostVulnerableProducts component
- *
- * Feature: 059-vuln-stats-domain-filter
- * Task: T013 [US1]
  */
 interface MostVulnerableProductsProps {
   /** Optional AD domain filter (null = all domains) */

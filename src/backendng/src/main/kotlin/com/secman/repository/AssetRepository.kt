@@ -25,9 +25,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * Find asset by ID with workgroups eagerly loaded
      * Used for detail/update operations when LAZY loading is enabled
      *
-     * Feature: 073-memory-optimization
-     * Task: T006
-     *
      * @param id The asset ID
      * @return Optional containing the asset with workgroups loaded
      */
@@ -127,9 +124,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * 7. Assets with cloudAccountId matching an AWS account assigned to a workgroup the user belongs to (WorkgroupAwsAccount)
      * 8. Assets with adDomain matching an AD domain assigned to a workgroup the user belongs to (WorkgroupAdDomain)
      *
-     * Feature: 073-memory-optimization
-     * Task: T031
-     *
      * @param userId The user's ID (for workgroup, creator, uploader checks)
      * @param userEmail The user's email (for AWS account and domain mapping lookups)
      * @param username The user's username (for owner-based access)
@@ -214,7 +208,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     /**
      * Find asset by exact name match
      * Used for hostname lookup during vulnerability import
-     * Related to: Feature 003-i-want-to (Vulnerability Management System)
      *
      * @param name The asset name (hostname)
      * @return Optional containing the asset if found
@@ -234,7 +227,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     /**
      * Find asset by case-insensitive name match
      * Prevents duplicate asset creation with different casing (e.g., "SERVER1" vs "server1")
-     * Related to: Feature 030 (CrowdStrike Asset Auto-Creation) - FR-006
      *
      * @param name The asset name (hostname, case-insensitive)
      * @return The asset if found, null otherwise
@@ -447,25 +439,21 @@ interface AssetRepository : JpaRepository<Asset, Long> {
 
     /**
      * Find assets by group membership (partial match in comma-separated groups field)
-     * Related to: Feature 006 (MCP Tools for Security Data)
      */
     fun findByGroupsContaining(group: String): List<Asset>
 
     /**
      * Find assets by IP address (partial match, case-insensitive)
-     * Related to: Feature 006 (MCP Tools for Security Data)
      */
     fun findByIpContainingIgnoreCase(ip: String): List<Asset>
 
     /**
      * Find all assets with pagination support
-     * Related to: Feature 006 (MCP Tools for Security Data)
      */
     override fun findAll(pageable: Pageable): Page<Asset>
 
     /**
      * Find assets by name with pagination support (partial match, case-insensitive)
-     * Related to: Feature 006 (MCP Tools for Security Data)
      */
     fun findByNameContainingIgnoreCase(name: String, pageable: Pageable): Page<Asset>
 
@@ -558,8 +546,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * 2. Created manually by the user
      * 3. Discovered via scans uploaded by the user
      *
-     * Related to: Feature 008 (Workgroup-Based Access Control) - FR-013, FR-017
-     *
      * @param userId The user ID to filter by
      * @return List of assets accessible to the user
      */
@@ -573,8 +559,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * Find assets in specific workgroups
      * Used for admin workgroup management views
      *
-     * Related to: Feature 008 (Workgroup-Based Access Control) - FR-009
-     *
      * @param workgroupId The workgroup ID to filter by
      * @return List of assets in the specified workgroup
      */
@@ -583,8 +567,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     /**
      * Find assets by cloud account IDs
      * Used for Account Vulns view to filter assets by user's AWS account mappings
-     *
-     * Related to: Feature 018 (Account Vulns - AWS Account-Based Vulnerability Overview)
      *
      * @param cloudAccountIds List of AWS account IDs to filter by
      * @return List of assets in the specified AWS accounts
@@ -667,8 +649,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * Optimized query for domain-based access control filtering
      * Uses index: idx_asset_ad_domain
      *
-     * Feature: Database Structure Optimization
-     *
      * @param domains List of AD domain names (lowercase)
      * @return List of assets matching any of the specified domains
      */
@@ -682,8 +662,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     /**
      * Find assets by name or name starting with "name." (FQDN check)
      * Used to detect duplicate assets (e.g. "server1" vs "server1.domain.com")
-     *
-     * Feature: 053-crowdstrike-import-cleanup
      *
      * @param name The short hostname
      * @return List of potential duplicate assets
@@ -700,9 +678,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     /**
      * Find assets running a specific product with access control and pagination
      * Returns distinct assets that have vulnerabilities with the specified product
-     *
-     * Feature: 054-products-overview
-     * Task: T006
      *
      * @param product The product name to search for (exact match on vulnerableProductVersions)
      * @param accessibleAssetIds Set of asset IDs the user has access to
@@ -734,9 +709,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * Find assets running a specific product for admin users (no access control) with pagination
      * Returns distinct assets that have vulnerabilities with the specified product
      *
-     * Feature: 054-products-overview
-     * Task: T006
-     *
      * @param product The product name to search for (exact match on vulnerableProductVersions)
      * @param pageable Pagination parameters
      * @return Page of assets running the specified product
@@ -763,9 +735,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * Find all assets running a specific product with access control (no pagination)
      * Used for export functionality
      *
-     * Feature: 054-products-overview
-     * Task: T025 (Export)
-     *
      * @param product The product name to search for
      * @param accessibleAssetIds Set of asset IDs the user has access to
      * @return List of all assets running the specified product
@@ -789,9 +758,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     /**
      * Find all assets running a specific product (admin view, no pagination)
      * Used for export functionality
-     *
-     * Feature: 054-products-overview
-     * Task: T025 (Export)
      *
      * @param product The product name to search for
      * @return List of all assets running the specified product

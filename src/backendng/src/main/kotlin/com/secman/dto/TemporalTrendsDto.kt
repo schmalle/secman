@@ -9,10 +9,6 @@ import java.time.LocalDate
  * Represents time-series data showing how vulnerability counts change over time.
  * Supports 30, 60, or 90-day trend periods with daily data points.
  *
- * Feature: 036-vuln-stats-lense
- * Task: T047 [US4]
- * Spec reference: spec.md FR-009, FR-010, FR-011
- * User Story: US4 - View Temporal Trends (P4)
  * Data model: data-model.md Section "TemporalTrendsDto"
  */
 @Serdeable

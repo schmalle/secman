@@ -2,9 +2,6 @@
  * Cache Utilities
  *
  * Utilities for calculating and displaying cache age for CrowdStrike vulnerability queries
- *
- * Feature: 041-falcon-instance-lookup
- * Task: T037 [US3-Impl]
  */
 
 import { parseServerDate } from './dateUtils';

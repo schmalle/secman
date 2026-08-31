@@ -32,7 +32,6 @@ import java.time.LocalDate
 
 /**
  * REST controller for the Requirements Alignment Process.
- * Feature: 068-requirements-alignment-process
  *
  * Provides endpoints for:
  * - Starting alignment on DRAFT releases

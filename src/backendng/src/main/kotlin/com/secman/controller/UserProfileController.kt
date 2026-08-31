@@ -31,7 +31,6 @@ import java.time.Instant
  * Controller for user profile operations
  * Feature 028: User Profile Page
  * Feature 051: User Password Change
- * Feature: Profile Picture Management
  *
  * Endpoints:
  * - GET /api/users/profile: Returns current user's profile data
@@ -100,7 +99,6 @@ open class UserProfileController(
 
     /**
      * Metadata about the current user's avatar.
-     * Feature: Profile Picture Management
      */
     @Serdeable
     data class ProfilePictureMetadata(
@@ -143,7 +141,6 @@ open class UserProfileController(
 
     /**
      * Get MFA status for current user
-     * Feature: Passkey MFA Support
      *
      * GET /api/users/profile/mfa-status
      */
@@ -180,7 +177,6 @@ open class UserProfileController(
 
     /**
      * Toggle MFA on/off for current user
-     * Feature: Passkey MFA Support
      *
      * PUT /api/users/profile/mfa-toggle
      */
@@ -231,15 +227,7 @@ open class UserProfileController(
      * PUT /api/users/profile/change-password
      *
      * Requirements:
-     * - FR-001: Accessible to authenticated users with local accounts
-     * - FR-002: Requires current password verification
      * - FR-003, FR-004: Requires new password and confirmation to match
-     * - FR-005: Minimum 8 characters
-     * - FR-006: Must differ from current password
-     * - FR-007: Clear error messages
-     * - FR-008: Success message on completion
-     * - FR-009: OAuth users cannot change password
-     * - FR-010: Secure password hashing
      */
     @Put("/profile/change-password")
     @Transactional

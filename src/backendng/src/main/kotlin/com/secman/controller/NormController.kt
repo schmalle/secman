@@ -19,7 +19,6 @@ import org.slf4j.LoggerFactory
 
 /**
  * Norm Controller
- * Feature: 025-role-based-access-control
  *
  * Access Control:
  * - ADMIN: Full access to all norm operations

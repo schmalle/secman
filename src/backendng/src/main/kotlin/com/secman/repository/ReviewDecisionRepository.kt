@@ -8,7 +8,6 @@ import java.util.*
 
 /**
  * Repository for ReviewDecision entity.
- * Feature: 078-release-rework
  */
 @Repository
 interface ReviewDecisionRepository : JpaRepository<ReviewDecision, Long> {

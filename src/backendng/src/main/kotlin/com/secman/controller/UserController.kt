@@ -116,7 +116,6 @@ open class UserController(
 
     /**
      * List all users with optional workgroup information
-     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
      *
      * GET /api/users?includeWorkgroups=true
      * FR-010: Display user workgroup membership in admin views
@@ -264,7 +263,6 @@ open class UserController(
             }
 
             // Send email notification to ADMIN users (async, non-blocking)
-            // Feature: 027-admin-user-notifications
             try {
                 val createdByUsername = authentication.name
                 adminNotificationService.sendNewUserNotificationForManualCreation(savedUser, createdByUsername)
@@ -282,7 +280,6 @@ open class UserController(
 
     /**
      * Get user by ID with workgroup information
-     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
      *
      * GET /api/users/{id}
      * FR-010: Display user workgroup membership in detail views
@@ -442,7 +439,6 @@ open class UserController(
     
     /**
      * Get all mappings for a user
-     * Feature: 017-user-mapping-management
      * User Story 1: View User's Existing Mappings (P1)
      */
     @Get("/{userId}/mappings")
@@ -452,7 +448,6 @@ open class UserController(
     
     /**
      * Create a new mapping for a user
-     * Feature: 017-user-mapping-management
      * User Story 2: Add New Mapping (P2)
      */
     @Post("/{userId}/mappings")
@@ -466,7 +461,6 @@ open class UserController(
     
     /**
      * Update an existing mapping
-     * Feature: 017-user-mapping-management
      * User Story 4: Edit Existing Mapping (P3)
      */
     @Put("/{userId}/mappings/{mappingId}")
@@ -480,7 +474,6 @@ open class UserController(
     
     /**
      * Delete a mapping
-     * Feature: 017-user-mapping-management
      * User Story 3: Delete Existing Mapping (P2)
      */
     @Delete("/{userId}/mappings/{mappingId}")

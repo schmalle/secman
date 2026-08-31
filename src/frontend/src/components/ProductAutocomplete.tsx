@@ -9,8 +9,6 @@
  * - Highlights matching text
  * - Dropdown with suggestions
  * - Manual entry allowed
- *
- * Related to: Feature 021-vulnerability-overdue-exception-logic (Phase 3)
  */
 
 import React, { useState, useEffect, useRef } from 'react';

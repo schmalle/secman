@@ -8,8 +8,6 @@ import io.micronaut.serde.annotation.Serdeable
  * Contains all workgroup groups with their assets, plus overall summary statistics.
  * This is the response body for GET /api/wg-vulns endpoint.
  *
- * Feature: 022-wg-vulns-handling - Workgroup-Based Vulnerability View
- *
  * @property workgroupGroups List of workgroup groups with their assets (sorted alphabetically by workgroup name)
  * @property totalAssets Total number of assets across all workgroups (for summary display)
  * @property totalVulnerabilities Total number of vulnerabilities across all assets (for summary display)

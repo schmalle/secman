@@ -18,8 +18,6 @@ import java.time.LocalDateTime
  *
  * Retention policy: Permanent (manual cleanup after 7 years per compliance requirements)
  *
- * Related to: Feature 031-vuln-exception-approval (FR-026b - Audit logging)
- *
  * @property id Unique identifier
  * @property requestId ID of the exception request (not FK to allow orphaned audit logs)
  * @property eventType Type of event (REQUEST_CREATED, APPROVED, REJECTED, etc.)

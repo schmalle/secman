@@ -9,8 +9,6 @@ import java.math.BigInteger
  *
  * Used by MaterializedViewRefreshService for batch loading vulnerability statistics
  * instead of N+1 queries per asset.
- *
- * Feature: Outdated Assets Performance Optimization (Fix 3)
  */
 @Serdeable
 @Introspected

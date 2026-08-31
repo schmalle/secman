@@ -9,10 +9,6 @@ import io.micronaut.serde.annotation.Serdeable
  * Represents the distribution of vulnerabilities across CVSS severity levels
  * with counts and computed percentages. Used for pie chart visualization.
  *
- * Feature: 036-vuln-stats-lense
- * Task: T021 [US2]
- * Spec reference: spec.md FR-003, FR-004
- * User Story: US2 - View Severity Distribution (P2)
  * Data model: data-model.md Section "SeverityDistributionDto"
  */
 @Serdeable

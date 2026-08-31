@@ -7,7 +7,6 @@ import com.secman.dto.mcp.McpExecutionContext
  * Base interface for all MCP tools.
  * Each tool provides specific functionality accessible through the MCP protocol.
  *
- * Feature: 052-mcp-access-control
  * Tools now receive an execution context that includes:
  * - API key information
  * - Delegated user information (if User Delegation is enabled)

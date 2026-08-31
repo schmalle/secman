@@ -15,7 +15,7 @@ import java.time.LocalDateTime
     name = "asset",
     indexes = [
         Index(name = "idx_asset_ip_numeric", columnList = "ip_numeric"),
-        // Query optimization indexes (Feature: Database Structure Optimization)
+        // Query optimization indexes
         Index(name = "idx_asset_name", columnList = "name"),                      // Asset lookups, filters, sorting
         Index(name = "idx_asset_cloud_account", columnList = "cloud_account_id"), // AWS account-based access control
         Index(name = "idx_asset_ad_domain", columnList = "ad_domain"),            // AD domain filtering
@@ -67,7 +67,6 @@ data class Asset(
 
     /**
      * Numeric representation of IP address for efficient range queries
-     * Feature: 020-i-want-to (IP Address Mapping)
      * Computed from ip field in @PrePersist and @PreUpdate
      * Example: "192.168.1.100" -> 3232235876
      */
@@ -91,7 +90,6 @@ data class Asset(
     /**
      * Timestamp when asset was last seen in a scan
      * Updated when new ScanResult is created for this asset
-     * Related to: Feature 002-implement-a-parsing (Nmap Scan Import)
      */
     @Column(name = "last_seen")
     var lastSeen: LocalDateTime? = null,
@@ -121,21 +119,18 @@ data class Asset(
     /**
      * Comma-separated group names this asset belongs to
      * Example: "SVR-MS-DMZ,Production"
-     * Related to: Feature 003-i-want-to (Vulnerability Management System)
      */
     @Column(name = "groups", length = 512)
     var groups: String? = null,
 
     /**
      * Cloud service account ID
-     * Related to: Feature 003-i-want-to (Vulnerability Management System)
      */
     @Column(name = "cloud_account_id", length = 255)
     var cloudAccountId: String? = null,
 
     /**
      * Cloud service instance ID
-     * Related to: Feature 003-i-want-to (Vulnerability Management System)
      */
     @Column(name = "cloud_instance_id", length = 255)
     var cloudInstanceId: String? = null,
@@ -143,7 +138,6 @@ data class Asset(
     /**
      * Active Directory domain this asset belongs to
      * Example: "MS.HOME"
-     * Related to: Feature 003-i-want-to (Vulnerability Management System)
      */
     @Column(name = "ad_domain", length = 255)
     var adDomain: String? = null,
@@ -151,7 +145,6 @@ data class Asset(
     /**
      * Operating system version
      * Example: "Windows Server 2030", "Ubuntu 22.04"
-     * Related to: Feature 003-i-want-to (Vulnerability Management System)
      */
     @Column(name = "os_version", length = 255)
     var osVersion: String? = null,
@@ -202,8 +195,6 @@ data class Asset(
 
     /**
      * Many-to-many relationship with Workgroup
-     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
-     * Feature: 073-memory-optimization (LAZY loading)
      * Assets can belong to 0..n workgroups
      *
      * LAZY fetch: Workgroups loaded on-demand to reduce memory for list operations.
@@ -224,7 +215,6 @@ data class Asset(
 
     /**
      * Dual ownership tracking - manual creator
-     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
      * User who manually created this asset via UI
      * Nullable: allows user deletion (FR-027)
      * LAZY fetch: not needed for list operations
@@ -236,7 +226,6 @@ data class Asset(
 
     /**
      * Dual ownership tracking - scan uploader
-     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
      * User who uploaded scan that discovered this asset
      * Nullable: allows user deletion (FR-027)
      * LAZY fetch: not needed for list operations
@@ -250,7 +239,6 @@ data class Asset(
      * Bidirectional relationship to ScanResult
      * One asset can have multiple scan results over time (scan history)
      * Foreign key is in scan_result table (asset_id)
-     * Related to: Feature 002-implement-a-parsing, Decision 4 (point-in-time snapshots)
      *
      * Note: @JsonIgnore prevents lazy loading errors during JSON serialization.
      * Scan results should be loaded explicitly via port history endpoint.
@@ -263,7 +251,6 @@ data class Asset(
      * Bidirectional relationship to Vulnerability
      * One asset can have multiple vulnerabilities discovered across different scans
      * Foreign key is in vulnerability table (asset_id)
-     * Related to: Feature 003-i-want-to (Vulnerability Management System)
      *
      * Note: @JsonIgnore prevents lazy loading errors during JSON serialization.
      * Vulnerabilities should be loaded explicitly via asset vulnerabilities endpoint.
@@ -352,7 +339,6 @@ data class Asset(
 
     /**
      * Normalize Active Directory domain to lowercase
-     * Feature: 043-crowdstrike-domain-import
      * Ensures consistent storage and case-insensitive comparison
      */
     private fun normalizeDomain() {
@@ -361,7 +347,6 @@ data class Asset(
 
     /**
      * Compute numeric representation of IP address
-     * Feature: 020-i-want-to (IP Address Mapping)
      * Converts IPv4 address string to Long for efficient range queries
      */
     private fun computeIpNumeric() {

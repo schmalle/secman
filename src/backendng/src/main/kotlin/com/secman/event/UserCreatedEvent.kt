@@ -7,12 +7,8 @@ import java.time.Instant
 /**
  * Event published when a new user is created
  *
- * Feature: 042-future-user-mappings
- *
  * Purpose: Trigger automatic application of future user mappings when a user is created
  * (either manually or via OAuth auto-provisioning)
- *
- * Related to: Feature 042 (Future User Mappings)
  */
 @Serdeable
 data class UserCreatedEvent(

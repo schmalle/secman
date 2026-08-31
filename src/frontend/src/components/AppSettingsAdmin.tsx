@@ -8,7 +8,6 @@ import {
 
 /**
  * Application Settings Admin Component
- * Feature: 068-requirements-alignment-process
  *
  * Allows ADMIN users to configure application-wide settings like the base URL
  * used in email notifications (alignment review links, etc.).

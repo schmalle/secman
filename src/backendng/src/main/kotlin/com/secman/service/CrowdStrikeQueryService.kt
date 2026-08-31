@@ -26,9 +26,6 @@ import java.time.temporal.ChronoUnit
 /**
  * Query type enum for cache key discrimination
  *
- * Feature: 041-falcon-instance-lookup
- * Task: T004
- *
  * Enables different cache keys for hostname vs AWS instance ID queries
  */
 enum class QueryType {
@@ -44,9 +41,6 @@ enum class QueryType {
  * - Caching of vulnerability results (15 minute TTL)
  * - Error mapping to internal exceptions
  * - Configuration retrieval from database
- *
- * Related to: Feature 023-create-in-the (Phase 5: Backend API Integration)
- * Task: T062-T065
  */
 @Singleton
 open class CrowdStrikeQueryService(
@@ -62,8 +56,6 @@ open class CrowdStrikeQueryService(
      * Query vulnerabilities with caching
      *
      * Results are cached for 15 minutes per hostname+severity+product combination
-     *
-     * Task: T062-T065
      *
      * @param hostname System hostname
      * @param severity Optional severity filter
@@ -234,9 +226,6 @@ open class CrowdStrikeQueryService(
 
     /**
      * Query vulnerabilities by AWS EC2 Instance ID with caching
-     *
-     * Feature: 041-falcon-instance-lookup
-     * Task: T014
      *
      * Results are cached for 15 minutes per instanceId+severity+product combination
      *

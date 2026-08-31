@@ -8,7 +8,6 @@ import java.time.Instant
 
 /**
  * Represents an active alignment process for a release.
- * Feature: 068-requirements-alignment-process
  *
  * An alignment session is created when a Release Manager initiates the
  * requirements alignment process for a DRAFT release. All users with REQ role

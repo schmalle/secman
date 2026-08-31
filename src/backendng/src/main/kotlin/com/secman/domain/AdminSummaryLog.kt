@@ -9,7 +9,6 @@ import java.time.Instant
 /**
  * Execution log for admin summary email sends.
  * One record per CLI execution.
- * Feature: 070-admin-summary-email
  */
 @Entity
 @Table(
@@ -56,7 +55,6 @@ data class AdminSummaryLog(
 
 /**
  * Execution status for admin summary email sends.
- * Feature: 070-admin-summary-email
  */
 enum class ExecutionStatus {
     /** All emails sent successfully */

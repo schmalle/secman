@@ -11,8 +11,6 @@ import org.slf4j.LoggerFactory
 /**
  * MCP tool for listing AWS account assignments for a workgroup.
  *
- * Feature: Workgroup AWS Account Assignment
- *
  * ADMIN role is required via User Delegation.
  *
  * Input parameters:

@@ -19,9 +19,6 @@ import org.hibernate.Hibernate
 
 /**
  * Centralized service for unified access control filtering
- * Feature: 008-create-an-additional (Workgroup-Based Access Control)
- * Feature: 013-user-mapping-upload (AWS Account Mapping)
- * Feature: 073-memory-optimization (LAZY loading support)
  *
  * Implements filtering logic for assets, vulnerabilities, and scans based on:
  * - ADMIN role: Full access to all resources
@@ -30,10 +27,6 @@ import org.hibernate.Hibernate
  * - USER role: Access to resources from their workgroups + personally created/uploaded items + AWS account mappings
  *
  * Related Requirements:
- * - FR-013: Filter assets by workgroup membership + ownership
- * - FR-014: Filter vulnerabilities by asset accessibility
- * - FR-015: Filter scans by uploader workgroup membership
- * - FR-016: ADMIN has universal access
  * - FR-017-019: Workgroup-based filtering for regular users and VULN role
  * - AWS Account Mapping: Users can access assets based on UserMapping.awsAccountId
  */

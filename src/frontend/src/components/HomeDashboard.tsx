@@ -4,7 +4,7 @@ import HomeStatisticsDashboard from './HomeStatisticsDashboard';
 import UserTodoDashboard from './UserTodoDashboard';
 
 /**
- * Role-based home dashboard switch (Feature: role-based dashboard).
+ * Role-based home dashboard switch.
  *
  * - ADMIN or SECCHAMPION → platform-wide statistics dashboard (unchanged)
  * - every other authenticated user → personal todo dashboard

@@ -13,9 +13,6 @@ import java.io.File
  * - YAML files: ~/.secman/crowdstrike.conf, ~/.secman/crowdstrike.yaml
  * - Environment variables: CROWDSTRIKE_CLIENT_ID, CROWDSTRIKE_CLIENT_SECRET
  * - System properties: crowdstrike.clientId, crowdstrike.clientSecret
- *
- * Related to: Feature 023-create-in-the
- * Task: T045
  */
 class ConfigLoader {
     private val log = LoggerFactory.getLogger(ConfigLoader::class.java)

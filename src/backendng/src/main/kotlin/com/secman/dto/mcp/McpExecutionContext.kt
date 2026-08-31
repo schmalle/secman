@@ -11,7 +11,6 @@ import io.micronaut.serde.annotation.Serdeable
  * 2. Check permissions
  * 3. Apply access control filtering
  *
- * Feature: 052-mcp-access-control
  * Implements row-level access control for MCP tools based on User Delegation.
  *
  * SECURITY: User delegation is mandatory for all data-accessing endpoints.

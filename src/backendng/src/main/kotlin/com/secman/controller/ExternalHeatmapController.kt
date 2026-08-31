@@ -25,8 +25,6 @@ import org.slf4j.LoggerFactory
  * Authenticates via MCP API key (X-MCP-API-Key) and user delegation (X-MCP-User-Email)
  * headers. Returns the same heatmap data as the internal endpoint, scoped by the
  * delegated user's access control.
- *
- * Feature: 086-heatmap-mcp-api
  */
 @Controller("/api/external/vulnerability-heatmap")
 @Secured(SecurityRule.IS_ANONYMOUS)

@@ -19,7 +19,6 @@ import java.util.Base64
 
 /**
  * MCP tool for exporting security requirements to Excel or Word format.
- * Feature: 057-cli-mcp-requirements
  *
  * Returns base64-encoded file content with metadata for AI assistant processing.
  */

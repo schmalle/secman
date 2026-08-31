@@ -10,16 +10,12 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for getting assets with overdue vulnerabilities.
- * Feature: 062-mcp-vuln-exceptions
  *
  * Access Control:
  * - Requires User Delegation
  * - ADMIN or VULN role required
  * - ADMIN sees all overdue assets
  * - VULN sees only assets from assigned workgroups
- *
- * Spec reference: spec.md FR-001 through FR-005
- * User Story: US1 - View Overdue Assets (P1)
  */
 @Singleton
 class GetOverdueAssetsTool(

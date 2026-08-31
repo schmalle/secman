@@ -15,8 +15,6 @@ import javax.imageio.ImageWriteParam
 /**
  * Validates and normalizes uploaded profile pictures.
  *
- * Feature: Profile Picture Management
- *
  * The upload is never stored as-is. It is decoded to a raster, centre-cropped to a square, scaled
  * to [targetEdge] and re-encoded. That round trip is the strongest control in this pipeline: any
  * polyglot payload (PNG header with trailing HTML, EXIF-embedded script, GIF with a comment

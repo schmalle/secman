@@ -4,7 +4,6 @@ import { uploadUserMappings, uploadUserMappingsCSV, getSampleFileUrl, downloadCS
 
 /**
  * UserMappingUpload Component
- * Feature: 013-user-mapping-upload (Excel), 016-i-want-to (CSV)
  *
  * Provides UI for uploading Excel and CSV files with user-to-AWS-account-to-domain mappings.
  * Displays file requirements, handles upload, and shows results/errors.

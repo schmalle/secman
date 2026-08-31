@@ -11,7 +11,6 @@ import jakarta.transaction.Transactional
 
 /**
  * MCP tool for deleting all security requirements.
- * Feature: 057-cli-mcp-requirements
  *
  * ADMIN role is required and confirmation flag must be true.
  * Also deletes all standards/norms, since they only exist to be attached

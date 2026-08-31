@@ -19,17 +19,12 @@ import java.io.FileWriter
  * - File overwrite prompt (interactive mode)
  * - Automatic directory creation
  * - Write permission validation
- *
- * Related to: Feature 023-create-in-the (Phase 6: Export Results)
- * Task: T101-T110
  */
 class ExportService {
     private val log = LoggerFactory.getLogger(ExportService::class.java)
 
     /**
      * Export query response to JSON file with overwrite handling
-     *
-     * Task: T101, T103, T108
      *
      * @param response Query response to export
      * @param outputFile Target JSON file path
@@ -77,8 +72,6 @@ class ExportService {
 
     /**
      * Export query response to CSV file with overwrite handling
-     *
-     * Task: T102, T104, T105, T108
      *
      * CSV columns:
      * - Hostname
@@ -169,8 +162,6 @@ class ExportService {
     /**
      * Export query response to both JSON and CSV
      *
-     * Task: T048
-     *
      * @param response Query response to export
      * @param baseFilename Base filename without extension
      * @param outputDir Output directory
@@ -207,8 +198,6 @@ class ExportService {
     /**
      * Ensure directory exists, creating it if necessary
      *
-     * Task: T109
-     *
      * @param dir Directory to check/create
      * @return true if directory exists or was created successfully
      */
@@ -232,8 +221,6 @@ class ExportService {
     /**
      * Check if file can be written to
      *
-     * Task: T110
-     *
      * @param file File to check
      * @return true if file can be written
      */
@@ -248,8 +235,6 @@ class ExportService {
 
     /**
      * Prompt user for file overwrite confirmation
-     *
-     * Task: T108
      *
      * @param file File that would be overwritten
      * @return true if user confirms overwrite, false otherwise

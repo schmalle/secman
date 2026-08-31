@@ -12,11 +12,8 @@ import java.time.Instant
 
 /**
  * Workgroup entity - represents an organizational unit or team grouping
- * Feature: 008-create-an-additional (Workgroup-Based Access Control)
  *
  * Related Requirements:
- * - FR-001: System MUST allow administrators to create workgroups with a unique name
- * - FR-006: Workgroup names MUST be 1-100 characters, alphanumeric + spaces + hyphens, unique (case-insensitive)
  */
 @Entity
 @Table(
@@ -26,7 +23,7 @@ import java.time.Instant
     ],
     indexes = [
         Index(name = "idx_workgroup_parent", columnList = "parent_id"),
-        // Query optimization indexes (Feature: Database Structure Optimization)
+        // Query optimization indexes
         Index(name = "idx_workgroup_name", columnList = "name")  // Name lookups and filtering
     ]
 )

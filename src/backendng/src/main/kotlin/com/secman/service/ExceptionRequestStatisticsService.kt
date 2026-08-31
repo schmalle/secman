@@ -25,7 +25,6 @@ import java.time.LocalDateTime
  * **Important**: Average approval time uses MEDIAN (not mean) per spec Assumption 8
  * to avoid outliers skewing the metric.
  *
- * Feature: 031-vuln-exception-approval
  * User Story 8: Analytics & Reporting (P3)
  * Phase 11: Analytics & Reporting
  * Reference: spec.md acceptance scenarios US8-1, US8-2

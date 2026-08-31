@@ -8,11 +8,6 @@
  * - Click handlers for drill-down to filtered vulnerability lists
  * - Loading, error, and empty states
  * - Color mapping comes from SEVERITY_HEX (utils/severityColors.ts), which is drift-tested against theme.css
- *
- * Feature: 036-vuln-stats-lense
- * Task: T026 [US2]
- * Spec reference: spec.md FR-003, FR-004
- * User Story: US2 - View Severity Distribution (P2)
  */
 
 import React from 'react';
@@ -38,9 +33,6 @@ const handleSegmentClick = (severity: string) => {
 
 /**
  * Props for SeverityDistributionChart component
- *
- * Feature: 059-vuln-stats-domain-filter
- * Task: T014 [US1]
  */
 interface SeverityDistributionChartProps {
   /** Optional AD domain filter (null = all domains) */

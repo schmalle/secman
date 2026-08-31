@@ -10,7 +10,6 @@
  * - Pagination support (20/50/100 items per page)
  * - Empty state handling
  *
- * Feature: 031-vuln-exception-approval
  * User Story 3: ADMIN Approval Dashboard (P1)
  * Reference: spec.md FR-018 to FR-023
  */

@@ -14,9 +14,6 @@ import org.slf4j.LoggerFactory
  * - Filter for HIGH and CRITICAL severity
  * - Store results via VulnerabilityStorageService
  * - Handle pagination and rate limiting
- *
- * Related to: Feature 026-crowdstrike-polling-monitor
- * Tasks: T5-T9
  */
 @Singleton
 class CrowdStrikePollerService(
@@ -31,8 +28,6 @@ class CrowdStrikePollerService(
     
     /**
      * Poll all devices in CrowdStrike for HIGH/CRITICAL vulnerabilities
-     *
-     * Task: T5
      *
      * @param config CrowdStrike configuration
      * @return PollResult with statistics
@@ -59,8 +54,6 @@ class CrowdStrikePollerService(
     /**
      * Poll specific hostnames for HIGH/CRITICAL vulnerabilities
      *
-     * Task: T5-T6
-     *
      * @param hostnames List of hostnames to query
      * @param config CrowdStrike configuration
      * @return PollResult with statistics
@@ -82,7 +75,7 @@ class CrowdStrikePollerService(
                 val response = apiClient.queryAllVulnerabilities(hostname, config)
                 devicesQueried++
                 
-                // Filter for HIGH and CRITICAL severity (Task: T6)
+                // Filter for HIGH and CRITICAL severity
                 val highCriticalVulns = filterHighCritical(response)
                 totalVulnerabilities += highCriticalVulns.size
                 
@@ -126,8 +119,6 @@ class CrowdStrikePollerService(
     
     /**
      * Filter vulnerabilities for HIGH and CRITICAL severity
-     *
-     * Task: T6
      *
      * @param response CrowdStrike query response
      * @return Filtered response with only HIGH/CRITICAL vulnerabilities

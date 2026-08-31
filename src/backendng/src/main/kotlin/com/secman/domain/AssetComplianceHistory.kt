@@ -12,8 +12,6 @@ import java.time.LocalDateTime
  *
  * Status: COMPLIANT = no vulnerabilities older than threshold (default 30 days)
  *         NON_COMPLIANT = has vulnerabilities older than threshold
- *
- * Feature: ec2-vulnerability-tracking
  */
 @Entity
 @Table(

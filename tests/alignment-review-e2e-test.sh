@@ -1,6 +1,5 @@
 #!/bin/bash
 # E2E Test: Alignment Review Export/Import Workflow
-# Feature: 080-alignment-review-excel
 #
 # This script validates the alignment review Excel export/import workflow:
 # 1. Create test requirements

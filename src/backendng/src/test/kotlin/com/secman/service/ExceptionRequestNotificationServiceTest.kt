@@ -65,7 +65,9 @@ class ExceptionRequestNotificationServiceTest {
     )
 
     private fun captureNewRequestHtml(request: VulnerabilityExceptionRequest): String {
-        every { userRepository.findAll() } returns listOf(secChampion)
+        every {
+            userRepository.findByRolesContainingAny(listOf(User.Role.ADMIN, User.Role.SECCHAMPION))
+        } returns listOf(secChampion)
         every { assetRepository.findById(42L) } returns Optional.of(originatingAsset)
         val subjectSlot = slot<String>()
         val htmlSlot = slot<String>()

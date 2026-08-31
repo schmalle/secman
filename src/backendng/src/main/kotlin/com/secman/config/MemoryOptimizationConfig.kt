@@ -5,7 +5,6 @@ import io.micronaut.serde.annotation.Serdeable
 
 /**
  * Configuration for memory optimization features
- * Feature: 073-memory-optimization
  *
  * Provides feature flags for stability-first rollback capability:
  * - lazyLoadingEnabled: Toggle LAZY/EAGER entity loading

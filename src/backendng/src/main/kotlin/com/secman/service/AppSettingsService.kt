@@ -11,7 +11,6 @@ import org.slf4j.LoggerFactory
 
 /**
  * Service for managing application-wide settings.
- * Feature: 068-requirements-alignment-process
  */
 @Singleton
 open class AppSettingsService(

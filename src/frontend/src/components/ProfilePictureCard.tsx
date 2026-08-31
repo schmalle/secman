@@ -3,7 +3,6 @@ import userProfileService from '../services/userProfileService';
 
 /**
  * Profile Picture Card
- * Feature: Profile Picture Management
  *
  * Lets the signed-in user upload, crop, replace and remove their own avatar.
  *

@@ -2,7 +2,6 @@ import axios from 'axios';
 
 /**
  * Passkey credential info
- * Feature: Passkey MFA Support
  */
 export interface PasskeyCredentialInfo {
   id: number;
@@ -21,7 +20,6 @@ export interface PasskeyListResponse {
 
 /**
  * Service for Passkey/WebAuthn API operations
- * Feature: Passkey MFA Support
  */
 class PasskeyService {
   private readonly baseUrl = '/api/passkey';

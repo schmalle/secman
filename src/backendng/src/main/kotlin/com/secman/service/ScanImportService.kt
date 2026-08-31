@@ -21,13 +21,6 @@ import java.time.LocalDateTime
  * 4. Handle duplicates and errors
  * 5. Audit logging
  *
- * Related to:
- * - Feature: 002-implement-a-parsing (Nmap Scan Import)
- * - FR-002: Automatically create assets
- * - FR-012: IP as asset name when hostname missing (Decision 1)
- * - FR-013: Skip duplicate IPs (Decision 2)
- * - FR-014: Default type "Network Host" (Decision 3)
- * - FR-015: Point-in-time snapshots (Decision 4)
  * - NFR-003: Audit logging
  */
 @Singleton
@@ -239,7 +232,6 @@ open class ScanImportService(
 
     /**
      * Lookup asset by IP or create new one
-     * Implements:
      * - Decision 1: IP as name when hostname missing
      * - Decision 3: Default type "Network Host"
      */
@@ -298,7 +290,6 @@ open class ScanImportService(
 
     /**
      * Log audit event
-     * Implements: NFR-003 (audit logging)
      *
      * Note: This is a placeholder implementation.
      * In production, this should write to a dedicated audit_log table.

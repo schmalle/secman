@@ -11,7 +11,6 @@ interface IpMappingFormProps {
 
 /**
  * Form component for creating/editing IP address mappings
- * Feature: 020-i-want-to (IP Address Mapping)
  *
  * Supports:
  * - Single IP addresses (192.168.1.100)

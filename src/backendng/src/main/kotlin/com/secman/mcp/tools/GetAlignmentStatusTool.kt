@@ -8,7 +8,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for querying alignment status and progress.
- * Feature: 068-requirements-alignment-process
  *
  * Returns detailed status including reviewer progress, assessment
  * summary, and requirement change breakdown.

@@ -17,7 +17,6 @@ import jakarta.validation.constraints.Size
  * Note: Validation enforcement for "required on rejection" is handled in service layer
  * because it's context-dependent (approve vs reject action).
  *
- * Feature: 031-vuln-exception-approval
  * Reference: contracts/exception-request-api.yaml lines 627-637
  */
 @Serdeable

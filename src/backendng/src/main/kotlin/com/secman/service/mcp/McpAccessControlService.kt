@@ -17,8 +17,6 @@ import org.slf4j.LoggerFactory
 /**
  * Service for building MCP execution context with pre-computed access control data.
  *
- * Feature: 052-mcp-access-control
- *
  * Implements row-level access control for MCP tools based on User Delegation.
  * When delegation is enabled, computes accessible asset IDs using the Unified Access Control
  * policy defined in CLAUDE.md.

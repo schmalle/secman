@@ -11,9 +11,6 @@ import java.time.Instant
  * Feature 040: Nested Workgroups
  *
  * Related Requirements:
- * - FR-014: System MUST support up to 5 levels of nesting depth
- * - FR-019: System MUST use optimistic locking to detect concurrent modifications
- * - FR-020: System MUST enforce sibling uniqueness
  */
 
 /**

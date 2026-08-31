@@ -34,10 +34,6 @@ interface PortHistoryProps {
  *
  * Displays port scan history for an asset in a modal.
  * Shows timeline of port changes across multiple scans.
- *
- * Related to:
- * - Feature: 002-implement-a-parsing (Nmap Scan Import)
- * - FR-011: Display port scan history
  */
 const PortHistory: React.FC<PortHistoryProps> = ({ assetId, assetName, onClose }) => {
   const [portHistory, setPortHistory] = useState<PortHistoryData | null>(null);

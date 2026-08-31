@@ -18,10 +18,6 @@ import javax.xml.parsers.DocumentBuilderFactory
  * - Host information (IP, hostname)
  * - Port details (number, protocol, state, service, version)
  *
- * Related to:
- * - Feature: 002-implement-a-parsing (Nmap Scan Import)
- * - FR-001: Parse nmap XML files
- * - FR-006: File validation
  * - NFR-001: Validate XML structure before processing
  */
 @Singleton
@@ -193,7 +189,9 @@ class NmapParserService {
      * Extract hostname from host (if available)
      * From: <hostnames><hostname name="example.com" type="PTR"/></hostnames>
      * Returns: First hostname found, or null if none
-     * Implements: Decision 1 (IP as fallback when hostname missing)
+     *
+     * Null is expected, not an error: callers fall back to the IP when a host
+     * reports no hostname.
      */
     private fun extractHostname(hostElement: Element): String? {
         val hostnamesElement = hostElement.getElementsByTagName("hostnames")

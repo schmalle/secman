@@ -27,7 +27,6 @@ import java.time.LocalDateTime
 
 /**
  * Risk Assessment Controller
- * Feature: 025-role-based-access-control
  *
  * Access Control:
  * - ADMIN, SECCHAMPION: universal access to all risk assessment operations (Unified Asset Access).

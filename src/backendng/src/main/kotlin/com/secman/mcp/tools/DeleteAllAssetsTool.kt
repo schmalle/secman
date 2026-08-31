@@ -8,7 +8,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for deleting all assets from the system.
- * Feature: 063-e2e-vuln-exception
  *
  * ADMIN role is required via User Delegation and confirmation flag must be true.
  * Returns the count of deleted assets and cascade-deleted entities.

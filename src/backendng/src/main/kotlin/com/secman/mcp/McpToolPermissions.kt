@@ -144,6 +144,17 @@ object McpToolPermissions {
             // also missing (see requireAnyRole call in AddRequirementTool.execute()).
             setOf(REQUIREMENTS_WRITE) to listOf(
                 "add_requirement",
+                "delete_all_requirements", // ADMIN re-checked via context.isAdmin in execute()
+            ),
+            // Releases and alignment were in LISTING but absent here, so tools/call denied
+            // them unconditionally — visible in tools/list yet uncallable, the same
+            // fail-closed shape as the add_requirement bug noted above. Each tool
+            // re-checks its own roles in execute() (ADMIN/RELEASE_MANAGER, ADMIN/REQADMIN
+            // for create+delete, REQ/ADMIN for submit_review) and calls requireDelegation.
+            setOf(REQUIREMENTS_READ) to listOf(
+                "list_releases", "get_release", "compare_releases",
+                "create_release", "delete_release", "set_release_status",
+                "start_alignment", "submit_review", "get_alignment_status", "finalize_alignment",
             ),
             setOf(VULNERABILITIES_READ) to listOf(
                 "get_vulnerabilities", "search_vulnerabilities",
@@ -159,6 +170,9 @@ object McpToolPermissions {
                 "list_github_owner_email_mappings",
                 "create_github_owner_email_mapping", "delete_github_owner_email_mapping",
                 "discover_github_owner_email_mappings",
+                // Also LISTING-only until now. refresh_ re-checks context.isAdmin;
+                // get_ scopes every row through context.getFilterableAssetIds().
+                "get_vulnerability_heatmap", "refresh_vulnerability_heatmap",
             ),
             // get_asset_scan_results moved here from ASSETS_READ so CALLING agrees with
             // LISTING. While they disagreed the tool was invisible in tools/list to a

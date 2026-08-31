@@ -344,8 +344,6 @@ open class UserMappingController(
      *
      * Returns mappings that have not been applied yet (appliedAt IS NULL).
      * Includes both future user mappings and active user mappings.
-     *
-     * Feature: 042-future-user-mappings
      */
     @Get("/current")
     @Secured("ADMIN")
@@ -388,8 +386,6 @@ open class UserMappingController(
      *
      * Returns mappings that have been applied to users (appliedAt IS NOT NULL).
      * These are historical records of when future user mappings were applied.
-     *
-     * Feature: 042-future-user-mappings
      */
     @Get("/applied-history")
     @Secured("ADMIN")

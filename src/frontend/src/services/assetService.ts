@@ -1,6 +1,5 @@
 /**
  * Asset service for API calls
- * Feature: 029-asset-bulk-operations
  *
  * Provides methods for:
  * - User Story 1: Bulk delete assets

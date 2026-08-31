@@ -14,10 +14,6 @@ import java.util.Optional
  *
  * Provides efficient queries for outdated assets with workgroup filtering,
  * search, severity filtering, and sorting capabilities.
- *
- * Feature: 034-outdated-assets
- * Task: T007
- * Spec reference: data-model.md, contracts/01-get-outdated-assets.md
  */
 @Repository
 interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetMaterializedView, Long> {
@@ -145,9 +141,6 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
      * - Search by asset name (case-insensitive)
      * - Minimum severity filtering (CRITICAL, HIGH, MEDIUM, LOW)
      * - Pagination and sorting
-     *
-     * Task: T007, T079 (filter queries)
-     * Spec reference: FR-011, FR-012, FR-013
      */
     @Query(
         value = """
@@ -193,25 +186,18 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
 
     /**
      * Get latest refresh timestamp for staleness indicator
-     *
-     * Task: T007
-     * Spec reference: FR-017
      */
     @Query("SELECT MAX(v.lastCalculatedAt) FROM OutdatedAssetMaterializedView v")
     fun getLastRefreshTimestamp(): Optional<LocalDateTime>
 
     /**
      * Find latest calculated timestamp (nullable for service)
-     *
-     * Task: T016
      */
     @Query("SELECT MAX(v.lastCalculatedAt) FROM OutdatedAssetMaterializedView v")
     fun findLatestCalculatedAt(): LocalDateTime?
 
     /**
      * Count outdated assets with workgroup filtering
-     *
-     * Task: T016
      */
     @Query("""
         SELECT COUNT(v) FROM OutdatedAssetMaterializedView v
@@ -224,9 +210,6 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
 
     /**
      * Delete all rows (used during refresh to clear old data)
-     *
-     * Task: T007
-     * Spec reference: data-model.md (refresh process)
      */
     override fun deleteAll()
 

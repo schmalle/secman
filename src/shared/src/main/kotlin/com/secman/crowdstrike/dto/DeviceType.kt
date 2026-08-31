@@ -3,7 +3,6 @@ package com.secman.crowdstrike.dto
 /**
  * Device type classification for CrowdStrike queries
  *
- * Feature: 055-cli-query-clients
  * Maps to CrowdStrike's product_type_desc field values
  */
 enum class DeviceType(val fqlValue: String) {

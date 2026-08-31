@@ -11,8 +11,6 @@ import java.time.LocalDateTime
  * Represents a single scan file upload (nmap, masscan) with summary metadata.
  * Each scan can have multiple ScanResult records (one per discovered host).
  *
- * Related to:
- * - Feature: 002-implement-a-parsing (Nmap Scan Import)
  * - Data Model: specs/002-implement-a-parsing/data-model.md
  * - Decision 5: scanType discriminator for future masscan support
  * - Decision 6: 60s timeout enforced at controller level

@@ -11,8 +11,6 @@ import org.slf4j.LoggerFactory
 /**
  * Sends a GDPR data processing notification email to newly created users.
  *
- * Feature: 210 - GDPR compliance notification
- *
  * Under GDPR Article 13/14, data subjects must be informed when their personal
  * data is collected and processed. This listener sends that notification whenever
  * a user account is created (manually, via OAuth, MCP, or import).

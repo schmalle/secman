@@ -8,10 +8,6 @@ import io.micronaut.serde.annotation.Serdeable
  * Represents an asset with its vulnerability statistics, used for identifying
  * assets with the highest vulnerability burden. Includes severity breakdown.
  *
- * Feature: 036-vuln-stats-lense
- * Task: T031 [US3]
- * Spec reference: spec.md FR-005, FR-006
- * User Story: US3 - View Asset Vulnerability Statistics (P3)
  * Data model: data-model.md Section "TopAssetByVulnerabilitiesDto"
  */
 @Serdeable

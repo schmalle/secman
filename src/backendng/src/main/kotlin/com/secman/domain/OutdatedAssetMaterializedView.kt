@@ -8,10 +8,6 @@ import java.time.LocalDateTime
  *
  * Represents pre-calculated denormalized view of assets with overdue vulnerabilities.
  * Refreshed asynchronously by MaterializedViewRefreshService.
- *
- * Feature: 034-outdated-assets
- * Task: T004
- * Spec reference: data-model.md
  */
 @Entity
 @Table(

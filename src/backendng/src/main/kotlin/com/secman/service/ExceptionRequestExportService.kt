@@ -27,7 +27,6 @@ import java.time.format.DateTimeFormatter
  * - Request ID, CVE ID, Asset Name, Asset IP, Requester, Submission Date
  * - Status, Reviewer, Review Date, Reason, Review Comment, Expiration Date, Auto-Approved
  *
- * Feature: 031-vuln-exception-approval
  * User Story 8: Analytics & Reporting (P3)
  * Phase 11: Analytics & Reporting
  * Reference: spec.md FR-026, acceptance scenario US8-3

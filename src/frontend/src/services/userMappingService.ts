@@ -85,7 +85,6 @@ export async function uploadUserMappings(file: File): Promise<ImportResult> {
 
 /**
  * Upload user mapping CSV file
- * Feature: 016-i-want-to (CSV-Based User Mapping Upload - User Story 1)
  *
  * Validates file client-side, uploads CSV to backend for parsing and import.
  * Supports comma, semicolon, tab delimiters; case-insensitive headers;
@@ -133,7 +132,6 @@ export function getSampleFileUrl(): string {
 
 /**
  * Download CSV user mapping template
- * Feature: 016-i-want-to (CSV-Based User Mapping Upload - User Story 3)
  *
  * Makes authenticated request to backend endpoint to download CSV template.
  * Template includes headers and example row for user mapping import.
@@ -183,7 +181,6 @@ export async function getDomains(): Promise<string[]> {
 
 /**
  * List user mappings with pagination
- * Feature: 020-i-want-to (IP Address Mapping)
  *
  * @param page Page number (0-indexed)
  * @param size Page size
@@ -220,7 +217,6 @@ export async function listUserMappings(
 
 /**
  * Get user mapping by ID
- * Feature: 020-i-want-to (IP Address Mapping)
  *
  * @param id Mapping ID
  * @returns User mapping details
@@ -245,7 +241,6 @@ export async function getUserMapping(id: number): Promise<UserMapping> {
 
 /**
  * Create new user mapping (AWS account, IP address, or both)
- * Feature: 020-i-want-to (IP Address Mapping)
  *
  * @param request Create mapping request
  * @returns Created user mapping
@@ -272,7 +267,6 @@ export async function createUserMapping(request: CreateUserMappingRequest): Prom
 
 /**
  * Update existing user mapping
- * Feature: 020-i-want-to (IP Address Mapping)
  *
  * @param id Mapping ID
  * @param request Update mapping request
@@ -302,7 +296,6 @@ export async function updateUserMapping(id: number, request: UpdateUserMappingRe
 
 /**
  * Delete user mapping
- * Feature: 020-i-want-to (IP Address Mapping)
  *
  * @param id Mapping ID
  */
@@ -326,7 +319,6 @@ export async function deleteUserMapping(id: number): Promise<void> {
 
 /**
  * List current user mappings (future + active)
- * Feature: 042-future-user-mappings
  *
  * Returns mappings that have not been applied yet (appliedAt IS NULL).
  * Includes both future user mappings and active user mappings.
@@ -360,7 +352,6 @@ export async function listCurrentMappings(
 
 /**
  * List applied historical user mappings
- * Feature: 042-future-user-mappings
  *
  * Returns mappings that have been applied to users (appliedAt IS NOT NULL).
  * These are historical records of when future user mappings were applied.

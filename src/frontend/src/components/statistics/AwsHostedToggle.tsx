@@ -4,8 +4,6 @@
  * Bootstrap form-switch toggle that filters vulnerability statistics
  * to only show assets with a non-null cloudAccountId (AWS-hosted assets).
  * Combines with domain filter using AND logic.
- *
- * Feature: aws-hosted-filter
  */
 
 import React from 'react';

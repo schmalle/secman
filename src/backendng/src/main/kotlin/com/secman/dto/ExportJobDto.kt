@@ -8,7 +8,6 @@ import java.time.LocalDateTime
 
 /**
  * DTO for export job status response
- * Feature: Vulnerability Export Performance Optimization - Background Job Pattern
  */
 @Serdeable
 data class ExportJobDto(

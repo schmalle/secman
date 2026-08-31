@@ -21,7 +21,6 @@ import io.micronaut.context.event.ApplicationEvent
  * 4. Handler broadcasts new count to all SSE subscribers
  * 5. Frontend exceptionBadgeService updates badge
  *
- * Feature: 031-vuln-exception-approval
  * User Story 3: ADMIN Approval Dashboard (P1)
  * Phase 6: Real-Time Badge Updates
  * Reference: spec.md FR-024

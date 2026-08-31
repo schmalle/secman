@@ -108,7 +108,6 @@ class McpToolPermissionService(
     /**
      * Check if a given permission set allows calling a specific tool.
      * Used for delegation where effective permissions are pre-computed.
-     * Feature: 050-mcp-user-delegation
      *
      * @param toolName The name of the tool to check
      * @param permissions The set of effective permissions
@@ -143,7 +142,6 @@ class McpToolPermissionService(
 
     /**
      * Check if a permission set allows access to a specific tool.
-     * Feature: 050-mcp-user-delegation
      *
      * A tool missing from [McpToolPermissions.CALLING] is denied — that is the
      * `tools/call` path, so a tool added to the registry but not to that table

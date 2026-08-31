@@ -1,6 +1,5 @@
 #!/bin/bash
 # E2E Test: S3 User Mapping Import
-# Feature: 065-s3-user-mapping-import
 #
 # This script validates the end-to-end flow of importing user mappings
 # from an AWS S3 bucket via the CLI import-s3 command.

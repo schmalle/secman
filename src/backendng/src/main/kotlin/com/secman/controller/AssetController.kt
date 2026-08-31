@@ -239,7 +239,6 @@ open class AssetController(
 
     /**
      * List assets accessible to the authenticated user
-     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
      *
      * FR-013, FR-016, FR-017: Filter by workgroup membership + ownership
      * ADMIN sees all, regular users and VULN see their workgroup assets + owned assets
@@ -298,7 +297,6 @@ open class AssetController(
 
     /**
      * Get asset by ID with access control
-     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
      *
      * FR-020: Verify asset access before detail view
      */
@@ -420,7 +418,6 @@ open class AssetController(
 
     /**
      * Create asset with manual creator tracking
-     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
      *
      * FR-023: Track manual creator for ownership-based access
      */
@@ -588,15 +585,12 @@ open class AssetController(
 
     /**
      * Get cascade deletion summary for pre-flight validation
-     * Feature: 033-cascade-asset-deletion (User Story 4 - UI Warning Before Cascade Deletion)
      *
      * GET /api/assets/{id}/cascade-summary
      * Auth: Any authenticated user (ADMIN recommended)
      * Response: CascadeDeleteSummaryDto
      *
      * Related Requirements:
-     * - FR-012: System MUST perform a pre-flight count of related records
-     * - Contract: contracts/cascade-delete-api.yaml
      *
      * Error Responses:
      * - 404: Asset not found
@@ -630,19 +624,12 @@ open class AssetController(
 
     /**
      * Delete asset with cascade deletion of all related data
-     * Feature: 033-cascade-asset-deletion (User Story 1 - Delete Asset with All Related Data)
      *
      * DELETE /api/assets/{id}
      * Auth: ADMIN role required
      * Response: CascadeDeletionResultDto
      *
      * Related Requirements:
-     * - FR-001: System MUST cascade delete vulnerabilities when asset is deleted
-     * - FR-002: System MUST cascade delete ASSET-type exceptions
-     * - FR-003: System MUST cascade delete vulnerability exception requests
-     * - FR-011: Use pessimistic row-level locking to prevent concurrent deletion
-     * - FR-013: Provide detailed structured error messages
-     * - Contract: contracts/cascade-delete-api.yaml
      *
      * Error Responses:
      * - 403: User does not have ADMIN role
@@ -746,11 +733,6 @@ open class AssetController(
      * GET /api/assets/{id}/ports
      * Auth: Any authenticated user
      * Response: PortHistoryDTO with scan history and port data
-     *
-     * Related to:
-     * - Feature: 002-implement-a-parsing (Nmap Scan Import)
-     * - Contract: specs/002-implement-a-parsing/contracts/asset-ports.yaml
-     * - FR-011: Display port scan history
      */
     @Get("/{id}/ports")
     @Transactional(readOnly = true)
@@ -807,16 +789,10 @@ open class AssetController(
 
     /**
      * Get vulnerabilities for an asset with access control
-     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
      *
      * GET /api/assets/{assetId}/vulnerabilities
      * Auth: Any authenticated user
      * Response: List<Vulnerability>
-     *
-     * Related to:
-     * - Feature: 003-i-want-to (Vulnerability Management System)
-     * - Feature: 008-create-an-additional (Workgroup-Based Access Control)
-     * - FR-021: Filter asset vulnerabilities by accessibility
      */
     @Get("/{assetId}/vulnerabilities")
     @Transactional(readOnly = true)
@@ -851,18 +827,12 @@ open class AssetController(
 
     /**
      * Export assets to Excel file
-     * Feature: 029-asset-bulk-operations (User Story 2 - Export Assets to File)
      *
      * GET /api/assets/export
      * Auth: Any authenticated user
      * Response: Binary Excel file (.xlsx)
      *
      * Related Requirements:
-     * - FR-010: Export assets to Excel with all fields
-     * - FR-011: Apply workgroup-based access control (ADMIN sees all, non-ADMIN sees workgroup+owned)
-     * - FR-012: Format export file with clear column headers
-     * - FR-014: Provide user feedback during export (loading indicators handled by frontend)
-     * - FR-015: Display error when no assets available
      *
      * Error Responses:
      * - 400: No assets available to export
@@ -967,18 +937,12 @@ open class AssetController(
 
     /**
      * Bulk delete all assets (ADMIN only)
-     * Feature: 029-asset-bulk-operations (User Story 1 - Bulk Delete Assets)
      *
      * DELETE /api/assets/bulk
      * Auth: ADMIN role required
      * Response: BulkDeleteResult
      *
      * Related Requirements:
-     * - FR-001: Delete All Assets button visible only to ADMIN users
-     * - FR-003: Delete all assets when ADMIN confirms
-     * - FR-006: Prevent non-ADMIN users from accessing bulk delete
-     * - FR-007: Handle cascade deletion (vulnerabilities, scan results)
-     * - FR-008: Execute within transaction with rollback on failure
      *
      * Error Responses:
      * - 403: User does not have ADMIN role

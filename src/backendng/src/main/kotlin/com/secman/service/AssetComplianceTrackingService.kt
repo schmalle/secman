@@ -20,8 +20,6 @@ import java.time.temporal.ChronoUnit
  *
  * Core principle: Only store status TRANSITIONS, not every import.
  * If an asset stays COMPLIANT across 27 imports, only 1 record exists.
- *
- * Feature: ec2-vulnerability-tracking
  */
 @Singleton
 open class AssetComplianceTrackingService(

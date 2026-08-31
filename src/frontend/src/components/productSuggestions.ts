@@ -4,8 +4,6 @@
  * Kept out of ProductAutocomplete.tsx so the unit test tier can import it: Node's
  * type stripping cannot parse JSX, so any logic that stays in a .tsx file is only
  * reachable by asserting against the source text.
- *
- * Related to: Feature 021-vulnerability-overdue-exception-logic (Phase 3)
  */
 
 /**

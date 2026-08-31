@@ -3,7 +3,6 @@ import type { CrowdStrikeImportStatus } from '../types/crowdstrike';
 
 /**
  * Service for Account Vulns API operations
- * Feature: 018-under-vuln-management
  */
 
 /**

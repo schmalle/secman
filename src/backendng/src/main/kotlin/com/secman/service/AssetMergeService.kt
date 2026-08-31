@@ -17,8 +17,6 @@ import java.time.LocalDateTime
  * - Find existing asset by hostname
  * - If exists: Merge (append groups, update IP, preserve owner/type/description)
  * - If not exists: Create with default values
- *
- * Related to: Feature 003-i-want-to (Vulnerability Management System)
  */
 @Singleton
 open class AssetMergeService(

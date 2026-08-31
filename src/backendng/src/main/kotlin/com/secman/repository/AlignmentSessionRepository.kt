@@ -9,7 +9,6 @@ import java.util.*
 
 /**
  * Repository for AlignmentSession entity.
- * Feature: 068-requirements-alignment-process
  */
 @Repository
 interface AlignmentSessionRepository : JpaRepository<AlignmentSession, Long> {

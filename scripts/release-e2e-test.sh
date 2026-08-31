@@ -1,6 +1,5 @@
 #!/bin/bash
 # E2E Test: Release Lifecycle with REQADMIN Role Enforcement
-# Feature: 079-reqadmin-release-role
 #
 # This script validates:
 # 1. REQADMIN can create/delete releases (REST + MCP)

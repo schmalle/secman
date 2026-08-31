@@ -7,7 +7,6 @@ import java.time.LocalDateTime
 
 /**
  * Entity for tracking background export jobs
- * Feature: Vulnerability Export Performance Optimization - Background Job Pattern
  *
  * Stores metadata about export jobs including status, progress, and file location.
  * Jobs are processed asynchronously and files are stored temporarily on disk.

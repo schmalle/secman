@@ -16,7 +16,6 @@ import java.time.format.DateTimeFormatter
 
 /**
  * Service for sending admin summary emails with system statistics.
- * Feature: 070-admin-summary-email
  * Enhanced: 069-enhanced-admin-summary (link, top products, top servers)
  */
 @Singleton
@@ -32,7 +31,6 @@ class AdminSummaryService(
 
     /**
      * Summary entry for a product's vulnerability count.
-     * Feature: 069-enhanced-admin-summary
      */
     data class ProductSummary(
         val name: String,
@@ -41,7 +39,6 @@ class AdminSummaryService(
 
     /**
      * Summary entry for a server's vulnerability count.
-     * Feature: 069-enhanced-admin-summary
      */
     data class ServerSummary(
         val name: String,
@@ -102,7 +99,6 @@ class AdminSummaryService(
 
     /**
      * Get top 10 most vulnerable products (admin-level, unfiltered).
-     * Feature: 069-enhanced-admin-summary
      */
     private fun getTopProductsAdmin(): List<ProductSummary> {
         return try {
@@ -120,7 +116,6 @@ class AdminSummaryService(
 
     /**
      * Get top 10 most affected servers (admin-level, unfiltered).
-     * Feature: 069-enhanced-admin-summary
      */
     private fun getTopServersAdmin(): List<ServerSummary> {
         return try {
@@ -369,7 +364,6 @@ class AdminSummaryService(
 
     /**
      * Render top products as HTML table rows.
-     * Feature: 069-enhanced-admin-summary
      */
     private fun renderTopProductsHtml(products: List<ProductSummary>): String {
         if (products.isEmpty()) {
@@ -392,7 +386,6 @@ $rows
 
     /**
      * Render top servers as HTML table rows.
-     * Feature: 069-enhanced-admin-summary
      */
     private fun renderTopServersHtml(servers: List<ServerSummary>): String {
         if (servers.isEmpty()) {
@@ -415,7 +408,6 @@ $rows
 
     /**
      * Render top products as plain text lines.
-     * Feature: 069-enhanced-admin-summary
      */
     private fun renderTopProductsText(products: List<ProductSummary>): String {
         if (products.isEmpty()) {
@@ -429,7 +421,6 @@ $rows
 
     /**
      * Render top servers as plain text lines.
-     * Feature: 069-enhanced-admin-summary
      */
     private fun renderTopServersText(servers: List<ServerSummary>): String {
         if (servers.isEmpty()) {

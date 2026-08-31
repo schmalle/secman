@@ -15,7 +15,6 @@ import org.slf4j.LoggerFactory
 
 /**
  * Controller for admin notification settings
- * Feature: 027-admin-user-notifications
  *
  * Provides endpoints for ADMIN users to configure email notifications
  * sent when new users are created (via OAuth or manual creation).

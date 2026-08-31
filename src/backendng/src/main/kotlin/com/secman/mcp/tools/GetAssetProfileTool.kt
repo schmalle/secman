@@ -77,7 +77,7 @@ class GetAssetProfileTool(
         val scanHistoryLimit = ((arguments["scanHistoryLimit"] as? Number)?.toInt() ?: 10).coerceIn(1, 50)
 
         try {
-            // Access control check (Feature: 052-mcp-access-control)
+            // Access control check
             // Returns generic "not found" to avoid revealing asset existence
             if (!context.canAccessAsset(assetId)) {
                 return McpToolResult.error("ASSET_NOT_FOUND", "Asset with ID $assetId not found")

@@ -7,7 +7,6 @@ import {
 
 /**
  * Admin Notification Settings Component
- * Feature: 027-admin-user-notifications
  *
  * Allows ADMIN users to configure email notifications for new user registrations.
  * Displays a toggle to enable/disable notifications and an input for sender email.

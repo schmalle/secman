@@ -11,7 +11,6 @@
  * - Concurrent approval detection (409 handling)
  * - Success/error handling
  *
- * Feature: 031-vuln-exception-approval
  * User Story 3: ADMIN Approval Dashboard (P1)
  * Reference: spec.md FR-021 to FR-023
  */

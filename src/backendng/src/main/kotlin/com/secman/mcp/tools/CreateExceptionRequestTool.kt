@@ -15,15 +15,11 @@ import java.time.format.DateTimeParseException
 
 /**
  * MCP tool for creating vulnerability exception requests.
- * Feature: 062-mcp-vuln-exceptions
  *
  * Access Control:
  * - Requires User Delegation
  * - Any authenticated user can create requests for vulnerabilities on accessible assets
  * - ADMIN/SECCHAMPION requests are auto-approved
- *
- * Spec reference: spec.md FR-006 through FR-010
- * User Story: US2 - Create Exception Request (P1)
  */
 @Singleton
 open class CreateExceptionRequestTool(

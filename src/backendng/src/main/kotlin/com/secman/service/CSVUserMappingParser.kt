@@ -19,8 +19,6 @@ import java.time.LocalDateTime
 /**
  * Service for parsing and importing user mappings from CSV files
  *
- * Feature: 016-i-want-to (CSV-Based User Mapping Upload)
- *
  * Responsibilities:
  * - Parse CSV files (RFC 4180 compliant)
  * - Auto-detect encoding (UTF-8 BOM, UTF-8, ISO-8859-1 fallback)
@@ -41,8 +39,6 @@ import java.time.LocalDateTime
  * - Max file size: 10MB
  * - Supported encodings: UTF-8, ISO-8859-1
  * - Supported delimiters: comma, semicolon, tab
- *
- * Related to: Feature 016 (CSV-Based User Mapping Upload), Feature 013 (Excel upload)
  */
 @Singleton
 open class CSVUserMappingParser(

@@ -6,17 +6,11 @@ import java.time.LocalDateTime
 
 /**
  * DTO for asset import from Excel format
- * Feature: 029-asset-bulk-operations (User Story 3 - Import Assets from File)
  *
  * Purpose: Temporary representation of parsed Excel row before entity creation
  * Used by AssetImportService to validate and convert Excel data to Asset entities
  *
  * Related Requirements:
- * - FR-017: Accept Excel files with validation for file size, format, required fields
- * - FR-018: Validate required fields (name, type, owner)
- * - FR-019: Validate data formats (IP address, type values)
- * - FR-021: Associate imported assets with workgroups based on column data
- * - Contract: contracts/asset-import.yaml
  *
  * Validation Rules:
  * - name: Required, non-blank, trimmed

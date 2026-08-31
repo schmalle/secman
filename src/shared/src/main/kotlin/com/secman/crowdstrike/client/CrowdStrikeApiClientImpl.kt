@@ -43,9 +43,6 @@ import java.util.concurrent.atomic.AtomicInteger
  * - Automatic retry with exponential backoff for transient errors
  * - Pagination support for large result sets
  * - Response mapping to shared DTOs
- *
- * Related to: Feature 023-create-in-the (CrowdStrike CLI)
- * Tasks: T029-T033
  */
 @Singleton
 open class CrowdStrikeApiClientImpl(
@@ -64,8 +61,6 @@ open class CrowdStrikeApiClientImpl(
 
     /**
      * Query vulnerabilities for a specific hostname
-     *
-     * Task: T030
      *
      * @param hostname System hostname to query
      * @param config CrowdStrike configuration
@@ -135,8 +130,6 @@ open class CrowdStrikeApiClientImpl(
      * in one response, so there is no page-size knob to honor. This method is a thin wrapper
      * over [queryVulnerabilities] kept for callers that historically expected a paginating
      * variant; the wrapper now exists for API stability only.
-     *
-     * Task: T032
      */
     override fun queryAllVulnerabilities(
         hostname: String,
@@ -148,7 +141,6 @@ open class CrowdStrikeApiClientImpl(
     /**
      * Query all vulnerabilities in bulk using server-side FQL filters
      *
-     * Feature: 032-servers-query-import (Performance Optimization)
      * Optimization: Single API call instead of N device queries
      *
      * @param severity Severity filter (e.g., "HIGH,CRITICAL")
@@ -357,10 +349,6 @@ open class CrowdStrikeApiClientImpl(
 
     /**
      * Query servers with filters (device type, severity, days open)
-     *
-     * Feature: 032-servers-query-import
-     * Task: T007, T008
-     * Spec reference: FR-002, FR-003, FR-004, FR-001a
      *
      * @param hostnames Optional list of specific hostnames to query (null = all servers)
      * @param deviceType Device type filter (e.g., "SERVER")
@@ -928,10 +916,6 @@ open class CrowdStrikeApiClientImpl(
     /**
      * Get all server device IDs from CrowdStrike
      *
-     * Feature: 032-servers-query-import
-     * Task: T007
-     * Spec reference: FR-001
-     *
      * @param deviceType Device type filter (e.g., "SERVER")
      * @param token OAuth2 access token
      * @param limit Maximum number of devices to retrieve per page
@@ -1039,7 +1023,6 @@ open class CrowdStrikeApiClientImpl(
     /**
      * Get device IDs from CrowdStrike using product_type_desc filter
      *
-     * Feature: 055-cli-query-clients (Extended from 032-servers-query-import)
      * Supports querying SERVER, WORKSTATION, or ALL device types
      *
      * @param token OAuth2 access token
@@ -1177,7 +1160,6 @@ open class CrowdStrikeApiClientImpl(
     /**
      * Query vulnerabilities for specific device IDs with filters
      *
-     * Feature: 032-servers-query-import (Performance Optimization)
      * Optimization: Query vulnerabilities only for specific device IDs (not all devices)
      *
      * @param deviceIds List of device IDs to query
@@ -1774,7 +1756,6 @@ open class CrowdStrikeApiClientImpl(
     /**
      * Query CrowdStrike Spotlight API for vulnerabilities with pagination and retry logic
      *
-     * Task: T030, T031 (with retry logic)
      * Enhancement: Added pagination support, timeout retry with exponential backoff
      *
      * @param deviceId Device ID (aid) from Hosts API
@@ -1968,8 +1949,6 @@ open class CrowdStrikeApiClientImpl(
 
     /**
      * Map CrowdStrike API response to DTOs
-     *
-     * Task: T033
      *
      * @param resources Raw vulnerability resources from API
      * @param hostname Hostname for the device (from query context)
@@ -2427,9 +2406,6 @@ open class CrowdStrikeApiClientImpl(
     /**
      * Query vulnerabilities by AWS EC2 Instance ID
      *
-     * Feature: 041-falcon-instance-lookup
-     * Tasks: T011, T012, T013
-     *
      * Three-step workflow:
      * 1. Query devices by instance_id filter
      * 2. Get device details (hostname, metadata)
@@ -2507,9 +2483,6 @@ open class CrowdStrikeApiClientImpl(
     /**
      * Query device IDs by AWS instance ID filter
      *
-     * Feature: 041-falcon-instance-lookup
-     * Task: T011
-     *
      * @param instanceId AWS EC2 Instance ID
      * @param token OAuth2 access token
      * @return List of device IDs (AIDs) with this instance ID
@@ -2578,9 +2551,6 @@ open class CrowdStrikeApiClientImpl(
     /**
      * Get device details by device IDs
      *
-     * Feature: 041-falcon-instance-lookup
-     * Task: T012
-     *
      * @param deviceIds List of device IDs (AIDs)
      * @param token OAuth2 access token
      * @return List of device detail maps with hostname, instance_id, etc.
@@ -2637,8 +2607,6 @@ open class CrowdStrikeApiClientImpl(
 
     /**
      * Query vulnerabilities by Active Directory domains
-     *
-     * Feature: 042-domain-vulnerabilities-view
      *
      * Workflow:
      * 1. Authenticate with CrowdStrike
@@ -2719,8 +2687,6 @@ open class CrowdStrikeApiClientImpl(
 
     /**
      * Query device IDs by AD domain filter
-     *
-     * Feature: 042-domain-vulnerabilities-view
      *
      * Uses FQL filter: machine_domain:'DOMAIN' to find devices in a specific AD domain
      *

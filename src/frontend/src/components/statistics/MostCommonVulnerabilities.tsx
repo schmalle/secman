@@ -7,11 +7,6 @@
  * - Severity badges with color coding (CRITICAL=red, HIGH=orange, MEDIUM=yellow, LOW=blue, UNKNOWN=gray)
  * - Click handlers for drill-down navigation to vulnerability details
  * - Loading, error, and empty states
- *
- * Feature: 036-vuln-stats-lense
- * Task: T016 [US1]
- * Spec reference: spec.md FR-001, FR-002
- * User Story: US1 - View Most Common Vulnerabilities (P1/MVP)
  */
 
 import React, { useState } from 'react';
@@ -42,9 +37,6 @@ const severityBadgeClass = (severity: string): string => {
 
 /**
  * Props for MostCommonVulnerabilities component
- *
- * Feature: 059-vuln-stats-domain-filter
- * Task: T012 [US1]
  */
 interface MostCommonVulnerabilitiesProps {
   /** Optional AD domain filter (null = all domains) */

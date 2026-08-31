@@ -22,8 +22,6 @@ import java.time.Instant
  * 3. This listener receives the event
  * 4. Find all PENDING mappings for the user's email
  * 5. Update mappings: status = ACTIVE, user = newUser, appliedAt = NOW()
- *
- * Related to: Feature 042 (Future User Mappings), Feature 049 (CLI User Mapping)
  */
 @Singleton
 open class UserMappingApplicationService(

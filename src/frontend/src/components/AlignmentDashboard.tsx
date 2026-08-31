@@ -3,8 +3,6 @@
  *
  * Dashboard for Release Managers to view and manage alignment sessions.
  * Shows reviewer progress, assessment summary, and allows finalization.
- *
- * Feature: 068-requirements-alignment-process
  */
 
 import React, { useState, useEffect } from 'react';

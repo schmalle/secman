@@ -9,10 +9,6 @@ import java.time.LocalDate
  * Represents vulnerability counts for a specific date with severity breakdown.
  * Used for time-series visualization in line charts.
  *
- * Feature: 036-vuln-stats-lense
- * Task: T046 [US4]
- * Spec reference: spec.md FR-009, FR-010
- * User Story: US4 - View Temporal Trends (P4)
  * Data model: data-model.md Section "TemporalTrendDataPointDto"
  */
 @Serdeable

@@ -71,7 +71,6 @@ data class Release(
 ) {
     /**
      * Release lifecycle statuses
-     * Feature: 078-release-rework
      *
      * - PREPARATION: Initial state, can be edited, alignment can be started
      * - ALIGNMENT: Alignment process active, requirements under review

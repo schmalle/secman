@@ -6,11 +6,6 @@
  * - Product dropdown selector with search filter
  * - Paginated systems table
  * - Empty state handling
- *
- * Feature: 054-products-overview
- * Task: T013-T015, T023-T024 (search)
- * User Story: US1 - View Systems Running a Specific Product (P1)
- * User Story: US2 - Search and Filter Products (P2)
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';

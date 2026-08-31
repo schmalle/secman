@@ -12,7 +12,6 @@ import org.slf4j.LoggerFactory
 
 /**
  * Norm Mapping Controller
- * Feature: 058-ai-norm-mapping
  *
  * Provides AI-powered norm mapping suggestions for requirements.
  * Uses Claude Opus 4.5 via OpenRouter to suggest ISO 27001 and IEC 62443 mappings.

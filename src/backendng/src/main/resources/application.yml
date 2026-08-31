@@ -225,14 +225,11 @@ micronaut:
         access:
           - isAuthenticated()
   # Cache configuration
-  # Feature: 041-falcon-instance-lookup
-  # Task: T034
-  # Feature: Database Structure Optimization - Extended caching
   caches:
     vulnerability_queries:
       maximum-size: 1000
       expire-after-write: 15m
-    # Database optimization caches (Feature: Database Structure Optimization)
+    # Database optimization caches
     asset_queries:
       maximum-size: 500
       expire-after-write: 10m
@@ -249,11 +246,11 @@ micronaut:
     workgroup_memberships:
       maximum-size: 200
       expire-after-write: 10m
-    # CVE description cache (Feature: 072-cve-link-lookup)
+    # CVE description cache
     cve_descriptions:
       maximum-size: 5000
       expire-after-write: 24h
-    # MCP Access Control cache (Feature: 052-mcp-access-control)
+    # MCP Access Control cache
     mcp_accessible_assets:
       maximum-size: 500
       expire-after-write: 5m
@@ -272,7 +269,7 @@ secman:
     # Default: true (production-safe). Set SECMAN_AUTH_COOKIE_SECURE=false for local HTTP development.
     cookie-secure: ${SECMAN_AUTH_COOKIE_SECURE:true}
   profile-picture:
-    # Feature: Profile Picture Management. Uploads are validated and re-encoded, never stored raw.
+    # Uploads are validated and re-encoded, never stored raw.
     # Hard cap on the uploaded bytes. Well below micronaut.server.multipart.max-file-size, which
     # stays large for the XLSX/vulnerability importers.
     max-upload-bytes: ${SECMAN_PROFILE_PICTURE_MAX_UPLOAD_BYTES:2097152}
@@ -616,7 +613,7 @@ datasources:
     driverClassName: org.mariadb.jdbc.Driver
     username: ${DB_USERNAME:secman}
     password: ${DB_PASSWORD:CHANGEME}
-    # Connection pool configuration (Feature: Database Structure Optimization)
+    # Connection pool configuration
     # Raised from 20 -> 40 (2026-07): a CrowdStrike import (3 parallel @Transactional worker
     # threads + 1 long-running post-import stats-refresh connection, see
     # CrowdStrikeVulnerabilityImportService) combined with concurrent interactive-user traffic
@@ -714,7 +711,7 @@ jpa:
           preferred_enum_jdbc_type: 12
         show_sql: false
         format_sql: true
-        # Query optimization settings (Feature: Database Structure Optimization)
+        # Query optimization settings
         query:
           plan_cache_max_size: 2048                    # Cache compiled query plans
           plan_parameter_metadata_max_size: 128        # Cache query parameter metadata

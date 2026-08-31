@@ -11,9 +11,6 @@ import io.micronaut.data.model.Pageable
  *
  * Provides CRUD operations and custom queries for scan result management.
  *
- * Related to:
- * - Feature: 002-implement-a-parsing (Nmap Scan Import)
- * - Contract: GET /api/assets/{id}/ports (port history)
  * - Decision 4: Point-in-time snapshots via multiple ScanResults per asset
  */
 @Repository
@@ -45,21 +42,18 @@ interface ScanResultRepository : JpaRepository<ScanResult, Long> {
     /**
      * Find all scan results for an asset with pagination
      * Used for: MCP tools querying asset scan history
-     * Related to: Feature 006 (MCP Tools for Security Data)
      */
     fun findByAssetId(assetId: Long, pageable: Pageable): Page<ScanResult>
 
     /**
      * Find all scan results for an asset with pagination, ordered by discovery time (newest first)
      * Used for: MCP get_asset_profile tool
-     * Related to: Feature 006 (MCP Tools for Security Data)
      */
     fun findByAssetIdOrderByDiscoveredAtDesc(assetId: Long, pageable: Pageable): Page<ScanResult>
 
     /**
      * Find all scan results for a scan with pagination
      * Used for: MCP tools querying scan details
-     * Related to: Feature 006 (MCP Tools for Security Data)
      */
     fun findByScanId(scanId: Long, pageable: Pageable): Page<ScanResult>
 }

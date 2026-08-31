@@ -467,8 +467,6 @@ open class ImportController(
     /**
      * Upload vulnerability scan Excel file
      *
-     * Related to: Feature 003-i-want-to (Vulnerability Management System)
-     *
      * Endpoint: POST /api/import/upload-vulnerability-xlsx
      * Request: multipart/form-data with xlsxFile and scanDate
      * Response: VulnerabilityImportResponse with import counts
@@ -552,8 +550,6 @@ open class ImportController(
     /**
      * Upload user mapping Excel file
      *
-     * Feature: 013-user-mapping-upload
-     *
      * Endpoint: POST /api/import/upload-user-mappings
      * Request: multipart/form-data with xlsxFile
      * Response: ImportResult with counts (imported, skipped, errors)
@@ -616,8 +612,6 @@ open class ImportController(
 
     /**
      * Upload user mapping CSV file
-     *
-     * Feature: 016-i-want-to (CSV-Based User Mapping Upload)
      *
      * Endpoint: POST /api/import/upload-user-mappings-csv
      * Request: multipart/form-data with csvFile
@@ -748,8 +742,6 @@ open class ImportController(
     /**
      * Download CSV template for user mappings
      *
-     * Feature: 016-i-want-to (CSV-Based User Mapping Upload)
-     *
      * Endpoint: GET /api/import/user-mapping-template-csv
      * Response: CSV file with headers and example row
      * Access: ADMIN only
@@ -793,8 +785,6 @@ open class ImportController(
 
     /**
      * Upload Masscan XML scan file
-     *
-     * Related to: Feature 005-add-funtionality-to (Masscan XML Import)
      *
      * Endpoint: POST /api/import/upload-masscan-xml
      * Request: multipart/form-data with xmlFile
@@ -972,7 +962,6 @@ open class ImportController(
 
     /**
      * Import assets from Excel file
-     * Feature: 029-asset-bulk-operations (User Story 3 - Import Assets from File)
      *
      * POST /api/import/upload-assets-xlsx
      * Auth: Any authenticated user
@@ -980,13 +969,6 @@ open class ImportController(
      * Response: ImportResult
      *
      * Related Requirements:
-     * - FR-017: Accept Excel files with validation for file size, format, required fields
-     * - FR-018: Validate required fields (name, type, owner)
-     * - FR-019: Validate data formats (IP address, type values)
-     * - FR-020: Handle duplicate asset names by skipping
-     * - FR-021: Associate imported assets with workgroups
-     * - FR-022: Track importing user as creator
-     * - FR-023: Provide import summary
      *
      * Error Responses:
      * - 400: Invalid file format, validation errors, missing headers

@@ -16,14 +16,8 @@ import java.time.format.DateTimeFormatter
 
 /**
  * Service for exporting assets to Excel format
- * Feature: 029-asset-bulk-operations (User Story 2 - Export Assets to File)
  *
  * Related Requirements:
- * - FR-010: Export assets to Excel with all fields
- * - FR-011: Apply workgroup-based access control to exports
- * - FR-012: Format export file with clear column headers
- * - FR-013: Include workgroup names in readable format
- * - FR-015: Handle empty asset list with error message
  *
  * Performance Target:
  * - Export 10K assets in <15 seconds (SC-002)

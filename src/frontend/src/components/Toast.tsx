@@ -2,8 +2,6 @@
  * Toast Notification Component
  *
  * Simple Bootstrap-based toast notification for success/error messages
- *
- * Related to: Feature 012-build-ui-for
  */
 
 import React, { useEffect } from 'react';

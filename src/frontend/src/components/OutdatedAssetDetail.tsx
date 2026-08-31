@@ -7,11 +7,6 @@
  * - Severity breakdown
  * - Paginated vulnerability table
  * - Back navigation
- *
- * Feature: 034-outdated-assets
- * Task: T039-T045
- * User Story: US2 - View Asset Details (P1)
- * Spec reference: spec.md, wireframes/02-asset-detail-view.md
  */
 
 import React, { useState, useEffect } from 'react';

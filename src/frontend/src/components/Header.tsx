@@ -5,7 +5,6 @@ interface User {
     username: string;
     email: string;
     roles: string[];
-    // Feature: Profile Picture Management. Supplied by GET /api/auth/status via window.currentUser.
     hasProfilePicture?: boolean;
     profilePictureUpdatedAt?: string | null;
 }

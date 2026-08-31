@@ -3,8 +3,6 @@
  *
  * Fetches CVE descriptions from backend proxy (NVD API).
  * Includes in-memory cache and request deduplication.
- *
- * Feature: 072-cve-link-lookup
  */
 
 import { authenticatedGet } from '../utils/auth';

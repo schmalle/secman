@@ -26,8 +26,6 @@ import org.slf4j.LoggerFactory
  * - GET /api/scans - List all scans with pagination (ADMIN only)
  * - GET /api/scans/{id} - Get scan detail with hosts (ADMIN only)
  *
- * Related to:
- * - Feature: 002-implement-a-parsing (Nmap Scan Import)
  * - Contracts: specs/002-implement-a-parsing/contracts/
  * - FR-007, FR-008: Scans page with admin-only access
  */
@@ -108,7 +106,6 @@ open class ScanController(
 
     /**
      * List accessible scans with workgroup-based filtering
-     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
      *
      * GET /api/scans?scanType=nmap
      * Auth: Any authenticated user

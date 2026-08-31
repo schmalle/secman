@@ -13,8 +13,6 @@ import org.slf4j.LoggerFactory
  * REST Controller for Asset Compliance History.
  * Provides overview, per-asset timeline, summary, and recalculation endpoints.
  * Access: ADMIN role only.
- *
- * Feature: ec2-vulnerability-tracking
  */
 @Controller("/api/asset-compliance")
 @Secured("ADMIN")

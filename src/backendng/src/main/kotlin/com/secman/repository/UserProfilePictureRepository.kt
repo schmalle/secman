@@ -10,8 +10,6 @@ import java.util.Optional
 /**
  * Repository for user profile pictures.
  *
- * Feature: Profile Picture Management
- *
  * IMPORTANT: [findByUserId] loads the LONGBLOB. `@Basic(fetch = LAZY)` on a `@Lob` is inert
  * without Hibernate bytecode enhancement, which this build does not enable, so there is no
  * lazy-loading safety net here. Metadata-only callers - in particular `GET /api/auth/status`,

@@ -8,11 +8,6 @@ import java.time.LocalDateTime
  *
  * Maps OutdatedAssetMaterializedView to API response format
  * per contract specification (contracts/01-get-outdated-assets.md)
- *
- * Feature: 034-outdated-assets
- * Task: T023
- * User Story: US1 - View Outdated Assets (P1)
- * Spec reference: contracts/01-get-outdated-assets.md
  */
 @Serdeable
 data class OutdatedAssetDto(

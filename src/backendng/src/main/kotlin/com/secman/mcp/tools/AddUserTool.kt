@@ -12,7 +12,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 
 /**
  * MCP tool for adding a new user with defined roles.
- * Feature: add-mcp-user-roles
  *
  * ADMIN role is required via User Delegation.
  * Creates a new user with the specified username, email, password, and roles.

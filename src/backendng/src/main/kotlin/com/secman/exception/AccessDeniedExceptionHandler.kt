@@ -15,7 +15,6 @@ import org.slf4j.LoggerFactory
 
 /**
  * Global Exception Handler for Access Denied (403 Forbidden) responses
- * Feature: 025-role-based-access-control (Task T032)
  *
  * Intercepts all 403 Forbidden responses and logs them to ACCESS_DENIAL_AUDIT logger
  * with full context (user, roles, resource, timestamp, IP address)

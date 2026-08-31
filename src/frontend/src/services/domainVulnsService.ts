@@ -1,8 +1,6 @@
 /**
  * Domain Vulnerabilities Service
  *
- * Feature: 043-crowdstrike-domain-import
- *
  * Provides client-side service for querying domain-based vulnerabilities
  * from secman database via the backend endpoint.
  *

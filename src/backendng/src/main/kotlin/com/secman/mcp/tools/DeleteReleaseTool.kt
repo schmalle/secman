@@ -8,7 +8,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for deleting a release.
- * Feature: MCP Release Management
  *
  * Note: ACTIVE releases cannot be deleted. Set another release to ACTIVE first,
  * or set this release to LEGACY before deletion.

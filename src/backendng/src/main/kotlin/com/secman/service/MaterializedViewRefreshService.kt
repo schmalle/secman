@@ -30,10 +30,6 @@ import java.time.temporal.ChronoUnit
  * - Batch processing for performance (1000 assets/chunk)
  * - Error handling and audit trail
  * - Observability metrics and structured logging
- *
- * Feature: 034-outdated-assets
- * Task: T011
- * Spec reference: FR-005, FR-007, FR-021, FR-022, research.md
  */
 @Singleton
 open class MaterializedViewRefreshService(
@@ -120,9 +116,6 @@ open class MaterializedViewRefreshService(
      * If a refresh job is already running, this method returns the existing job
      * instead of starting a new one. This prevents multiple concurrent refreshes
      * from wasting resources when triggered by batch operations (e.g., CLI imports).
-     *
-     * Task: T011
-     * Spec reference: FR-005 (async refresh)
      *
      * @param triggeredBy Description of what triggered the refresh (for audit trail)
      * @param bypassCooldown Skip the min-interval cooldown gate below. Only the manual
@@ -242,9 +235,6 @@ open class MaterializedViewRefreshService(
 
     /**
      * Execute refresh in background thread
-     *
-     * Task: T011
-     * Spec reference: FR-005, FR-007, FR-021, FR-022
      */
     @Async
     open fun executeRefreshAsync(jobId: Long) {
@@ -285,9 +275,6 @@ open class MaterializedViewRefreshService(
      * jumps to complete, instead of ticking every 1000 assets. That is an honest reflection of
      * how the work now happens — the previous per-batch ticks measured in-heap record building,
      * which no longer exists.
-     *
-     * Task: T011, T060 (progress publishing)
-     * Spec reference: FR-005, FR-007
      *
      * Note: NOT @Transactional - uses separate short transactions for each operation
      * to avoid holding database locks during long-running refresh process
@@ -417,9 +404,6 @@ open class MaterializedViewRefreshService(
 
     /**
      * Publish progress event for SSE streaming
-     *
-     * Task: T011, T060
-     * Spec reference: FR-007, FR-022
      */
     private fun publishProgressEvent(job: MaterializedViewRefreshJob, message: String) {
         val event = RefreshProgressEvent(
@@ -449,9 +433,6 @@ open class MaterializedViewRefreshService(
     /**
      * Get SSE stream of refresh progress events
      *
-     * Task: T050-T053
-     * User Story: US3 - Manual Refresh
-     *
      * @return Flux of progress events
      */
     fun getProgressStream(): Flux<RefreshProgressEvent> {
@@ -461,9 +442,6 @@ open class MaterializedViewRefreshService(
     /**
      * Get currently running refresh job (if any)
      *
-     * Task: T054-T055
-     * User Story: US3 - Manual Refresh
-     *
      * @return Running job or null
      */
     fun getCurrentRunningJob(): MaterializedViewRefreshJob? {
@@ -472,9 +450,6 @@ open class MaterializedViewRefreshService(
 
     /**
      * Get recent refresh job history
-     *
-     * Task: T056-T057
-     * User Story: US3 - Manual Refresh
      *
      * @param limit Maximum number of jobs to return
      * @return List of recent jobs, newest first

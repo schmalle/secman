@@ -6,8 +6,6 @@ import io.micronaut.serde.annotation.Serdeable
 /**
  * Response DTO for GET /api/products endpoint
  * Contains list of unique product names from vulnerability data
- *
- * Related to: Feature 054-products-overview
  */
 @Serdeable
 @JsonInclude(JsonInclude.Include.ALWAYS)
@@ -18,8 +16,6 @@ data class ProductListResponse(
 
 /**
  * DTO representing a system (asset) running a specific product
- *
- * Related to: Feature 054-products-overview
  */
 @Serdeable
 data class ProductSystemDto(
@@ -33,8 +29,6 @@ data class ProductSystemDto(
 
 /**
  * Paginated response DTO for GET /api/products/{product}/systems endpoint
- *
- * Related to: Feature 054-products-overview
  */
 @Serdeable
 data class PaginatedProductSystemsResponse(
@@ -50,8 +44,6 @@ data class PaginatedProductSystemsResponse(
 
 /**
  * DTO representing a product with its vulnerability count
- *
- * Related to: Feature 054-products-overview
  */
 @Serdeable
 data class TopProductDto(
@@ -62,8 +54,6 @@ data class TopProductDto(
 /**
  * Response DTO for GET /api/products/top endpoint
  * Contains list of products with their vulnerability counts
- *
- * Related to: Feature 054-products-overview
  */
 @Serdeable
 @JsonInclude(JsonInclude.Include.ALWAYS)

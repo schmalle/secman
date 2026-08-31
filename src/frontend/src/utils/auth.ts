@@ -61,7 +61,6 @@ export function isAdmin(): boolean {
 
 /**
  * Check if user has vulnerability management access (ADMIN, VULN, or SECCHAMPION role)
- * Feature: 025-role-based-access-control - SECCHAMPION has broad access including vulns
  */
 export function hasVulnAccess(): boolean {
     return hasRole('ADMIN') || hasRole('VULN') || hasRole('SECCHAMPION');

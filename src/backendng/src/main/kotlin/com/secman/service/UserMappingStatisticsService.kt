@@ -14,7 +14,6 @@ import java.time.format.DateTimeFormatter
 
 /**
  * Service for sending user-mapping statistics email reports to ADMIN and REPORT users.
- * Feature: 085-cli-mappings-email
  *
  * Mirrors the AdminSummaryService pattern from feature 070 but targets user mappings.
  * Reuses AdminSummaryService.getAdminRecipients() for the ADMIN+REPORT recipient set

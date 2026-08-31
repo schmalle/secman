@@ -9,8 +9,6 @@
  * - Required field validation
  * - Success/error handling
  * - Loading states
- *
- * Related to: Feature 012-build-ui-for, User Story 2 (Create New Release)
  */
 
 import React, { useState, useEffect } from 'react';

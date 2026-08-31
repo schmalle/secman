@@ -2,8 +2,6 @@
  * Product Service
  *
  * Handles API calls for products overview functionality
- *
- * Feature: 054-products-overview
  */
 
 import { authenticatedGet } from '../utils/auth';
@@ -69,7 +67,6 @@ export async function getTopProducts(limit: number = 15): Promise<TopProductsRes
 
 /**
  * Get list of unique products from vulnerability data
- * Task: T012, T022 (search support)
  *
  * @param search Optional search term for filtering products
  * @returns Promise<ProductListResponse>
@@ -96,7 +93,6 @@ export async function getProducts(search?: string): Promise<ProductListResponse>
 
 /**
  * Get paginated list of systems running a specific product
- * Task: T012
  *
  * @param product - Product name (will be URL encoded)
  * @param page - Page number (0-indexed)
@@ -130,7 +126,6 @@ export async function getProductSystems(
 
 /**
  * Export systems running a specific product to Excel
- * Task: T028
  *
  * @param product - Product name (will be URL encoded)
  * @returns Promise<void> - Downloads the Excel file

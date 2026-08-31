@@ -17,7 +17,6 @@ import org.slf4j.LoggerFactory
  * and logs detailed validation failure information before returning HTTP 400.
  *
  * Purpose: Diagnose 400 Bad Request errors during CrowdStrike import
- * Feature: 032-servers-query-import (debugging support)
  *
  * @Primary annotation resolves bean conflict with Micronaut's built-in ConstraintExceptionHandler
  */

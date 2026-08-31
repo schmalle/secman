@@ -13,12 +13,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Service for bulk asset deletion operations
- * Feature: 029-asset-bulk-operations (User Story 1 - Bulk Delete Assets)
  *
  * Related Requirements:
- * - FR-003: Delete all assets from database when ADMIN confirms
- * - FR-007: Handle cascade deletion of related data (vulnerabilities, scan results)
- * - FR-008: Execute within transaction with rollback on failure
  *
  * Performance Target:
  * - Delete 10K+ assets in <30 seconds (SC-001)

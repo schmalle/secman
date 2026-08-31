@@ -8,7 +8,6 @@ import java.util.*
 
 /**
  * Repository for AdminNotificationSettings
- * Feature: 027-admin-user-notifications
  */
 @Repository
 interface AdminNotificationSettingsRepository : JpaRepository<AdminNotificationSettings, Long> {

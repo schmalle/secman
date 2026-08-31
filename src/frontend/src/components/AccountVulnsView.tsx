@@ -11,11 +11,7 @@
  * - Admin redirect handling
  * - No AWS account mapping error handling
  *
- * Related to: Feature 018-under-vuln-management (Account Vulns)
  * Feature 019: Account Vulns Severity Breakdown
- * User Story: US1 (P1) - View Vulnerabilities for Single AWS Account
- * User Story: US2 (P1) - View Account-Level Severity Aggregation
- * User Story: US3 (P1) - Global Severity Summary
  */
 
 import React, { useState, useEffect } from 'react';

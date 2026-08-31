@@ -1,6 +1,5 @@
 /**
  * ReleaseIndicator Component
- * Feature: 067-requirement-releases, FR-003
  *
  * Displays the current release context in the upper right of the requirements UI.
  * Shows "CURRENT" when viewing live requirements or the release version when

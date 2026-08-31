@@ -8,9 +8,6 @@ import java.io.PrintStream
 
 /**
  * Simple unit tests for SecmanCli
- *
- * Related to: Feature 023-create-in-the
- * Task: T055
  */
 class SecmanCliTest {
 

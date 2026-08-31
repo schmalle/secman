@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory
 
 /**
  * REST controller for Workgroup management
- * Feature: 008-create-an-additional (Workgroup-Based Access Control)
  *
  * All endpoints require ADMIN role per FR-001 through FR-012
  *

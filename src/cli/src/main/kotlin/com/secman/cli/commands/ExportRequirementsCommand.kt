@@ -10,7 +10,6 @@ import java.time.format.DateTimeFormatter
 
 /**
  * CLI command to export requirements to Excel or Word format
- * Feature: 057-cli-mcp-requirements
  *
  * Usage:
  *   secman export-requirements --format <xlsx|docx> [--output <path>] [options]

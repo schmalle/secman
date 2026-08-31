@@ -10,7 +10,6 @@ interface PaginationProps {
 
 /**
  * Reusable pagination component
- * Feature: 020-i-want-to (IP Address Mapping)
  */
 export default function Pagination({
   currentPage,

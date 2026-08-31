@@ -8,7 +8,6 @@ import java.time.Instant
 
 /**
  * Service for logging access denials for security audit purposes
- * Feature: 025-role-based-access-control
  *
  * Logs are written to a dedicated logger (ACCESS_DENIAL_AUDIT) with structured MDC context.
  * This enables easy aggregation in log management systems (Splunk, ELK, Datadog).

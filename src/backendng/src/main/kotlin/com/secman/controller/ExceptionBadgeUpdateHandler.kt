@@ -40,7 +40,6 @@ import java.time.Duration
  * - Automatic cleanup on client disconnect
  * - Replay(1) to ensure new subscribers get latest count
  *
- * Feature: 031-vuln-exception-approval
  * User Story 3: ADMIN Approval Dashboard (P1)
  * Phase 6: Real-Time Badge Updates
  * Reference: spec.md FR-024

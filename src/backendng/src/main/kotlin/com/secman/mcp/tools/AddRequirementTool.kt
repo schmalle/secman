@@ -9,7 +9,6 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for creating a new security requirement.
- * Feature: 057-cli-mcp-requirements
  *
  * Returns the created requirement ID and confirmation.
  */

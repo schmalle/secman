@@ -3,7 +3,6 @@
  *
  * Handles API calls for vulnerability exception request management
  *
- * Feature: 031-vuln-exception-approval
  * User Story 1: Regular User Requests Exception (P1)
  */
 

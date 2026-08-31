@@ -35,8 +35,6 @@ import java.time.Instant
  * - john@example.com → null → null → 192.168.1.0/24 (email + IP range)
  * - john@example.com → 123456789012 → example.com → 192.168.1.0/24 (email + AWS + domain + IP)
  * - future@example.com → 123456789012 → null → null + user=null + appliedAt=null (future user mapping)
- *
- * Related to: Feature 013 (User Mapping Upload), Feature 020 (IP Address Mapping), Feature 042 (Future User Mappings)
  */
 @Entity
 @Table(

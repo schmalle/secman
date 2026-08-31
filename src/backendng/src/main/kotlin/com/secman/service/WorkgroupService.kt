@@ -14,7 +14,6 @@ import jakarta.transaction.Transactional
 
 /**
  * Service for Workgroup business logic
- * Feature: 008-create-an-additional (Workgroup-Based Access Control)
  *
  * Handles workgroup CRUD operations, validation, and membership management
  */

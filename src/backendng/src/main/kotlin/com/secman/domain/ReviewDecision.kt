@@ -8,7 +8,6 @@ import java.time.Instant
 
 /**
  * Admin/REQADMIN decision on an individual requirement review.
- * Feature: 078-release-rework
  *
  * After reviewers submit assessments (OK/CHANGE/NOGO), an admin or REQADMIN
  * user can accept or reject each assessment with an optional comment.

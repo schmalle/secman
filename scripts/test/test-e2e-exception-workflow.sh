@@ -1,7 +1,6 @@
 #!/bin/bash
 #
 # E2E Vulnerability Exception Workflow Test Script
-# Feature: 063-e2e-vuln-exception
 #
 # Tests the complete vulnerability exception request workflow via MCP:
 # 1. Delete all assets (clean environment)

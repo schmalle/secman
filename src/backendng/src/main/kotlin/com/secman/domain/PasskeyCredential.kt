@@ -9,7 +9,6 @@ import java.time.Instant
 
 /**
  * PasskeyCredential entity for WebAuthn/FIDO2 authentication
- * Feature: Passkey MFA Support
  *
  * Stores WebAuthn credentials for passwordless/MFA authentication
  */

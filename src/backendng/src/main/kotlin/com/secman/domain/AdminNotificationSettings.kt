@@ -8,7 +8,6 @@ import java.time.LocalDateTime
 
 /**
  * Entity for storing admin notification settings
- * Feature: 027-admin-user-notifications
  *
  * Stores configuration for email notifications sent to ADMIN users
  * when new users are created (via OAuth or manual creation)

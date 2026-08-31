@@ -2,7 +2,6 @@ import { authenticatedGet, authenticatedPut } from '../utils/auth';
 
 /**
  * Service for Application Settings API operations
- * Feature: 068-requirements-alignment-process
  *
  * Provides methods to get and update application-wide settings
  * such as the base URL used in email notifications.

@@ -6,7 +6,6 @@ import java.time.LocalDateTime
 
 /**
  * DTOs for the Asset Compliance History feature.
- * Feature: ec2-vulnerability-tracking
  */
 
 @Serdeable

@@ -57,7 +57,6 @@ import java.util.*
 
 /**
  * Requirement Controller
- * Feature: 025-role-based-access-control
  *
  * Access Control:
  * - ADMIN: Full access to all requirement operations

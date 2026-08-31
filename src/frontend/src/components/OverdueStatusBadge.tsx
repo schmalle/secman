@@ -15,8 +15,6 @@
  * - Tooltips with detailed information
  * - Optional detailed display for exception reasons
  * - Accessible (not relying solely on color)
- *
- * Related to: Feature 021-vulnerability-overdue-exception-logic
  */
 
 import React from 'react';

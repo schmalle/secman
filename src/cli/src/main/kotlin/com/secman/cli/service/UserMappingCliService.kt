@@ -959,8 +959,6 @@ class UserMappingCliService(
      * wrapping the HTTP status code and parsed body so callers can distinguish
      * auth denials (403), validation errors (400), and server errors (5xx) to
      * map them to distinct CLI exit codes.
-     *
-     * Feature: 085-cli-mappings-email
      */
     fun sendStatisticsEmail(
         backendUrl: String,
@@ -1266,8 +1264,6 @@ data class MappingComparisonResult(
  * Wrapper returned by [UserMappingCliService.sendStatisticsEmail] carrying the
  * HTTP status code and the parsed response body so CLI callers can map distinct
  * failure modes to distinct exit codes.
- *
- * Feature: 085-cli-mappings-email
  */
 data class StatisticsEmailResult(
     val statusCode: Int,

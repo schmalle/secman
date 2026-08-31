@@ -2,7 +2,6 @@ import { authenticatedGet, authenticatedPut } from '../utils/auth';
 
 /**
  * Service for Admin Notification Settings API operations
- * Feature: 027-admin-user-notifications
  *
  * Provides methods to get and update admin notification settings
  * (email notifications sent to ADMIN users when new users are created)

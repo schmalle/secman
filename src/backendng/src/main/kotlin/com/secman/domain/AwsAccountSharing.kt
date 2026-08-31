@@ -8,8 +8,6 @@ import java.time.Instant
  * AwsAccountSharing entity - stores directional, non-transitive sharing rules
  * for AWS account visibility between users.
  *
- * Feature: AWS Account Sharing
- *
  * Semantics:
  * - sourceUser shares their AWS account visibility with targetUser
  * - targetUser can then see all assets whose cloudAccountId matches

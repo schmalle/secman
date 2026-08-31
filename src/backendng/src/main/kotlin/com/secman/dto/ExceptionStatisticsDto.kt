@@ -14,7 +14,6 @@ import io.micronaut.serde.annotation.Serdeable
  * - Top requesters with counts
  * - Top CVEs with counts
  *
- * Feature: 031-vuln-exception-approval
  * User Story 8: Analytics & Reporting (P3)
  * Phase 11: Analytics & Reporting
  * Reference: spec.md acceptance scenarios US8-1, US8-2

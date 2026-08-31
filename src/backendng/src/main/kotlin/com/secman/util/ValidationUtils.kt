@@ -2,9 +2,6 @@ package com.secman.util
 
 /**
  * Validation utilities for input data
- *
- * Feature: 041-falcon-instance-lookup
- * Task: T006
  */
 object ValidationUtils {
     /**

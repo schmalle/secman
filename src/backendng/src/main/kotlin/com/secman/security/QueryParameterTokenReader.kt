@@ -20,8 +20,6 @@ import java.util.Optional
  * - Query parameter tokens may be logged in access logs (use HTTPS)
  * - SSE EventSource API doesn't support custom headers, requiring this fallback
  * - Only use query parameters for SSE endpoints; prefer Authorization header for REST APIs
- *
- * Feature: SSE Authentication Fix (031-vuln-exception-approval)
  */
 @Singleton
 class QueryParameterTokenReader : TokenReader<HttpRequest<*>> {

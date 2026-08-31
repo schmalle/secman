@@ -109,7 +109,7 @@ open class GetVulnerabilitiesTool(
             val startDate = startDateStr?.let { LocalDateTime.parse(it, DateTimeFormatter.ISO_DATE_TIME) }
             val endDate = endDateStr?.let { LocalDateTime.parse(it, DateTimeFormatter.ISO_DATE_TIME) }
 
-            // Get accessible asset IDs for access control filtering (Feature: 052-mcp-access-control)
+            // Get accessible asset IDs for access control filtering
             val accessibleIds = context.getFilterableAssetIds()
 
             // If delegation is active and user has no accessible assets, return empty result

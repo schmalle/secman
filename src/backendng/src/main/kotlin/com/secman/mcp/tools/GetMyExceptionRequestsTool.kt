@@ -11,15 +11,11 @@ import jakarta.inject.Singleton
 
 /**
  * MCP tool for getting the current user's own exception requests.
- * Feature: 062-mcp-vuln-exceptions
  *
  * Access Control:
  * - Requires User Delegation
  * - Any authenticated user can view their own requests
  * - Only returns requests created by the delegated user
- *
- * Spec reference: spec.md FR-011 through FR-013
- * User Story: US3 - View My Exception Requests (P2)
  */
 @Singleton
 class GetMyExceptionRequestsTool(

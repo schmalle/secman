@@ -15,8 +15,6 @@ import java.time.Duration
  *
  * Proxies requests to NVD to avoid CORS issues and centralize caching.
  * Responses are cached for 24h via Micronaut's Caffeine cache.
- *
- * Feature: 072-cve-link-lookup
  */
 @Singleton
 open class CveLookupService {
