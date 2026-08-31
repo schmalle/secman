@@ -134,6 +134,9 @@ object McpToolPermissions {
                 "get_assets", "get_asset_profile", "search_assets",
                 "get_all_assets_detail", "get_asset_complete_profile",
                 "delete_all_assets", "delete_asset",
+                // Same fail-closed gap as add_requirement/the six workgroup tools below:
+                // present in LISTING, absent here, so tools/call denied them unconditionally.
+                "asset_match_clear", "delete_asset_not_seen",
             ),
             setOf(ASSETS_WRITE) to listOf(
                 "create_asset", "update_asset",
@@ -143,7 +146,15 @@ object McpToolPermissions {
             // not authorization) uncovered while adding the role guard this tool was
             // also missing (see requireAnyRole call in AddRequirementTool.execute()).
             setOf(REQUIREMENTS_WRITE) to listOf(
-                "add_requirement",
+                "add_requirement", "delete_all_requirements",
+            ),
+            // Releases and alignment tools — same LISTING group as get_requirements.
+            // ADMIN/RELEASE_MANAGER/REQ role checked in execute(). Were listed but,
+            // like the workgroup tools below, never added to CALLING at all.
+            setOf(REQUIREMENTS_READ) to listOf(
+                "list_releases", "get_release", "compare_releases",
+                "create_release", "delete_release", "set_release_status",
+                "start_alignment", "submit_review", "get_alignment_status", "finalize_alignment",
             ),
             setOf(VULNERABILITIES_READ) to listOf(
                 "get_vulnerabilities", "search_vulnerabilities",
@@ -153,8 +164,15 @@ object McpToolPermissions {
                 "get_overdue_assets", "create_exception_request", "get_my_exception_requests",
                 "get_pending_exception_requests", "approve_exception_request",
                 "reject_exception_request", "cancel_exception_request",
+                "get_exception_request", "get_my_exception_request_summary",
+                "get_exception_request_statistics", "delete_exception_request",
+                "reconcile_exception_requests",
                 "list_vulnerability_exceptions", "delete_all_vulnerability_exceptions",
                 "add_vulnerability",
+                "get_vulnerability_heatmap", "refresh_vulnerability_heatmap",
+                "get_top_accounts_by_finding_age",
+                "get_crowdstrike_last_import",
+                "deduplicate_vulnerabilities",
                 "import_github_repos",
                 "list_github_owner_email_mappings",
                 "create_github_owner_email_mapping", "delete_github_owner_email_mapping",
@@ -198,6 +216,10 @@ object McpToolPermissions {
             ),
             setOf(NOTIFICATIONS_SEND) to listOf(
                 "send_github_repo_alerts",
+                // Same fail-closed gap: listed but never added to CALLING.
+                "notify_new_accounts", "send_application_register_reminders",
+                "send_exception_expiry_reminders", "send_outdated_notifications",
+                "send_vulnerability_notifications",
             ),
         ))
 
