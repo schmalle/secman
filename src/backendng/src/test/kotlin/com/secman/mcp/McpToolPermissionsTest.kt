@@ -141,4 +141,32 @@ class McpToolPermissionsTest {
         assertThat(McpToolPermissions.CALLING["link_workgroup_aws_accounts"])
             .isEqualTo(setOf(McpPermission.WORKGROUPS_WRITE))
     }
+
+    @Test
+    fun `the release, alignment, exception-detail and reminder tools are in BOTH tables`() {
+        // Same fail-closed shape as add_requirement and the workgroup tools above: these 28
+        // tools were declared in LISTING (so tools/list showed them) but never added to
+        // CALLING at all (so tools/call denied every one of them unconditionally). Found by
+        // ./scripts/owasp-check.sh --all (§A01 A01-mcp-perms). application_register is
+        // deliberately excluded — LISTING's own doc comment says it "has never been mapped".
+        for (tool in listOf(
+            "asset_match_clear", "delete_asset_not_seen",
+            "delete_all_requirements",
+            "list_releases", "get_release", "compare_releases",
+            "create_release", "delete_release", "set_release_status",
+            "start_alignment", "submit_review", "get_alignment_status", "finalize_alignment",
+            "get_exception_request", "get_my_exception_request_summary",
+            "get_exception_request_statistics", "delete_exception_request",
+            "reconcile_exception_requests",
+            "get_vulnerability_heatmap", "refresh_vulnerability_heatmap",
+            "get_top_accounts_by_finding_age", "get_crowdstrike_last_import",
+            "deduplicate_vulnerabilities",
+            "notify_new_accounts", "send_application_register_reminders",
+            "send_exception_expiry_reminders", "send_outdated_notifications",
+            "send_vulnerability_notifications",
+        )) {
+            assertThat(McpToolPermissions.LISTING).describedAs("LISTING/%s", tool).containsKey(tool)
+            assertThat(McpToolPermissions.CALLING).describedAs("CALLING/%s", tool).containsKey(tool)
+        }
+    }
 }
