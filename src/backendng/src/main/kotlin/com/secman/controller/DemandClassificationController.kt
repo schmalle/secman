@@ -243,20 +243,53 @@ open class DemandClassificationController(
         }
     }
     
+    // Classification rule sets are a short, hand-authored JSON array — well under this
+    // ceiling in any legitimate use. Kept far below the global multipart cap
+    // (100MB, sized for XLSX/vulnerability imports) so a bad upload fails fast instead
+    // of buffering a large file into a String and handing it to Jackson.
+    private val MAX_RULES_FILE_SIZE = 5 * 1024 * 1024L // 5MB
+
+    /** Mirrors ImportController.validateFile: size, extension, content-type, non-empty — before parsing. */
+    private fun validateRulesFile(file: CompletedFileUpload): String? {
+        if (file.size > MAX_RULES_FILE_SIZE) {
+            return "File size exceeds maximum limit of ${MAX_RULES_FILE_SIZE / 1024 / 1024}MB"
+        }
+        val filename = file.filename.orEmpty()
+        if (!filename.lowercase().endsWith(".json")) {
+            return "Only .json files are supported"
+        }
+        val contentType = file.contentType.map { it.toString() }.orElse("")
+        if (contentType.isNotBlank() &&
+            !(contentType.contains("json", ignoreCase = true) ||
+                contentType.contains("octet-stream", ignoreCase = true) ||
+                contentType.contains("text/plain", ignoreCase = true))
+        ) {
+            return "Invalid file format. Please upload a valid JSON file."
+        }
+        if (file.size == 0L) {
+            return "File is empty"
+        }
+        return null
+    }
+
     @Post("/rules/import", consumes = [MediaType.MULTIPART_FORM_DATA])
     @Secured("ADMIN")
     @Transactional
     open fun importRules(
         file: CompletedFileUpload,
         authentication: Authentication
-    ): HttpResponse<List<DemandClassificationRule>> {
+    ): HttpResponse<Any> {
+        val validationError = validateRulesFile(file)
+        if (validationError != null) {
+            return HttpResponse.badRequest(mapOf("error" to validationError))
+        }
         return try {
             val content = String(file.bytes, StandardCharsets.UTF_8)
             val user = userRepository.findByUsername(authentication.name).orElse(null)
-            
+
             val imported = classificationService.importRulesFromFile(content, user)
             log.info("Imported {} classification rules", imported.size)
-            
+
             HttpResponse.ok(imported)
         } catch (e: Exception) {
             log.error("Error importing rules", e)
