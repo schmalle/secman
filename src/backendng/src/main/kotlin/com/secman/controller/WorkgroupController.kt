@@ -827,14 +827,24 @@ open class WorkgroupController(
      * Get all ancestors from root to immediate parent
      * Feature 040: Nested Workgroups (User Story 5)
      *
+     * SECURITY (A01): unlike its siblings (getWorkgroup, getChildren, getRootWorkgroups,
+     * getWorkgroupTree), this endpoint took no `authentication` and never checked
+     * membership — any authenticated user could read the ancestor chain (names) of an
+     * arbitrary, inaccessible workgroup by id. Gate on the same `accessibleWorkgroupIdsOrNull`
+     * used by getChildren, returning 404 (not 403) so a hidden id's existence isn't leaked.
+     *
      * GET /api/workgroups/{id}/ancestors
-     * Returns: 200 OK with list of ancestors (root first), 404 if not found
+     * Returns: 200 OK with list of ancestors (root first), 404 if not found or not accessible
      */
     @Get("/{id}/ancestors")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     @Transactional
-    open fun getAncestors(@PathVariable id: Long): HttpResponse<List<BreadcrumbItem>> {
+    open fun getAncestors(@PathVariable id: Long, authentication: Authentication): HttpResponse<List<BreadcrumbItem>> {
         return try {
+            val accessibleIds = accessibleWorkgroupIdsOrNull(authentication)
+            if (accessibleIds != null && id !in accessibleIds) {
+                return HttpResponse.notFound()
+            }
             val ancestors = workgroupService.getAncestors(id)
             val response = ancestors.map { BreadcrumbItem(id = it.id!!, name = it.name) }
             HttpResponse.ok(response)
@@ -847,15 +857,26 @@ open class WorkgroupController(
      * Get all descendants (entire subtree)
      * Feature 040: Nested Workgroups (User Story 2)
      *
+     * SECURITY (A01): same gap and fix as getAncestors() above — no authentication
+     * parameter and no membership check meant any authenticated user could read the
+     * full subtree (names/descriptions/criticality) of an arbitrary workgroup by id.
+     * Mirrors getChildren(): the requested id must itself be accessible, and results
+     * are additionally filtered to the caller's accessible set.
+     *
      * GET /api/workgroups/{id}/descendants
-     * Returns: 200 OK with list of all descendants
+     * Returns: 200 OK with list of all descendants, 404 if not accessible
      */
     @Get("/{id}/descendants")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     @Transactional
-    open fun getDescendants(@PathVariable id: Long): HttpResponse<List<WorkgroupResponse>> {
+    open fun getDescendants(@PathVariable id: Long, authentication: Authentication): HttpResponse<List<WorkgroupResponse>> {
+        val accessibleIds = accessibleWorkgroupIdsOrNull(authentication)
+        if (accessibleIds != null && id !in accessibleIds) {
+            return HttpResponse.notFound()
+        }
         val descendants = workgroupService.getDescendants(id)
-        val response = descendants.map { toWorkgroupResponse(it) }
+        val filtered = if (accessibleIds == null) descendants else descendants.filter { it.id in accessibleIds }
+        val response = filtered.map { toWorkgroupResponse(it) }
         return HttpResponse.ok(response)
     }
 
