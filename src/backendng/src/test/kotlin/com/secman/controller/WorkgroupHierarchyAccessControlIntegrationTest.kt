@@ -71,14 +71,16 @@ class WorkgroupHierarchyAccessControlIntegrationTest : BaseIntegrationTest() {
 
         val ancestorsEx = assertThrows<HttpClientResponseException> {
             client.toBlocking().exchange(
-                HttpRequest.GET<Any>("/api/workgroups/${workgroup.id}/ancestors").cookie(cookie)
+                HttpRequest.GET<Any>("/api/workgroups/${workgroup.id}/ancestors").cookie(cookie),
+                Argument.listOf(Map::class.java)
             )
         }
         assertThat(ancestorsEx.status).isEqualTo(HttpStatus.NOT_FOUND)
 
         val descendantsEx = assertThrows<HttpClientResponseException> {
             client.toBlocking().exchange(
-                HttpRequest.GET<Any>("/api/workgroups/${workgroup.id}/descendants").cookie(cookie)
+                HttpRequest.GET<Any>("/api/workgroups/${workgroup.id}/descendants").cookie(cookie),
+                Argument.listOf(Map::class.java)
             )
         }
         assertThat(descendantsEx.status).isEqualTo(HttpStatus.NOT_FOUND)

@@ -78,6 +78,10 @@ dependencies {
     // (tools.jackson.module), not this Jackson 2 one. It previously resolved only via a
     // transitive jackson-bom that micronaut-micrometer-bom 6.0.1 dropped.
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.2")
+    // Same story as the Kotlin module above: the dropped jackson-bom took the Java 8
+    // time module with it, so every plain ObjectMapper lost Instant support. Without it
+    // findAndRegisterModules() finds nothing and Instant fields fail to serialize.
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.22.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation("io.micronaut.reactor:micronaut-reactor")
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")

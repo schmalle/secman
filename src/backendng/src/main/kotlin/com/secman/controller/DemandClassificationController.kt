@@ -284,7 +284,7 @@ open class DemandClassificationController(
             HttpResponse.ok(imported)
         } catch (e: Exception) {
             log.error("Error importing rules", e)
-            HttpResponse.serverError()
+            HttpResponse.serverError<ErrorResponse>()
         }
     }
     
