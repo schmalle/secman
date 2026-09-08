@@ -499,7 +499,7 @@ secman:
     # Data minimisation: only the sections listed here are ever assembled, so
     # anything removed from this list never leaves the trusted network.
     # Valid values: totals, kpis, exceptions, imports, top-products, top-servers
-    sections: ${SECMAN_RELAY_SECTIONS:totals,kpis,exceptions,imports,top-products,top-servers}
+    sections: ${SECMAN_RELAY_SECTIONS:totals,kpis,exceptions,imports,top-products,top-servers,integrations}
     # Development only. A production relay URL is https.
     allow-plaintext-url: ${SECMAN_RELAY_ALLOW_PLAINTEXT_URL:false}
   crowdstrike:

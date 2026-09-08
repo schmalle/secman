@@ -1,0 +1,54 @@
+name: Integration contract (manual, no database)
+on:
+  workflow_dispatch:
+    inputs:
+      github_extension_ref:
+        description: Published GitHub scanner commit (full 40-character SHA)
+        required: true
+      visual_extension_ref:
+        description: Published visual scanner commit (full 40-character SHA)
+        required: true
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require immutable client revisions
+        env:
+          GITHUB_REF_INPUT: ${{ inputs.github_extension_ref }}
+          VISUAL_REF_INPUT: ${{ inputs.visual_extension_ref }}
+        run: |
+          [[ "$GITHUB_REF_INPUT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$VISUAL_REF_INPUT" =~ ^[0-9a-f]{40}$ ]]
+      - uses: actions/checkout@v4
+        with:
+          repository: schmalle/secman_ai_github
+          ref: ${{ inputs.github_extension_ref }}
+          path: extensions/secman_ai_github
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: schmalle/secman_visual_check
+          ref: ${{ inputs.visual_extension_ref }}
+          path: extensions/secman_visual_check
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install client test dependencies
+        run: |
+          python -m venv extensions/secman_ai_github/.venv
+          extensions/secman_ai_github/.venv/bin/pip install -e extensions/secman_ai_github pytest pytest-asyncio
+          python -m venv extensions/secman_visual_check/.venv
+          extensions/secman_visual_check/.venv/bin/pip install -e 'extensions/secman_visual_check[dev]'
+      - name: Check shared fixture and clients
+        run: bash scripts/check-integration-contract.sh --run

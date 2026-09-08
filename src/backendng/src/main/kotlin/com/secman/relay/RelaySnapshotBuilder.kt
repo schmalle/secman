@@ -6,6 +6,7 @@ import com.secman.service.AdminSummaryService
 import com.secman.service.AwsCleanServerKpiService
 import com.secman.service.CrowdStrikeVulnerabilityImportService
 import com.secman.service.EdrCoverageKpiService
+import com.secman.service.IntegrationReadService
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 import java.time.Instant
@@ -37,7 +38,8 @@ open class RelaySnapshotBuilder(
     private val awsCleanServerKpiService: AwsCleanServerKpiService,
     private val edrCoverageKpiService: EdrCoverageKpiService,
     private val crowdStrikeImportService: CrowdStrikeVulnerabilityImportService,
-    private val exceptionRequestRepository: VulnerabilityExceptionRequestRepository
+    private val exceptionRequestRepository: VulnerabilityExceptionRequestRepository,
+    private val integrationReadService: IntegrationReadService
 ) {
     private val logger = LoggerFactory.getLogger(RelaySnapshotBuilder::class.java)
 
@@ -48,6 +50,7 @@ open class RelaySnapshotBuilder(
         const val SECTION_IMPORTS = "imports"
         const val SECTION_TOP_PRODUCTS = "top-products"
         const val SECTION_TOP_SERVERS = "top-servers"
+        const val SECTION_INTEGRATIONS = "integrations"
 
         /**
          * Every section this builder can produce. Section names are lowercase
@@ -60,7 +63,8 @@ open class RelaySnapshotBuilder(
             SECTION_EXCEPTIONS,
             SECTION_IMPORTS,
             SECTION_TOP_PRODUCTS,
-            SECTION_TOP_SERVERS
+            SECTION_TOP_SERVERS,
+            SECTION_INTEGRATIONS
         )
 
         /**
@@ -107,6 +111,10 @@ open class RelaySnapshotBuilder(
             SECTION_TOP_SERVERS to RelaySectionPolicy(
                 requiredRoles = listOf("ADMIN"),
                 description = "Servers with the most vulnerabilities"
+            ),
+            SECTION_INTEGRATIONS to RelaySectionPolicy(
+                requiredRoles = listOf("ADMIN"),
+                description = "Integration finding counts and scan coverage freshness"
             )
         )
 
@@ -177,10 +185,19 @@ open class RelaySnapshotBuilder(
         SECTION_IMPORTS -> buildImports()
         SECTION_TOP_PRODUCTS -> buildTopProducts()
         SECTION_TOP_SERVERS -> buildTopServers()
+        SECTION_INTEGRATIONS -> buildIntegrations()
         else -> {
             logger.warn("Unknown relay snapshot section '{}' requested; ignoring", section)
             null
         }
+    }
+
+    private fun buildIntegrations(): Map<String, Any> {
+        val summary = integrationReadService.globalSummary()
+        return mapOf("scanners" to summary.scanners, "totalSubjects" to summary.totalSubjects,
+            "healthySubjects" to summary.healthySubjects, "failedSubjects" to summary.failedSubjects,
+            "unscannedSubjects" to summary.unscannedSubjects, "staleSubjects" to summary.staleSubjects,
+            "openFindings" to summary.openFindings)
     }
 
     private fun buildTotals(): Map<String, Any> {

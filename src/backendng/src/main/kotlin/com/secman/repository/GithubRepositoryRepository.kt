@@ -10,11 +10,12 @@ import java.util.Optional
 
 /**
  * Repository for imported GitHub repositories. The import upserts by the
- * stable numeric [GithubRepository.githubRepoId] (rename-safe), with
- * [findByFullName] as a fallback match for pre-existing rows.
+ * instance plus numeric [GithubRepository.githubRepoId] (rename-safe).
+ * A reused name must never replace a different repository's identity.
  */
 @Repository
 interface GithubRepositoryRepository : JpaRepository<GithubRepository, Long> {
+    fun findByGithubInstanceAndGithubRepoId(githubInstance: String, githubRepoId: Long): Optional<GithubRepository>
 
     fun findByGithubRepoId(githubRepoId: Long): Optional<GithubRepository>
 

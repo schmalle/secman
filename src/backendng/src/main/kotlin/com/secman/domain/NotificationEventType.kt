@@ -29,6 +29,16 @@ enum class NotificationEventType(
             "processed and which AWS accounts SecMan had never seen before."
     ),
 
+    INTEGRATION_SCAN_FAILED(
+        "Integration scan failed or partial",
+        "A registered integration submitted an unsuccessful scan. Details remain in the access-controlled Integration Results page."
+    ),
+
+    INTEGRATION_STALE(
+        "Integration coverage stale",
+        "A registered integration has targets past their configured freshness threshold."
+    ),
+
     CROWDSTRIKE_RECONCILE_ABORTED(
         "CrowdStrike reconcile sweep aborted",
         "A post-import stale-row reconcile sweep was refused by a safety brake " +

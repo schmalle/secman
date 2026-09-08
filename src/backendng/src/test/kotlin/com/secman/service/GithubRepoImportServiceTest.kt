@@ -56,8 +56,7 @@ class GithubRepoImportServiceTest {
         every { configRepository.findActiveConfig() } returns Optional.of(config)
         every { client.getInstallationToken(config) } returns "token"
         every { snapshotRepository.save(any()) } answers { firstArg() }
-        every { repoRepository.findByGithubRepoId(any()) } returns Optional.empty()
-        every { repoRepository.findByFullName(any()) } returns Optional.empty()
+        every { repoRepository.findByGithubInstanceAndGithubRepoId(any(), any()) } returns Optional.empty()
         every { repoRepository.save(any()) } answers {
             firstArg<GithubRepository>().also { it.id = it.id ?: it.githubRepoId }
         }
@@ -83,6 +82,25 @@ class GithubRepoImportServiceTest {
         assertThatThrownBy { service.importRepositories() }
             .isInstanceOf(IllegalStateException::class.java)
             .hasMessageContaining("No active GitHub App configuration")
+    }
+
+    @Test
+    fun `instance identity canonicalizes web and API origins without merging enterprise hosts`() {
+        assertThat(service.githubInstance("https://api.github.com")).isEqualTo("github.com")
+        assertThat(service.githubInstance("https://API.TENANT.ghe.com:443")).isEqualTo("tenant.ghe.com")
+        assertThat(service.githubInstance("https://code.example.com/api/v3")).isEqualTo("code.example.com")
+        assertThat(service.githubInstance("https://code.example.com:8443/api/v3")).isEqualTo("code.example.com:8443")
+    }
+
+    @Test
+    fun `same numeric repo ID on another instance does not reuse public repository`() {
+        val saved = slot<GithubRepository>()
+        every { repoRepository.save(capture(saved)) } answers { firstArg<GithubRepository>().also { it.id = 500 } }
+        service.persistRepo(repoDto(7), GithubAppClientService.SeverityCounts(critical = 0, high = 0), Instant.now(), "code.example.com")
+        assertThat(saved.captured.githubInstance).isEqualTo("code.example.com")
+        verify { repoRepository.findByGithubInstanceAndGithubRepoId("code.example.com", 7) }
+        verify(exactly = 0) { repoRepository.findByGithubRepoId(any()) }
+        verify(exactly = 0) { repoRepository.findByFullName(any()) }
     }
 
     @Test
@@ -119,7 +137,7 @@ class GithubRepoImportServiceTest {
             ownerEmail = "keeper@example.com", criticalCount = 9, highCount = 9,
             lastHighCriticalFindingAt = null
         )
-        every { repoRepository.findByGithubRepoId(7) } returns Optional.of(existing)
+        every { repoRepository.findByGithubInstanceAndGithubRepoId("github.com", 7) } returns Optional.of(existing)
         every { entityManager.find(GithubRepository::class.java, 42L, LockModeType.PESSIMISTIC_WRITE) } returns existing
         every { client.listInstallationRepositories("token", "https://api.github.com") } returns listOf(repoDto(7))
         every { client.countOpenDependabotAlerts("token", "org", "repo7", "https://api.github.com") } returns
@@ -248,7 +266,7 @@ class GithubRepoImportServiceTest {
             id = 42, githubRepoId = 7, name = "repo7", owner = "org", fullName = "org/repo7",
             ownerEmail = "manual@example.com"
         )
-        every { repoRepository.findByGithubRepoId(7) } returns Optional.of(existing)
+        every { repoRepository.findByGithubInstanceAndGithubRepoId("github.com", 7) } returns Optional.of(existing)
         every { entityManager.find(GithubRepository::class.java, 42L, LockModeType.PESSIMISTIC_WRITE) } returns existing
         every { client.listInstallationRepositories("token", "https://api.github.com") } returns listOf(repoDto(7))
         every { client.countOpenDependabotAlerts("token", "org", "repo7", "https://api.github.com") } returns
@@ -270,7 +288,7 @@ class GithubRepoImportServiceTest {
             id = 42, githubRepoId = 7, name = "repo7", owner = "org", fullName = "org/repo7",
             ownerEmail = "org-default@example.com"
         )
-        every { repoRepository.findByGithubRepoId(7) } returns Optional.of(existing)
+        every { repoRepository.findByGithubInstanceAndGithubRepoId("github.com", 7) } returns Optional.of(existing)
         every { entityManager.find(GithubRepository::class.java, 42L, LockModeType.PESSIMISTIC_WRITE) } returns existing
         every { client.listInstallationRepositories("token", "https://api.github.com") } returns listOf(repoDto(7))
         every { client.countOpenDependabotAlerts("token", "org", "repo7", "https://api.github.com") } returns

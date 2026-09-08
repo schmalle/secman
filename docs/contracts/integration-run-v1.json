@@ -1,0 +1,33 @@
+{
+  "scannerId": 1,
+  "subjectId": 2,
+  "runKey": "contract-run-2026-09-06",
+  "status": "SUCCESS",
+  "completeCoverage": false,
+  "startedAt": "2026-09-06T10:00:00Z",
+  "completedAt": "2026-09-06T10:01:00Z",
+  "metadataJson": "{\"targetCount\":1,\"coverage\":\"partial\"}",
+  "findings": [
+    {
+      "externalId": "rule-location-identity",
+      "legacyIds": [],
+      "severity": "INFO",
+      "title": "Example observation",
+      "description": "A harmless contract example.",
+      "recommendation": "Review the observation in SecMan.",
+      "evidence": "Observed response metadata.",
+      "filePath": null,
+      "lineRange": null,
+      "url": "https://example.com/",
+      "confidence": 0.9,
+      "engine": "contract-test",
+      "model": null,
+      "commitSha": null,
+      "issueUrl": null,
+      "fixPrUrl": null,
+      "attachments": [
+        {"fileName": "evidence.txt", "contentType": "text/plain", "base64": "ZXZpZGVuY2U="}
+      ]
+    }
+  ]
+}

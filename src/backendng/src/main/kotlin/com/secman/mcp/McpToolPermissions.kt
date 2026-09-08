@@ -37,6 +37,8 @@ object McpToolPermissions {
      * `application_register` is intentionally absent — it has never been mapped.
      */
     val LISTING: Map<String, Set<McpPermission>> = table(
+        setOf(INTEGRATIONS_WRITE) to listOf("submit_integration_run"),
+        setOf(ASSETS_READ, INTEGRATIONS_WRITE) to listOf("list_integration_subjects"),
         setOf(REQUIREMENTS_READ) to listOf(
             "get_requirements", "export_requirements",
             // Releases and alignment — ADMIN/RELEASE_MANAGER/REQ role checked in execute()
@@ -129,6 +131,8 @@ object McpToolPermissions {
      * resolves to the ADMIN_TOOLS default rather than to USER_ACTIVITY.
      */
     val CALLING: Map<String, Set<McpPermission>> = buildMap {
+        put("submit_integration_run", setOf(INTEGRATIONS_WRITE))
+        put("list_integration_subjects", setOf(ASSETS_READ, INTEGRATIONS_WRITE))
         putAll(table(
             setOf(ASSETS_READ) to listOf(
                 "get_assets", "get_asset_profile", "search_assets",

@@ -81,6 +81,7 @@ class McpDelegationService {
      */
     private val roleToPermissions: Map<User.Role, Set<McpPermission>> = mapOf(
         User.Role.USER to setOf(
+            McpPermission.INTEGRATIONS_WRITE,
             McpPermission.REQUIREMENTS_READ,
             McpPermission.ASSETS_READ,
             McpPermission.ASSETS_WRITE,
@@ -89,6 +90,7 @@ class McpDelegationService {
         ),
         User.Role.ADMIN to McpPermission.entries.toSet(),
         User.Role.VULN to setOf(
+            McpPermission.INTEGRATIONS_WRITE,
             McpPermission.VULNERABILITIES_READ,
             McpPermission.SCANS_READ,
             McpPermission.ASSETS_READ,
@@ -110,6 +112,7 @@ class McpDelegationService {
             McpPermission.ASSESSMENTS_EXECUTE
         ),
         User.Role.SECCHAMPION to setOf(
+            McpPermission.INTEGRATIONS_WRITE,
             McpPermission.REQUIREMENTS_READ,
             McpPermission.ASSESSMENTS_READ,
             McpPermission.ASSETS_READ,

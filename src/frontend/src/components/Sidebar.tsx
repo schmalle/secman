@@ -225,6 +225,11 @@ const Sidebar = () => {
                                     <i className="bi bi-window-stack me-2"></i> Application Register
                                 </a>
                             </li>
+                            <li>
+                                <a href="/integrations" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                    <i className="bi bi-plugin me-2"></i> Integration Results
+                                </a>
+                            </li>
                         </ul>
                     )}
                 </li>
