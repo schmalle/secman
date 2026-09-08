@@ -32,9 +32,16 @@ open class DemandClassificationController(
     private val demandRepository: DemandRepository,
     private val userRepository: UserRepository
 ) {
-    
+
     private val log = LoggerFactory.getLogger(DemandClassificationController::class.java)
-    
+
+    companion object {
+        // Classification rule sets are small hand-authored JSON documents, not bulk
+        // data imports — 5MB is generous headroom while still bounding the in-memory
+        // String/Jackson parse below (A08: upload validated before parsing).
+        const val MAX_FILE_SIZE = 5 * 1024 * 1024L
+    }
+
     @Serdeable
     data class CreateRuleRequest(
         @NotBlank val name: String,
@@ -58,7 +65,11 @@ open class DemandClassificationController(
     data class UpdateRulePriorityRequest(
         @NotNull val ruleIds: List<Long>
     )
-    
+
+    /** Generic error body for the validation failures below (upload rejection, bad ids). */
+    @Serdeable
+    data class ErrorResponse(val error: String)
+
     @Serdeable
     data class ClassifyDemandRequest(
         @NotNull val demandId: Long
@@ -249,7 +260,20 @@ open class DemandClassificationController(
     open fun importRules(
         file: CompletedFileUpload,
         authentication: Authentication
-    ): HttpResponse<List<DemandClassificationRule>> {
+    ): HttpResponse<*> {
+        // A08: validate before parsing — size, extension and empty-file checks,
+        // matching ImportController.validateFile (the reference for every upload here).
+        if (file.size > MAX_FILE_SIZE) {
+            return HttpResponse.status<ErrorResponse>(HttpStatus.REQUEST_ENTITY_TOO_LARGE)
+                .body(ErrorResponse("File size exceeds maximum limit of ${MAX_FILE_SIZE / 1024 / 1024}MB"))
+        }
+        if (file.size == 0L) {
+            return HttpResponse.badRequest(ErrorResponse("File is empty"))
+        }
+        val filename = file.filename.orEmpty()
+        if (!filename.lowercase().endsWith(".json")) {
+            return HttpResponse.badRequest(ErrorResponse("Only .json files are supported"))
+        }
         return try {
             val content = String(file.bytes, StandardCharsets.UTF_8)
             val user = userRepository.findByUsername(authentication.name).orElse(null)
