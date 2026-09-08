@@ -85,6 +85,9 @@ enum class McpPermission {
      */
     VULNERABILITIES_READ,
 
+    /** Submit terminal snapshots for scanners assigned to the delegated service user. */
+    INTEGRATIONS_WRITE,
+
     /**
      * Manage workgroups - allows create_workgroup, delete_workgroup, assign_assets_to_workgroup,
      * assign_users_to_workgroup MCP tools (admin only)
@@ -117,6 +120,7 @@ enum class McpPermission {
             ASSETS_WRITE -> "Write Assets"
             SCANS_READ -> "Read Scans"
             VULNERABILITIES_READ -> "Read Vulnerabilities"
+            INTEGRATIONS_WRITE -> "Submit Integration Runs"
             WORKGROUPS_WRITE -> "Manage Workgroups"
             NOTIFICATIONS_SEND -> "Send Notifications"
         }
@@ -143,6 +147,7 @@ enum class McpPermission {
             ASSETS_WRITE -> "Create and update assets in the inventory"
             SCANS_READ -> "View scan data and results"
             VULNERABILITIES_READ -> "View vulnerability information"
+            INTEGRATIONS_WRITE -> "Submit scanner results for assigned integration subjects"
             WORKGROUPS_WRITE -> "Create, delete, and manage workgroup memberships (admin only)"
             NOTIFICATIONS_SEND -> "Send admin summary emails and trigger notifications (admin only)"
         }

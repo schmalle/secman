@@ -93,7 +93,7 @@ open class GithubRepoImportService(
                 // Via the self proxy so @Transactional applies; deadlock-retried because the
                 // per-repo transaction takes a PESSIMISTIC_WRITE lock on the repo row.
                 val wasNew = DeadlockRetry.withRetry("github-import ${repoDto.fullName}") {
-                    selfProvider.get().persistRepo(repoDto, counts, now)
+                    selfProvider.get().persistRepo(repoDto, counts, now, githubInstance(apiBaseUrl))
                 }
                 if (wasNew) created++ else updated++
             } catch (e: Exception) {
@@ -123,11 +123,10 @@ open class GithubRepoImportService(
     open fun persistRepo(
         repoDto: GithubAppClientService.GithubRepoDto,
         counts: GithubAppClientService.SeverityCounts,
-        now: Instant
+        now: Instant,
+        instance: String = "github.com"
     ): Boolean {
-        val resolved = githubRepositoryRepository.findByGithubRepoId(repoDto.repoId)
-            .or { githubRepositoryRepository.findByFullName(repoDto.fullName) }
-            .orElse(null)
+        val resolved = githubRepositoryRepository.findByGithubInstanceAndGithubRepoId(instance, repoDto.repoId).orElse(null)
 
         // Serialize concurrent imports of the same repo (CLI + UI "Import now" can overlap):
         // a PESSIMISTIC_WRITE row lock makes the snapshot insert + alert delete + alert
@@ -142,6 +141,7 @@ open class GithubRepoImportService(
         val isNew = existing == null
         val repo = existing ?: GithubRepository()
         repo.githubRepoId = repoDto.repoId
+        repo.githubInstance = instance
         repo.name = repoDto.name
         repo.owner = repoDto.owner
         repo.fullName = repoDto.fullName
@@ -195,5 +195,16 @@ open class GithubRepoImportService(
             )
         }
         return isNew
+    }
+
+    internal fun githubInstance(apiBaseUrl: String): String {
+        val uri = java.net.URI(apiBaseUrl)
+        val host = requireNotNull(uri.host).lowercase()
+        val webHost = when {
+            host == "api.github.com" -> "github.com"
+            host.startsWith("api.") && host.endsWith(".ghe.com") -> host.removePrefix("api.")
+            else -> host
+        }
+        return webHost + if (uri.port == -1 || uri.port == 443) "" else ":${uri.port}"
     }
 }

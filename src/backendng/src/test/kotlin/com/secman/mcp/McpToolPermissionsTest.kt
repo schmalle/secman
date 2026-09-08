@@ -12,6 +12,16 @@ import org.junit.jupiter.api.Test
 class McpToolPermissionsTest {
 
     @Test
+    fun `integration submission requires new permission without broadening legacy writes`() {
+        listOf(McpToolPermissions.LISTING, McpToolPermissions.CALLING).forEach { table ->
+            assertThat(table["submit_integration_run"]).isEqualTo(setOf(McpPermission.INTEGRATIONS_WRITE))
+            assertThat(table["list_integration_subjects"]).contains(McpPermission.ASSETS_READ, McpPermission.INTEGRATIONS_WRITE)
+            assertThat(McpToolPermissions.allows(table, "submit_integration_run", setOf(McpPermission.VULNERABILITIES_READ))).isFalse()
+            assertThat(McpToolPermissions.allows(table, "submit_integration_run", setOf(McpPermission.INTEGRATIONS_WRITE))).isTrue()
+        }
+    }
+
+    @Test
     fun `allows requires at least one of the mapped permissions`() {
         val table = McpToolPermissions.LISTING
 

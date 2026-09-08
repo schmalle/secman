@@ -79,6 +79,7 @@ Authoritative filter: `AssetFilterService.getAccessibleAssets()`. SQL pre-filter
 | Notifications | `GET/PUT /api/notification-preferences`; `GET /api/notification-logs`; `.../export` (ADMIN) | mixed |
 | Chat Notifications | `GET /api/notification-events` (event catalogue); `GET/PUT /api/slack/settings`, `POST .../test`; `GET/PUT /api/telegram/settings`, `POST .../test` (self-scoped); `GET/PUT /api/slack/config`, `POST .../test`, `GET/PUT /api/telegram/config` (ADMIN) | mixed |
 | CLI | `POST /api/vulnerabilities/cli-add` (ADMIN/VULN; auto-creates asset) | ADMIN/VULN |
+| Integrations | `/api/integrations/v1`: `GET /summary`, `/findings[/{id}[/attachments/{attachmentId}]]`, `/runs[/{id}]` (asset-scoped); `POST /runs` (assigned service user + asset access); `/scanners` configuration and target binding (ADMIN). MCP `submit_integration_run`, `list_integration_subjects`; `docs/INTEGRATION_RESULTS.md` | mixed |
 | Account Onboarding | `GET/POST/PUT/DELETE /api/account-onboarding/questions[/{id}[/choices[/{cid}]]]`, `.../rules[/{id}]`, `GET .../rules/{coverage,matrix}`, `POST .../rules/preview`, `POST .../simulate` (ADMIN/SECCHAMPION); public single-use token `GET/POST /api/public/account-onboarding/{token}` | ADMIN/SECCHAMPION + public |
 | Product Classification | `GET/POST /api/product-classification/rules`, `PUT/DELETE .../rules/{id}`, `POST .../test`, `POST .../reclassify`, `GET .../stats` (ADMIN). Marks installer/setup payloads so vuln + EOL reads can hide them — `docs/CROWDSTRIKE_IMPORT.md` | ADMIN |
 | Mobile Relay | `GET /api/relay/{status,sections,devices,identities}`, `POST /api/relay/{publish,enrollments,revocations,identities,principals/publish}`, `DELETE /api/relay/identities/{id}` | ADMIN |
@@ -277,7 +278,7 @@ GRANT ALL PRIVILEGES ON secman_test.* TO 'secman_test'@'localhost';
 
 ## Extension Clients (`extensions/`)
 
-`secman_ai_github` (GitHub security scanner) and `secman_visual_check` (external attack-surface scanner): independent Python repos with their own remotes, **gitignored here** — root `git status` never shows them and no build or test here covers them.
+`secman_ai_github` (GitHub security scanner) and `secman_visual_check` (external attack-surface scanner): independent Python repos with their own remotes, **gitignored here** — root `git status` never shows them. Normal builds do not cover them; `scripts/check-integration-contract.sh --run` and the manual integration-contract workflow provide opt-in contract checks, only when test execution is authorized.
 
 `secman_app_ios` (iOS/iPadOS status app, Swift) is a **relay client, not a backend client**: it never calls `/api/…` and holds no secman credential. A change to a secman endpoint cannot break it. What *can* is the relay contract — `com.secman.relay.RelayDtos`, the section names and `SECTION_POLICIES` in `RelaySnapshotBuilder`, or `src/relay/internal/api`. Both envelopes carry a `schemaVersion` for that reason; bump it on a breaking change and update `relaySupportedSnapshotSchemaVersion` in the app. Sweep its surface with `grep -rnE '/api/v1/|/ingest/v1/' extensions/secman_app_ios --include='*.swift'`.
 
@@ -285,7 +286,7 @@ Always rediscover the surface; a written list means a newly added call gets chec
 ```bash
 grep -rnE '/api/|"/mcp"|X-MCP-User-Email' extensions --include='*.py' --exclude-dir=.venv
 ```
-As of 2026-08-01: `POST /api/auth/login`, `POST /api/vulnerabilities/cli-add`, `GET /api/vulnerabilities/current`, `PUT /api/assets/import`, MCP `/mcp` (`X-MCP-API-Key` + `X-MCP-User-Email`; `get_vulnerabilities`, `add_vulnerability`, `create_asset`).
+As of 2026-09-06: legacy calls remain `POST /api/auth/login`, `POST /api/vulnerabilities/cli-add`, `GET /api/vulnerabilities/current`, `PUT /api/assets/import`, MCP `/mcp` (`X-MCP-API-Key` + `X-MCP-User-Email`; `get_vulnerabilities`, `add_vulnerability`, `create_asset`). Opt-in v1 adds `GET /api/integrations/v1/scanners/{id}/subjects`, `POST /api/integrations/v1/runs`, and MCP `list_integration_subjects` / `submit_integration_run`; see `docs/INTEGRATION_RESULTS.md`.
 
 When you change any of those endpoints, verify all five dimensions against the client: **path, HTTP method, request field names, response fields the client reads, and `@Secured` roles / required headers**. Field names matter most — Jackson drops unknown keys without error, so a rename makes the client "succeed" while sending nothing. Update the client's `tests/` too; a test asserting the old shape is drift.
 
@@ -305,14 +306,14 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-08-27*
+*Last updated: 2026-09-06*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
-- **Source-review quick wins: hot-path queries, transaction scope, dashboard parallelism (2026-08-27)** — first execution pass over `docs/SOURCE_REVIEW_COMPLEXITY_SPEED.md` §6. `AssetFilterService` admin paths use a new `findAllIds()` projection and the scan path became two batch queries (no more full-table `findAll()` + in-memory filter); eight `findAll().filter{hasRole}` sites became role queries; `NormMappingService` no longer holds a transaction across its OpenRouter loop (per-requirement apply transactions via self-`Provider`); the private CrowdStrike deadlock-retry copy merged into shared `DeadlockRetry`; new `GET /api/workgroups/tree` replaces the frontend's recursive per-node walk; home dashboard fetches run concurrently, the `McpDashboard` interval leak is fixed, dead `utils/api-config.ts` and the legacy unpaged `getCurrentVulnerabilities` are deleted. Backend build/startup + E2E gates still owed before merge (authoring env had no Gradle mirror/DB/pass-cli) — detail in `docs/CHANGELOG.md`.
+- **Source-review quick wins (2026-08-27)** — batched asset access, shorter transactions, shared `DeadlockRetry`, `GET /api/workgroups/tree`, and parallel dashboard loading. Build/startup and E2E gates remain owed. See `docs/SOURCE_REVIEW_COMPLEXITY_SPEED.md` §6 and `docs/CHANGELOG.md`.
 
-- **AWS account display names link accounts to workgroups (2026-08-25)** — an account whose `display_name` is `DevOps-x` now belongs to workgroup **`aws-DevOps-x`**: matched exactly (case-insensitively) on the `aws-` prefix, **created** when missing. One implementation, `WorkgroupAccountLinkService`, reached from the import (CLI/REST/MCP `displayName`, after the mappings commit) and from a correction path that re-links from stored names with no file — CLI `manage-user-mappings link-workgroups`, `POST /api/user-mappings/link-workgroup-accounts`, MCP `link_workgroup_aws_accounts`. The name is persisted as `user_mapping.aws_account_name` (V260) and deliberately kept **out** of the unique key. A display name that cannot be a workgroup name is an error row, never a forced creation; already-linked accounts are idempotent no-ops. Also fixed: six workgroup MCP tools were in `LISTING` but not `.CALLING` (listed yet uncallable). `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`.
+- **AWS account display names → workgroups (2026-08-25)** — imports and CLI `manage-user-mappings link-workgroups` / REST `POST /api/user-mappings/link-workgroup-accounts` / MCP `link_workgroup_aws_accounts` link accounts to `aws-<display name>`. Invalid names fail; existing links are idempotent. See `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`.
 
-- **Full `excepted` recompute chunked to stop multi-minute lock holds (2026-08-24)** — `recomputeExceptedAll()` was one `UPDATE` with **no WHERE**, locking every `vulnerability` row (~1.8M) plus `vulnerability_exception` for 53-180s, so every concurrent writer (bulk exception delete/import, CrowdStrike import, per-asset recompute) queued behind it. `AsyncExceptionRecompute.recomputeAllChunked` now drives bounded **keyset** chunks (`CHUNK_SIZE` 10,000) through `recomputeExceptedForIdRange`, each its own REQUIRES_NEW transaction with per-chunk `DeadlockRetry`. Atomicity is deliberately given up (the path is already `@Async` and eventual); a failure now leaves a converged prefix. `recomputeExceptedAll()` is retained for integration tests only. `docs/CHANGELOG.md`.
+- **Chunked exception recompute (2026-08-24)** — `AsyncExceptionRecompute.recomputeAllChunked` uses 10,000-ID keyset chunks with independent transactions/retries. Convergence is eventual; a failure preserves the completed prefix. Unbounded `recomputeExceptedAll()` is test-only. See `docs/CHANGELOG.md`.

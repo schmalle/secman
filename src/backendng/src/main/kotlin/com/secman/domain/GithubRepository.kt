@@ -9,7 +9,7 @@ import java.time.Instant
  *
  * Rows are created/updated by the repo import (`import-github-repos` CLI /
  * `import_github_repos` MCP → `POST /api/github/import`), which upserts by
- * the stable numeric [githubRepoId] (rename-safe). `criticalCount` /
+ * the [githubInstance] and stable numeric [githubRepoId] (rename-safe). `criticalCount` /
  * `highCount` hold the open Dependabot alert counts from the last import;
  * the per-import history lives in [GithubRepoFindingSnapshot].
  */
@@ -17,8 +17,8 @@ import java.time.Instant
 @Table(
     name = "github_repository",
     uniqueConstraints = [
-        UniqueConstraint(name = "uk_github_repo_id", columnNames = ["github_repo_id"]),
-        UniqueConstraint(name = "uk_github_repo_full_name", columnNames = ["full_name"])
+        UniqueConstraint(name = "uk_github_instance_repo_id", columnNames = ["github_instance", "github_repo_id"]),
+        UniqueConstraint(name = "uk_github_instance_full_name", columnNames = ["github_instance", "full_name"])
     ],
     indexes = [
         Index(name = "idx_github_repo_owner", columnList = "owner")
@@ -33,6 +33,9 @@ data class GithubRepository(
     /** GitHub's stable numeric repository id. */
     @Column(name = "github_repo_id", nullable = false)
     var githubRepoId: Long = 0,
+
+    @Column(name = "github_instance", nullable = false, length = 255)
+    var githubInstance: String = "github.com",
 
     @Column(name = "name", nullable = false, length = 255)
     var name: String = "",

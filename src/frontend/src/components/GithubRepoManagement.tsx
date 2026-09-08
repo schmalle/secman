@@ -16,6 +16,7 @@ import {
 import { hasRole, hasVulnAccess } from '../utils/auth';
 import { useClientHasVulnAccess } from '../utils/useClientAuth';
 import Pagination from './Pagination';
+import IntegrationFindingList from './IntegrationFindingList';
 
 const PAGE_SIZE = 50;
 
@@ -468,6 +469,8 @@ const GithubRepoManagement: React.FC = () => {
                         <tr>
                           <td></td>
                           <td colSpan={canManage ? 9 : 8} className="bg-light">
+                            <IntegrationFindingList githubRepositoryId={r.id} />
+                            <h3 className="h6 mt-4">Dependabot alerts</h3>
                             {loadingAlerts && !alertsByRepo[r.id] ? (
                               <div className="py-2">
                                 <span className="spinner-border spinner-border-sm me-2"></span>
