@@ -1,0 +1,1 @@
+run "python -m secman_visual_check --no-ai https://example.com" and ensure that no errors appear and missing dependencies are installed
