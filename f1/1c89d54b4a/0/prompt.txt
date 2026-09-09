@@ -1,0 +1,235 @@
+<recommended_plugins>
+Here is a list of plugins that are available but not installed.
+
+- Airtable (airtable@openai-curated-remote)
+- Alpaca (alpaca@openai-curated-remote)
+- Apollo.io (apollo@openai-curated-remote)
+- Spotify (app-68de829bf7648191acd70a907364c67c@openai-curated-remote)
+- AllTrails (app-68f1afc5a6008191a701eaaab428816c@openai-curated-remote)
+- Apple Music (app-6938a94a61d881918ef32cb999ff937c@openai-curated-remote)
+- LONA Trading Assistant (app-694336b0c0948191a4ad234f9942885b@openai-curated-remote)
+- SciSpace (app-69439d715a7c8191aed9e2f6649e105f@openai-curated-remote)
+- Tarot (app-6943a2c078b0819188de39e4fe168d9b@openai-curated-remote)
+- Todoist: To Do List & Calendar (app-6943b73823548191a9f9216c6790c453@openai-curated-remote)
+- Consensus (app-6943e6f4a928819195962de16fb9ffe4@openai-curated-remote)
+- Sider Scholar (app-6948b485f5bc8191adb4df13f369cec7@openai-curated-remote)
+- True Sky (app-69490a4a06148191a0dd78606a3dbf1f@openai-curated-remote)
+- Bigdata.com (app-69491eceef3c8191beb70788b7840429@openai-curated-remote)
+- Gamma (app-698a098735908191989f5788d7ee317e@openai-curated-remote)
+- Tredict (app-69aef5b699a0819184512d57743fc1cd@openai-curated-remote)
+- Maersk (app-69b2b5a768d4819190d3a86c5f12e6d9@openai-curated-remote)
+- Dropbox (app-69b31dc2110c8191b8b47dc98fe5a052@openai-curated-remote)
+- Parqet (app-69b68652f0308191a27d7c7096cab4f6@openai-curated-remote)
+- Interactive Brokers (IBKR) (app-69bc11db874881918718abaca20b68ce@openai-curated-remote)
+- Financial Datasets (app-69cacd9394a88191ba6564e1bb0430fa@openai-curated-remote)
+- Fathom (app-69d88b99c5c481918e8da9225737e1e9@openai-curated-remote)
+- vidIQ (app-69dd11f3e50c8191b1ca48d03cf7e2ad@openai-curated-remote)
+- TickTick:To-Do List & Calendar (app-69ddbaba3fb48191a825f22c21b0599d@openai-curated-remote)
+- Plaud (app-69f3c30d68288191bbd428a394a78407@openai-curated-remote)
+- Wolfram (app-69fe0bf66c8481919c513d799406436e@openai-curated-remote)
+- Runway (app-6a05e3b201788191be12b590b43e6ce3@openai-curated-remote)
+- Caliber (app-6a05e8f22d408191b13ba3897157f6df@openai-curated-remote)
+- COROS (app-6a0694cbb2608191bbefb74ba810ab68@openai-curated-remote)
+- TradingCursor (app-6a0d835ff1dc8191972eeabd14967446@openai-curated-remote)
+- CoinMarketCap (app-6a172fe86f5481919f73cbc3bc3ad5bb@openai-curated-remote)
+- Trello (app-6a20b18a639081918c1b438f8381b27e@openai-curated-remote)
+- Longbridge (app-6a2baf2fad748191812393c3e00308ef@openai-curated-remote)
+- freddy (app-6a322b52a82c8191b7fb653f9e9f7891@openai-curated-remote)
+- Higgsfield (app-6a3293e129088191abf0875820e839da@openai-curated-remote)
+- Stocktwits (app-6a427a19b1f481919c5db13838af00c2@openai-curated-remote)
+- CoinGecko (app-6a4f02d735388191959c8328877e0bbd@openai-curated-remote)
+- Asana (asana@openai-curated-remote)
+- Atlassian Rovo (atlassian-rovo@openai-curated-remote)
+- Base44 (base44@openai-curated-remote)
+- Binance (binance@openai-curated-remote)
+- Box (box@openai-curated-remote)
+- Canva (canva@openai-curated-remote)
+- ClickUp (clickup@openai-curated-remote)
+- Cloudflare (cloudflare@openai-curated-remote)
+- Figma (figma@openai-curated-remote)
+- Gmail (gmail@openai-curated-remote)
+- Google Calendar (google-calendar@openai-curated-remote)
+</recommended_plugins>
+
+# AGENTS.md instructions for /Users/flake/sources/misc/secman
+
+<INSTRUCTIONS>
+## Behavioral Guidelines
+
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+## 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+---
+
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+--- project-doc ---
+
+# Repository Guidelines
+
+`CLAUDE.md` is authoritative. This file is a short summary of the rules other AI agents (Codex, Gemini, etc.) need to know when contributing here.
+
+## Layout
+- `src/backendng/` — Micronaut/Kotlin (`src/main/kotlin`, `src/main/resources`).
+- `src/frontend/` — Astro + React; pages in `src/pages/`, components in `src/components/`, Playwright in `tests/`.
+- `src/cli/` — Picocli CLI.
+- `src/shared/` — code shared between backend and CLI.
+- `scripts/` — **all** scripts, invoked as `./scripts/<name>.sh` (canonical — do not call `gradlew`/`npm` directly for dev start). `tests/`, `docker/`, `docs/`.
+
+## Build, run, test
+- Backend dev: `./scripts/startbackenddev.sh` (canonical — wraps `gradle run` with `pass-cli`-resolved env).
+- Build everything (incl. tests): `./gradlew build`.
+- Frontend: `cd src/frontend && npm install`, then `./scripts/startfrontenddev.sh` (canonical dev start — never `npm run dev` directly); production check `npm run build && npm run preview`; lint `npm run lint`.
+- CLI: build once `./gradlew :cli:shadowJar`, then `./scripts/secman <cmd>`.
+
+## Skills
+Fourteen project skills live in **`.agents/skills/`** — the Codex rendering of the
+same skill set Claude Code loads from `.claude/skills/` (`CLAUDE.md` §Tooling
+Conventions). They are plain Markdown: there is no slash command here, so read
+the matching `.agents/skills/<name>/SKILL.md` **in full** and follow it.
+
+### Two-way sync is mandatory
+
+The two trees are two renderings of the *same* skill, not two skills.
+**Whichever tree you edit, the same change must land in the counterpart file in
+the same commit** — Codex editing `.agents/skills/` ports to `.claude/skills/`
+exactly as Claude Code editing `.claude/skills/` ports to `.agents/skills/`. A
+commit that touches one tree only is incomplete. This covers every `*.md` under
+the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
+
+- **Translate, don't copy.** Swap harness-specific mechanics for their equivalent: `sandbox_permissions: "require_escalated"` ↔ Bash tool `dangerouslyDisableSandbox: true`; "ask the user directly" ↔ `AskUserQuestion`; `.agents/skills/…` ↔ `.claude/skills/…` paths. Everything else — steps, commands, thresholds, credential handling — stays word-for-word identical.
+- **Tie-breaker, not sole writer.** If the two copies already disagree and neither is clearly newer, `.claude/skills/` wins. That resolves existing drift; it does not make a Codex-side edit second-class and never excuses leaving `.claude/skills/` stale.
+- **New skill → create both; delete → delete both.** If you *find* an entry that exists in only one tree, report it rather than synthesizing the missing side.
+- **Gate**: `./scripts/check-skill-sync.sh` must exit 0 before a skill change is done (`--verbose` shows differing lines). It is report-only and never edits either tree.
+- Each skill file carries a `> **Sync policy (two-way, mandatory)**` banner naming its counterpart. The checker strips banners before diffing, so their wording may differ.
+
+| Skill | Use it to | Writes data? |
+|---|---|---|
+| `secure-code` | Write code that satisfies OWASP Top 10:2021 by construction, then verify it (`./scripts/owasp-check.sh`) | no |
+| `humanizer` | Crisp comments, names a stranger can predict, screen-sized functions; verifies with `./scripts/humanizer-scan.sh` and proposes risky renames instead of applying them | no |
+| `optimizer` | Hot-path performance and copy-paste blocks; verifies with `./scripts/optimizer-scan.sh` and proposes extractions instead of applying them | no |
+| `finalizer` | Pre-merge pass: version/doc drift, `extensions/` contract drift, HIGH/CRITICAL security review, skill sync | docs only |
+| `testsuite` | Fast test tier (backend, CLI, frontend) + name-reference coverage gaps | no |
+| `e2ejs` | Scan every page for JS errors as admin *and* normal user | no |
+| `e2evulnexception` | Full vuln + exception lifecycle over MCP and the UI | ⚠️ **wipes the DB** |
+| `e2eexception` | Fast MCP-only exception smoke test | ⚠️ **deletes all assets** |
+| `e2eeol` | Full end-of-life lifecycle: catalogue sync, matching, owner mail, top-10 repos, authz negatives | seeds + removes a testbed; rebuilds derived `eol_finding` rows |
+| `admin-asset-e2e` | Admin adds a system + vulnerability, normal user sees it | adds one asset |
+| `importtest` | Run and debug the CrowdStrike import | ⚠️ **imports live data** |
+| `crowdstrike-vuln-match` | Compare stored rows against a fresh Falcon query | no |
+| `aws-account-risk-assessment` | New AWS account starts a correctly scoped assessment | seeds + removes a testbed |
+| `aws-account-owner-email` | The account owner actually receives the mail | testbed, ⚠️ **sends real mail** |
+| `account-onboarding` | Welcome mail, direct and guided assessments, the owner's tokenized questionnaire | seeds + removes a testbed |
+| `createtestdata` | Seed a fixture to click through | adds a fixture |
+
+The three destructive ones are unsafe against a shared instance — resolve
+`SECMAN_HOST` before running them. `aws-account-risk-assessment` carries a
+quieter one: it activates its own requirements release, archiving the current
+`ACTIVE` one, and `ARCHIVED` is terminal.
+
+`.agents/skills/_shared/stack-lifecycle.md` is **mandatory reading** before any
+skill that touches the running stack: it defines the unconditional cold start
+(both stop scripts first, even when the ports look free), port-bind liveness
+(`lsof -iTCP:8080`, 120s; `:4321`, 60s), the `pass-cli` credentials, the log
+paths and the 5-iteration fix budget. The start scripts need `pass-cli`, so run
+them with `sandbox_permissions: "require_escalated"` — a sandboxed shell cannot
+reach the vault and the process fails to start.
+
+`docs/SKILLS.md` is the longer routing guide, including the pairs that get
+confused (`e2eexception` vs `e2evulnexception`, `importtest` vs
+`crowdstrike-vuln-match`, the two AWS-account skills).
+
+Not mirrored, Claude Code only: the `speckit.*` commands in `.claude/commands/`
+(spec-driven-development pipeline, see `docs/SKILLS_AND_AGENTS.md`) and the two
+subagents in `.claude/agents/`, which no skill spawns.
+
+## Style
+- Kotlin: 4-space indent, `UpperCamelCase` types, constructor injection, immutable data classes; ktlint if configured.
+- TS/TSX: 2-space indent, named exports, ESLint via `npm run lint`. Import order: external → internal → relative.
+
+## Tests (mandatory)
+Always write tests for new code. JUnit 6 + Mockk for unit; integration tests run against an **external MariaDB** (no Docker/Testcontainers — removed from the build) via `BaseIntegrationTest`. Tests must route HTTP through `SECMAN_HOST` (sourced from `pass-cli`) — never hardcode `http://localhost:*`. After **every** change, the `e2ejs` and `e2evulnexception` skills (§Skills) must exit clean (see `CLAUDE.md` principle 7).
+
+## Commits / PRs
+- `type(scope): description` (Conventional Commits) or short `Type: Summary` form.
+- PR body: motivation, verification (`./gradlew build`, `npm run lint`), screenshots for UI changes.
+- Flag schema changes, feature toggles, manual data steps, new dependencies.
+
+## Security & secrets
+- **All code you generate must comply with the OWASP Top 10 checklist in `CLAUDE.md` §OWASP Top 10 Compliance** (A01–A10, pinned to the 2021 list). It is binding, names the existing control to reuse for each category, and requires you to state the A01–A10 result for your diff before calling a change complete. A HIGH-or-above finding blocks the change.
+- Secrets via `pass-cli` only — never commit.
+- Copy `.env.example` → `.env` for local overrides (gitignored).
+- Update sample configs and docs when ports/env vars change.
+- Authentication, encryption, RBAC, or export changes require a security review before merge.
+
+</INSTRUCTIONS>
+
+<environment_context>
+  <cwd>/Users/flake/sources/misc/secman</cwd>
+  <shell>zsh</shell>
+  <current_date>2026-09-09</current_date>
+  <timezone>Atlantic/Canary</timezone>
+  <filesystem><workspace_roots><root>/Users/flake/sources/misc/secman</root></workspace_roots><permission_profile type="managed"><file_system type="restricted"><entry access="read"><special>:root</special></entry><entry access="write"><path>/Users/flake/sources/misc/secman</path></entry><entry access="write"><special>:slash_tmp</special></entry><entry access="write"><special>:tmpdir</special></entry><entry access="read"><path>/Users/flake/sources/misc/secman/.git</path></entry><entry access="read"><path>/Users/flake/sources/misc/secman/.agents</path></entry><entry access="read"><path>/Users/flake/sources/misc/secman/.codex</path></entry></file_system></permission_profile></filesystem>
+</environment_context>
