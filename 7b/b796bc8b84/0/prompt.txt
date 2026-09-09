@@ -1,0 +1,1 @@
+update documentation of extension, i have clone https://github.com/schmalle/secman_web_check, which will become  a security scanner
