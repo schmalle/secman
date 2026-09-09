@@ -1,0 +1,1 @@
+i want to implement several functions, a) scan a local directory for vulnerabilities, b) scan a given repository on github, c) scan all github repos reachable via the provided github access token.Extend documentation where needed, extend testcases
