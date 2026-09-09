@@ -1,0 +1,1 @@
+extend the parent SecMan backend/frontend with a proper WEB_SECURITY source
