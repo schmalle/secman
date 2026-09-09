@@ -1,0 +1,1 @@
+approved, ensure that the webscanner is implemented in the extension directory
