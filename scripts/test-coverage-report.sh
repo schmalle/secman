@@ -99,8 +99,12 @@ while IFS='|' read -r area main_dir glob test_dir; do
         : > "$TMP/corpus"
     else
         # One concatenated corpus: far faster than grepping per unit, and the only
-        # thing we need from it is whether a name appears anywhere.
-        xargs -a "$TMP/testfiles" cat 2>/dev/null > "$TMP/corpus" || : > "$TMP/corpus"
+        # thing we need from it is whether a name appears anywhere. Read the list
+        # explicitly because macOS xargs does not support GNU xargs' -a option.
+        : > "$TMP/corpus"
+        while IFS= read -r test_file; do
+            cat "$test_file" >> "$TMP/corpus"
+        done < "$TMP/testfiles"
     fi
 
     units=0
@@ -152,7 +156,7 @@ Read this as a floor, not a coverage figure, in both directions:
   * A unit listed as uncovered may still be exercised end-to-end. Controllers and
     MCP tools especially: the E2E gates and tests/e2e/ drive them through HTTP
     without ever naming the Kotlin class, and table-driven tests such as
-    McpToolPermissionsTest assert over all 85 MCP tools without naming one.
+    McpToolPermissionsTest assert over all 96 MCP tools without naming one.
 
 So the controller and mcp-tools percentages understate reality, while the service
 and util percentages are close to honest. Use the list to choose where to look,

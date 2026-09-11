@@ -9,6 +9,12 @@
 - `src/shared/` — code shared between backend and CLI.
 - `scripts/` — **all** scripts, invoked as `./scripts/<name>.sh` (canonical — do not call `gradlew`/`npm` directly for dev start). `tests/`, `docker/`, `docs/`.
 
+## Branch guardrail
+
+- `dev` is the default and only branch for agent-authored commits unless the user explicitly names another branch.
+- Before editing and again before committing, verify `git branch --show-current` is `dev`. Never commit directly to `main` or `master` by inference.
+- Repositories under `extensions/` are independent Git repositories; apply the same branch check inside each repository and commit there separately.
+
 ## Build, run, test
 - Backend dev: `./scripts/startbackenddev.sh` (canonical — wraps `gradle run` with `pass-cli`-resolved env).
 - Build everything (incl. tests): `./gradlew build`.
@@ -16,7 +22,7 @@
 - CLI: build once `./gradlew :cli:shadowJar`, then `./scripts/secman <cmd>`.
 
 ## Skills
-Fourteen project skills live in **`.agents/skills/`** — the Codex rendering of the
+Nineteen project skills live in **`.agents/skills/`** — the Codex rendering of the
 same skill set Claude Code loads from `.claude/skills/` (`CLAUDE.md` §Tooling
 Conventions). They are plain Markdown: there is no slash command here, so read
 the matching `.agents/skills/<name>/SKILL.md` **in full** and follow it.
@@ -43,6 +49,7 @@ the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
 | `optimizer` | Hot-path performance and copy-paste blocks; verifies with `./scripts/optimizer-scan.sh` and proposes extractions instead of applying them | no |
 | `finalizer` | Pre-merge pass: version/doc drift, `extensions/` contract drift, HIGH/CRITICAL security review, skill sync | docs only |
 | `testsuite` | Fast test tier (backend, CLI, frontend) + name-reference coverage gaps | no |
+| `integration-contract-test` | Shared v1 SecMan contract for GitHub, Visual, and Web checkers | no |
 | `e2ejs` | Scan every page for JS errors as admin *and* normal user | no |
 | `e2evulnexception` | Full vuln + exception lifecycle over MCP and the UI | ⚠️ **wipes the DB** |
 | `e2eexception` | Fast MCP-only exception smoke test | ⚠️ **deletes all assets** |
@@ -53,6 +60,8 @@ the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
 | `aws-account-risk-assessment` | New AWS account starts a correctly scoped assessment | seeds + removes a testbed |
 | `aws-account-owner-email` | The account owner actually receives the mail | testbed, ⚠️ **sends real mail** |
 | `account-onboarding` | Welcome mail, direct and guided assessments, the owner's tokenized questionnaire | seeds + removes a testbed |
+| `aws-account-workgroup-import` | AWS display-name import and workgroup linking | seeds + removes a testbed |
+| `requirement-export-template` | Word export-template lifecycle and validation | seeds + removes a testbed |
 | `createtestdata` | Seed a fixture to click through | adds a fixture |
 
 The three destructive ones are unsafe against a shared instance — resolve

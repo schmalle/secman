@@ -16,12 +16,12 @@ Security requirement, vulnerability and risk-assessment platform.
 - AWS account onboarding: a newly discovered account's owner is welcomed and, optionally, given a risk assessment — either scoped by the operator or by the owner answering a short questionnaire whose answers resolve through admin-configured rules.
 - AuthN: local (BCrypt) + OAuth2/OIDC + Passkey/WebAuthn + optional MFA.
 - AuthZ: 9-role RBAC with row-level filtering on assets (workgroup, ownership, AWS account, AD domain, sharing rules).
-- AI integration: 80+ tool MCP server (Streamable HTTP) for Claude Desktop/Code and other MCP clients, with mandatory user delegation.
+- AI integration: 90+ tool MCP server (Streamable HTTP) for Claude Desktop/Code, Paperclip, and other MCP clients, with mandatory user delegation.
 - Email: SMTP/SES with retry + audit, Thymeleaf HTML templates, escalation tiers.
 
 ## Stack
 
-Kotlin 2.4.10 / Java 25 · Micronaut 5.1 · Hibernate JPA · Astro 7 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.7.0 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2 · Go 1.24 (mobile relay).
+Kotlin 2.4.20 / Java 25 · Micronaut 5.1 · Hibernate JPA · Astro 7 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.7.1 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2 · Go 1.24 (mobile relay).
 
 ## Quick Start (development)
 
@@ -155,6 +155,8 @@ Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings):
 | [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) | All env vars (backend, frontend, CLI) |
 | [docs/CLI.md](docs/CLI.md) | CLI commands, cron, S3 ops |
 | [docs/MCP.md](docs/MCP.md) | MCP tools, API keys, delegation, troubleshooting |
+| [docs/PAPERCLIP.md](docs/PAPERCLIP.md) | Paperclip goals/issues/agents with asset-scoped SecMan MCP reads |
+| [docs/INTEGRATION_RESULTS.md](docs/INTEGRATION_RESULTS.md) | Shared Visual/Web/GitHub checker contract and lifecycle |
 | [docs/CROWDSTRIKE_IMPORT.md](docs/CROWDSTRIKE_IMPORT.md) | Transactional-replace pattern, JPA cascade trap |
 | [docs/GITHUB_REPOS.md](docs/GITHUB_REPOS.md) | GitHub App vulnerability import, Dependabot alerts, owner alerting |
 | [docs/AI_RISK_ASSESSMENT.md](docs/AI_RISK_ASSESSMENT.md) | AI-assisted risk-assessment answer pre-fill |
@@ -166,7 +168,7 @@ Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings):
 | [docs/SKILLS.md](docs/SKILLS.md) | Which agent skill to use when, and what each one writes |
 | [docs/RACE_CONDITIONS.md](docs/RACE_CONDITIONS.md) | Known races and the guards that close them |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Full change history (archived from CLAUDE.md) |
-| [docs/TESTING.md](docs/TESTING.md) | JUnit/Mockk/Testcontainers stack and patterns |
+| [docs/TESTING.md](docs/TESTING.md) | JUnit/Mockk, external MariaDB, CLI and frontend test patterns |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Symptom → diagnosis → fix |
 | [docs/S3_USER_MAPPING_IMPORT.md](docs/S3_USER_MAPPING_IMPORT.md) | `import-s3` / `download-s3` / `print-s3` / `list-bucket` |
 | [docs/E2E_EXCEPTION_WORKFLOW_TEST.md](docs/E2E_EXCEPTION_WORKFLOW_TEST.md) | Vuln-exception MCP E2E |

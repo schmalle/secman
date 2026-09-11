@@ -124,9 +124,8 @@ const UserManagement = () => {
 
         const checkAdminAndFetchUsers = async () => {
             console.log("Checking admin status and fetching users...");
-            let userIsAdmin = false;
             if (window.currentUser) {
-                userIsAdmin = window.currentUser.roles?.includes('ADMIN') ?? false;
+                const userIsAdmin = window.currentUser.roles?.includes('ADMIN') ?? false;
                 if (isMounted) {
                     setIsAdmin(userIsAdmin);
                     setIsLoading(false); // Permission check done

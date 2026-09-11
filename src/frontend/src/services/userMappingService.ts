@@ -160,7 +160,7 @@ export async function downloadCSVTemplate(): Promise<void> {
     if (error instanceof Error) {
       throw error;
     }
-    throw new Error('Failed to download CSV template');
+    throw new Error('Failed to download CSV template', { cause: error });
   }
 }
 

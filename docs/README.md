@@ -16,7 +16,7 @@ Security requirement, vulnerability and risk assessment management tool.
    /*      ───►  Frontend :4321 (Astro/React SSR)
 ```
 
-Stack: Kotlin 2.4.10 / Java 25 · Micronaut 5.1 · Hibernate JPA · Astro 7.2 / React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.7.0 · Picocli 4.7.7.
+Stack: Kotlin 2.4.20 / Java 25 · Micronaut 5.1 · Hibernate JPA · Astro 7.3 / React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.7.1 · Picocli 4.7.7.
 
 ## Index
 
@@ -27,8 +27,10 @@ Stack: Kotlin 2.4.10 / Java 25 · Micronaut 5.1 · Hibernate JPA · Astro 7.2 / 
 | [ENVIRONMENT.md](./ENVIRONMENT.md) | All env vars (backend / frontend / CLI) |
 | [CLI.md](./CLI.md) | CLI commands, cron, S3, AWS Secrets Manager |
 | [MCP.md](./MCP.md) | MCP tools, API keys, delegation, troubleshooting |
+| [PAPERCLIP.md](./PAPERCLIP.md) | Paperclip security-work setup and SecMan MCP boundary |
+| [INTEGRATION_RESULTS.md](./INTEGRATION_RESULTS.md) | Shared checker contract, lifecycle, evidence and rollout |
 | [CROWDSTRIKE_IMPORT.md](./CROWDSTRIKE_IMPORT.md) | Vulnerability and installed-product imports, transactional-replace pattern, JPA cascade trap |
-| [TESTING.md](./TESTING.md) | JUnit/Mockk/Testcontainers stack and patterns |
+| [TESTING.md](./TESTING.md) | JUnit/Mockk, external MariaDB, CLI and frontend test patterns |
 | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | Symptom → fix |
 | [DB_CONNECTION_LOST_RUNBOOK.md](./DB_CONNECTION_LOST_RUNBOOK.md) | Step-by-step recovery when `/health` reports the database connection lost |
 | [E2E_EXCEPTION_WORKFLOW_TEST.md](./E2E_EXCEPTION_WORKFLOW_TEST.md) | Vuln-exception MCP E2E |

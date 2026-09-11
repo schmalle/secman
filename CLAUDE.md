@@ -4,12 +4,12 @@ Security requirement, vulnerability and risk management platform.
 
 ## Stack
 
-- Backend: Kotlin 2.4.10 / Java 25, Micronaut 5.1, Hibernate JPA → `src/backendng/`
-- Frontend: Astro 7.2 + React 19 islands, Axios, JWT in the HttpOnly `secman_auth` cookie → `src/frontend/`
+- Backend: Kotlin 2.4.20 / Java 25, Micronaut 5.1, Hibernate JPA → `src/backendng/`
+- Frontend: Astro 7.3 + React 19 islands, Axios, JWT in the HttpOnly `secman_auth` cookie → `src/frontend/`
 - CLI: Kotlin + Picocli 4.7.7, AWS SDK v2 → `src/cli/`
 - Mobile relay: Go 1.24, **zero third-party dependencies** (stdlib only, incl. its own RFC 8555 ACME client) → `src/relay/`
 - DB: MariaDB 11.4, Flyway + Hibernate auto-migration
-- Build: Gradle 9.7.0 (Kotlin DSL)
+- Build: Gradle 9.7.1 (Kotlin DSL)
 - MCP: Streamable HTTP / JSON-RPC 2.0. `X-MCP-User-Email` header is **mandatory** on `tools/list` and `tools/call` (only `initialize` and `ping` exempt).
 
 ## Roles (RBAC)
@@ -18,6 +18,7 @@ Security requirement, vulnerability and risk management platform.
 
 ## Tooling Conventions (canonical, do not deviate)
 
+- **Branch**: `dev` is the default and only branch for agent-authored commits unless the user explicitly names another branch. Verify the current branch before editing and before committing; never commit directly to `main` or `master` by inference. Each repository under `extensions/` is independent and must pass the same check locally.
 - **Scripts**: `./scripts/` only.
 - **Skills — two harness trees, one skill set**: every skill exists twice, once per agent harness. `.claude/skills/` is what **Claude Code** loads; `.agents/skills/` is what **Codex** (and other `AGENTS.md`-driven agents) load. They are two renderings of the same skill, not two skills.
   - **Two-way sync is mandatory.** *Whichever* tree an agent edits — Claude Code editing `.claude/skills/`, Codex editing `.agents/skills/` — the same change must land in the counterpart file **in the same commit**. There is no "port it later"; a commit that touches one tree only is incomplete. This applies to every `*.md` under the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
@@ -79,7 +80,7 @@ Authoritative filter: `AssetFilterService.getAccessibleAssets()`. SQL pre-filter
 | Notifications | `GET/PUT /api/notification-preferences`; `GET /api/notification-logs`; `.../export` (ADMIN) | mixed |
 | Chat Notifications | `GET /api/notification-events` (event catalogue); `GET/PUT /api/slack/settings`, `POST .../test`; `GET/PUT /api/telegram/settings`, `POST .../test` (self-scoped); `GET/PUT /api/slack/config`, `POST .../test`, `GET/PUT /api/telegram/config` (ADMIN) | mixed |
 | CLI | `POST /api/vulnerabilities/cli-add` (ADMIN/VULN; auto-creates asset) | ADMIN/VULN |
-| Integrations | `/api/integrations/v1`: `GET /summary`, `/findings[/{id}[/attachments/{attachmentId}]]`, `/runs[/{id}]` (asset-scoped); `POST /runs` (assigned service user + asset access); `/scanners` configuration and target binding (ADMIN). MCP `submit_integration_run`, `list_integration_subjects`; `docs/INTEGRATION_RESULTS.md` | mixed |
+| Integrations | `/api/integrations/v1`: `GET /summary`, `/findings[/{id}[/attachments/{attachmentId}]]`, `/runs[/{id}]` (asset-scoped); `POST /runs` (assigned service user + asset access); `/scanners` configuration and target binding (ADMIN). MCP `list_integration_subjects`, `submit_integration_run`, and asset-scoped summary/finding/run reads; `docs/INTEGRATION_RESULTS.md` | mixed |
 | Account Onboarding | `GET/POST/PUT/DELETE /api/account-onboarding/questions[/{id}[/choices[/{cid}]]]`, `.../rules[/{id}]`, `GET .../rules/{coverage,matrix}`, `POST .../rules/preview`, `POST .../simulate` (ADMIN/SECCHAMPION); public single-use token `GET/POST /api/public/account-onboarding/{token}` | ADMIN/SECCHAMPION + public |
 | Product Classification | `GET/POST /api/product-classification/rules`, `PUT/DELETE .../rules/{id}`, `POST .../test`, `POST .../reclassify`, `GET .../stats` (ADMIN). Marks installer/setup payloads so vuln + EOL reads can hide them — `docs/CROWDSTRIKE_IMPORT.md` | ADMIN |
 | Mobile Relay | `GET /api/relay/{status,sections,devices,identities}`, `POST /api/relay/{publish,enrollments,revocations,identities,principals/publish}`, `DELETE /api/relay/identities/{id}` | ADMIN |
@@ -278,7 +279,7 @@ GRANT ALL PRIVILEGES ON secman_test.* TO 'secman_test'@'localhost';
 
 ## Extension Clients (`extensions/`)
 
-`secman_ai_github` (GitHub security scanner) and `secman_visual_check` (external attack-surface scanner): independent Python repos with their own remotes, **gitignored here** — root `git status` never shows them. Normal builds do not cover them; `scripts/check-integration-contract.sh --run` and the manual integration-contract workflow provide opt-in contract checks, only when test execution is authorized.
+`secman_ai_github`, `secman_visual_check`, and `secman_web_check` are independent Python repositories with their own remotes, **gitignored here** — root `git status` never shows them. Normal builds do not cover them; `/integration-contract-test`, `scripts/check-integration-contract.sh --run`, and the manual integration-contract workflow provide opt-in contract checks.
 
 `secman_app_ios` (iOS/iPadOS status app, Swift) is a **relay client, not a backend client**: it never calls `/api/…` and holds no secman credential. A change to a secman endpoint cannot break it. What *can* is the relay contract — `com.secman.relay.RelayDtos`, the section names and `SECTION_POLICIES` in `RelaySnapshotBuilder`, or `src/relay/internal/api`. Both envelopes carry a `schemaVersion` for that reason; bump it on a breaking change and update `relaySupportedSnapshotSchemaVersion` in the app. Sweep its surface with `grep -rnE '/api/v1/|/ingest/v1/' extensions/secman_app_ios --include='*.swift'`.
 
@@ -286,7 +287,7 @@ Always rediscover the surface; a written list means a newly added call gets chec
 ```bash
 grep -rnE '/api/|"/mcp"|X-MCP-User-Email' extensions --include='*.py' --exclude-dir=.venv
 ```
-As of 2026-09-06: legacy calls remain `POST /api/auth/login`, `POST /api/vulnerabilities/cli-add`, `GET /api/vulnerabilities/current`, `PUT /api/assets/import`, MCP `/mcp` (`X-MCP-API-Key` + `X-MCP-User-Email`; `get_vulnerabilities`, `add_vulnerability`, `create_asset`). Opt-in v1 adds `GET /api/integrations/v1/scanners/{id}/subjects`, `POST /api/integrations/v1/runs`, and MCP `list_integration_subjects` / `submit_integration_run`; see `docs/INTEGRATION_RESULTS.md`.
+As of 2026-09-11: legacy calls remain `POST /api/auth/login`, `POST /api/vulnerabilities/cli-add`, `GET /api/vulnerabilities/current`, `PUT /api/assets/import`, MCP `/mcp` (`X-MCP-API-Key` + `X-MCP-User-Email`; `get_vulnerabilities`, `add_vulnerability`, `create_asset`). Version 1 uses `GET /api/integrations/v1/scanners/{id}/subjects`, `POST /api/integrations/v1/runs`, MCP subject/run writes, and asset-scoped integration reads; see `docs/INTEGRATION_RESULTS.md`.
 
 When you change any of those endpoints, verify all five dimensions against the client: **path, HTTP method, request field names, response fields the client reads, and `@Secured` roles / required headers**. Field names matter most — Jackson drops unknown keys without error, so a rename makes the client "succeed" while sending nothing. Update the client's `tests/` too; a test asserting the old shape is drift.
 

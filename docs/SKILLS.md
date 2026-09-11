@@ -1,6 +1,6 @@
 # Which secman skill to use when
 
-Fourteen skills live in `.claude/skills/` (Claude Code) and again in
+Nineteen skills live in `.claude/skills/` (Claude Code) and again in
 `.agents/skills/` (Codex). The two trees are one skill set: an edit to either
 side must be ported to the other in the same commit — see `CLAUDE.md`
 §"Tooling Conventions" and verify with `./scripts/check-skill-sync.sh`.
@@ -26,6 +26,9 @@ writes.
 | Write code that satisfies the OWASP Top 10 by construction | `/secure-code` | No |
 | Finish a change and check it before merging | `/finalizer` | Docs only |
 | Run the unit/integration tests, or ask where coverage is thin | `/testsuite` | No |
+| Verify the shared GitHub/Visual/Web checker result contract | `/integration-contract-test` | No |
+| Improve code clarity and report risky renames | `/humanizer` | No |
+| Find hot paths and repeated code | `/optimizer` | No |
 | Prove no page throws JS errors | `/e2ejs` | No |
 | Exercise the full exception lifecycle (MCP + UI) | `/e2evulnexception` | **Wipes the DB** |
 | Quick MCP-only exception smoke test | `/e2eexception` | **Deletes all assets** |
@@ -35,7 +38,9 @@ writes.
 | Compare SecMan against Falcon without changing anything | `/crowdstrike-vuln-match` | No |
 | Check a new AWS account starts a correctly scoped assessment | `/aws-account-risk-assessment` | Adds + removes a testbed |
 | Check the AWS account owner actually gets the email | `/aws-account-owner-email` | Adds + removes a testbed, **sends real mail** |
+| Import AWS display names and link matching workgroups | `/aws-account-workgroup-import` | Adds + removes a testbed |
 | Test welcome mail + the guided questionnaire that scopes an assessment | `/account-onboarding` | Adds + removes a testbed |
+| Test requirement export templates end to end | `/requirement-export-template` | Adds + removes a testbed |
 | Get a fixture to click around in | `/createtestdata` | Adds a fixture |
 
 **The three destructive ones are not safe against a shared instance.** Check what
