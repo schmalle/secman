@@ -110,6 +110,58 @@ class SecmanCliTest {
     }
 
     @Test
+    fun `test all listed commands have detailed help`() {
+        val cli = SecmanCli()
+        val commands = listOf(
+            "query",
+            "installed-products",
+            "monitor",
+            "config",
+            "send-notifications",
+            "send-admin-summary",
+            "send-account-finding-age-report",
+            "send-application-register-reminders",
+            "send-notification-users",
+            "send-patch-notifications",
+            "notify-new-accounts",
+            "send-exception-expiry-reminders",
+            "eol-sync",
+            "send-eol-notifications",
+            "manage-user-mappings",
+            "manage-workgroups",
+            "import-github-repos",
+            "alert-github-repo-owners",
+            "manage-github-owner-mappings",
+            "port-scan",
+            "add-vulnerability",
+            "deduplicate-vulnerabilities",
+            "delete-asset-not-seen",
+            "asset-match-clear",
+            "export-requirements",
+            "add-requirement",
+            "delete-all-requirements",
+            "crowdstrike-last-import",
+        )
+
+        commands.forEach { command ->
+            val (result, output) = captureStdout {
+                cli.execute(arrayOf("help", command))
+            }
+            assertEquals(0, result, "missing detailed help for $command")
+            assertTrue(output.contains("secman $command"), "unexpected help for $command")
+        }
+    }
+
+    @Test
+    fun `test picocli usage errors propagate to the process exit code`() {
+        val cli = SecmanCli()
+
+        val result = cli.execute(arrayOf("send-application-register-reminders", "--unknown-option"))
+
+        assertEquals(2, result)
+    }
+
+    @Test
     fun `test help lists installed products command`() {
         val cli = SecmanCli()
 

@@ -50,6 +50,51 @@ Full env reference: `docs/ENVIRONMENT.md`.
 
 ## Commands
 
+### `query` — single-host CrowdStrike query
+
+```bash
+./scripts/secman query --hostname web-01 --severity HIGH,CRITICAL
+./scripts/secman query --hostname web-01 --format csv --output findings.csv
+```
+
+Required: `--hostname`. Optional filters are `--severity`, `--product`, and
+`--limit` (default 100). Output is `json` or `csv`; `--save` persists through
+the configured backend. Use `query servers` for batch collection.
+
+### `config` — CrowdStrike CLI configuration
+
+```bash
+./scripts/secman config --show
+./scripts/secman config --client-id ID --client-secret SECRET --base-url https://api.crowdstrike.com
+```
+
+`--show` prints the effective non-secret configuration. `--format` selects the
+configuration format. Prefer `pass-cli`/environment resolution over putting a
+secret on the command line.
+
+### `monitor` — recurring high/critical monitoring
+
+```bash
+./scripts/secman monitor --interval 5 --hostnames web-01,web-02 --dry-run
+```
+
+Options: `--interval` minutes (default 5), `--hostnames`, `--backend-url`,
+`--config`, `--no-storage`, `--dry-run`, and `--verbose`. See
+[`src/cli/MONITOR.md`](../src/cli/MONITOR.md) for lifecycle and configuration.
+
+### `eol-sync` and `send-eol-notifications`
+
+```bash
+./scripts/secman eol-sync --products ubuntu,rhel --horizon-months 12
+./scripts/secman eol-sync --scan-only
+./scripts/secman send-eol-notifications --months 12 --dry-run
+```
+
+`eol-sync` refreshes the configured catalogue and re-matches inventory; use
+`--no-scan` or `--scan-only` for one half only. `send-eol-notifications` reads
+stored matches and supports `--include-already-eol`, `--only-email`, and
+`--dry-run`. Both require ADMIN. Full behavior: [`EOL.md`](EOL.md).
+
 ### `query servers` — CrowdStrike vulnerability query
 
 ```bash
@@ -407,7 +452,8 @@ Mirrored by MCP tool `send_exception_expiry_reminders`.
 
 ### `manage-user-mappings`
 
-Subcommands: `list`, `add-aws`, `add-domain`, `import`, `import-s3`, `download-s3`, `print-s3`, `link-workgroups`, `remove`.
+Subcommands: `list`, `add-aws`, `add-domain`, `import`, `import-s3`, `download-s3`,
+`download-parse`, `print-s3`, `list-bucket`, `link-workgroups`, `remove`.
 
 ```bash
 # list (default table; supports --format json|csv, --output FILE, --type AWS|DOMAIN|ALL)
@@ -422,6 +468,10 @@ Subcommands: `list`, `add-aws`, `add-domain`, `import`, `import-s3`, `download-s
 # import (CSV/JSON, --dry-run validates without persisting)
 ./scripts/secman manage-user-mappings import --file mappings.csv  --format csv  --dry-run
 ./scripts/secman manage-user-mappings import --file mappings.json --format json
+
+# inspect S3 input without importing it
+./scripts/secman manage-user-mappings list-bucket --bucket mappings --prefix accounts/
+./scripts/secman manage-user-mappings download-parse --bucket mappings --key accounts.json
 
 # link AWS accounts to the workgroup named after their display name
 ./scripts/secman manage-user-mappings link-workgroups --dry-run

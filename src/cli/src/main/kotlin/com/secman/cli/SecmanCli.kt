@@ -250,195 +250,76 @@ class SecmanCli {
                 monitorCommand.execute()
             }
             args[0] == "manage-user-mappings" -> {
-                // Use Picocli with Micronaut DI for user mapping commands
-                // Drop the first argument (command name) before passing to PicocliRunner
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(ManageUserMappingsCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(ManageUserMappingsCommand::class.java, args)
             }
             args[0] == "send-notifications" -> {
-                // Use Picocli with Micronaut DI for notification command
-                // Drop the first argument (command name) before passing to PicocliRunner
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(SendNotificationsCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(SendNotificationsCommand::class.java, args)
             }
             args[0] == "manage-workgroups" -> {
-                // Use Picocli with Micronaut DI for workgroup commands
-                // Drop the first argument (command name) before passing to PicocliRunner
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(ManageWorkgroupsCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(ManageWorkgroupsCommand::class.java, args)
             }
             args[0] == "add-vulnerability" -> {
-                // Use Picocli with Micronaut DI for add-vulnerability command
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(AddVulnerabilityCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(AddVulnerabilityCommand::class.java, args)
             }
             args[0] == "export-requirements" -> {
-                // Use Picocli with Micronaut DI for export-requirements command
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(ExportRequirementsCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(ExportRequirementsCommand::class.java, args)
             }
             args[0] == "add-requirement" -> {
-                // Use Picocli with Micronaut DI for add-requirement command
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(AddRequirementCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(AddRequirementCommand::class.java, args)
             }
             args[0] == "delete-all-requirements" -> {
-                // Use Picocli with Micronaut DI for delete-all-requirements command
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(DeleteAllRequirementsCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(DeleteAllRequirementsCommand::class.java, args)
             }
             args[0] == "send-admin-summary" -> {
-                // Use Picocli with Micronaut DI for send-admin-summary command
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(SendAdminSummaryCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(SendAdminSummaryCommand::class.java, args)
             }
             args[0] == "send-account-finding-age-report" -> {
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(SendAccountFindingAgeReportCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(SendAccountFindingAgeReportCommand::class.java, args)
             }
             args[0] == "send-application-register-reminders" -> {
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(SendApplicationRegisterRemindersCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(SendApplicationRegisterRemindersCommand::class.java, args)
             }
             args[0] == "send-notification-users" -> {
-                // Use Picocli with Micronaut DI for send-notification-users command
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(SendNotificationUsersCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(SendNotificationUsersCommand::class.java, args)
             }
             args[0] == "send-patch-notifications" -> {
-                // Notify users about missing patches, filtered by the first character of their email
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(SendPatchNotificationsCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(SendPatchNotificationsCommand::class.java, args)
             }
             args[0] == "notify-new-accounts" -> {
-                // Notify users about new AWS account mappings created within the last N hours
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(NotifyNewAccountsCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(NotifyNewAccountsCommand::class.java, args)
             }
             args[0] == "send-exception-expiry-reminders" -> {
-                // Notify vulnerability exception owners about exceptions expiring soon
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(SendExceptionExpiryRemindersCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(SendExceptionExpiryRemindersCommand::class.java, args)
             }
             args[0] == "deduplicate-vulnerabilities" -> {
-                // Remove duplicate vulnerability records from the database
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(DeduplicateVulnerabilitiesCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(DeduplicateVulnerabilitiesCommand::class.java, args)
             }
             args[0] == "delete-asset-not-seen" -> {
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(DeleteAssetNotSeenCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(DeleteAssetNotSeenCommand::class.java, args)
             }
             args[0] == "asset-match-clear" -> {
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(AssetMatchClearCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(AssetMatchClearCommand::class.java, args)
             }
             args[0] == "port-scan" -> {
-                // Port-scan internet-facing assets using nmap
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(PortScanCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(PortScanCommand::class.java, args)
             }
             args[0] == "crowdstrike-last-import" -> {
-                // Show timestamp and metadata of the most recent CrowdStrike import
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(CrowdStrikeLastImportCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(CrowdStrikeLastImportCommand::class.java, args)
             }
             args[0] == "import-github-repos" -> {
-                // Import GitHub repositories via the configured GitHub App (backend-side)
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(ImportGithubReposCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(ImportGithubReposCommand::class.java, args)
             }
             args[0] == "manage-github-owner-mappings" -> {
-                // Manage GitHub owner (org/user login) to default email mappings
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(ManageGithubOwnerMappingsCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(ManageGithubOwnerMappingsCommand::class.java, args)
             }
             args[0] == "eol-sync" -> {
-                // Download the EOL catalogue (backend-side fetch) and re-match the inventory
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(EolSyncCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(EolSyncCommand::class.java, args)
             }
             args[0] == "send-eol-notifications" -> {
-                // Email account owners about software/OS reaching EOL within N months
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(SendEolNotificationsCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(SendEolNotificationsCommand::class.java, args)
             }
             args[0] == "alert-github-repo-owners" -> {
-                // Alert repo owners whose high/critical vuln count has not decreased in N days
-                val subArgs = args.drop(1).toTypedArray()
-                createCliContext().use { ctx ->
-                    PicocliRunner.run(AlertGithubRepoOwnersCommand::class.java, ctx, *subArgs)
-                }
-                0
+                runPicocli(AlertGithubRepoOwnersCommand::class.java, args)
             }
             else -> {
                 System.err.println("ERROR: Unknown command: '${args[0]}'")
@@ -465,6 +346,11 @@ class SecmanCli {
             }
         }
     }
+
+    private fun runPicocli(command: Class<*>, args: Array<String>): Int =
+        createCliContext().use { context ->
+            PicocliRunner.execute(command, context, *args.drop(1).toTypedArray())
+        }
 
     private fun showHelp(): Int {
         println("""
@@ -737,6 +623,24 @@ class SecmanCli {
                   secman send-account-finding-age-report --dry-run
                 """.trimIndent(),
 
+            "send-application-register-reminders" to """
+                secman send-application-register-reminders - Remind owners about stale application register reviews
+
+                Usage: secman send-application-register-reminders [options]
+
+                Options:
+                  --days <n>              Review-age threshold in days (default: 365)
+                  --dry-run               Preview recipients without sending email
+                  --verbose, -v           Print recipient and failure details
+                  --username <user>       Backend username (or SECMAN_ADMIN_NAME)
+                  --password <pass>       Backend password (or SECMAN_ADMIN_PASS)
+                  --backend-url <url>     Backend URL (or SECMAN_HOST / SECMAN_BACKEND_URL)
+
+                Examples:
+                  secman send-application-register-reminders --dry-run
+                  secman send-application-register-reminders --days 180 --verbose
+            """.trimIndent(),
+
             "send-notification-users" to """
                 secman send-notification-users - Send vulnerability notification emails to users with affected AWS accounts
 
@@ -823,6 +727,26 @@ class SecmanCli {
                 Examples:
                   secman import-github-repos
                   secman import-github-repos --verbose
+            """.trimIndent(),
+
+            "manage-github-owner-mappings" to """
+                secman manage-github-owner-mappings - Manage GitHub owner notification mappings
+
+                Usage: secman manage-github-owner-mappings <subcommand> [options]
+
+                Subcommands:
+                  add                       Add or update an owner-to-email mapping
+                  list                      List mappings
+                  remove                    Remove a mapping
+                  import                    Import mappings from CSV
+                  discover                  Discover unmapped owners
+
+                Common options:
+                  --username <user>         Backend username (or SECMAN_ADMIN_NAME)
+                  --password <pass>         Backend password (or SECMAN_ADMIN_PASS)
+                  --backend-url <url>       Backend URL (or SECMAN_HOST / SECMAN_BACKEND_URL)
+
+                Run 'secman manage-github-owner-mappings <subcommand> --help' for details.
             """.trimIndent(),
 
             "alert-github-repo-owners" to """
