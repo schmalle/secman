@@ -15,9 +15,29 @@ class McpToolPermissionsTest {
     fun `integration submission requires new permission without broadening legacy writes`() {
         listOf(McpToolPermissions.LISTING, McpToolPermissions.CALLING).forEach { table ->
             assertThat(table["submit_integration_run"]).isEqualTo(setOf(McpPermission.INTEGRATIONS_WRITE))
-            assertThat(table["list_integration_subjects"]).contains(McpPermission.ASSETS_READ, McpPermission.INTEGRATIONS_WRITE)
+            assertThat(table["list_integration_subjects"]).contains(
+                McpPermission.INTEGRATIONS_READ,
+                McpPermission.ASSETS_READ,
+                McpPermission.INTEGRATIONS_WRITE,
+            )
             assertThat(McpToolPermissions.allows(table, "submit_integration_run", setOf(McpPermission.VULNERABILITIES_READ))).isFalse()
             assertThat(McpToolPermissions.allows(table, "submit_integration_run", setOf(McpPermission.INTEGRATIONS_WRITE))).isTrue()
+        }
+    }
+
+    @Test
+    fun `integration reads are present in both permission tables`() {
+        val tools = listOf(
+            "get_integration_summary",
+            "list_integration_findings",
+            "get_integration_finding",
+            "list_integration_runs",
+            "get_integration_run",
+        )
+
+        for (tool in tools) {
+            assertThat(McpToolPermissions.LISTING[tool]).isEqualTo(setOf(McpPermission.INTEGRATIONS_READ))
+            assertThat(McpToolPermissions.CALLING[tool]).isEqualTo(setOf(McpPermission.INTEGRATIONS_READ))
         }
     }
 

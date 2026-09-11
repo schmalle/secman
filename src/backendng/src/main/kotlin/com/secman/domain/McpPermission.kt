@@ -85,6 +85,9 @@ enum class McpPermission {
      */
     VULNERABILITIES_READ,
 
+    /** Read asset-scoped scanner subjects, findings, runs, and health summaries. */
+    INTEGRATIONS_READ,
+
     /** Submit terminal snapshots for scanners assigned to the delegated service user. */
     INTEGRATIONS_WRITE,
 
@@ -120,6 +123,7 @@ enum class McpPermission {
             ASSETS_WRITE -> "Write Assets"
             SCANS_READ -> "Read Scans"
             VULNERABILITIES_READ -> "Read Vulnerabilities"
+            INTEGRATIONS_READ -> "Read Integration Results"
             INTEGRATIONS_WRITE -> "Submit Integration Runs"
             WORKGROUPS_WRITE -> "Manage Workgroups"
             NOTIFICATIONS_SEND -> "Send Notifications"
@@ -147,6 +151,7 @@ enum class McpPermission {
             ASSETS_WRITE -> "Create and update assets in the inventory"
             SCANS_READ -> "View scan data and results"
             VULNERABILITIES_READ -> "View vulnerability information"
+            INTEGRATIONS_READ -> "View asset-scoped scanner findings, runs, and health"
             INTEGRATIONS_WRITE -> "Submit scanner results for assigned integration subjects"
             WORKGROUPS_WRITE -> "Create, delete, and manage workgroup memberships (admin only)"
             NOTIFICATIONS_SEND -> "Send admin summary emails and trigger notifications (admin only)"

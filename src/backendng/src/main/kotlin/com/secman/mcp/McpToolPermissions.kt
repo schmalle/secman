@@ -38,7 +38,11 @@ object McpToolPermissions {
      */
     val LISTING: Map<String, Set<McpPermission>> = table(
         setOf(INTEGRATIONS_WRITE) to listOf("submit_integration_run"),
-        setOf(ASSETS_READ, INTEGRATIONS_WRITE) to listOf("list_integration_subjects"),
+        setOf(INTEGRATIONS_READ, ASSETS_READ, INTEGRATIONS_WRITE) to listOf("list_integration_subjects"),
+        setOf(INTEGRATIONS_READ) to listOf(
+            "get_integration_summary", "list_integration_findings", "get_integration_finding",
+            "list_integration_runs", "get_integration_run",
+        ),
         setOf(REQUIREMENTS_READ) to listOf(
             "get_requirements", "export_requirements",
             // Releases and alignment — ADMIN/RELEASE_MANAGER/REQ role checked in execute()
@@ -132,7 +136,11 @@ object McpToolPermissions {
      */
     val CALLING: Map<String, Set<McpPermission>> = buildMap {
         put("submit_integration_run", setOf(INTEGRATIONS_WRITE))
-        put("list_integration_subjects", setOf(ASSETS_READ, INTEGRATIONS_WRITE))
+        put("list_integration_subjects", setOf(INTEGRATIONS_READ, ASSETS_READ, INTEGRATIONS_WRITE))
+        putAll(listOf(
+            "get_integration_summary", "list_integration_findings", "get_integration_finding",
+            "list_integration_runs", "get_integration_run",
+        ).associateWith { setOf(INTEGRATIONS_READ) })
         putAll(table(
             setOf(ASSETS_READ) to listOf(
                 "get_assets", "get_asset_profile", "search_assets",

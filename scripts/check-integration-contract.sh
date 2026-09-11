@@ -8,7 +8,8 @@ if [[ "${1:-}" != "--run" ]]; then
 fi
 github_python="${SECMAN_GITHUB_TEST_PYTHON:-extensions/secman_ai_github/.venv/bin/python}"
 visual_python="${SECMAN_VISUAL_TEST_PYTHON:-extensions/secman_visual_check/.venv/bin/python}"
-for client in secman_ai_github secman_visual_check; do
+web_python="${SECMAN_WEB_TEST_PYTHON:-extensions/secman_web_check/.venv/bin/python}"
+for client in secman_ai_github secman_visual_check secman_web_check; do
     cmp docs/contracts/integration-run-v1.json "extensions/$client/tests/fixtures/integration-run-v1.json"
 done
 ./gradlew :backendng:test \
@@ -20,3 +21,4 @@ done
 "$github_python" -m pytest extensions/secman_ai_github/tests/test_integration_results.py \
     extensions/secman_ai_github/tests/test_cli_integration_results.py -q
 "$visual_python" -m pytest extensions/secman_visual_check/tests/test_secman_integration_results.py -q
+"$web_python" -m pytest extensions/secman_web_check/tests/test_secman_integration_results.py -q

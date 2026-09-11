@@ -1,6 +1,6 @@
 # MCP Integration
 
-Streamable HTTP / JSON-RPC 2.0 endpoint at `POST /mcp`. **85 tools** spanning requirements, releases, alignment, assets, the application register, vulnerabilities, exception requests, scans, workgroups, user mappings, AWS account sharing, users, the vulnerability heatmap, GitHub repositories, notifications, and maintenance jobs.
+Streamable HTTP / JSON-RPC 2.0 endpoint at `POST /mcp`. **96 tools** spanning requirements, releases, alignment, assets, the application register, vulnerabilities, integration results, exception requests, scans, workgroups, user mappings, AWS account sharing, users, the vulnerability heatmap, GitHub repositories, notifications, and maintenance jobs.
 
 Every tool is listed in [Tool reference](#tool-reference) below — that section is exhaustive and is checked against the source by the commands in [Keeping this document in sync](#keeping-this-document-in-sync).
 
@@ -24,14 +24,14 @@ Implied per role:
 
 | Role | Implied permissions |
 |---|---|
-| `USER` | `REQUIREMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `TAGS_READ` |
+| `USER` | `INTEGRATIONS_READ/WRITE`, `REQUIREMENTS_READ`, `ASSETS_READ/WRITE`, `VULNERABILITIES_READ`, `TAGS_READ` |
 | `ADMIN` | all |
-| `VULN` | `VULNERABILITIES_READ`, `SCANS_READ`, `ASSETS_READ` |
+| `VULN` | `INTEGRATIONS_READ/WRITE`, `VULNERABILITIES_READ`, `SCANS_READ`, `ASSETS_READ/WRITE` |
 | `RELEASE_MANAGER` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ` |
 | `REQ` | `REQUIREMENTS_READ/WRITE`, `FILES_READ`, `TAGS_READ` |
 | `REQADMIN` | `REQUIREMENTS_READ/WRITE` (also enables release create/delete + alignment) |
 | `RISK` | `ASSESSMENTS_READ/WRITE/EXECUTE` |
-| `SECCHAMPION` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `SCANS_READ` |
+| `SECCHAMPION` | `INTEGRATIONS_READ/WRITE`, `REQUIREMENTS_READ`, `ASSESSMENTS_READ`, `ASSETS_READ/WRITE`, `VULNERABILITIES_READ`, `SCANS_READ` |
 
 ## Quick start
 
@@ -118,6 +118,8 @@ This is the **API-key** permission each tool is gated on. It is only half the ch
 | `REQUIREMENTS_WRITE` | `add_requirement`, `delete_all_requirements` |
 | `ASSETS_READ` | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile`, `delete_asset`, `delete_all_assets`, `delete_asset_not_seen`, `asset_match_clear` |
 | `ASSETS_WRITE` | `create_asset`, `update_asset` |
+| `INTEGRATIONS_READ` | `list_integration_subjects`, `get_integration_summary`, `list_integration_findings`, `get_integration_finding`, `list_integration_runs`, `get_integration_run` |
+| `INTEGRATIONS_WRITE` | `list_integration_subjects`, `submit_integration_run` |
 | `SCANS_READ` | `get_scans`, `get_asset_scan_results`, `search_products` |
 | `VULNERABILITIES_READ` | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_all_accessible_vulnerabilities`, `get_asset_most_vulnerabilities`, `get_overdue_assets`, `add_vulnerability`, `deduplicate_vulnerabilities`, `list_products`, all `*_exception_request*` tools, `list_vulnerability_exceptions`, `delete_all_vulnerability_exceptions`, `get_vulnerability_heatmap`, `refresh_vulnerability_heatmap`, `get_top_accounts_by_finding_age`, `get_crowdstrike_last_import`, `import_github_repos`, `*_github_owner_email_mapping*` |
 | `ASSESSMENTS_READ` | `list_aws_account_risk_assessments`, `list_account_onboarding_rules`, `preview_account_onboarding_rules` |
@@ -395,6 +397,22 @@ Delegation required. See `docs/GITHUB_REPOS.md`.
 - `create_github_owner_email_mapping` returns 409 if the owner is already mapped, and immediately backfills `ownerEmail` on existing repos under that owner whose value is currently blank — a manually-set or previously auto-filled value is never overwritten.
 - `delete_github_owner_email_mapping` does not un-set any `ownerEmail` it previously backfilled.
 - `discover_github_owner_email_mappings` is best-effort auto-discovery: for already-imported repos with no `ownerEmail`, it reads the GitHub API's public profile field (`GET /users/{owner}`, works for orgs and users) and creates a mapping (with the usual backfill) for each owner that has one set. It only touches owners without an existing mapping and never calls GitHub's repo-listing API. Returns `discoveredMappings[]` (`owner`, `email`, `repoCount`) and `ownersSkippedNoPublicEmail[]`. Errors with `NO_GITHUB_CONFIG`. Mirrors CLI `manage-github-owner-mappings discover`.
+
+### Integration results
+
+All tools require delegation. Reads use the delegated user's asset visibility;
+run submission additionally requires the scanner's assigned service user and
+access to the bound asset.
+
+| Tool | Arguments | Permission |
+|---|---|---|
+| `list_integration_subjects` | `scannerId`*, `page`, `size` (max 100) | `INTEGRATIONS_READ`, `ASSETS_READ`, or `INTEGRATIONS_WRITE` |
+| `get_integration_summary` | *(none)* | `INTEGRATIONS_READ` |
+| `list_integration_findings` | `page`, `size` (max 100), `scannerId`, `subjectId`, `githubRepositoryId`, `source`, `owner`, `severity`, `state`, `search` | `INTEGRATIONS_READ` |
+| `get_integration_finding` | `id`* | `INTEGRATIONS_READ` |
+| `list_integration_runs` | `page`, `size` (max 100), `scannerId`, `subjectId` | `INTEGRATIONS_READ` |
+| `get_integration_run` | `id`* | `INTEGRATIONS_READ` |
+| `submit_integration_run` | version-1 run payload; see `docs/INTEGRATION_RESULTS.md` | `INTEGRATIONS_WRITE` |
 
 ### Notifications and reports
 

@@ -2,6 +2,7 @@ package com.secman.mcp.tools
 
 import com.secman.domain.McpPermission
 import com.secman.dto.IntegrationPage
+import com.secman.dto.IntegrationSummaryDto
 import com.secman.dto.IntegrationSubjectDto
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.UserRepository
@@ -40,5 +41,24 @@ class IntegrationToolsTest {
         assertThat(tool.execute(mapOf("scannerId" to 1), context().copy(delegatedUserId = null)).isError).isTrue()
         assertThat(tool.execute(mapOf("scannerId" to 1), context().copy(effectivePermissions = emptySet())).isError).isTrue()
         verify(exactly = 0) { reads.subjects(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `summary read uses the delegated user and dedicated permission`() = runBlocking {
+        val summaryTool = GetIntegrationSummaryTool(reads, users)
+        val summary = IntegrationSummaryDto(3, 8, 6, 1, 1, 2, 12)
+        every { users.findById(50) } returns Optional.of(user)
+        every { reads.summary(any()) } returns summary
+
+        val result = summaryTool.execute(
+            emptyMap(),
+            context().copy(effectivePermissions = setOf(McpPermission.INTEGRATIONS_READ)),
+        )
+
+        assertThat(result).isEqualTo(McpToolResult.success(summary))
+        assertThat(
+            summaryTool.execute(emptyMap(), context().copy(effectivePermissions = emptySet())).isError
+        ).isTrue()
+        verify(exactly = 1) { reads.summary(any()) }
     }
 }
