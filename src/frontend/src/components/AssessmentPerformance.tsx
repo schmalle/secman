@@ -33,10 +33,11 @@ interface Requirement {
 
 interface RiskAssessment {
   id: number;
-  assessmentBasisType: 'DEMAND' | 'ASSET';
+  assessmentBasisType: 'DEMAND' | 'ASSET' | 'AWS_ACCOUNT';
   assessmentBasisId: number;
   demand?: Demand;
   asset?: Asset;
+  awsAccount?: { awsAccountId: string; name?: string };
   endDate: string;
   status: string;
   assessor?: { id: number; username: string; email: string };
@@ -459,9 +460,11 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
                   <div className="col-md-6">
                     <p className="mb-1">
                       <strong>Basis:</strong>{' '}
-                      {assessmentData.assessment.assessmentBasisType === 'DEMAND' 
+                      {assessmentData.assessment.assessmentBasisType === 'DEMAND'
                         ? `Demand: ${assessmentData.assessment.demand?.title}`
-                        : `Asset: ${assessmentData.assessment.asset?.name}`}
+                        : assessmentData.assessment.assessmentBasisType === 'AWS_ACCOUNT'
+                          ? `AWS account: ${assessmentData.assessment.awsAccount?.name || assessmentData.assessment.awsAccount?.awsAccountId}`
+                          : `Asset: ${assessmentData.assessment.asset?.name}`}
                     </p>
                     <p className="mb-1">
                       <strong>Assessor:</strong> {assessmentData.assessment.assessor?.username}

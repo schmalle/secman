@@ -26,8 +26,13 @@ Stack: Kotlin 2.4.20 / Java 25 · Micronaut 5.1 · Hibernate JPA · Astro 7.3 / 
 | [DEPLOYMENT.md](./DEPLOYMENT.md) | Linux production: nginx, systemd, SSL, hardening, monitoring |
 | [ENVIRONMENT.md](./ENVIRONMENT.md) | All env vars (backend / frontend / CLI) |
 | [CLI.md](./CLI.md) | CLI commands, cron, S3, AWS Secrets Manager |
+| [ADREAD.md](./ADREAD.md) | Python AD group/member import and AWS asset synchronization |
+| [WORKGROUP_ASSET_SYNC.md](./WORKGROUP_ASSET_SYNC.md) | Assign AWS assets through workgroup member emails; preview, counters, and preservation semantics |
 | [MCP.md](./MCP.md) | MCP tools, API keys, delegation, troubleshooting |
+| [MCP_REQUIREMENT_MANAGEMENT.md](./MCP_REQUIREMENT_MANAGEMENT.md) | Complete MCP requirement/use-case CRUD, assignment workflow, and Paperclip contract |
+| [MCP_STATISTICS.md](./MCP_STATISTICS.md) | Aggregate estate, scoped vulnerability, and risk-assessment MCP statistics for Paperclip |
 | [PAPERCLIP.md](./PAPERCLIP.md) | Paperclip security-work setup and SecMan MCP boundary |
+| [PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md](./PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md) | Automated risk-assessment company, agents, heartbeats, and respondent reminders |
 | [INTEGRATION_RESULTS.md](./INTEGRATION_RESULTS.md) | Shared checker contract, lifecycle, evidence and rollout |
 | [CROWDSTRIKE_IMPORT.md](./CROWDSTRIKE_IMPORT.md) | Vulnerability and installed-product imports, transactional-replace pattern, JPA cascade trap |
 | [TESTING.md](./TESTING.md) | JUnit/Mockk, external MariaDB, CLI and frontend test patterns |
@@ -92,21 +97,10 @@ Full reference: [`ENVIRONMENT.md`](./ENVIRONMENT.md). Step-by-step deploy: [`DEP
 
 ## MCP
 
-```bash
-# Claude Code
-claude mcp add --transport http secman http://localhost:8080/mcp \
-  --header "X-MCP-API-Key: sk-..." \
-  --header "X-MCP-User-Email: you@company.com"
-```
-
-Or in `claude_desktop_config.json`:
-```json
-{ "mcpServers": { "secman": {
-    "url": "http://localhost:8080/mcp",
-    "headers": { "X-MCP-API-Key": "sk-...", "X-MCP-User-Email": "you@company.com" }
-} } }
-```
-`X-MCP-User-Email` is mandatory for `tools/list` and `tools/call`. Full setup: [`MCP.md`](./MCP.md).
+Use [Connect SecMan MCP clients](./MCP_CLIENT_SETUP.md) for Cursor, Codex,
+Claude Code, Claude web, and Claude Desktop setup, including Proton Pass,
+required headers, verification, and troubleshooting. The exhaustive tool and
+permission reference is in [`MCP.md`](./MCP.md).
 
 ## Cron-friendly automation
 

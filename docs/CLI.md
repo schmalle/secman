@@ -7,6 +7,30 @@ Wrappers (canonical):
 
 Legacy `java -jar secman-cli.jar` invocation is shown in some examples for clarity. Prefer the wrappers in real use. See `docs/PASS_CLI.md` for the secret resolution map.
 
+## Python workgroup asset synchronization
+
+`./scripts/sync-workgroup-assets.sh [--dry-run]` adds AWS assets to workgroups
+through normalized member-email ownership, using the existing Python AD importer
+and SecMan REST APIs. It preserves manual and stale assignments. See
+[command syntax, data flow, and limitations](WORKGROUP_ASSET_SYNC.md).
+
+```bash
+./scripts/sync-workgroup-assets.sh --dry-run
+./scripts/sync-workgroup-assets.sh
+```
+
+Requires Python 3.11+, `uv`, authenticated `pass-cli`, and a SecMan ADMIN account
+over verified HTTPS. The wrapper resolves `SECMAN_BACKEND_URL`,
+`SECMAN_ADMIN_NAME`, and `SECMAN_ADMIN_PASS`. Azure/AWS credentials are unnecessary.
+This is a separate Python entry point, not a Kotlin `secman` subcommand; the
+Kotlin build, configuration-file resolution and TLS bypass flags below apply to
+the Kotlin client only. For private CAs, use `REQUESTS_CA_BUNDLE`.
+
+Run after imports with one sync process at a time. Dry-run still logs in and reads
+the backend, emits JSON counters on stdout and diagnostics on stderr, and sends
+no asset assignments. Exit codes: `0` success, `1` record/request/configuration
+errors, `2` invalid arguments, `130` interrupted.
+
 ## Build
 
 ```bash
@@ -772,6 +796,11 @@ Exit codes: `0` ok, `1` validation/auth error, `2` connection error.
 ### `manage-workgroups`
 
 Subcommands: `list`, `assign-assets`, `remove-assets`.
+
+For assignments derived from member-email AWS ownership, use
+[`./scripts/sync-workgroup-assets.sh [--dry-run]`](WORKGROUP_ASSET_SYNC.md).
+For account display-name matching to `aws-<display name>`, use
+[`manage-user-mappings link-workgroups`](AWS_ACCOUNT_WORKGROUP_LINKING.md).
 
 ```bash
 ./scripts/secman manage-workgroups list                          # list workgroups

@@ -2,8 +2,10 @@ package com.secman.service
 
 import com.secman.crowdstrike.dto.InstalledProductDto
 import com.secman.domain.Asset
+import com.secman.domain.CrowdStrikeAssetIdentity
 import com.secman.domain.InstalledProduct
 import com.secman.repository.AssetRepository
+import com.secman.repository.CrowdStrikeAssetIdentityRepository
 import com.secman.repository.InstalledProductRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -15,17 +17,19 @@ import org.junit.jupiter.api.Test
 
 class InstalledProductImportServiceTest {
     private lateinit var assetRepository: AssetRepository
+    private lateinit var crowdStrikeAssetIdentityRepository: CrowdStrikeAssetIdentityRepository
     private lateinit var installedProductRepository: InstalledProductRepository
     private lateinit var service: InstalledProductImportService
 
     @BeforeEach
     fun setUp() {
         assetRepository = mockk()
+        crowdStrikeAssetIdentityRepository = mockk(relaxed = true)
         installedProductRepository = mockk()
         // relaxed mock returns an empty rule list, so every product classifies as INSTALLED —
         // the behaviour these tests assert predates classification.
         service = InstalledProductImportService(
-            assetRepository, installedProductRepository, mockk(relaxed = true)
+            assetRepository, crowdStrikeAssetIdentityRepository, installedProductRepository, mockk(relaxed = true)
         )
     }
 
@@ -232,6 +236,34 @@ class InstalledProductImportServiceTest {
         assertThat(result.productsSkipped).isEqualTo(1)
         assertThat(result.unknownSystems).isEqualTo(1)
         verify(exactly = 0) { installedProductRepository.save(any()) }
+    }
+
+    @Test
+    fun `uses Falcon agent identity when exact source hostnames collide`() {
+        val expected = asset(1L, "shared-host").apply { crowdStrikeHostname = "shared-host" }
+        val sibling = asset(2L, "shared-host-copy").apply { crowdStrikeHostname = "shared-host" }
+        val identity = CrowdStrikeAssetIdentity(
+            id = 10L,
+            asset = expected,
+            crowdStrikeAid = "aid-expected",
+            sourceHostname = "shared-host"
+        )
+        every { assetRepository.findAll() } returns mutableListOf(expected, sibling)
+        every { crowdStrikeAssetIdentityRepository.findByCrowdStrikeAidIn(listOf("aid-expected")) } returns listOf(identity)
+        every { installedProductRepository.deleteByAssetId(1L) } returns 0
+        every { installedProductRepository.findByExternalIdAndAssetId(any(), any()) } returns null
+        every { installedProductRepository.findByExternalId(any()) } returns null
+        every { installedProductRepository.findLogicalDuplicate(any(), any(), any(), any()) } returns null
+        every { installedProductRepository.save(any()) } answers { firstArg<InstalledProduct>().apply { id = 1L } }
+
+        val result = service.importProducts(
+            listOf(InstalledProductDto(aid = "aid-expected", hostname = "shared-host", name = "Chrome")),
+            dryRun = false
+        )
+
+        assertThat(result.productsImported).isEqualTo(1)
+        verify(exactly = 1) { installedProductRepository.deleteByAssetId(1L) }
+        verify(exactly = 0) { installedProductRepository.deleteByAssetId(2L) }
     }
 
 

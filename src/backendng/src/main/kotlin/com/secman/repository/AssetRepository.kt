@@ -233,6 +233,9 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      */
     fun findByNameIgnoreCase(name: String): Asset?
 
+    /** Find an asset by the latest hostname owned by the CrowdStrike import. */
+    fun findByCrowdStrikeHostnameIgnoreCase(crowdStrikeHostname: String): Asset?
+
     /**
      * Find asset by cloud instance ID (case-insensitive)
      * Used for database-first vulnerability lookup by AWS EC2 Instance ID
@@ -672,6 +675,17 @@ interface AssetRepository : JpaRepository<Asset, Long> {
         OR LOWER(a.name) LIKE LOWER(CONCAT(:name, '.%'))
     """)
     fun findPotentialDuplicates(name: String): List<Asset>
+
+    /**
+     * Find CrowdStrike assets by their source-owned hostname, falling back to [Asset.name]
+     * only for rows that predate source-hostname tracking.
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT a FROM Asset a
+        WHERE LOWER(COALESCE(a.crowdStrikeHostname, a.name)) = LOWER(:name)
+        OR LOWER(COALESCE(a.crowdStrikeHostname, a.name)) LIKE LOWER(CONCAT(:name, '.%'))
+    """)
+    fun findPotentialCrowdStrikeMatches(name: String): List<Asset>
 
     // Feature 054: Products Overview - Asset queries by product
 

@@ -60,8 +60,24 @@ Limits are enforced atomically:
 
 Administrators register a scanner and bind it to existing assets. GitHub
 subjects additionally retain GitHub instance and numeric repository identity.
+All subject responses expose the asset's nullable `cloudAccountId`, allowing a
+scanner to distinguish identical hostnames that belong to different AWS accounts.
 The assigned service user must already have access to every bound asset;
 registration does not grant access.
+
+### Web checker CSV and Proton Pass workflow
+
+The independent `extensions/secman_web_check` repository can import scan results
+directly through `POST /api/integrations/v1/runs`. Its `--targets-csv` input associates
+each target with a 12-digit AWS account number, which is matched against the authorized
+subject's `cloudAccountId` before URI or hostname matching.
+
+For unattended credential resolution, use the extension's
+`scripts/scan-with-proton-pass.sh` wrapper and a file containing only Proton Pass
+references. The wrapper follows SecMan's `scripts/import.sh` model, resolves values into
+the child environment, and enables `--push-to-secman`. Full setup, CSV format, examples,
+validation behavior, and override variables are documented in the extension's
+`README.md` and `docs/SECMAN.md`.
 
 Recommended rollout:
 

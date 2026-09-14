@@ -26,7 +26,8 @@ import java.time.Instant
 @Serdeable data class IntegrationSubjectDto(
     val id: Long, val scannerId: Long, val assetId: Long, val githubRepositoryId: Long?,
     val name: String, val uri: String?, val owner: String, val githubInstance: String?, val githubRepoId: Long?,
-    val lastStatus: String?, val lastScanAt: Instant?, val lastSuccessfulScanAt: Instant?, val stale: Boolean, val openFindings: Long
+    val lastStatus: String?, val lastScanAt: Instant?, val lastSuccessfulScanAt: Instant?, val stale: Boolean, val openFindings: Long,
+    val cloudAccountId: String? = null
 )
 @Serdeable data class IntegrationRunDto(
     val id: Long, val scannerId: Long, val subjectId: Long, val scannerName: String, val subjectName: String,

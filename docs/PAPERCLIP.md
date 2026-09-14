@@ -5,6 +5,10 @@ the authoritative store for assets, scanner findings, ownership, exceptions,
 evidence, and finding history. The integration links the two systems instead of
 copying SecMan's lifecycle into a second database.
 
+For requirement-curator agents, use the complete CRUD and deterministic
+two-step assignment contract in
+[`MCP_REQUIREMENT_MANAGEMENT.md`](MCP_REQUIREMENT_MANAGEMENT.md).
+
 ## Recommended topology
 
 ```text
@@ -42,6 +46,51 @@ argument, or committed environment file. Start read-only and confirm
 `tools/list` exposes `get_integration_summary`, `list_integration_findings`,
 `get_integration_finding`, `list_integration_runs`, and `get_integration_run`.
 These bounded tools use the delegated user's SecMan asset visibility.
+
+## AWS-account risk-assessment workflow
+
+For assessment orchestration, add `ASSESSMENTS_READ` and
+`ASSESSMENTS_WRITE` to the Paperclip MCP key. Add `NOTIFICATIONS_SEND` to the
+coordinator key when it may send outstanding-answer reminders, and add `ASSESSMENTS_EXECUTE` only
+for an agent that is explicitly allowed to act as the assigned respondent. The
+delegated creator must be ADMIN or SECCHAMPION. `create_risk_assessment` takes
+the 12-digit `awsAccountId` directly, so Paperclip must not create a placeholder
+asset:
+
+```json
+{
+  "awsAccountId":"123456789012",
+  "useCaseIds":[42,57],
+  "assessorEmail":"champion@example.org",
+  "respondentEmail":"owner@example.org",
+  "endDate":"2026-10-01",
+  "notes":"Paperclip issue SEC-4711"
+}
+```
+
+Use these bounded reads for follow-up work:
+
+- `get_risk_assessment_statistics` provides a cheap status count, optionally
+  filtered by exact `useCaseName`, before listing individual assessments;
+- `list_risk_assessments` with `status:"STARTED"` lists ongoing assessments;
+- add `useCaseName` to list assessments for one use case;
+- `get_risk_assessment_questionnaire` returns the questions and inline response state;
+- `get_risk_assessment_answers` returns only saved answers and response metadata;
+- `evaluate_risk_assessment` derives the verdict and findings after submission.
+- `notify_risk_assessment_respondent` previews or sends a reminder only while
+  answers remain outstanding.
+
+Change `X-MCP-User-Email` to the actual respondent before saving or submitting
+answers. SecMan verifies that this identity is the assessment's assigned
+respondent even when the API key itself has broad permissions. A top-level
+JSON-RPC error or `result.isError:true` is a failed action and must not close the
+Paperclip issue. The full schemas, response fields, curl-compatible envelope,
+Proton Pass provisioning script, and lifecycle test are in
+[`MCP_RISK_ASSESSMENT_LIFECYCLE.md`](MCP_RISK_ASSESSMENT_LIFECYCLE.md).
+The company, agent, and heartbeat blueprint is in
+[`PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md`](PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md).
+Estate-wide and delegated security summaries are documented in
+[`MCP_STATISTICS.md`](MCP_STATISTICS.md).
 
 ## Agent setup
 

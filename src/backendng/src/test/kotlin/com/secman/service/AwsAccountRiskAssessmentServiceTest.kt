@@ -1,7 +1,7 @@
 package com.secman.service
 
-import com.secman.domain.Asset
 import com.secman.domain.AssessmentBasisType
+import com.secman.domain.AwsAccount
 import com.secman.domain.AwsAccountRiskAssessment
 import com.secman.domain.Release
 import com.secman.domain.Requirement
@@ -9,7 +9,7 @@ import com.secman.domain.RiskAssessment
 import com.secman.domain.UseCase
 import com.secman.domain.User
 import com.secman.dto.NewAccountImportInfo
-import com.secman.repository.AssetRepository
+import com.secman.repository.AwsAccountRepository
 import com.secman.repository.AwsAccountRiskAssessmentRepository
 import com.secman.repository.RiskAssessmentRepository
 import com.secman.repository.UseCaseRepository
@@ -30,7 +30,7 @@ class AwsAccountRiskAssessmentServiceTest {
 
     private val userRepository = mockk<UserRepository>(relaxed = true)
     private val useCaseRepository = mockk<UseCaseRepository>(relaxed = true)
-    private val assetRepository = mockk<AssetRepository>(relaxed = true)
+    private val awsAccountRepository = mockk<AwsAccountRepository>(relaxed = true)
     private val riskAssessmentRepository = mockk<RiskAssessmentRepository>(relaxed = true)
     private val trackingRepository = mockk<AwsAccountRiskAssessmentRepository>(relaxed = true)
     private val emailService = mockk<EmailService>(relaxed = true)
@@ -64,7 +64,7 @@ class AwsAccountRiskAssessmentServiceTest {
         service = AwsAccountRiskAssessmentService(
             userRepository = userRepository,
             useCaseRepository = useCaseRepository,
-            assetRepository = assetRepository,
+            awsAccountRepository = awsAccountRepository,
             riskAssessmentRepository = riskAssessmentRepository,
             trackingRepository = trackingRepository,
             emailService = emailService,
@@ -83,8 +83,8 @@ class AwsAccountRiskAssessmentServiceTest {
         every { userRepository.findByRolesContaining(User.Role.SECCHAMPION) } returns listOf(champion1, champion2)
         every { userRepository.findById(9L) } returns Optional.of(admin)
         every { userRepository.findByEmailIgnoreCase(any()) } returns Optional.empty()
-        every { assetRepository.findByName(any()) } returns Optional.empty()
-        every { assetRepository.save(any()) } answers { firstArg<Asset>().also { it.id = it.id ?: 100L } }
+        every { awsAccountRepository.findByAwsAccountId(any()) } returns Optional.empty()
+        every { awsAccountRepository.save(any()) } answers { firstArg<AwsAccount>().also { it.id = it.id ?: 100L } }
         var nextId = 1000L
         every { riskAssessmentRepository.save(any()) } answers { firstArg<RiskAssessment>().apply { id = nextId++ } }
         every { trackingRepository.save(any()) } answers { firstArg() }
@@ -199,7 +199,7 @@ class AwsAccountRiskAssessmentServiceTest {
         val savedAssessments = mutableListOf<RiskAssessment>()
         verify(exactly = 2) { riskAssessmentRepository.save(capture(savedAssessments)) }
         assertThat(savedAssessments).allSatisfy {
-            assertThat(it.assessmentBasisType).isEqualTo(AssessmentBasisType.ASSET)
+            assertThat(it.assessmentBasisType).isEqualTo(AssessmentBasisType.AWS_ACCOUNT)
             assertThat(it.endDate).isEqualTo(LocalDate.now().plusDays(7))
             assertThat(it.requestor).isEqualTo(admin)
             assertThat(it.useCases).containsExactly(useCase)
@@ -358,25 +358,23 @@ class AwsAccountRiskAssessmentServiceTest {
     }
 
     @Test
-    fun `creates dedicated AWS account asset when none exists`() {
-        val assetSlot = slot<Asset>()
-        every { assetRepository.save(capture(assetSlot)) } answers { firstArg<Asset>().apply { id = 100L } }
+    fun `creates dedicated AWS account reference when none exists`() {
+        val accountSlot = slot<AwsAccount>()
+        every { awsAccountRepository.save(capture(accountSlot)) } answers { firstArg<AwsAccount>().apply { id = 100L } }
 
         service.startAssessmentsForNewAccounts(
             listOf(NewAccountImportInfo("111111111111", listOf("alice@corp.com"))),
             "Cloud Onboarding", 7, null
         )
 
-        assertThat(assetSlot.captured.name).isEqualTo("AWS Account 111111111111")
-        assertThat(assetSlot.captured.type).isEqualTo("AWS_ACCOUNT")
-        assertThat(assetSlot.captured.owner).isEqualTo("alice@corp.com")
-        assertThat(assetSlot.captured.cloudAccountId).isEqualTo("111111111111")
+        assertThat(accountSlot.captured.awsAccountId).isEqualTo("111111111111")
+        assertThat(accountSlot.captured.updatedBy).isEqualTo(champion1.email)
     }
 
     @Test
-    fun `reuses existing account asset by name`() {
-        val existing = Asset(id = 55L, name = "AWS Account 111111111111", type = "AWS_ACCOUNT", owner = "someone")
-        every { assetRepository.findByName("AWS Account 111111111111") } returns Optional.of(existing)
+    fun `reuses existing AWS account reference`() {
+        val existing = AwsAccount(id = 55L, awsAccountId = "111111111111", name = "Production")
+        every { awsAccountRepository.findByAwsAccountId("111111111111") } returns Optional.of(existing)
 
         val results = service.startAssessmentsForNewAccounts(
             listOf(NewAccountImportInfo("111111111111", listOf("alice@corp.com"))),
@@ -384,7 +382,7 @@ class AwsAccountRiskAssessmentServiceTest {
         )
 
         assertThat(results.single().error).isNull()
-        verify(exactly = 0) { assetRepository.save(any()) }
+        verify(exactly = 0) { awsAccountRepository.save(any()) }
         val saved = slot<RiskAssessment>()
         verify { riskAssessmentRepository.save(capture(saved)) }
         assertThat(saved.captured.assessmentBasisId).isEqualTo(55L)
@@ -420,7 +418,7 @@ class AwsAccountRiskAssessmentServiceTest {
 
     @Test
     fun `per-item failure is reported without aborting remaining accounts`() {
-        every { assetRepository.findByName("AWS Account 111111111111") } throws RuntimeException("boom")
+        every { awsAccountRepository.findByAwsAccountId("111111111111") } throws RuntimeException("boom")
 
         val results = service.startAssessmentsForNewAccounts(
             listOf(

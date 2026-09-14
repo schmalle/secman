@@ -8,9 +8,9 @@ import java.time.Instant
 /**
  * AwsAccount — admin-supplied display name for a 12-digit AWS account ID.
  *
- * Rows are created lazily, only when an admin names an account. Any account with
- * no row still appears in reports under its bare ID; see
- * AccountFindingAgeService.resolveName.
+ * Rows are created lazily when an admin names an account or when an account is
+ * selected as a risk-assessment basis. A row without a display name still
+ * appears in reports under its bare ID; see AccountFindingAgeService.resolveName.
  *
  * Spec: docs/superpowers/specs/2026-07-26-account-finding-age-design.md
  */

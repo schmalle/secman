@@ -49,6 +49,8 @@ class AddUserTool(
             ),
             "password" to mapOf(
                 "type" to "string",
+                "minLength" to 8,
+                "maxLength" to 200,
                 "description" to "Password for the new user (will be securely hashed)"
             ),
             "roles" to mapOf(
@@ -89,8 +91,8 @@ class AddUserTool(
             return McpToolResult.error("VALIDATION_ERROR", "Email is required and cannot be blank")
         }
 
-        if (password.isNullOrBlank()) {
-            return McpToolResult.error("VALIDATION_ERROR", "Password is required and cannot be blank")
+        if (password == null || password.length !in 8..200) {
+            return McpToolResult.error("VALIDATION_ERROR", "Password must contain 8 to 200 characters")
         }
 
         // Basic email format validation

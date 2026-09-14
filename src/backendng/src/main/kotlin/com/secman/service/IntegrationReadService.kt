@@ -130,7 +130,8 @@ open class IntegrationReadService(private val repository: IntegrationRepository,
             val r = repos[s.githubRepositoryId]
             IntegrationSubjectDto(s.id!!, s.scannerId, s.assetId, s.githubRepositoryId, a.name, a.uri, a.owner,
                 r?.githubInstance, r?.githubRepoId, s.lastStatus, s.lastScanAt, s.lastSuccessfulScanAt,
-                c.enabled && (s.lastSuccessfulScanAt ?: s.createdAt).plusSeconds(c.staleAfterHours * 3600L) < Instant.now(), counts[s.id] ?: 0)
+                c.enabled && (s.lastSuccessfulScanAt ?: s.createdAt).plusSeconds(c.staleAfterHours * 3600L) < Instant.now(), counts[s.id] ?: 0,
+                a.cloudAccountId)
         }
     }
 

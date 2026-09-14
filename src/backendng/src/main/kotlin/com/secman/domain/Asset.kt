@@ -49,6 +49,23 @@ data class Asset(
     @Size(max = 255)
     var name: String,
 
+    /**
+     * Latest hostname reported by CrowdStrike. This is deliberately separate from [name]:
+     * users own the display name, while imports use this source-owned value for identity.
+     */
+    @Column(name = "crowdstrike_hostname", length = 255)
+    @Size(max = 255)
+    var crowdStrikeHostname: String? = null,
+
+    /** When non-null, [name] is a deliberate user override and imports must preserve it. */
+    @Column(name = "name_overridden_at")
+    var nameOverriddenAt: LocalDateTime? = null,
+
+    /** Username or delegated MCP identity that last set the display-name override. */
+    @Column(name = "name_overridden_by", length = 255)
+    @Size(max = 255)
+    var nameOverriddenBy: String? = null,
+
     @Column(nullable = false)
     @NotBlank
     var type: String,
@@ -267,6 +284,22 @@ data class Asset(
     @OneToMany(mappedBy = "asset", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     var tags: MutableList<AssetTag> = mutableListOf()
 ) {
+    /** Set a user-owned display name without changing CrowdStrike's source identity. */
+    fun overrideName(newName: String, actor: String, changedAt: LocalDateTime = LocalDateTime.now()) {
+        name = newName
+        nameOverriddenAt = changedAt
+        nameOverriddenBy = actor.take(255)
+    }
+
+    /** Restore the latest CrowdStrike hostname as the display name. */
+    fun resetNameOverride(): Boolean {
+        val sourceName = crowdStrikeHostname?.takeIf { it.isNotBlank() } ?: return false
+        name = sourceName
+        nameOverriddenAt = null
+        nameOverriddenBy = null
+        return true
+    }
+
     /**
      * Computed effective criticality for this asset
      * Feature 039: Asset and Workgroup Criticality Classification

@@ -1,0 +1,239 @@
+"""Reconcile existing SecMan relationships through the importer's REST client."""
+
+from collections import defaultdict
+from dataclasses import dataclass, field
+import json
+import logging
+import os
+import re
+import sys
+from urllib.parse import urlsplit
+
+import requests
+
+log = logging.getLogger("adread.sync")
+BATCH_SIZE = 500
+EMAIL_PATTERN = re.compile(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+")
+
+
+def normalize_email(value: object) -> str | None:
+  if not isinstance(value, str):
+    return None
+  email = value.strip().lower()
+  if len(email) > 254 or not EMAIL_PATTERN.fullmatch(email):
+    return None
+  local, domain = email.split("@", 1)
+  if (len(local) > 64 or local.startswith(".") or local.endswith(".")
+      or ".." in local or any(len(label) > 63 for label in domain.split("."))):
+    return None
+  return email
+
+
+def account_id(value: object) -> str | None:
+  if isinstance(value, str) and re.fullmatch(r"[0-9]{12}", value.strip()):
+    return value.strip()
+  return None
+
+
+def record_id(record: object) -> int | None:
+  value = record.get("id") if isinstance(record, dict) else None
+  return value if type(value) is int and value > 0 else None
+
+
+def http_status(error: Exception) -> int | None:
+  if isinstance(error, requests.HTTPError) and error.response is not None:
+    return error.response.status_code
+  return None
+
+
+@dataclass
+class SyncPlan:
+  additions: dict[int, list[int]] = field(default_factory=dict)
+  workgroups_evaluated: int = 0
+  members_evaluated: int = 0
+  unique_email_addresses: int = 0
+  aws_accounts_matched: int = 0
+  assets_matched: int = 0
+  relationships_to_add: int = 0
+  relationships_to_remove: int = 0
+  relationships_added: int = 0
+  skipped_accounts: int = 0
+  errors: int = 0
+
+  def invalid(self, kind: str, identifier: object) -> None:
+    self.errors += 1
+    log.warning("Skipping invalid %s record id=%r", kind, identifier)
+
+  def summary(self, dry_run: bool) -> dict:
+    return {"dry_run": dry_run, **{
+      key: value for key, value in vars(self).items() if key != "additions"
+    }}
+
+
+def index_members(workgroups: list, users: list, plan: SyncPlan) -> dict[str, set[int]]:
+  group_ids = set()
+  for group in workgroups:
+    gid = record_id(group)
+    if gid is None:
+      plan.invalid("workgroup", None)
+    else:
+      group_ids.add(gid)
+  plan.workgroups_evaluated = len(group_ids)
+  by_email = defaultdict(set)
+  for user in users:
+    uid = record_id(user)
+    if uid is None or not isinstance(user.get("workgroups"), list):
+      plan.invalid("user", uid)
+      continue
+    memberships = {record_id(group) for group in user["workgroups"]}
+    if not memberships:
+      continue
+    plan.members_evaluated += 1
+    email = normalize_email(user.get("email"))
+    if email is None or not memberships <= group_ids:
+      plan.invalid("member", uid)
+      continue
+    by_email[email].update(memberships)
+  plan.unique_email_addresses = len(by_email)
+  return by_email
+
+
+def index_accounts(mappings: list, by_email: dict[str, set[int]], plan: SyncPlan) -> dict[str, set[int]]:
+  by_account = defaultdict(set)
+  for mapping in mappings:
+    if not isinstance(mapping, dict):
+      plan.invalid("mapping", None)
+      continue
+    raw_account = mapping.get("awsAccountId")
+    if raw_account is None or raw_account == "":
+      continue  # Domain/IP-only mappings are unrelated to AWS ownership.
+    account = account_id(raw_account)
+    if account is None:
+      plan.invalid("mapping AWS account", record_id(mapping))
+      continue
+    groups = by_account[account]
+    email = normalize_email(mapping.get("email"))
+    if email is None:
+      log.warning("AWS account=%s mapping_id=%r has no valid owner email", account, record_id(mapping))
+    else:
+      groups.update(by_email.get(email, set()))
+  return by_account
+
+
+def build_plan(workgroups: list, users: list, mappings: list, assets: list) -> SyncPlan:
+  plan = SyncPlan()
+  by_account = index_accounts(mappings, index_members(workgroups, users, plan), plan)
+  additions = defaultdict(set)
+  matched_assets = set()
+  for asset in assets:
+    aid = record_id(asset)
+    if aid is None:
+      plan.invalid("asset", aid)
+      continue
+    raw_account = asset.get("cloudAccountId")
+    if raw_account is None or raw_account == "":
+      continue
+    account = account_id(raw_account)
+    if account is None:
+      plan.invalid("asset AWS account", aid)
+      continue
+    desired = by_account.setdefault(account, set())
+    if not desired:
+      continue
+    groups = asset.get("workgroups")
+    if not isinstance(groups, list) or any(record_id(group) is None for group in groups):
+      plan.invalid("asset workgroups", aid)
+      continue  # A missing collection is not evidence of zero assignments.
+    matched_assets.add(aid)
+    existing = {record_id(group) for group in groups}
+    for gid in desired - existing:
+      additions[gid].add(aid)
+  plan.additions = {gid: sorted(ids) for gid, ids in sorted(additions.items())}
+  plan.assets_matched = len(matched_assets)
+  plan.aws_accounts_matched = sum(bool(groups) for groups in by_account.values())
+  skipped = sorted(account for account, groups in by_account.items() if not groups)
+  plan.skipped_accounts = len(skipped)
+  for account in skipped:
+    log.info("Skipping AWS account=%s: no owner email matching a workgroup member", account)
+  plan.relationships_to_add = sum(len(ids) for ids in plan.additions.values())
+  return plan
+
+
+def load_mappings(client) -> list:
+  mappings = []
+  # These two DB-paged endpoints partition UserMapping. Applied rows still grant
+  # AWS access, so reading /current alone silently loses existing owners.
+  for path in ("/api/user-mappings/current", "/api/user-mappings/applied-history"):
+    page = 0
+    total_pages = None
+    while total_pages is None or page < total_pages:
+      data = client.get_json(path, {"page": page, "size": BATCH_SIZE})
+      if (not isinstance(data, dict) or not isinstance(data.get("content"), list)
+          or type(data.get("totalPages")) is not int or data["totalPages"] < 0
+          or data.get("page") != page):
+        raise RuntimeError("Invalid mapping page; synchronization aborted before writes")
+      if total_pages is not None and data["totalPages"] != total_pages:
+        raise RuntimeError("Mapping page count changed; retry synchronization after imports finish")
+      total_pages = data["totalPages"]
+      if page < total_pages and not data["content"]:
+        raise RuntimeError("Incomplete mapping page; synchronization aborted before writes")
+      mappings.extend(data["content"])
+      page += 1
+  return mappings
+
+
+def synchronize(client, dry_run: bool) -> SyncPlan:
+  workgroups = client.get_json("/api/workgroups")
+  users = client.get_json("/api/users", {"includeWorkgroups": "true"})
+  mappings = load_mappings(client)
+  assets = client.get_json("/api/assets")
+  if not all(isinstance(rows, list) for rows in (workgroups, users, assets)):
+    raise RuntimeError("Invalid collection response; synchronization aborted before writes")
+  plan = build_plan(workgroups, users, mappings, assets)
+  for gid, ids in plan.additions.items():
+    log.info("workgroup_id=%d relationships_to_add=%d dry_run=%s", gid, len(ids), dry_run)
+    if dry_run:
+      continue
+    for offset in range(0, len(ids), BATCH_SIZE):
+      batch = ids[offset:offset + BATCH_SIZE]
+      try:
+        client.assign_assets(gid, batch)
+      except (requests.RequestException, RuntimeError) as exc:
+        plan.errors += 1
+        log.error("workgroup_id=%d asset_ids=%s outcome=unconfirmed error_type=%s http_status=%s; rerun to reconcile",
+                  gid, batch, type(exc).__name__, http_status(exc))
+        break  # Keep completed batches; other workgroups can still be processed.
+      plan.relationships_added += len(batch)
+      log.info("workgroup_id=%d asset_ids=%s outcome=assigned", gid, batch)
+  return plan
+
+
+def run_command(client_factory, dry_run: bool) -> int:
+  required = ("SECMAN_BACKEND_URL", "SECMAN_ADMIN_NAME", "SECMAN_ADMIN_PASS")
+  missing = [name for name in required if not os.environ.get(name)]
+  if missing:
+    log.error("Missing configuration: %s", ", ".join(missing))
+    return 1
+  client = None
+  try:
+    url = os.environ["SECMAN_BACKEND_URL"]
+    parsed = urlsplit(url)
+    if (parsed.scheme != "https" or not parsed.hostname or parsed.username is not None
+        or parsed.password is not None or parsed.query or parsed.fragment):
+      raise ValueError("Invalid backend URL")
+    client = client_factory(url, os.environ["SECMAN_ADMIN_NAME"], os.environ["SECMAN_ADMIN_PASS"],
+                            dry_run=dry_run, verify_tls=True)
+    client.login(require_admin=True)
+    plan = synchronize(client, dry_run)
+    print(json.dumps(plan.summary(dry_run), sort_keys=True))
+    log.info("actor=%r operation=SYNC_WORKGROUP_ASSETS outcome=%s errors=%d",
+             os.environ["SECMAN_ADMIN_NAME"], "dry-run" if dry_run else "finished", plan.errors)
+    return 1 if plan.errors else 0
+  except (requests.RequestException, RuntimeError, ValueError) as exc:
+    log.error("Synchronization failed error_type=%s http_status=%s; check HTTPS URL, CA trust, ADMIN credentials and API availability",
+              type(exc).__name__, http_status(exc))
+    print(json.dumps({"dry_run": dry_run, "errors": 1, "aborted": True}), file=sys.stdout)
+    return 1
+  finally:
+    if client is not None:
+      client._session.close()

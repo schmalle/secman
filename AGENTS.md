@@ -22,7 +22,7 @@
 - CLI: build once `./gradlew :cli:shadowJar`, then `./scripts/secman <cmd>`.
 
 ## Skills
-Nineteen project skills live in **`.agents/skills/`** — the Codex rendering of the
+Twenty-two project skills live in **`.agents/skills/`** — the Codex rendering of the
 same skill set Claude Code loads from `.claude/skills/` (`CLAUDE.md` §Tooling
 Conventions). They are plain Markdown: there is no slash command here, so read
 the matching `.agents/skills/<name>/SKILL.md` **in full** and follow it.
@@ -60,6 +60,9 @@ the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
 | `aws-account-risk-assessment` | New AWS account starts a correctly scoped assessment | seeds + removes a testbed |
 | `aws-account-owner-email` | The account owner actually receives the mail | testbed, ⚠️ **sends real mail** |
 | `account-onboarding` | Welcome mail, direct and guided assessments, the owner's tokenized questionnaire | seeds + removes a testbed |
+| `mcp-risk-assessment-lifecycle` | Full MCP setup, respondent answer/submit, and assessor evaluation with a manually supplied email | seeds + removes a testbed |
+| `cleanup-mcp-risk-assessment-lifecycle` | Remove a retained or interrupted MCP risk-assessment lifecycle fixture | removes only exact fixture markers |
+| `mcp-requirement-use-case-lifecycle` | Requirement create/list, use-case create/list, assignment verification, deletion, and post-delete listing through MCP | seeds + removes two exact fixtures |
 | `aws-account-workgroup-import` | AWS display-name import and workgroup linking | seeds + removes a testbed |
 | `requirement-export-template` | Word export-template lifecycle and validation | seeds + removes a testbed |
 | `createtestdata` | Seed a fixture to click through | adds a fixture |

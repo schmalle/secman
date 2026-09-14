@@ -505,12 +505,14 @@ open class CrowdStrikeApiClientImpl(
         // The deviceId keys are kept so failed Stage-2 batches can be mapped back to their
         // QueriedHosts and reported in failedHosts.
         val metadataByDeviceId = resolveDeviceMetadata(serverDeviceIds, token)
-        fun toQueriedHost(md: DeviceMetadata): QueriedHost? {
+        fun toQueriedHost(deviceId: String, md: DeviceMetadata): QueriedHost? {
             val h = md.hostname?.trim()?.takeIf { it.isNotBlank() }
             val i = md.cloudInstanceId?.trim()?.takeIf { it.isNotBlank() }
-            return if (h == null && i == null) null else QueriedHost(hostname = h, instanceId = i)
+            return if (h == null && i == null) null else QueriedHost(h, i, deviceId)
         }
-        val queriedHosts = metadataByDeviceId.values.mapNotNull(::toQueriedHost).toSet()
+        val queriedHosts = metadataByDeviceId.mapNotNull { (deviceId, metadata) ->
+            toQueriedHost(deviceId, metadata)
+        }.toSet()
         log.info("Resolved {} queried host(s) from {} device id(s) for reconcile scoping",
             queriedHosts.size, serverDeviceIds.size)
 
@@ -547,7 +549,7 @@ open class CrowdStrikeApiClientImpl(
         // QueriedHost to report — harmless: it is not in queriedHosts either, so the
         // sweep never touches it.
         val failedHosts = failedDeviceIds
-            .mapNotNull { metadataByDeviceId[it]?.let(::toQueriedHost) }
+            .mapNotNull { deviceId -> metadataByDeviceId[deviceId]?.let { toQueriedHost(deviceId, it) } }
             .toSet()
 
         if (failedHosts.isNotEmpty()) {
@@ -1827,7 +1829,7 @@ open class CrowdStrikeApiClientImpl(
                                 ?: throw CrowdStrikeException("Empty response from Spotlight API")
 
                             val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
-                            val vulns = mapResponseToDtos(resources, hostname)
+                            val vulns = mapResponseToDtos(resources, hostname, deviceId)
                             allVulnerabilities.addAll(vulns)
 
                             // Check for pagination
@@ -1954,7 +1956,16 @@ open class CrowdStrikeApiClientImpl(
      * @param hostname Hostname for the device (from query context)
      * @return List of CrowdStrikeVulnerabilityDto
      */
-    private fun mapResponseToDtos(resources: List<*>, hostname: String): List<CrowdStrikeVulnerabilityDto> {
+    private fun mapResponseToDtos(
+        resources: List<*>,
+        hostname: String
+    ): List<CrowdStrikeVulnerabilityDto> = mapResponseToDtos(resources, hostname, null)
+
+    private fun mapResponseToDtos(
+        resources: List<*>,
+        hostname: String,
+        crowdStrikeAid: String?
+    ): List<CrowdStrikeVulnerabilityDto> {
         return resources.mapNotNull { resource ->
             val vuln = resource as? Map<*, *> ?: return@mapNotNull null
             try {
@@ -2049,7 +2060,8 @@ open class CrowdStrikeApiClientImpl(
                     hasException = false,
                     exceptionReason = null,
                     cloudAccountId = cloudAccountId,
-                    cloudInstanceId = cloudInstanceId
+                    cloudInstanceId = cloudInstanceId,
+                    crowdStrikeAid = crowdStrikeAid
                 )
 
                 log.trace("Mapped vulnerability: CVE={}, severity={}, cvssScore={}, hostname={}",
@@ -2394,7 +2406,8 @@ open class CrowdStrikeApiClientImpl(
                     hasException = false,
                     exceptionReason = null,
                     cloudAccountId = cloudAccountId,
-                    cloudInstanceId = cloudInstanceId
+                    cloudInstanceId = cloudInstanceId,
+                    crowdStrikeAid = deviceId
                 )
             } catch (e: Exception) {
                 log.error("Failed to map vulnerability: {}", e.message, e)

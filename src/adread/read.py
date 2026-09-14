@@ -6,12 +6,6 @@ import time
 
 import requests
 
-from azure.identity import ClientSecretCredential
-
-TENANT_ID = os.environ["AZURE_TENANT_ID"]
-CLIENT_ID = os.environ["AZURE_CLIENT_ID"]
-CLIENT_SECRET = os.environ["AZURE_CLIENT_SECRET"]
-
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
 # (connect, read) timeouts for every HTTP call so a stalled socket can never hang
@@ -49,16 +43,18 @@ class GraphTokenProvider:
   """
 
   def __init__(self):
+    from azure.identity import ClientSecretCredential
+
     self._credential = ClientSecretCredential(
-      tenant_id=TENANT_ID,
-      client_id=CLIENT_ID,
-      client_secret=CLIENT_SECRET,
+      tenant_id=os.environ["AZURE_TENANT_ID"],
+      client_id=os.environ["AZURE_CLIENT_ID"],
+      client_secret=os.environ["AZURE_CLIENT_SECRET"],
     )
     self._token = None
     self._expires_on = 0
 
   def _refresh(self):
-    log.info("Acquiring access token (tenant=%s, client=%s)", TENANT_ID, CLIENT_ID)
+    log.info("Acquiring Graph access token")
     start = time.monotonic()
     token = self._credential.get_token("https://graph.microsoft.com/.default")
     elapsed = time.monotonic() - start
@@ -192,18 +188,22 @@ class SecmanClient:
     # Cache of lowercased name → id populated on first ensure_workgroup miss.
     self._workgroup_cache = None
 
-  def login(self):
-    log.info("SECMAN login (user=%s, url=%s)", self._admin_name, self.base)
+  def login(self, require_admin=False):
+    log.info("SECMAN login (user=%r)", self._admin_name)
     resp = self._session.post(
       f"{self.base}/api/auth/login",
       json={"username": self._admin_name, "password": self._admin_pass},
       timeout=HTTP_TIMEOUT,
+      allow_redirects=False,
     )
     if not resp.ok:
-      log.error("SECMAN login failed: HTTP %d — %s", resp.status_code, resp.text)
-      resp.raise_for_status()
+      raise requests.HTTPError(f"SECMAN login failed: HTTP {resp.status_code}", response=resp)
+    if resp.is_redirect:
+      raise RuntimeError("SECMAN login redirect refused")
 
     data = resp.json()
+    if not isinstance(data, dict) or not isinstance(data.get("roles"), list):
+      raise RuntimeError("Invalid SECMAN login response")
 
     # Extract JWT from the secman_auth cookie and use it as a Bearer header
     # so it works over plain HTTP (no Secure-cookie restriction).
@@ -214,6 +214,8 @@ class SecmanClient:
     log.debug("SECMAN Bearer token set (len=%d)", len(token))
 
     roles = data.get("roles", [])
+    if require_admin and "ADMIN" not in roles:
+      raise RuntimeError("sync-workgroup-assets requires an ADMIN account")
     if "ADMIN" not in roles:
       log.warning(
         "SECMAN user '%s' does not have the ADMIN role (roles=%s). "
@@ -223,6 +225,24 @@ class SecmanClient:
       )
     else:
       log.info("SECMAN login OK — user has ADMIN role")
+
+  def get_json(self, path, params=None):
+    resp = self._session.get(
+      f"{self.base}{path}", params=params, timeout=HTTP_TIMEOUT, allow_redirects=False,
+    )
+    if resp.status_code != 200:
+      raise requests.HTTPError(f"SECMAN GET {path} failed: HTTP {resp.status_code}", response=resp)
+    return resp.json()
+
+  def assign_assets(self, workgroup_id, asset_ids):
+    if self.dry_run:
+      raise RuntimeError("Asset writes are forbidden during dry-run")
+    resp = self._session.post(
+      f"{self.base}/api/workgroups/{workgroup_id}/assets",
+      json={"assetIds": asset_ids}, timeout=HTTP_TIMEOUT, allow_redirects=False,
+    )
+    if resp.status_code != 200:
+      raise requests.HTTPError(f"Asset assignment failed: HTTP {resp.status_code}", response=resp)
 
   def _load_workgroup_cache(self):
     resp = self._session.get(f"{self.base}/api/workgroups", timeout=HTTP_TIMEOUT)
@@ -315,9 +335,36 @@ class SecmanClient:
     )
 
 
-def main():
+def main(argv=None):
   parser = argparse.ArgumentParser(
-    description="Read AWS-prefixed Azure AD groups and optionally import them as secman workgroups.",
+    description="Import Azure AD workgroups or synchronize their AWS assets from SecMan ownership mappings.",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog="""AWS asset synchronization (from the repository root):
+  ./scripts/sync-workgroup-assets.sh --dry-run   # preview missing links
+  ./scripts/sync-workgroup-assets.sh             # apply missing links
+
+  Direct invocation with the same credentials already resolved:
+  uv run --locked --project src/adread python src/adread/read.py sync-workgroup-assets --dry-run
+
+  Requires SECMAN_BACKEND_URL (HTTPS), SECMAN_ADMIN_NAME and SECMAN_ADMIN_PASS.
+  The wrapper resolves these through Proton Pass. No Azure/AWS credentials are
+  needed for synchronization. Use REQUESTS_CA_BUNDLE for a private CA.
+
+  Matches direct workgroup members by normalized email to stored AWS mappings,
+  then assigns matching assets. Evaluates all workgroups, regardless of name.
+  Existing links, including stale links, are preserved: their source is unknown.
+  Run after imports, with one sync process at a time. Dry-run still authenticates.
+  JSON counters go to stdout; diagnostics go to stderr.
+
+  Sync exit codes: 0 success, 1 record/request/configuration errors,
+                   2 invalid arguments, 130 interrupted.
+  Details: docs/WORKGROUP_ASSET_SYNC.md
+  Azure AD read/import modes: docs/ADREAD.md
+""",
+  )
+  parser.add_argument(
+    "command", nargs="?", choices=["sync-workgroup-assets"],
+    help="Assign AWS assets using existing SecMan member emails and account mappings.",
   )
   parser.add_argument(
     "--import",
@@ -330,7 +377,7 @@ def main():
     "--dry-run",
     dest="dry_run",
     action="store_true",
-    help="With --import: log what would be created/assigned without writing anything.",
+    help="Plan imports or asset synchronization without writing relationships.",
   )
   parser.add_argument(
     "--insecure",
@@ -338,9 +385,18 @@ def main():
     action="store_true",
     default=os.environ.get("SECMAN_INSECURE", "").lower() in ("1", "true", "yes"),
     help="Skip TLS certificate verification for the SECMAN backend "
-         "(accept self-signed certificates). May also be set via SECMAN_INSECURE=1.",
+         "during AD import only. Not allowed for sync-workgroup-assets. "
+         "May also be set via SECMAN_INSECURE=1.",
   )
-  args = parser.parse_args()
+  args = parser.parse_args(argv)
+
+  if args.command == "sync-workgroup-assets":
+    if args.do_import:
+      parser.error("sync-workgroup-assets cannot be combined with --import")
+    if args.insecure:
+      parser.error("sync-workgroup-assets requires TLS verification; unset SECMAN_INSECURE/--insecure")
+    from sync_workgroup_assets import run_command
+    return run_command(SecmanClient, args.dry_run)
 
   if args.dry_run and not args.do_import:
     parser.error("--dry-run requires --import")
@@ -461,7 +517,7 @@ def main():
 
 if __name__ == "__main__":
   try:
-    main()
+    sys.exit(main())
   except KeyboardInterrupt:
     log.warning("Interrupted by user (Ctrl-C) — exiting")
     sys.exit(130)

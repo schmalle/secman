@@ -45,6 +45,7 @@ src/
   backendng/   Kotlin/Micronaut: domain → repository → service → controller, mcp/, dto/, filter/
   frontend/   Astro pages + React islands, services/ (Axios)
   cli/        Picocli commands + service/
+  adread/     Python AD workgroup import + AWS asset synchronization
   relay/      Go: zero-dependency DMZ relay for the mobile app
   clinotify/  stdlib-only Python monitoring helpers
 docs/         see below
@@ -68,6 +69,9 @@ specs/        historical implementation plans (frozen)
 ./scripts/secman manage-user-mappings list --send-email
 ./scripts/secman add-vulnerability --hostname host --cve CVE-2024-1234 --criticality HIGH
 ./scripts/secman export-requirements --format xlsx
+
+# Python importer: preview AWS asset assignments from workgroup member emails
+./scripts/sync-workgroup-assets.sh --dry-run
 
 # Tests
 ./gradlew :backendng:test --tests "*ServiceTest*"      # unit
@@ -113,22 +117,15 @@ Full reference: `CLAUDE.md`.
 
 ## MCP integration (AI assistants)
 
-Claude Code:
-```bash
-claude mcp add --transport http secman http://localhost:8080/mcp \
-  --header "X-MCP-API-Key: sk-..." \
-  --header "X-MCP-User-Email: you@company.com"
-```
+Setup instructions for Cursor, Codex, Claude Code, Claude web, and Claude
+Desktop are in [`docs/MCP_CLIENT_SETUP.md`](docs/MCP_CLIENT_SETUP.md). The
+guide covers the required API-key and delegated-user headers, Proton Pass,
+least-privilege configuration, verification, and client-specific limitations.
 
-Claude Desktop (`claude_desktop_config.json`):
-```json
-{ "mcpServers": { "secman": {
-    "url": "http://localhost:8080/mcp",
-    "headers": { "X-MCP-API-Key": "sk-...", "X-MCP-User-Email": "you@company.com" }
-} } }
-```
-
-`X-MCP-User-Email` is **required** for all `tools/list` and `tools/call`. Effective permissions = intersection of API-key permissions ∩ delegated user's role-implied permissions. See `docs/MCP.md`.
+`X-MCP-User-Email` is **required** for all `tools/list` and `tools/call`.
+Effective permissions = intersection of API-key permissions ∩ delegated user's
+role-implied permissions. See [`docs/MCP.md`](docs/MCP.md) for the complete tool
+and permission reference.
 
 ## Configuration
 
@@ -154,8 +151,14 @@ Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings):
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Linux production: nginx, systemd, SSL, hardening |
 | [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) | All env vars (backend, frontend, CLI) |
 | [docs/CLI.md](docs/CLI.md) | CLI commands, cron, S3 ops |
+| [docs/ADREAD.md](docs/ADREAD.md) | Python AD group/member import and AWS asset synchronization |
+| [docs/WORKGROUP_ASSET_SYNC.md](docs/WORKGROUP_ASSET_SYNC.md) | Member-email → AWS account → asset assignments, dry-run, and preservation semantics |
 | [docs/MCP.md](docs/MCP.md) | MCP tools, API keys, delegation, troubleshooting |
+| [docs/MCP_RISK_ASSESSMENT_LIFECYCLE.md](docs/MCP_RISK_ASSESSMENT_LIFECYCLE.md) | AWS-account assessment REST/UI/MCP contract, Paperclip calls, Proton Pass script, E2E and cleanup |
+| [docs/MCP_STATISTICS.md](docs/MCP_STATISTICS.md) | Admin, delegated security, and risk-assessment aggregate MCP tools for Paperclip |
+| [docs/MCP_REQUIREMENT_MANAGEMENT.md](docs/MCP_REQUIREMENT_MANAGEMENT.md) | Requirement and use-case CRUD, exact assignment semantics, and Paperclip examples |
 | [docs/PAPERCLIP.md](docs/PAPERCLIP.md) | Paperclip goals/issues/agents with asset-scoped SecMan MCP reads |
+| [docs/PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md](docs/PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md) | Paperclip company, agent, heartbeat, reminder, respondent, and assessor blueprint |
 | [docs/INTEGRATION_RESULTS.md](docs/INTEGRATION_RESULTS.md) | Shared Visual/Web/GitHub checker contract and lifecycle |
 | [docs/CROWDSTRIKE_IMPORT.md](docs/CROWDSTRIKE_IMPORT.md) | Transactional-replace pattern, JPA cascade trap |
 | [docs/GITHUB_REPOS.md](docs/GITHUB_REPOS.md) | GitHub App vulnerability import, Dependabot alerts, owner alerting |

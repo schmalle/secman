@@ -263,25 +263,35 @@ AWS S3 operations (`asset-match-clear`, `manage-user-mappings import-s3`, `list-
 | `AWS_ACCOUNT_BUCKET_NAME` | S3 bucket name for the `manage-user-mappings import-s3` mapping file (fallback when `--bucket` is omitted) |
 | `AWS_ACCOUNT_BUCKET_KEY_NAME` | S3 object key for the `manage-user-mappings import-s3` mapping file (fallback when `--key` is omitted) |
 
-## adread (Azure AD → workgroup import)
+## adread (workgroup import and AWS asset synchronization)
 
-`src/adread/read.py` — see `docs/ADREAD.md` for full usage.
+`src/adread/read.py` — see [AD read/import](ADREAD.md) and
+[AWS asset synchronization](WORKGROUP_ASSET_SYNC.md) for usage.
 
-### Azure AD (always required)
+### Azure AD (AD read/import only; not needed for asset synchronization)
 | Var | Description |
 |---|---|
 | `AZURE_TENANT_ID` | Azure AD tenant ID |
 | `AZURE_CLIENT_ID` | Service principal client ID |
 | `AZURE_CLIENT_SECRET` | Service principal secret |
 
-### secman backend (required with `--import`)
+### secman backend (required with `--import` or `sync-workgroup-assets`)
 | Var | Default | Description |
 |---|---|---|
-| `SECMAN_BACKEND_URL` | `http://localhost:8080` | Backend base URL |
+| `SECMAN_BACKEND_URL` | — | Backend base URL; required and HTTPS-only for asset synchronization |
 | `SECMAN_ADMIN_NAME` | — | secman ADMIN username |
 | `SECMAN_ADMIN_PASS` | — | secman ADMIN password |
 
 `LOG_LEVEL` (optional, default `INFO`) controls verbosity for this script as well.
+
+`./scripts/sync-workgroup-assets.sh` resolves the three SecMan variables above
+through Proton Pass, using `Test/SECMAN/SECMAN_BACKEND_BASE_URL`,
+`Test/SECMAN/SECMAN_ADMIN_NAME`, and `Test/SECMAN/SECMAN_ADMIN_PASS` unless the
+corresponding environment variables are supplied. It does not consume
+`SECMAN_HOST`, AWS SDK credentials, or the Kotlin CLI's configuration files.
+For a private backend CA, set `REQUESTS_CA_BUNDLE` to a trusted PEM bundle.
+The synchronization command rejects `--insecure` and a true `SECMAN_INSECURE`;
+the Kotlin CLI TLS options described above do not apply to it.
 
 ## Templates
 

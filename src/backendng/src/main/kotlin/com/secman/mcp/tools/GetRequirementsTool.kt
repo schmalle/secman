@@ -5,6 +5,7 @@ import com.secman.dto.mcp.McpExecutionContext
 import com.secman.service.RequirementService
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
+import org.slf4j.LoggerFactory
 
 /**
  * MCP tool for retrieving security requirements with filtering and pagination.
@@ -19,6 +20,7 @@ import jakarta.inject.Singleton
 class GetRequirementsTool(
     @Inject private val requirementService: RequirementService
 ) : McpTool {
+    private val log = LoggerFactory.getLogger(GetRequirementsTool::class.java)
 
     override val name = "get_requirements"
     override val description = "Retrieve security requirements with optional filtering by usecase, norm, chapter, or full-text search. " +
@@ -28,6 +30,9 @@ class GetRequirementsTool(
 
     companion object {
         const val DEFAULT_LIMIT = 50
+        const val MAX_LIMIT = 100
+        const val MAX_OFFSET = 10_000
+        const val MAX_FILTER_LENGTH = 500
     }
 
     override val inputSchema = mapOf(
@@ -35,18 +40,22 @@ class GetRequirementsTool(
         "properties" to mapOf(
             "search" to mapOf(
                 "type" to "string",
+                "maxLength" to MAX_FILTER_LENGTH,
                 "description" to "Full-text search across title, description, usecase, example, chapter, and norm fields (case-insensitive)"
             ),
             "usecase" to mapOf(
                 "type" to "string",
+                "maxLength" to MAX_FILTER_LENGTH,
                 "description" to "Filter by use case — matches UseCase entity names AND free-text usecase field (case-insensitive), e.g. 'SaaS', 'IoT', 'Network'"
             ),
             "norm" to mapOf(
                 "type" to "string",
+                "maxLength" to MAX_FILTER_LENGTH,
                 "description" to "Filter by norm — matches Norm entity names AND free-text norm field (case-insensitive), e.g. 'ISO 27001', 'NIST'"
             ),
             "chapter" to mapOf(
                 "type" to "string",
+                "maxLength" to MAX_FILTER_LENGTH,
                 "description" to "Filter by chapter name (case-insensitive contains match)"
             ),
             "detailed" to mapOf(
@@ -58,18 +67,21 @@ class GetRequirementsTool(
                 "type" to "number",
                 "description" to "Maximum number of requirements to return (default: $DEFAULT_LIMIT)",
                 "minimum" to 1,
+                "maximum" to MAX_LIMIT,
                 "default" to DEFAULT_LIMIT
             ),
             "offset" to mapOf(
                 "type" to "number",
                 "description" to "Number of requirements to skip",
                 "default" to 0,
-                "minimum" to 0
+                "minimum" to 0,
+                "maximum" to MAX_OFFSET
             )
         )
     )
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
+        requireDelegation(context)?.let { return it }
         // Mirrors RequirementController's own @Secured("ADMIN", "REQ", "SECCHAMPION") boundary —
         // the requirement corpus is not asset/owner-scoped, so a role gate is the right control
         // here rather than a row-scope check. Same pattern as ExportRequirementsTool.
@@ -86,6 +98,18 @@ class GetRequirementsTool(
         val detailed = arguments["detailed"] as? Boolean ?: false
         val limit = (arguments["limit"] as? Number)?.toInt() ?: DEFAULT_LIMIT
         val offset = (arguments["offset"] as? Number)?.toInt() ?: 0
+        if (listOf(search, usecase, norm, chapter).filterNotNull().any { it.length > MAX_FILTER_LENGTH }) {
+            return McpToolResult.error(
+                "VALIDATION_ERROR",
+                "Requirement filters must not exceed $MAX_FILTER_LENGTH characters"
+            )
+        }
+        if (limit !in 1..MAX_LIMIT || offset !in 0..MAX_OFFSET) {
+            return McpToolResult.error(
+                "VALIDATION_ERROR",
+                "limit must be 1..$MAX_LIMIT and offset must be 0..$MAX_OFFSET"
+            )
+        }
 
         try {
             val (requirements, total) = requirementService.filterRequirements(
@@ -111,7 +135,8 @@ class GetRequirementsTool(
             return McpToolResult.success(result)
 
         } catch (e: Exception) {
-            return McpToolResult.error("EXECUTION_ERROR", "Failed to retrieve requirements: ${e.message}")
+            log.error("MCP requirement listing failed: actorUserId={}", context.delegatedUserId, e)
+            return McpToolResult.error("EXECUTION_ERROR", "Requirements could not be retrieved")
         }
     }
 
@@ -119,13 +144,20 @@ class GetRequirementsTool(
         val map = mutableMapOf<String, Any?>(
             "id" to requirement.id,
             "internalId" to requirement.internalId,
+            "revision" to requirement.versionNumber,
+            "idRevision" to requirement.idRevision,
             "shortreq" to requirement.shortreq,
             "description" to requirement.details,
+            "details" to requirement.details,
             "example" to requirement.example,
             "motivation" to requirement.motivation,
             "chapter" to requirement.chapter,
             "usecases" to requirement.usecases.map { it.name },
             "norms" to requirement.norms.map { it.name },
+            "useCaseAssignments" to requirement.usecases.sortedBy { it.name }.map(::useCaseResult),
+            "normAssignments" to requirement.norms.sortedBy { it.name }.map {
+                mapOf("id" to it.id, "name" to it.name, "version" to it.version)
+            },
             "language" to requirement.language
         )
 

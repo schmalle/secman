@@ -18,6 +18,7 @@ interface User {
   username: string;
   email: string;
   isPending?: boolean;
+  roles?: string[];
 }
 
 type UserRef = { id?: number; email?: string };
@@ -41,6 +42,12 @@ interface UseCase {
   name: string;
 }
 
+interface AwsAccount {
+  id: number;
+  awsAccountId: string;
+  name?: string;
+}
+
 interface Demand {
   id: number;
   title: string;
@@ -59,13 +66,15 @@ interface Demand {
 interface RiskAssessment {
   id?: number;
   // New unified approach
-  assessmentBasisType: 'DEMAND' | 'ASSET';
+  assessmentBasisType: 'DEMAND' | 'ASSET' | 'AWS_ACCOUNT';
   assessmentBasisId: number;
   // Legacy fields for backward compatibility
   demand?: Demand;
   demandId?: number;
   asset?: Asset;
   assetId?: number;
+  awsAccount?: AwsAccount;
+  awsAccountId?: string;
   endDate: string;
   status: string;
   assessor?: User;
@@ -274,8 +283,10 @@ const RiskAssessmentManagement: React.FC = () => {
       // Set basis-specific fields
       if (formData.assessmentBasisType === 'DEMAND') {
         dataToSubmit.demandId = formData.assessmentBasisId;
-      } else {
+      } else if (formData.assessmentBasisType === 'ASSET') {
         dataToSubmit.assetId = formData.assessmentBasisId;
+      } else {
+        dataToSubmit.awsAccountId = formData.awsAccountId;
       }
       
       // Set requestor to current user for new assessments
@@ -307,6 +318,7 @@ const RiskAssessmentManagement: React.FC = () => {
     setFormData({
       assessmentBasisType: assessment.assessmentBasisType || (assessment.demand ? 'DEMAND' : 'ASSET'),
       assessmentBasisId: assessment.assessmentBasisId || assessment.demand?.id || assessment.asset?.id || 0,
+      awsAccountId: assessment.awsAccount?.awsAccountId,
       endDate: assessment.endDate,
       status: assessment.status,
       assessorId: assessment.assessor?.id || assessment.assessorId,
@@ -448,15 +460,17 @@ const RiskAssessmentManagement: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => {
+      const isNumericId = name.includes('Id') && name !== 'awsAccountId';
       const newData = { 
         ...prev, 
-        [name]: value === '' ? (name.includes('Id') ? 0 : '') : 
-                (name.includes('Id') ? parseInt(value) : value)
+        [name]: value === '' ? (isNumericId ? 0 : '') :
+                (isNumericId ? parseInt(value) : value)
       };
       
       // Reset basis ID when basis type changes
       if (name === 'assessmentBasisType') {
         newData.assessmentBasisId = 0;
+        newData.awsAccountId = '';
       }
       
       return newData;
@@ -567,12 +581,19 @@ const RiskAssessmentManagement: React.FC = () => {
                     >
                       <option value="DEMAND">Demand (Change Request)</option>
                       <option value="ASSET">Asset (Direct Assessment)</option>
+                      <option
+                        value="AWS_ACCOUNT"
+                        disabled={!currentUser?.roles?.some(role => role === 'ADMIN' || role === 'SECCHAMPION')}
+                      >
+                        AWS Account (Direct Assessment)
+                      </option>
                     </select>
                     <div className="form-text">
-                      {formData.assessmentBasisType === 'DEMAND' 
+                      {formData.assessmentBasisType === 'DEMAND'
                         ? 'Assess risks related to a change request or new asset creation'
-                        : 'Assess risks directly on an existing asset'
-                      }
+                        : formData.assessmentBasisType === 'ASSET'
+                          ? 'Assess risks directly on an existing asset'
+                          : 'Assess a 12-digit AWS account directly; no asset will be created'}
                     </div>
                   </div>
 
@@ -603,7 +624,7 @@ const RiskAssessmentManagement: React.FC = () => {
                         </div>
                       )}
                     </div>
-                  ) : (
+                  ) : formData.assessmentBasisType === 'ASSET' ? (
                     <div className="mb-3">
                       <label htmlFor="assessmentBasisId" className="form-label">Asset *</label>
                       <select
@@ -626,6 +647,23 @@ const RiskAssessmentManagement: React.FC = () => {
                           No assets available. <a href="/assets">Manage assets</a> to create them first.
                         </div>
                       )}
+                    </div>
+                  ) : (
+                    <div className="mb-3">
+                      <label htmlFor="awsAccountId" className="form-label">AWS Account ID *</label>
+                      <input
+                        className="form-control"
+                        id="awsAccountId"
+                        name="awsAccountId"
+                        value={formData.awsAccountId || ''}
+                        onChange={handleInputChange}
+                        inputMode="numeric"
+                        pattern="[0-9]{12}"
+                        maxLength={12}
+                        placeholder="123456789012"
+                        required
+                      />
+                      <div className="form-text">Exactly 12 digits. The assessment references the AWS account directly.</div>
                     </div>
                   )}
 
@@ -813,6 +851,13 @@ const RiskAssessmentManagement: React.FC = () => {
                               subtitle: `${assessment.asset.type} - ${assessment.asset.owner}`,
                               typeLabel: 'Direct Assessment',
                               typeClass: 'bg-success'
+                            };
+                          } else if (basisType === 'AWS_ACCOUNT' && assessment.awsAccount) {
+                            return {
+                              title: assessment.awsAccount.name || assessment.awsAccount.awsAccountId,
+                              subtitle: `AWS account ${assessment.awsAccount.awsAccountId}`,
+                              typeLabel: 'Direct AWS Account',
+                              typeClass: 'bg-info'
                             };
                           } else {
                             // Legacy support

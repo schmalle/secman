@@ -1,11 +1,13 @@
 package com.secman.mcp.tools
 
 import com.secman.domain.Criticality
+import com.secman.domain.Asset
 import com.secman.domain.McpOperation
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.AssetRepository
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
+import org.slf4j.LoggerFactory
 import java.net.URI
 
 /**
@@ -38,6 +40,8 @@ class UpdateAssetTool(
     @Inject private val assetRepository: AssetRepository
 ) : McpTool {
 
+    private val log = LoggerFactory.getLogger(UpdateAssetTool::class.java)
+
     override val name = "update_asset"
     override val description = "Update an existing asset's properties such as owner, name, type, or criticality (requires User Delegation)"
     override val operation = McpOperation.WRITE
@@ -53,6 +57,10 @@ class UpdateAssetTool(
                 "type" to "string",
                 "description" to "New asset name (max 255 characters)",
                 "maxLength" to 255
+            ),
+            "resetNameToCrowdStrike" to mapOf(
+                "type" to "boolean",
+                "description" to "Clear the user name override and restore the latest CrowdStrike hostname"
             ),
             "type" to mapOf(
                 "type" to "string",
@@ -109,22 +117,14 @@ class UpdateAssetTool(
     }
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
-        // Require User Delegation for audit trail
         requireDelegation(context)?.let { return it }
 
-        // Extract and validate asset ID
         val assetId = (arguments["assetId"] as? Number)?.toLong()
-        if (assetId == null) {
-            return McpToolResult.error("VALIDATION_ERROR", "assetId is required and must be a valid number")
-        }
-
-        // Collect update fields (exclude assetId)
-        val updateFields = arguments.keys - "assetId"
-        if (updateFields.isEmpty()) {
+            ?: return McpToolResult.error("VALIDATION_ERROR", "assetId is required and must be a valid number")
+        if (arguments.keys == setOf("assetId")) {
             return McpToolResult.error("VALIDATION_ERROR", "At least one field to update must be provided")
         }
 
-        // Row-level access control
         if (!context.canAccessAsset(assetId)) {
             return McpToolResult.error("NOT_FOUND", "Asset with ID $assetId not found or access denied")
         }
@@ -134,101 +134,169 @@ class UpdateAssetTool(
                 ?: return McpToolResult.error("NOT_FOUND", "Asset with ID $assetId not found")
 
             val updatedFields = mutableListOf<String>()
-
-            // Apply partial updates matching AssetController.update() pattern
-            (arguments["name"] as? String)?.let { newName ->
-                val trimmed = newName.trim()
-                if (trimmed.isBlank()) {
-                    return McpToolResult.error("VALIDATION_ERROR", "Name cannot be empty")
-                }
-                if (trimmed.length > 255) {
-                    return McpToolResult.error("VALIDATION_ERROR", "Name must not exceed 255 characters")
-                }
-                asset.name = trimmed
-                updatedFields.add("name")
-            }
-
-            (arguments["type"] as? String)?.let { newType ->
-                val trimmed = newType.trim()
-                if (trimmed.isBlank()) {
-                    return McpToolResult.error("VALIDATION_ERROR", "Type cannot be empty")
-                }
-                asset.type = trimmed
-                updatedFields.add("type")
-            }
-
-            (arguments["owner"] as? String)?.let { newOwner ->
-                val trimmed = newOwner.trim()
-                if (trimmed.isBlank()) {
-                    return McpToolResult.error("VALIDATION_ERROR", "Owner cannot be empty")
-                }
-                if (trimmed.length > 255) {
-                    return McpToolResult.error("VALIDATION_ERROR", "Owner must not exceed 255 characters")
-                }
-                asset.owner = trimmed
-                updatedFields.add("owner")
-            }
-
-            (arguments["ip"] as? String)?.let { newIp ->
-                asset.ip = newIp.trim().takeIf { it.isNotBlank() }
-                updatedFields.add("ip")
-            }
-
-            (arguments["uri"] as? String)?.let { newUri ->
-                asset.uri = try {
-                    normalizeUri(newUri)
-                } catch (e: IllegalArgumentException) {
-                    return McpToolResult.error("VALIDATION_ERROR", e.message ?: "Invalid URI")
-                }
-                updatedFields.add("uri")
-            }
-
-            (arguments["description"] as? String)?.let { newDescription ->
-                asset.description = newDescription.trim().takeIf { it.isNotBlank() }
-                updatedFields.add("description")
-            }
-
-            (arguments["criticality"] as? String)?.let { critStr ->
-                val trimmed = critStr.trim().uppercase()
-                try {
-                    asset.criticality = Criticality.valueOf(trimmed)
-                    updatedFields.add("criticality")
-                } catch (e: IllegalArgumentException) {
-                    return McpToolResult.error(
-                        "VALIDATION_ERROR",
-                        "Invalid criticality: '$trimmed'. Must be one of: CRITICAL, HIGH, MEDIUM, LOW, NA"
-                    )
-                }
-            }
-
-            (arguments["adDomain"] as? String)?.let { newAdDomain ->
-                asset.adDomain = newAdDomain.trim().takeIf { it.isNotBlank() }
-                updatedFields.add("adDomain")
-            }
+            applyNameUpdate(arguments, context, asset, updatedFields)?.let { return it }
+            applyOtherUpdates(arguments, asset, updatedFields)?.let { return it }
 
             if (updatedFields.isEmpty()) {
                 return McpToolResult.error("VALIDATION_ERROR", "No valid fields to update were provided")
             }
-
-            val savedAsset = assetRepository.save(asset)
-
-            val result = mapOf(
-                "id" to savedAsset.id,
-                "name" to savedAsset.name,
-                "type" to savedAsset.type,
-                "owner" to savedAsset.owner,
-                "ip" to savedAsset.ip,
-                "uri" to savedAsset.uri,
-                "criticality" to savedAsset.criticality?.name,
-                "adDomain" to savedAsset.adDomain,
-                "updatedFields" to updatedFields,
-                "message" to "Asset '${savedAsset.name}' (id: ${savedAsset.id}) updated: ${updatedFields.joinToString(", ")}"
-            )
-
-            return McpToolResult.success(result)
+            return saveUpdate(asset, updatedFields, context)
 
         } catch (e: Exception) {
-            return McpToolResult.error("EXECUTION_ERROR", "Failed to update asset: ${e.message}")
+            log.error(
+                "MCP asset update failed: actor={} assetId={} outcome=failed",
+                context.delegatedUserEmail, assetId, e
+            )
+            return McpToolResult.error("EXECUTION_ERROR", "Failed to update asset")
+        }
+    }
+
+    private fun saveUpdate(
+        asset: Asset,
+        updatedFields: List<String>,
+        context: McpExecutionContext
+    ): McpToolResult {
+        val savedAsset = assetRepository.save(asset)
+        val result = mapOf(
+            "id" to savedAsset.id,
+            "name" to savedAsset.name,
+            "crowdStrikeHostname" to savedAsset.crowdStrikeHostname,
+            "nameOverridden" to (savedAsset.nameOverriddenAt != null),
+            "type" to savedAsset.type,
+            "owner" to savedAsset.owner,
+            "ip" to savedAsset.ip,
+            "uri" to savedAsset.uri,
+            "criticality" to savedAsset.criticality?.name,
+            "adDomain" to savedAsset.adDomain,
+            "updatedFields" to updatedFields,
+            "message" to "Asset '${savedAsset.name}' (id: ${savedAsset.id}) updated: ${updatedFields.joinToString(", ")}"
+        )
+        log.info(
+            "MCP asset update completed: actor={} assetId={} nameOverride={} outcome=updated",
+            context.delegatedUserEmail, savedAsset.id, savedAsset.nameOverriddenAt != null
+        )
+        return McpToolResult.success(result)
+    }
+
+    private fun applyNameUpdate(
+        arguments: Map<String, Any>,
+        context: McpExecutionContext,
+        asset: Asset,
+        updatedFields: MutableList<String>
+    ): McpToolResult.Error? {
+        val resetName = arguments["resetNameToCrowdStrike"] as? Boolean ?: false
+        if (resetName && arguments["name"] != null) {
+            return McpToolResult.error(
+                "VALIDATION_ERROR",
+                "name and resetNameToCrowdStrike cannot be used together"
+            )
+        }
+        if (resetName) {
+            if (!asset.resetNameOverride()) {
+                return McpToolResult.error(
+                    "VALIDATION_ERROR",
+                    "Asset has no CrowdStrike hostname to restore"
+                )
+            }
+            updatedFields.add("nameOverride")
+        }
+
+        (arguments["name"] as? String)?.let { newName ->
+            val trimmed = newName.trim()
+            if (trimmed.isBlank()) {
+                return McpToolResult.error("VALIDATION_ERROR", "Name cannot be empty")
+            }
+            if (trimmed.length > 255) {
+                return McpToolResult.error(
+                    "VALIDATION_ERROR",
+                    "Name must not exceed 255 characters"
+                )
+            }
+            if (trimmed != asset.name) {
+                val actor = context.delegatedUsername ?: context.delegatedUserEmail ?: "mcp-user"
+                asset.overrideName(trimmed, actor)
+                updatedFields.add("name")
+            }
+        }
+        return null
+    }
+
+    private fun applyOtherUpdates(
+        arguments: Map<String, Any>,
+        asset: Asset,
+        updatedFields: MutableList<String>
+    ): McpToolResult.Error? {
+        (arguments["type"] as? String)?.let { newType ->
+            val trimmed = newType.trim()
+            if (trimmed.isBlank()) {
+                return McpToolResult.error("VALIDATION_ERROR", "Type cannot be empty")
+            }
+            asset.type = trimmed
+            updatedFields.add("type")
+        }
+        (arguments["owner"] as? String)?.let { newOwner ->
+            val trimmed = newOwner.trim()
+            if (trimmed.isBlank()) {
+                return McpToolResult.error("VALIDATION_ERROR", "Owner cannot be empty")
+            }
+            if (trimmed.length > 255) {
+                return McpToolResult.error(
+                    "VALIDATION_ERROR",
+                    "Owner must not exceed 255 characters"
+                )
+            }
+            asset.owner = trimmed
+            updatedFields.add("owner")
+        }
+        applyOptionalTextUpdates(arguments, asset, updatedFields)
+
+        (arguments["uri"] as? String)?.let { newUri ->
+            asset.uri = try {
+                normalizeUri(newUri)
+            } catch (e: IllegalArgumentException) {
+                return McpToolResult.error("VALIDATION_ERROR", e.message ?: "Invalid URI")
+            }
+            updatedFields.add("uri")
+        }
+        return applyCriticalityUpdate(arguments, asset, updatedFields)
+    }
+
+    private fun applyCriticalityUpdate(
+        arguments: Map<String, Any>,
+        asset: Asset,
+        updatedFields: MutableList<String>
+    ): McpToolResult.Error? {
+        (arguments["criticality"] as? String)?.let { criticality ->
+            val normalized = criticality.trim().uppercase()
+            asset.criticality = try {
+                Criticality.valueOf(normalized)
+            } catch (e: IllegalArgumentException) {
+                return McpToolResult.error(
+                    "VALIDATION_ERROR",
+                    "Invalid criticality: '$normalized'. Must be one of: CRITICAL, HIGH, MEDIUM, LOW, NA"
+                )
+            }
+            updatedFields.add("criticality")
+        }
+        return null
+    }
+
+    private fun applyOptionalTextUpdates(
+        arguments: Map<String, Any>,
+        asset: Asset,
+        updatedFields: MutableList<String>
+    ) {
+        (arguments["ip"] as? String)?.let {
+            asset.ip = it.trim().takeIf(String::isNotBlank)
+            updatedFields.add("ip")
+        }
+        (arguments["description"] as? String)?.let {
+            asset.description = it.trim().takeIf(String::isNotBlank)
+            updatedFields.add("description")
+        }
+        (arguments["adDomain"] as? String)?.let {
+            asset.adDomain = it.trim().takeIf(String::isNotBlank)
+            updatedFields.add("adDomain")
         }
     }
 }

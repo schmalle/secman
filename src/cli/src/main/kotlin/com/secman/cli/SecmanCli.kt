@@ -916,6 +916,13 @@ class SecmanCli {
 
                 Run 'secman manage-user-mappings <subcommand> --help' for subcommand-specific options.
 
+                After importing AWS owners, synchronize assets through workgroup member emails:
+                  ./scripts/sync-workgroup-assets.sh --dry-run
+                  ./scripts/sync-workgroup-assets.sh
+                This separate Python command requires ADMIN and verified HTTPS, preserves all
+                existing asset links, and uses member emails rather than account display names.
+                See docs/WORKGROUP_ASSET_SYNC.md for configuration, counters and exit codes.
+
                 See also: secman help manage-user-mappings-s3
             """.trimIndent(),
 
@@ -1003,6 +1010,14 @@ class SecmanCli {
                   secman manage-workgroups remove-assets -w Test --all -u admin@company.com
 
                 Run 'secman manage-workgroups <subcommand> --help' for subcommand-specific options.
+
+                To derive asset assignments from members' AWS account ownership, run the
+                separate Python importer command from the repository root:
+                  ./scripts/sync-workgroup-assets.sh --dry-run
+                  ./scripts/sync-workgroup-assets.sh
+                Requires ADMIN, verified HTTPS, pass-cli and uv; no Azure/AWS credentials.
+                Adds missing links only. Manual and stale links are preserved.
+                See docs/WORKGROUP_ASSET_SYNC.md for configuration, counters and exit codes.
             """.trimIndent(),
 
             "add-vulnerability" to """

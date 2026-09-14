@@ -1,8 +1,8 @@
 package com.secman.service
 
 import com.secman.config.AppConfig
-import com.secman.domain.Asset
 import com.secman.domain.AssessmentBasisType
+import com.secman.domain.AwsAccount
 import com.secman.domain.AwsAccountRiskAssessment
 import com.secman.domain.Release
 import com.secman.domain.RiskAssessment
@@ -10,7 +10,7 @@ import com.secman.domain.UseCase
 import com.secman.domain.User
 import com.secman.dto.AccountRiskAssessmentInfo
 import com.secman.dto.NewAccountImportInfo
-import com.secman.repository.AssetRepository
+import com.secman.repository.AwsAccountRepository
 import com.secman.repository.AwsAccountRiskAssessmentRepository
 import com.secman.repository.RiskAssessmentRepository
 import com.secman.repository.UseCaseRepository
@@ -31,8 +31,7 @@ import java.time.temporal.ChronoUnit
  * (CLI: `manage-user-mappings import --start-risk-assessment`).
  *
  * For every (new account, mapped owner email) pair:
- * - the assessment basis is an asset representing the AWS account
- *   (type `AWS_ACCOUNT`, `cloudAccountId` = account id) — found by name or created,
+ * - the assessment basis is the AWS account itself; no synthetic asset is created,
  * - the *standard* it is measured against is the current version of the security
  *   requirements, i.e. the single ACTIVE [Release]. The assessment is pinned to it
  *   (`lockedRelease`), so its questionnaire is resolved from that release's frozen
@@ -52,7 +51,7 @@ import java.time.temporal.ChronoUnit
 open class AwsAccountRiskAssessmentService(
     private val userRepository: UserRepository,
     private val useCaseRepository: UseCaseRepository,
-    private val assetRepository: AssetRepository,
+    private val awsAccountRepository: AwsAccountRepository,
     private val riskAssessmentRepository: RiskAssessmentRepository,
     private val trackingRepository: AwsAccountRiskAssessmentRepository,
     private val emailService: EmailService,
@@ -83,7 +82,6 @@ open class AwsAccountRiskAssessmentService(
          * of the database.
          */
         const val MAX_DEADLINE_DAYS = 3650
-        const val ACCOUNT_ASSET_TYPE = "AWS_ACCOUNT"
         private val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 
         // Owner mails are rendered from the shared email-templates/ resources rather than
@@ -341,17 +339,17 @@ open class AwsAccountRiskAssessmentService(
             )
         }
 
-        val asset = findOrCreateAccountAsset(awsAccountId, ownerEmail)
+        val awsAccount = findOrCreateAwsAccount(awsAccountId, requestor.email)
         val ownerUser = userRepository.findByEmailIgnoreCase(ownerEmail).orElse(null)
 
         val assessment = RiskAssessment(
             startDate = today,
             endDate = endDate,
-            assessmentBasisType = AssessmentBasisType.ASSET,
-            assessmentBasisId = asset.id!!,
+            assessmentBasisType = AssessmentBasisType.AWS_ACCOUNT,
+            assessmentBasisId = awsAccount.id!!,
             assessor = assessor,
             requestor = requestor,
-            asset = asset
+            awsAccount = awsAccount
         )
         assessment.respondent = ownerUser
         assessment.useCases = useCases.toMutableSet()
@@ -405,33 +403,16 @@ open class AwsAccountRiskAssessmentService(
         )
     }
 
-    /**
-     * Resolve the asset representing an AWS account, creating it when absent.
-     * The owner email is stored as asset owner and the account id as
-     * cloudAccountId, so the owner reaches the asset through the unified
-     * access rules (owner match / UserMapping cloud-account match).
-     */
-    private fun findOrCreateAccountAsset(awsAccountId: String, ownerEmail: String): Asset {
-        val assetName = "AWS Account $awsAccountId"
-        val existing = assetRepository.findByName(assetName).orElse(null)
+    /** Resolve the account reference row used as the assessment basis. */
+    private fun findOrCreateAwsAccount(awsAccountId: String, actorEmail: String): AwsAccount {
+        val existing = awsAccountRepository.findByAwsAccountId(awsAccountId).orElse(null)
         if (existing != null) return existing
 
-        // Best-effort duplicate mitigation: find-then-save is racy (asset.name has no DB
-        // unique constraint yet - see docs/RACE_CONDITIONS.md), so if a concurrent import
-        // created the asset between the check and the save, fall back to the winner's row.
+        // aws_account_id is unique; a concurrent creator can win between find and save.
         return try {
-            assetRepository.save(
-                Asset(
-                    name = assetName,
-                    type = ACCOUNT_ASSET_TYPE,
-                    owner = ownerEmail,
-                    description = "Automatically created for the risk assessment of AWS account " +
-                        "$awsAccountId (user-mapping import)",
-                    cloudAccountId = awsAccountId
-                )
-            )
+            awsAccountRepository.save(AwsAccount(awsAccountId = awsAccountId, updatedBy = actorEmail))
         } catch (e: Exception) {
-            assetRepository.findByName(assetName).orElseThrow { e }
+            awsAccountRepository.findByAwsAccountId(awsAccountId).orElseThrow { e }
         }
     }
 

@@ -46,7 +46,9 @@ class IntegrationPersistenceTest : BaseIntegrationTest() {
         val suffix = UUID.randomUUID().toString()
         user = users.save(TestDataFactory.createAdminUser("integration-$suffix", "$suffix@example.test"))
         auth = Authentication.build(user.username, listOf("ADMIN", "USER"))
-        asset = assets.save(TestDataFactory.createAsset(name = "integration-$suffix", owner = user.username))
+        asset = assets.save(TestDataFactory.createAsset(name = "integration-$suffix", owner = user.username).apply {
+            cloudAccountId = "111122223333"
+        })
         scannerId = admin.saveScanner(null, IntegrationScannerRequest("Integration persistence test", "VISUAL", user.id!!), auth).id
         subjectId = admin.bind(scannerId, IntegrationSubjectRequest(assetId = asset.id), auth)
     }
@@ -60,6 +62,12 @@ class IntegrationPersistenceTest : BaseIntegrationTest() {
         IntegrationRunRequest(scannerId, subjectId, "run-$index", status, complete, time.plusSeconds(index), time.plusSeconds(index), findings = findings)
     private fun evidence(id: String = "stable") = IntegrationFindingInput(id, severity = "HIGH", title = "Original title", evidence = "Retained evidence",
         attachments = listOf(IntegrationAttachmentInput("evidence.txt", "text/plain", "ZXZpZGVuY2U=")))
+
+    @Test
+    fun `subject discovery exposes the AWS account identity used by scanner CSV imports`() {
+        assertThat(reads.subjects(scannerId, 0, 100, auth).content.single().cloudAccountId)
+            .isEqualTo("111122223333")
+    }
 
     @Test
     fun `atomic snapshots replay resolve reopen and retain historic evidence`() {

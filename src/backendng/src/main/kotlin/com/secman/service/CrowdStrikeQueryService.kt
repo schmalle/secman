@@ -386,7 +386,9 @@ open class CrowdStrikeQueryService(
      * Returns null if no asset or no vulnerabilities found.
      */
     private fun queryFromDatabaseByHostname(hostname: String, limit: Int, page: Int = 0): CrowdStrikeQueryResponse? {
-        val asset = assetRepository.findByNameIgnoreCase(hostname) ?: return null
+        val asset = assetRepository.findByCrowdStrikeHostnameIgnoreCase(hostname)
+            ?: assetRepository.findByNameIgnoreCase(hostname)
+            ?: return null
         val assetId = asset.id ?: return null
 
         val vulns = vulnerabilityRepository.findByAssetId(assetId, Pageable.from(page, limit))
@@ -562,6 +564,7 @@ open class CrowdStrikeQueryService(
         // (a genuinely never-imported host queried live). type/owner are never read by
         // VulnerabilityException.scopeMatches — placeholders are safe.
         val asset = response.instanceId?.let { assetRepository.findByCloudInstanceIdIgnoreCase(it) }
+            ?: assetRepository.findByCrowdStrikeHostnameIgnoreCase(response.hostname)
             ?: assetRepository.findByNameIgnoreCase(response.hostname)
             ?: Asset(
                 name = response.hostname,

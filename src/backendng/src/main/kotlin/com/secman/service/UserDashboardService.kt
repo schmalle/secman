@@ -159,6 +159,7 @@ open class UserDashboardService(
                 .map { it.name }.orElse(null)
             AssessmentBasisType.DEMAND -> demandRepository.findById(assessment.assessmentBasisId)
                 .map { it.title }.orElse(null)
+            AssessmentBasisType.AWS_ACCOUNT -> assessment.awsAccount?.let { it.name ?: it.awsAccountId }
         }
         val now = LocalDateTime.now()
         val respondUrl = assessmentTokenRepository.findByRiskAssessmentIdAndEmail(id, email)

@@ -134,6 +134,66 @@ class McpToolPermissionsTest {
     }
 
     @Test
+    fun `requirement and use case lifecycle tools have exact permissions in both tables`() {
+        val expected = mapOf(
+            "get_requirements" to McpPermission.REQUIREMENTS_READ,
+            "list_use_cases" to McpPermission.REQUIREMENTS_READ,
+            "add_requirement" to McpPermission.REQUIREMENTS_WRITE,
+            "update_requirement" to McpPermission.REQUIREMENTS_WRITE,
+            "set_requirement_use_cases" to McpPermission.REQUIREMENTS_WRITE,
+            "create_use_case" to McpPermission.REQUIREMENTS_WRITE,
+            "update_use_case" to McpPermission.REQUIREMENTS_WRITE,
+            "delete_requirement" to McpPermission.REQUIREMENTS_DELETE,
+            "delete_use_case" to McpPermission.REQUIREMENTS_DELETE,
+        )
+
+        expected.forEach { (tool, permission) ->
+            assertThat(McpToolPermissions.LISTING[tool]).describedAs("LISTING/%s", tool)
+                .isEqualTo(setOf(permission))
+            assertThat(McpToolPermissions.CALLING[tool]).describedAs("CALLING/%s", tool)
+                .isEqualTo(setOf(permission))
+        }
+    }
+
+    @Test
+    fun `risk assessment workflow tools are mapped in both permission tables`() {
+        val expected = mapOf(
+            "list_risk_assessments" to McpPermission.ASSESSMENTS_READ,
+            "get_risk_assessment_questionnaire" to McpPermission.ASSESSMENTS_READ,
+            "get_risk_assessment_answers" to McpPermission.ASSESSMENTS_READ,
+            "evaluate_risk_assessment" to McpPermission.ASSESSMENTS_READ,
+            "create_risk_assessment" to McpPermission.ASSESSMENTS_WRITE,
+            "notify_risk_assessment_respondent" to McpPermission.NOTIFICATIONS_SEND,
+            "save_risk_assessment_answers" to McpPermission.ASSESSMENTS_EXECUTE,
+            "submit_risk_assessment" to McpPermission.ASSESSMENTS_EXECUTE,
+            "create_use_case" to McpPermission.REQUIREMENTS_WRITE,
+        )
+
+        expected.forEach { (tool, permission) ->
+            assertThat(McpToolPermissions.LISTING[tool]).describedAs("LISTING/%s", tool)
+                .isEqualTo(setOf(permission))
+            assertThat(McpToolPermissions.CALLING[tool]).describedAs("CALLING/%s", tool)
+                .isEqualTo(setOf(permission))
+        }
+    }
+
+    @Test
+    fun `statistics tools have exact permissions in both tables`() {
+        val expected = mapOf(
+            "get_secman_statistics" to McpPermission.SYSTEM_INFO,
+            "get_my_security_statistics" to McpPermission.VULNERABILITIES_READ,
+            "get_risk_assessment_statistics" to McpPermission.ASSESSMENTS_READ,
+        )
+
+        expected.forEach { (tool, permission) ->
+            assertThat(McpToolPermissions.LISTING[tool]).describedAs("LISTING/%s", tool)
+                .isEqualTo(setOf(permission))
+            assertThat(McpToolPermissions.CALLING[tool]).describedAs("CALLING/%s", tool)
+                .isEqualTo(setOf(permission))
+        }
+    }
+
+    @Test
     fun `no tool is mapped to an empty permission set`() {
         val tables = mapOf("LISTING" to McpToolPermissions.LISTING, "CALLING" to McpToolPermissions.CALLING)
         tables.forEach { (name, table) ->
