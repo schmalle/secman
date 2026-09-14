@@ -8,7 +8,7 @@
 | Node | 20+ |
 | MariaDB | 11.4+ |
 | Git | 2.x |
-| Docker | optional, integration tests |
+| Docker | optional, deployment only; tests use an external MariaDB |
 
 System: 2 cores / 4 GB RAM / 20 GB disk minimum (4 cores / 8 GB / 50 GB SSD recommended).
 

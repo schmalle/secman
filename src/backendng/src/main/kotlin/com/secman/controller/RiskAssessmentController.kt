@@ -3,6 +3,7 @@ package com.secman.controller
 import com.secman.domain.*
 import com.secman.event.RiskAssessmentCreatedEvent
 import com.secman.repository.*
+import com.secman.service.RiskAssessmentAccessService
 import com.secman.service.AssetFilterService
 import com.secman.service.UserResolutionService
 import io.micronaut.context.event.ApplicationEventPublisher
@@ -45,6 +46,7 @@ open class RiskAssessmentController(
     private val riskAssessmentRepository: RiskAssessmentRepository,
     private val demandRepository: DemandRepository,
     private val assetRepository: AssetRepository,
+    private val awsAccountRepository: AwsAccountRepository,
     private val userRepository: UserRepository,
     private val useCaseRepository: UseCaseRepository,
     private val assessmentTokenRepository: AssessmentTokenRepository,
@@ -53,7 +55,8 @@ open class RiskAssessmentController(
     private val entityManager: EntityManager,
     private val eventPublisher: ApplicationEventPublisher<RiskAssessmentCreatedEvent>,
     private val userResolutionService: UserResolutionService,
-    private val assetFilterService: AssetFilterService
+    private val assetFilterService: AssetFilterService,
+    private val riskAssessmentAccessService: RiskAssessmentAccessService
 ) {
 
     private val log = LoggerFactory.getLogger(RiskAssessmentController::class.java)
@@ -67,12 +70,23 @@ open class RiskAssessmentController(
     private fun linkedAssetId(assessment: RiskAssessment): Long? = when (assessment.assessmentBasisType) {
         AssessmentBasisType.ASSET -> assessment.asset?.id
         AssessmentBasisType.DEMAND -> assessment.demand?.existingAsset?.id
+        AssessmentBasisType.AWS_ACCOUNT -> null
     }
 
     private fun canAccessAssessment(assessment: RiskAssessment, authentication: Authentication): Boolean {
+        if (assessment.assessmentBasisType == AssessmentBasisType.AWS_ACCOUNT) {
+            return riskAssessmentAccessService.canViewAwsAccountAssessment(assessment, authentication)
+        }
         val assetId = linkedAssetId(assessment)
         return assetId == null || assetFilterService.canAccessAsset(assetId, authentication)
     }
+
+    private fun canManageAssessment(assessment: RiskAssessment, authentication: Authentication): Boolean =
+        if (assessment.assessmentBasisType == AssessmentBasisType.AWS_ACCOUNT) {
+            riskAssessmentAccessService.canManageAwsAccountAssessment(assessment, authentication)
+        } else {
+            canAccessAssessment(assessment, authentication)
+        }
 
     @Serdeable
     data class CreateRiskAssessmentRequest(
@@ -82,16 +96,19 @@ open class RiskAssessmentController(
         @Nullable val respondentId: Long? = null,
         @Nullable val notes: String? = null,
         @Nullable val useCaseIds: List<Long>? = null,
-        // New unified approach - either demandId or assetId must be provided
+        // Exactly one basis must be provided.
         @Nullable val demandId: Long? = null,
         @Nullable val assetId: Long? = null,
+        @Nullable val awsAccountId: String? = null,
         @Nullable val assessorRef: UserResolutionService.UserRef? = null,
         @Nullable val respondentRef: UserResolutionService.UserRef? = null
     ) {
         fun validate(): String? {
+            val suppliedBases = listOf(demandId, assetId, awsAccountId?.takeIf { it.isNotBlank() }).count { it != null }
             return when {
-                demandId != null && assetId != null -> "Only one of demandId or assetId should be provided"
-                demandId == null && assetId == null -> "Either demandId or assetId must be provided"
+                suppliedBases != 1 -> "Exactly one of demandId, assetId or awsAccountId must be provided"
+                awsAccountId != null && !awsAccountId.matches(Regex("^\\d{12}$")) ->
+                    "awsAccountId must contain exactly 12 digits"
                 assessorId == null && assessorRef == null -> "Either assessorId or assessorRef must be provided"
                 else -> null
             }
@@ -100,10 +117,9 @@ open class RiskAssessmentController(
         fun getBasisType(): AssessmentBasisType = when {
             demandId != null -> AssessmentBasisType.DEMAND
             assetId != null -> AssessmentBasisType.ASSET
+            awsAccountId != null -> AssessmentBasisType.AWS_ACCOUNT
             else -> throw IllegalStateException("No basis ID provided")
         }
-        
-        fun getBasisId(): Long = demandId ?: assetId ?: throw IllegalStateException("No basis ID provided")
     }
 
     // Legacy request classes for backward compatibility
@@ -177,6 +193,7 @@ open class RiskAssessmentController(
                 LEFT JOIN FETCH d.existingAsset
                 LEFT JOIN FETCH d.requestor
                 LEFT JOIN FETCH ra.asset a
+                LEFT JOIN FETCH ra.awsAccount
                 LEFT JOIN FETCH ra.assessor
                 LEFT JOIN FETCH ra.requestor
                 LEFT JOIN FETCH ra.respondent
@@ -210,6 +227,7 @@ open class RiskAssessmentController(
                 LEFT JOIN FETCH d.existingAsset
                 LEFT JOIN FETCH d.requestor
                 LEFT JOIN FETCH ra.asset a
+                LEFT JOIN FETCH ra.awsAccount
                 LEFT JOIN FETCH ra.assessor
                 LEFT JOIN FETCH ra.requestor
                 LEFT JOIN FETCH ra.respondent
@@ -300,6 +318,7 @@ open class RiskAssessmentController(
                         @Suppress("DEPRECATION")
                         assessment.asset?.name
                     }
+                    AssessmentBasisType.AWS_ACCOUNT -> assessment.awsAccount?.awsAccountId
                 }
                 assessment.assessor.username
                 assessment.requestor.username
@@ -338,6 +357,7 @@ open class RiskAssessmentController(
                         @Suppress("DEPRECATION")
                         assessment.asset?.name
                     }
+                    AssessmentBasisType.AWS_ACCOUNT -> assessment.awsAccount?.awsAccountId
                 }
                 assessment.assessor.username
                 assessment.requestor.username
@@ -353,6 +373,23 @@ open class RiskAssessmentController(
         }
     }
 
+    @Get("/aws-account/{awsAccountId}")
+    @Transactional(readOnly = true)
+    open fun getRiskAssessmentsByAwsAccount(
+        awsAccountId: String,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        if (!awsAccountId.matches(Regex("^\\d{12}$"))) {
+            return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "awsAccountId must contain exactly 12 digits"))
+        }
+        val account = awsAccountRepository.findByAwsAccountId(awsAccountId).orElse(null)
+            ?: return HttpResponse.ok(emptyList<RiskAssessment>())
+        val assessments = riskAssessmentRepository
+            .findByAssessmentBasisTypeAndAssessmentBasisId(AssessmentBasisType.AWS_ACCOUNT, account.id!!)
+            .filter { canAccessAssessment(it, authentication) }
+        return HttpResponse.ok(assessments)
+    }
+
     @Post
     @Transactional
     open fun createRiskAssessment(@Valid @Body request: CreateRiskAssessmentRequest, authentication: Authentication): HttpResponse<*> {
@@ -364,9 +401,9 @@ open class RiskAssessmentController(
             }
 
             val basisType = request.getBasisType()
-            val basisId = request.getBasisId()
+            val suppliedBasis = request.demandId ?: request.assetId ?: request.awsAccountId
 
-            log.debug("Creating risk assessment with basis type: {} and ID: {}", basisType, basisId)
+            log.debug("Creating risk assessment with basis type: {} and identifier: {}", basisType, suppliedBasis)
 
             // 1. PRE-VALIDATE BASIS first so a missing basis doesn't orphan a lazy-created User row
             // SECURITY (A01): basisId is caller-supplied. For an ASSET basis it names an asset
@@ -374,8 +411,9 @@ open class RiskAssessmentController(
             // response (title/description/asset name) once the assessment is created. Both must be
             // resolved through the unified asset-access boundary — never a bare findById() whose
             // result is returned — matching the fix already applied to DemandController.
-            val resolvedBasis: Any = when (basisType) {
+            val resolvedBasis: Any? = when (basisType) {
                 AssessmentBasisType.DEMAND -> {
+                    val basisId = request.demandId!!
                     val demand = demandRepository.findById(basisId).orElse(null)
                         ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Demand not found"))
                     if (demand.status != DemandStatus.APPROVED) {
@@ -389,11 +427,19 @@ open class RiskAssessmentController(
                     demand
                 }
                 AssessmentBasisType.ASSET -> {
+                    val basisId = request.assetId!!
                     if (!assetFilterService.canAccessAsset(basisId, authentication)) {
                         return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Asset not found"))
                     }
                     assetRepository.findById(basisId).orElse(null)
                         ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Asset not found"))
+                }
+                AssessmentBasisType.AWS_ACCOUNT -> {
+                    if (authentication.roles.none { it == "ADMIN" || it == "SECCHAMPION" }) {
+                        return HttpResponse.status<ErrorResponse>(HttpStatus.FORBIDDEN)
+                            .body(ErrorResponse("FORBIDDEN", "ADMIN or SECCHAMPION role required for AWS account assessments"))
+                    }
+                    awsAccountRepository.findByAwsAccountId(request.awsAccountId!!).orElse(null)
                 }
             }
 
@@ -440,7 +486,7 @@ open class RiskAssessmentController(
                         startDate = request.startDate ?: LocalDate.now(),
                         endDate = request.endDate,
                         assessmentBasisType = AssessmentBasisType.DEMAND,
-                        assessmentBasisId = basisId,
+                        assessmentBasisId = request.demandId!!,
                         assessor = assessor,
                         requestor = requestor,
                         demand = demand // Keep for backward compatibility
@@ -461,10 +507,28 @@ open class RiskAssessmentController(
                         startDate = request.startDate ?: LocalDate.now(),
                         endDate = request.endDate,
                         assessmentBasisType = AssessmentBasisType.ASSET,
-                        assessmentBasisId = basisId,
+                        assessmentBasisId = request.assetId!!,
                         assessor = assessor,
                         requestor = requestor,
                         asset = asset // Keep for backward compatibility
+                    )
+                }
+                AssessmentBasisType.AWS_ACCOUNT -> {
+                    val account = (resolvedBasis as? AwsAccount) ?: try {
+                        awsAccountRepository.save(
+                            AwsAccount(awsAccountId = request.awsAccountId!!, updatedBy = authentication.name)
+                        )
+                    } catch (e: Exception) {
+                        awsAccountRepository.findByAwsAccountId(request.awsAccountId!!).orElseThrow { e }
+                    }
+                    RiskAssessment(
+                        startDate = request.startDate ?: LocalDate.now(),
+                        endDate = request.endDate,
+                        assessmentBasisType = AssessmentBasisType.AWS_ACCOUNT,
+                        assessmentBasisId = account.id!!,
+                        assessor = assessor,
+                        requestor = requestor,
+                        awsAccount = account
                     )
                 }
             }
@@ -500,6 +564,7 @@ open class RiskAssessmentController(
                     @Suppress("DEPRECATION")
                     savedAssessment.asset?.name
                 }
+                AssessmentBasisType.AWS_ACCOUNT -> savedAssessment.awsAccount?.awsAccountId
             }
             savedAssessment.assessor.username
             savedAssessment.requestor.username
@@ -521,7 +586,7 @@ open class RiskAssessmentController(
                 // Don't fail the request if event publishing fails
             }
 
-            log.info("Created risk assessment with id: {} for {} basis: {}", savedAssessment.id, basisType, basisId)
+            log.info("Created risk assessment with id: {} for {} basis: {}", savedAssessment.id, basisType, suppliedBasis)
             HttpResponse.status<RiskAssessment>(HttpStatus.CREATED).body(savedAssessment)
         } catch (e: Exception) {
             // Rethrow so the @Transactional interceptor rolls back. Without this,
@@ -542,7 +607,7 @@ open class RiskAssessmentController(
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
 
             // SECURITY (A01): see canAccessAssessment().
-            if (!canAccessAssessment(assessment, authentication)) {
+            if (!canManageAssessment(assessment, authentication)) {
                 log.warn("User {} denied update of risk assessment {} (linked asset {} not accessible)",
                     authentication.name, id, linkedAssetId(assessment))
                 return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
@@ -616,7 +681,7 @@ open class RiskAssessmentController(
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
 
             // SECURITY (A01): see canAccessAssessment().
-            if (!canAccessAssessment(assessment, authentication)) {
+            if (!canManageAssessment(assessment, authentication)) {
                 log.warn("User {} denied delete of risk assessment {} (linked asset {} not accessible)",
                     authentication.name, id, linkedAssetId(assessment))
                 return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
@@ -646,7 +711,7 @@ open class RiskAssessmentController(
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
 
             // SECURITY (A01): see canAccessAssessment().
-            if (!canAccessAssessment(assessment, authentication)) {
+            if (!canManageAssessment(assessment, authentication)) {
                 log.warn("User {} denied token generation for risk assessment {} (linked asset {} not accessible)",
                     authentication.name, id, linkedAssetId(assessment))
                 return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
@@ -692,7 +757,7 @@ open class RiskAssessmentController(
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
 
             // SECURITY (A01): see canAccessAssessment().
-            if (!canAccessAssessment(assessment, authentication)) {
+            if (!canManageAssessment(assessment, authentication)) {
                 log.warn("User {} denied notification for risk assessment {} (linked asset {} not accessible)",
                     authentication.name, id, linkedAssetId(assessment))
                 return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
@@ -728,7 +793,7 @@ open class RiskAssessmentController(
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
 
             // SECURITY (A01): see canAccessAssessment().
-            if (!canAccessAssessment(assessment, authentication)) {
+            if (!canManageAssessment(assessment, authentication)) {
                 log.warn("User {} denied reminder for risk assessment {} (linked asset {} not accessible)",
                     authentication.name, id, linkedAssetId(assessment))
                 return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
@@ -799,6 +864,8 @@ open class RiskAssessmentController(
         val title = when (assessment.assessmentBasisType) {
             AssessmentBasisType.DEMAND -> assessment.demand?.title ?: "Risk Assessment for Demand"
             AssessmentBasisType.ASSET -> "Risk Assessment for Asset: ${assessment.asset?.name ?: "Unknown Asset"}"
+            AssessmentBasisType.AWS_ACCOUNT ->
+                "Risk Assessment for AWS Account: ${assessment.awsAccount?.awsAccountId ?: "Unknown"}"
         }
 
         val description = when (assessment.assessmentBasisType) {
@@ -818,11 +885,17 @@ open class RiskAssessmentController(
                     asset?.type?.let { append(" (Type: $it)") }
                 }
             }
+            AssessmentBasisType.AWS_ACCOUNT -> {
+                val account = assessment.awsAccount
+                "Risk assessment for AWS account: ${account?.awsAccountId}" +
+                    account?.name?.let { " ($it)" }.orEmpty()
+            }
         }
 
         val category = when (assessment.assessmentBasisType) {
             AssessmentBasisType.DEMAND -> "Demand Assessment"
             AssessmentBasisType.ASSET -> "Asset Assessment"
+            AssessmentBasisType.AWS_ACCOUNT -> "AWS Account Assessment"
         }
 
         // Determine risk level based on assessment characteristics
@@ -864,6 +937,12 @@ open class RiskAssessmentController(
                     asset.id?.let { metadata["assetId"] = it }
                     metadata["assetType"] = asset.type
                     metadata["assetStatus"] = "ACTIVE" // Asset doesn't have status property
+                }
+            }
+            AssessmentBasisType.AWS_ACCOUNT -> {
+                assessment.awsAccount?.let { account ->
+                    metadata["awsAccountId"] = account.awsAccountId
+                    account.name?.let { metadata["awsAccountName"] = it }
                 }
             }
         }
@@ -908,6 +987,7 @@ open class RiskAssessmentController(
                     else -> "LOW"
                 }
             }
+            AssessmentBasisType.AWS_ACCOUNT -> if (assessment.useCases.size > 2) "MEDIUM" else "LOW"
         }
     }
 }

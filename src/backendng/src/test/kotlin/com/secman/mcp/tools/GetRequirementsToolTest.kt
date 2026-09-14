@@ -25,6 +25,7 @@ class GetRequirementsToolTest {
         mockk<McpExecutionContext>().also {
             every { it.isAdmin } returns isAdmin
             every { it.delegatedUserRoles } returns roles
+            every { it.hasDelegation() } returns true
         }
 
     @Test
@@ -64,5 +65,12 @@ class GetRequirementsToolTest {
         val result = tool.execute(emptyMap(), ctx(isAdmin = true, roles = setOf("USER")))
 
         assertThat(result.isError).isFalse()
+    }
+
+    @Test
+    fun `rejects an unbounded limit`() = runBlocking<Unit> {
+        val result = tool.execute(mapOf("limit" to 101), ctx(isAdmin = false, roles = setOf("REQ")))
+
+        assertThat((result as McpToolResult.Error).code).isEqualTo("VALIDATION_ERROR")
     }
 }

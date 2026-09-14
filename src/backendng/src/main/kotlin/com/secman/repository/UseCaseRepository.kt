@@ -4,6 +4,8 @@ import com.secman.domain.UseCase
 import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
+import io.micronaut.data.model.Page
+import io.micronaut.data.model.Pageable
 import java.util.*
 
 @Repository
@@ -12,6 +14,8 @@ interface UseCaseRepository : JpaRepository<UseCase, Long> {
     fun findByName(name: String): Optional<UseCase>
     
     fun findByNameContainingIgnoreCase(name: String): List<UseCase>
+
+    fun findByNameContainingIgnoreCase(name: String, pageable: Pageable): Page<UseCase>
 
     fun existsByName(name: String): Boolean
     

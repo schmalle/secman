@@ -2,9 +2,12 @@ package com.secman.controller
 
 import com.secman.domain.AwsAccount
 import com.secman.repository.AwsAccountRepository
+import com.secman.repository.RiskAssessmentRepository
+import com.secman.domain.AssessmentBasisType
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.annotation.Body
 import io.micronaut.http.annotation.Controller
+import io.micronaut.http.annotation.Delete
 import io.micronaut.http.annotation.PathVariable
 import io.micronaut.http.annotation.Put
 import io.micronaut.scheduling.TaskExecutors
@@ -25,7 +28,8 @@ import org.slf4j.LoggerFactory
 @Secured("ADMIN")
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class AwsAccountController(
-    private val awsAccountRepository: AwsAccountRepository
+    private val awsAccountRepository: AwsAccountRepository,
+    private val riskAssessmentRepository: RiskAssessmentRepository
 ) {
     private val logger = LoggerFactory.getLogger(AwsAccountController::class.java)
 
@@ -71,5 +75,27 @@ open class AwsAccountController(
             logger.error("Failed to update name for AWS account {}", awsAccountId, e)
             HttpResponse.serverError(ErrorResponse("Internal server error"))
         }
+    }
+
+    /** Delete only a nameless, unreferenced account row (used by exact fixture cleanup). */
+    @Delete("/{awsAccountId}")
+    @Transactional
+    open fun deleteUnreferenced(@PathVariable awsAccountId: String): HttpResponse<*> {
+        if (!accountIdPattern.matches(awsAccountId)) {
+            return HttpResponse.badRequest(ErrorResponse("AWS Account ID must be exactly 12 numeric digits"))
+        }
+        val account = awsAccountRepository.findByAwsAccountId(awsAccountId).orElse(null)
+            ?: return HttpResponse.notFound<ErrorResponse>()
+        if (account.name != null || riskAssessmentRepository.existsByAssessmentBasisTypeAndAssessmentBasisId(
+                AssessmentBasisType.AWS_ACCOUNT,
+                account.id!!
+            )
+        ) {
+            return HttpResponse.status<ErrorResponse>(io.micronaut.http.HttpStatus.CONFLICT)
+                .body(ErrorResponse("AWS account is named or still referenced"))
+        }
+        awsAccountRepository.delete(account)
+        logger.info("Deleted unreferenced nameless AWS account {}", awsAccountId)
+        return HttpResponse.noContent<Any>()
     }
 }

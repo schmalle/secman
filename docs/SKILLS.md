@@ -1,6 +1,6 @@
 # Which secman skill to use when
 
-Fourteen skills live in `.claude/skills/` (Claude Code) and again in
+Twenty-two skills live in `.claude/skills/` (Claude Code) and again in
 `.agents/skills/` (Codex). The two trees are one skill set: an edit to either
 side must be ported to the other in the same commit — see `CLAUDE.md`
 §"Tooling Conventions" and verify with `./scripts/check-skill-sync.sh`.
@@ -26,6 +26,9 @@ writes.
 | Write code that satisfies the OWASP Top 10 by construction | `/secure-code` | No |
 | Finish a change and check it before merging | `/finalizer` | Docs only |
 | Run the unit/integration tests, or ask where coverage is thin | `/testsuite` | No |
+| Verify the shared GitHub/Visual/Web checker result contract | `/integration-contract-test` | No |
+| Improve code clarity and report risky renames | `/humanizer` | No |
+| Find hot paths and repeated code | `/optimizer` | No |
 | Prove no page throws JS errors | `/e2ejs` | No |
 | Exercise the full exception lifecycle (MCP + UI) | `/e2evulnexception` | **Wipes the DB** |
 | Quick MCP-only exception smoke test | `/e2eexception` | **Deletes all assets** |
@@ -35,7 +38,12 @@ writes.
 | Compare SecMan against Falcon without changing anything | `/crowdstrike-vuln-match` | No |
 | Check a new AWS account starts a correctly scoped assessment | `/aws-account-risk-assessment` | Adds + removes a testbed |
 | Check the AWS account owner actually gets the email | `/aws-account-owner-email` | Adds + removes a testbed, **sends real mail** |
+| Import AWS display names and link matching workgroups | `/aws-account-workgroup-import` | Adds + removes a testbed |
 | Test welcome mail + the guided questionnaire that scopes an assessment | `/account-onboarding` | Adds + removes a testbed |
+| Test the full MCP assessment lifecycle with a manually supplied respondent email | `/mcp-risk-assessment-lifecycle` | Adds + removes a testbed |
+| Remove retained/interrupted MCP assessment lifecycle data | `/cleanup-mcp-risk-assessment-lifecycle` | Removes exact fixture rows only |
+| Test requirement/use-case create, list, assign, delete, and list-again through MCP | `/mcp-requirement-use-case-lifecycle` | Adds + removes two exact fixtures |
+| Test requirement export templates end to end | `/requirement-export-template` | Adds + removes a testbed |
 | Get a fixture to click around in | `/createtestdata` | Adds a fixture |
 
 **The three destructive ones are not safe against a shared instance.** Check what
@@ -360,6 +368,41 @@ are **skipped** — say so in the report rather than counting them as passes; po
 Cleanup is scoped to `e2e-onb-` and the `87…000` accounts it mints, and deletes
 rules before questions because the API refuses to delete a question a rule still
 references.
+
+### `/mcp-risk-assessment-lifecycle` — complete delegated MCP workflow
+
+Takes an unused email address from the user and proves the lifecycle that an
+agent such as PaperclipAI needs: create the respondent and assessor, create one
+use case with exactly one linked requirement, add the user's AWS mapping and
+account-native basis, start the assessment, list it open by use case, read and answer
+the questionnaire as that respondent, submit it, and evaluate it as the assigned
+assessor. Every business operation is performed through MCP.
+
+Unlike `/aws-account-risk-assessment`, this skill does not activate a requirements
+release and therefore cannot terminally archive the environment's current
+baseline. Cleanup runs before and after and matches exact `e2e-mcp-ra-` fixture
+names. Use `--keep-data` only for explicit manual inspection.
+
+### `/cleanup-mcp-risk-assessment-lifecycle` — remove a retained fixture
+
+Runs the lifecycle driver's `--cleanup-only` mode. It is idempotent and removes
+the exact assessment, mapping, requirement, use case, respondent, and
+assessor created by the lifecycle skill. Use it after `--keep-data` or an
+interrupted run; it does not need the original manually supplied email because
+it resolves that address from the exact fixture username.
+
+### `/mcp-requirement-use-case-lifecycle` — reversible requirement relationship test
+
+Creates one uniquely marked requirement and proves it is listable, creates one
+uniquely marked use case and proves it is listable, assigns that use case to the
+requirement, and verifies the stable ID in `useCaseAssignments`. It then removes
+the relationship, deletes the use case and requirement with explicit
+confirmation, and lists both collections again to prove the fixtures are gone.
+
+Every operation uses MCP. Cleanup is limited to the exact IDs returned by the
+create calls, including the failure trap, so the skill is safe to run against a
+shared instance when its delegated identity and key have the documented
+permissions.
 
 ### `/createtestdata` — seed a fixture
 Additive only, nothing is deleted, fixtures accumulate without bound. Do not run

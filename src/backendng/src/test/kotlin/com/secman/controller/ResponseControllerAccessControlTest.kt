@@ -106,7 +106,9 @@ class ResponseControllerAccessControlTest : BaseIntegrationTest() {
             client.toBlocking().exchange<BulkSaveResponseBody, Any>(
                 HttpRequest.POST(
                     "/api/responses/assessment/${assessment.id}/bulk-save",
-                    BulkSaveResponseBody(responses = emptyList())
+                    BulkSaveResponseBody(
+                        responses = listOf(mapOf("requirementId" to 1, "answerType" to "YES"))
+                    )
                 ).cookie(cookie)
             )
         }

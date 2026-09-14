@@ -6,8 +6,8 @@ Integration tests run **unconditionally** — they *fail*, not skip, when no tes
 
 Stack:
 ```
-junit-jupiter 6.1.2, junit-platform-launcher 6.1.2,
-micronaut-test-junit5 5.1.0,
+junit-jupiter 6.1.3, junit-platform-launcher 6.1.3,
+micronaut-test-junit5 5.1.1,
 mockk 1.14.11,
 assertj 3.27.7
 ```
@@ -232,7 +232,7 @@ a floor, and it is biased in both directions:
 - A unit counted as covered may carry a single trivial assertion.
 - `controller` and `mcp-tools` are **understated**: the E2E gates and `tests/e2e/`
   exercise controllers over HTTP without naming a Kotlin class, and
-  `McpToolPermissionsTest` asserts over all 85 MCP tools in one table.
+  `McpToolPermissionsTest` asserts over all 96 MCP tools in one table.
 
 `service`, `util` and the frontend areas are close to honest, because those units
 are normally reached by a unit test or not at all. Never quote the total as "test

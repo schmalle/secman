@@ -5,6 +5,7 @@ import com.secman.repository.RequirementRepository
 import com.secman.repository.RequirementSnapshotRepository
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
+import io.micronaut.data.model.Pageable
 import java.time.Instant
 
 @Singleton
@@ -102,37 +103,16 @@ open class RequirementService(
         limit: Int? = null,
         offset: Int = 0
     ): Pair<List<Requirement>, Int> {
-        // Start with the most selective filter to minimize in-memory work
-        var results: List<Requirement> = when {
-            !search.isNullOrBlank() -> requirementRepository.searchCurrentRequirements(search)
-            !usecase.isNullOrBlank() -> requirementRepository.findCurrentByUsecaseNameOrTextField(usecase)
-            !norm.isNullOrBlank() -> requirementRepository.findCurrentByNormName(norm)
-            else -> requirementRepository.findCurrentRequirements()
-        }
-
-        // Apply remaining filters in memory (already narrowed by SQL above)
-        if (!usecase.isNullOrBlank() && !search.isNullOrBlank()) {
-            // usecase wasn't the primary query, apply it as secondary filter
-            results = results.filter { req ->
-                req.usecases.any { it.name.equals(usecase, ignoreCase = true) } ||
-                    req.usecase?.contains(usecase, ignoreCase = true) == true
-            }
-        }
-        if (!norm.isNullOrBlank() && (!search.isNullOrBlank() || !usecase.isNullOrBlank())) {
-            results = results.filter { req ->
-                req.norms.any { it.name.equals(norm, ignoreCase = true) } ||
-                    req.norm?.contains(norm, ignoreCase = true) == true
-            }
-        }
-        if (!chapter.isNullOrBlank()) {
-            results = results.filter {
-                it.chapter?.contains(chapter, ignoreCase = true) == true
-            }
-        }
-
-        val total = results.size
-        val paged = results.drop(offset).let { if (limit != null) it.take(limit) else it }
-        return Pair(paged, total)
+        val boundedLimit = limit ?: 50
+        val fetchSize = offset + boundedLimit
+        val page = requirementRepository.findCurrentFiltered(
+            search = search?.trim().orEmpty(),
+            usecase = usecase?.trim().orEmpty(),
+            norm = norm?.trim().orEmpty(),
+            chapter = chapter?.trim().orEmpty(),
+            pageable = Pageable.from(0, fetchSize)
+        )
+        return page.content.drop(offset).take(boundedLimit) to page.totalSize.toInt()
     }
 
     /**

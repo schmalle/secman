@@ -24,7 +24,8 @@ data class StreamingSummary(
  */
 data class QueriedHost(
     val hostname: String?,
-    val instanceId: String?
+    val instanceId: String?,
+    val crowdStrikeAid: String? = null
 )
 
 /**

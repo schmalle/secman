@@ -58,6 +58,20 @@ class AssessmentContextBuilder(
                     fewShotExamples = fewShot
                 )
             }
+            AssessmentBasisType.AWS_ACCOUNT -> {
+                val account = assessment.awsAccount
+                AssessmentContext(
+                    basisType = "AWS_ACCOUNT",
+                    basisLabel = account?.name ?: account?.awsAccountId ?: "Unknown AWS account",
+                    assetType = null,
+                    assetGroups = emptyList(),
+                    cloudAccountId = account?.awsAccountId,
+                    osVersion = null,
+                    demandDescription = null,
+                    useCases = useCases,
+                    fewShotExamples = fewShot
+                )
+            }
         }
     }
 

@@ -19,14 +19,14 @@ import java.time.LocalDateTime
  */
 /**
  * One device the import run actually queried (Stage-1 device population). Carries the
- * identifiers the backend uses to resolve the device to persisted `Asset` rows: the
- * hostname (short or FQDN, matched like the import's `findPotentialDuplicates`) and,
- * when known, the AWS EC2 instance id.
+ * identifiers the backend uses to resolve the device to a persisted `Asset`: Falcon AID
+ * first, then AWS EC2 instance id, then the CrowdStrike-owned hostname.
  */
 @Serdeable
 data class QueriedHostDto(
     val hostname: String? = null,
-    val instanceId: String? = null
+    val instanceId: String? = null,
+    val crowdStrikeAid: String? = null
 )
 
 @Serdeable

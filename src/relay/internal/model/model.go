@@ -296,10 +296,10 @@ type Principal struct {
 
 // ExternalIdentity binds an identity-provider subject to a secman principal.
 type ExternalIdentity struct {
-	// Provider is "apple" or "github".
+	// Provider is "apple", "google", or "github".
 	Provider string `json:"provider"`
-	// Subject is the provider's stable user identifier: Apple's `sub` claim,
-	// or GitHub's numeric account id. Never the email or the login name —
+	// Subject is the provider's stable user identifier: the OIDC `sub` claim for
+	// Apple/Google, or GitHub's numeric account id. Never the email or login —
 	// both are mutable and both can be re-registered by someone else.
 	Subject string `json:"subject"`
 	// Label is a human hint ("markus@github"), shown in listings only.
@@ -309,6 +309,7 @@ type ExternalIdentity struct {
 // Providers the relay accepts in an ExternalIdentity.
 const (
 	ProviderApple  = "apple"
+	ProviderGoogle = "google"
 	ProviderGitHub = "github"
 )
 
@@ -426,7 +427,7 @@ func (p Principal) validate() error {
 
 func (e ExternalIdentity) validate() error {
 	switch e.Provider {
-	case ProviderApple, ProviderGitHub:
+	case ProviderApple, ProviderGoogle, ProviderGitHub:
 	default:
 		return fmt.Errorf("unknown identity provider %q", sanitizeRole(e.Provider))
 	}
@@ -434,7 +435,7 @@ func (e ExternalIdentity) validate() error {
 		return errors.New("identity subject has an implausible length")
 	}
 	for _, r := range e.Subject {
-		// Provider subjects are opaque identifiers; both Apple and GitHub use
+		// Provider subjects are opaque identifiers; all supported providers use
 		// a conservative character set, and anything else here is a red flag.
 		ok := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') ||
 			r == '.' || r == '-' || r == '_' || r == '|' || r == '@'

@@ -1,8 +1,13 @@
-# adread — Azure AD → secman Workgroup Import
+# adread — Workgroup Import and AWS Asset Synchronization
 
 `src/adread/read.py` reads Azure AD groups whose `displayName` starts with `AWS-`
 (case-insensitive) and, optionally, creates matching workgroups in secman with the AD
 group members assigned.
+
+Its `sync-workgroup-assets` command uses data already stored in SecMan to assign
+AWS assets through direct workgroup members' email ownership. This mode needs no
+Azure or AWS credentials. See [the synchronization guide](WORKGROUP_ASSET_SYNC.md)
+for the complete data flow, statistics and removal limitations.
 
 ## Overview
 
@@ -11,16 +16,23 @@ group members assigned.
 | Read-only (default) | `uv run python read.py` | Print AD groups + members to stdout. No secman calls. |
 | Import | `uv run python read.py --import` | Read AD groups **and** create/update secman workgroups. |
 | Dry run | `uv run python read.py --import --dry-run` | Log what would be created/assigned; no writes. |
+| AWS asset sync | `uv run --locked python read.py sync-workgroup-assets` | Add missing asset/workgroup links from stored email/account mappings. |
+| AWS asset preview | `uv run --locked python read.py sync-workgroup-assets --dry-run` | Read SecMan and report the complete plan without assigning assets. |
+
+The table's direct commands run from `src/adread/`. From the repository root,
+use `./scripts/sync-workgroup-assets.sh [--dry-run]` for asset synchronization.
 
 ## Prerequisites
 
 - Python 3.11+ with [`uv`](https://docs.astral.sh/uv/)
-- An Azure service principal with `Group.Read.All` and `GroupMember.Read.All` Graph API permissions
-- A secman **ADMIN** account (cross-domain user creation requires ADMIN)
+- For AD read/import: an Azure service principal with `Group.Read.All` and `GroupMember.Read.All` Graph API permissions
+- For SecMan imports or asset synchronization: a secman **ADMIN** account
+- For the canonical synchronization wrapper: `pass-cli` installed and authenticated,
+  and an HTTPS backend whose certificate is trusted by Python
 
 ## Environment Variables
 
-### Azure AD (always required)
+### Azure AD (AD read/import only)
 
 | Var | Description |
 |---|---|
@@ -28,11 +40,11 @@ group members assigned.
 | `AZURE_CLIENT_ID` | Service principal (app registration) client ID |
 | `AZURE_CLIENT_SECRET` | Service principal secret |
 
-### secman backend (required with `--import`)
+### secman backend (required with `--import` or `sync-workgroup-assets`)
 
 | Var | Default | Description |
 |---|---|---|
-| `SECMAN_BACKEND_URL` | — | Backend URL, e.g. `http://localhost:8080` |
+| `SECMAN_BACKEND_URL` | — | Backend URL; asset synchronization requires HTTPS |
 | `SECMAN_ADMIN_NAME` | — | secman username with ADMIN role |
 | `SECMAN_ADMIN_PASS` | — | Password for the above account |
 
@@ -41,8 +53,10 @@ Optional:
 | Var | Default | Description |
 |---|---|---|
 | `LOG_LEVEL` | `INFO` | Standard log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `REQUESTS_CA_BUNDLE` | Python's default trust store | PEM CA bundle for verifying a private backend certificate |
+| `SECMAN_INSECURE` | unset | Legacy AD import option; a true value is rejected by asset synchronization |
 
-## Behaviour
+## AD read/import behaviour
 
 - **Group filter:** AD groups are fetched with a server-side `startswith` filter on `AWS-`, `aws-`, and `Aws-`.
 - **Workgroup naming:** The AD group `displayName` is used verbatim as the secman workgroup name. Names longer than 100 characters are skipped with a warning.
@@ -51,6 +65,26 @@ Optional:
 - **Error handling:** If one group fails (HTTP error, name too long, etc.) the run continues with the remaining groups and exits non-zero when done so cron/CI notices.
 
 ## Running
+
+### Synchronize assets from stored AWS ownership
+
+Run these commands from the repository root after importing AD memberships,
+AWS owner mappings and CrowdStrike assets:
+
+```bash
+./scripts/sync-workgroup-assets.sh --dry-run
+./scripts/sync-workgroup-assets.sh
+./scripts/sync-workgroup-assets.sh --dry-run
+```
+
+With unchanged source data, the final preview reports `relationships_to_add: 0`.
+All workgroups are evaluated, including names without an `AWS-` prefix. Only
+direct members participate. Existing links, including stale automatic links,
+remain because `asset_workgroups` has no manual/automatic source marker.
+
+The wrapper resolves the three SecMan variables from Proton Pass; it does not
+load the Azure settings or accept `--import`/`--insecure` for this command.
+See [configuration and exit codes](WORKGROUP_ASSET_SYNC.md#reconciliation-and-diagnostics).
 
 ### With Proton Pass (canonical)
 
@@ -102,6 +136,7 @@ uv run python read.py --import --dry-run
 ```
 src/adread/
 ├── read.py                         # main script
+├── sync_workgroup_assets.py        # AWS owner-email reconciliation
 ├── pyproject.toml                  # uv project metadata
 ├── import-workgroups.sh            # Proton Pass launcher
 ├── import-workgroups-noproton.sh   # plain-env launcher
@@ -109,6 +144,8 @@ src/adread/
 ├── adread.env.local.example        # template for plain-env secrets (committed)
 └── adread.env.local                # actual plain-env secrets (gitignored)
 ```
+
+The synchronization launcher lives at `scripts/sync-workgroup-assets.sh`.
 
 ## Logging
 

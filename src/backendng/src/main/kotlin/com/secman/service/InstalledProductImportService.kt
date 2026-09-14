@@ -5,6 +5,7 @@ import com.secman.domain.Asset
 import com.secman.domain.InstalledProduct
 import com.secman.dto.InstalledProductImportResponse
 import com.secman.repository.AssetRepository
+import com.secman.repository.CrowdStrikeAssetIdentityRepository
 import com.secman.repository.InstalledProductRepository
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
@@ -14,6 +15,7 @@ import java.time.LocalDateTime
 @Singleton
 open class InstalledProductImportService(
     private val assetRepository: AssetRepository,
+    private val crowdStrikeAssetIdentityRepository: CrowdStrikeAssetIdentityRepository,
     private val installedProductRepository: InstalledProductRepository,
     private val productClassificationService: ProductClassificationService
 ) {
@@ -57,13 +59,20 @@ open class InstalledProductImportService(
         // that may name the same host differently (short vs FQDN), so we match in both
         // directions. Asset count is small (low thousands); a full scan here is cheap.
         val allAssets = assetRepository.findAll()
-        val exactByName = HashMap<String, Asset>(allAssets.size * 2)
+        val exactByName = HashMap<String, MutableList<Asset>>(allAssets.size * 2)
         val assetsByShortName = HashMap<String, MutableList<Asset>>()
         allAssets.forEach { a ->
-            val norm = normHost(a.name) ?: return@forEach
-            exactByName.putIfAbsent(norm, a)
+            val norm = normHost(a.crowdStrikeHostname ?: a.name) ?: return@forEach
+            exactByName.getOrPut(norm) { mutableListOf() }.add(a)
             val short = norm.substringBefore('.')
             assetsByShortName.getOrPut(short) { mutableListOf() }.add(a)
+        }
+        val requestedAids = products.mapNotNull { normalizeAid(it.aid) }.distinct()
+        val assetsByAid = if (requestedAids.isEmpty()) {
+            emptyMap()
+        } else {
+            crowdStrikeAssetIdentityRepository.findByCrowdStrikeAidIn(requestedAids)
+                .associate { it.crowdStrikeAid to it.asset }
         }
 
         products.forEach { dto ->
@@ -76,7 +85,7 @@ open class InstalledProductImportService(
                     return@forEach
                 }
 
-                val asset = when (val resolution = resolveAsset(hostname, exactByName, assetsByShortName)) {
+                val asset = when (val resolution = resolveAsset(dto.aid, hostname, assetsByAid, exactByName, assetsByShortName)) {
                     is Resolution.Found -> resolution.asset
                     Resolution.Ambiguous -> {
                         ambiguousHosts.add(normHost(hostname) ?: "(no hostname)")
@@ -219,16 +228,19 @@ open class InstalledProductImportService(
      *   3. CrowdStrike short name → asset stored as FQDN (unique short name only)
      */
     private fun resolveAsset(
+        aid: String?,
         hostname: String?,
-        exactByName: Map<String, Asset>,
+        assetsByAid: Map<String, Asset>,
+        exactByName: Map<String, List<Asset>>,
         assetsByShortName: Map<String, List<Asset>>
     ): Resolution {
+        normalizeAid(aid)?.let(assetsByAid::get)?.let { return Resolution.Found(it) }
         val norm = normHost(hostname) ?: return Resolution.NotFound
-        exactByName[norm]?.let { return Resolution.Found(it) }
+        resolveUnique(exactByName[norm])?.let { return it }
 
         val short = norm.substringBefore('.')
         if (short != norm) {
-            exactByName[short]?.let { return Resolution.Found(it) }
+            resolveUnique(exactByName[short])?.let { return it }
         }
 
         val byShort = assetsByShortName[short].orEmpty()
@@ -237,6 +249,12 @@ open class InstalledProductImportService(
             1 -> Resolution.Found(byShort.first())
             else -> Resolution.Ambiguous
         }
+    }
+
+    private fun resolveUnique(matches: List<Asset>?): Resolution? = when (matches?.size ?: 0) {
+        0 -> null
+        1 -> Resolution.Found(matches!!.first())
+        else -> Resolution.Ambiguous
     }
 
     /** Normalize a hostname for matching: trim, lowercase, drop a trailing dot. */
@@ -250,4 +268,8 @@ open class InstalledProductImportService(
         ?.trim()
         ?.takeIf { it.isNotBlank() }
         ?.take(maxLength)
+
+    private fun normalizeAid(value: String?): String? = value
+        ?.trim()
+        ?.takeIf { it.isNotBlank() && it.length <= 64 }
 }

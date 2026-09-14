@@ -27,6 +27,10 @@ interface OwnerCandidate {
 interface Asset {
   id?: number;
   name: string;
+  crowdStrikeHostname?: string;
+  nameOverridden?: boolean;
+  nameOverriddenAt?: string;
+  nameOverriddenBy?: string;
   type: string;
   ip?: string;
   uri?: string;
@@ -242,6 +246,29 @@ const AssetManagement: React.FC = () => {
     setTimeout(() => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }, 100);
+  };
+
+  const handleResetName = async () => {
+    if (!editingAsset?.id) return;
+
+    try {
+      const response = await authenticatedPost(`/api/assets/${editingAsset.id}/name/reset`);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({ error: 'Failed to reset asset name' }));
+        throw new Error(body.error || `Failed to reset asset name: ${response.status}`);
+      }
+
+      const updated: Asset = await response.json();
+      setEditingAsset(updated);
+      setFormData({
+        ...updated,
+        workgroupIds: updated.workgroups?.map(workgroup => workgroup.id) || []
+      });
+      await fetchAssets();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reset asset name');
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -585,6 +612,23 @@ const AssetManagement: React.FC = () => {
                       onChange={handleInputChange}
                       required
                     />
+                    {editingAsset?.crowdStrikeHostname && (
+                      <div className="form-text">
+                        CrowdStrike hostname: <code>{editingAsset.crowdStrikeHostname}</code>
+                        {editingAsset.nameOverridden && (
+                          <>
+                            {' '}— this display name is protected from imports.
+                            <button
+                              type="button"
+                              className="btn btn-link btn-sm p-0 ms-2 align-baseline"
+                              onClick={handleResetName}
+                            >
+                              Restore CrowdStrike hostname
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="mb-3">
                     <label htmlFor="type" className="form-label">Type *</label>

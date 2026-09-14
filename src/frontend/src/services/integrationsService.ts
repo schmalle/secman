@@ -94,14 +94,22 @@ async function read<T>(path: string): Promise<T> {
   return response.json();
 }
 
+export function normalizeIntegrationPage<T>(page: Omit<IntegrationPage<T>, 'content'> & { content?: T[] }): IntegrationPage<T> {
+  return { ...page, content: page.content ?? [] };
+}
+
+async function readPage<T>(path: string): Promise<IntegrationPage<T>> {
+  return normalizeIntegrationPage(await read<Omit<IntegrationPage<T>, 'content'> & { content?: T[] }>(path));
+}
+
 export const getIntegrationSummary = () => read<IntegrationSummary>('/summary');
 export const getScanners = () => read<Scanner[]>('/scanners');
 export const getIntegrationSubjects = (scannerId: number, page = 0) =>
-  read<IntegrationPage<IntegrationSubject>>(`/scanners/${scannerId}/subjects?page=${page}&size=25`);
+  readPage<IntegrationSubject>(`/scanners/${scannerId}/subjects?page=${page}&size=25`);
 export const getIntegrationRuns = (scannerId?: number, page = 0) =>
-  read<IntegrationPage<IntegrationRun>>(`/runs?${findingQuery({ scannerId }, page)}`);
+  readPage<IntegrationRun>(`/runs?${findingQuery({ scannerId }, page)}`);
 export const getIntegrationFindings = (filters: FindingFilters, page = 0) =>
-  read<IntegrationPage<IntegrationFinding>>(`/findings?${findingQuery(filters, page)}`);
+  readPage<IntegrationFinding>(`/findings?${findingQuery(filters, page)}`);
 export const getIntegrationFinding = (id: number) => read<IntegrationFinding>(`/findings/${id}`);
 export interface IntegrationRunDetail {
   run: IntegrationRun;

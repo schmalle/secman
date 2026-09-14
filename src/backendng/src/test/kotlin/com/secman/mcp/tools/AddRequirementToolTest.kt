@@ -1,68 +1,82 @@
 package com.secman.mcp.tools
 
 import com.secman.domain.Requirement
+import com.secman.domain.UseCase
 import com.secman.dto.mcp.McpExecutionContext
-import com.secman.service.RequirementService
+import com.secman.service.InputValidationService
+import com.secman.service.McpRequirementManagementService
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
-/**
- * `add_requirement` has no asset/owner scoping — like RequirementController and
- * ExportRequirementsTool, access must be gated by role alone. Regression coverage for
- * the missing-guard finding: this tool used to have no role check at all, so any
- * MCP-delegated identity holding only the coarse REQUIREMENTS_WRITE permission
- * (including a plain USER) could create requirements, bypassing RequirementController's
- * `@Secured("ADMIN", "REQ", "SECCHAMPION")` boundary.
- */
 class AddRequirementToolTest {
+    private val service = mockk<McpRequirementManagementService>()
+    private val tool = AddRequirementTool(service, InputValidationService())
 
-    private val service = mockk<RequirementService>(relaxed = true)
-    private val tool = AddRequirementTool(service)
-
-    private fun ctx(isAdmin: Boolean, roles: Set<String>) =
+    private fun ctx(isAdmin: Boolean, roles: Set<String>, delegatedUserId: Long? = 7L) =
         mockk<McpExecutionContext>().also {
             every { it.isAdmin } returns isAdmin
             every { it.delegatedUserRoles } returns roles
+            every { it.delegatedUserId } returns delegatedUserId
+            every { it.hasDelegation() } returns (delegatedUserId != null)
         }
-
-    private fun args(shortreq: String = "Some requirement") = mapOf("shortreq" to shortreq)
 
     @Test
     fun `plain USER role is rejected`() = runBlocking<Unit> {
-        val result = tool.execute(args(), ctx(isAdmin = false, roles = setOf("USER")))
-
-        assertThat(result.isError).isTrue()
-        val error = result as McpToolResult.Error
-        assertThat(error.code).isEqualTo("ROLE_REQUIRED")
+        val result = tool.execute(mapOf("shortreq" to "Some requirement"), ctx(false, setOf("USER")))
+        assertThat((result as McpToolResult.Error).code).isEqualTo("ROLE_REQUIRED")
     }
 
     @Test
-    fun `REQ role is accepted`() = runBlocking {
-        every { service.createRequirement(any()) } returns Requirement(shortreq = "Some requirement").apply { id = 1L }
-
-        val result = tool.execute(args(), ctx(isAdmin = false, roles = setOf("REQ")))
-
-        assertThat(result.isError).isFalse()
+    fun `delegation is required`() = runBlocking<Unit> {
+        val result = tool.execute(mapOf("shortreq" to "Some requirement"), ctx(true, setOf("ADMIN"), null))
+        assertThat((result as McpToolResult.Error).code).isEqualTo("DELEGATION_REQUIRED")
     }
 
     @Test
-    fun `SECCHAMPION role is accepted`() = runBlocking {
-        every { service.createRequirement(any()) } returns Requirement(shortreq = "Some requirement").apply { id = 1L }
+    fun `creates every field and relationship supplied`() = runBlocking {
+        val saved = Requirement(
+            id = 1L,
+            internalId = "REQ-001",
+            shortreq = "Encrypt data",
+            details = "At rest",
+            language = "en",
+            usecases = mutableSetOf(UseCase(id = 9L, name = "Cloud"))
+        )
+        every { service.createRequirement(any(), listOf(9L), listOf(4L), 7L) } returns saved
 
-        val result = tool.execute(args(), ctx(isAdmin = false, roles = setOf("SECCHAMPION")))
+        val result = tool.execute(
+            mapOf(
+                "shortreq" to "Encrypt data",
+                "details" to "At rest",
+                "language" to "en",
+                "useCaseIds" to listOf(9),
+                "normIds" to listOf(4)
+            ),
+            ctx(false, setOf("REQ"))
+        )
 
         assertThat(result.isError).isFalse()
+        verify {
+            service.createRequirement(
+                match { it.shortreq == "Encrypt data" && it.details == "At rest" && it.language == "en" },
+                listOf(9L),
+                listOf(4L),
+                7L
+            )
+        }
     }
 
     @Test
-    fun `admin API key bypasses the role check regardless of delegated role`() = runBlocking {
-        every { service.createRequirement(any()) } returns Requirement(shortreq = "Some requirement").apply { id = 1L }
-
-        val result = tool.execute(args(), ctx(isAdmin = true, roles = setOf("USER")))
-
-        assertThat(result.isError).isFalse()
+    fun `rejects duplicate relationship ids`() = runBlocking<Unit> {
+        val result = tool.execute(
+            mapOf("shortreq" to "Some requirement", "useCaseIds" to listOf(9, 9)),
+            ctx(false, setOf("REQ"))
+        )
+        assertThat((result as McpToolResult.Error).code).isEqualTo("VALIDATION_ERROR")
+        verify(exactly = 0) { service.createRequirement(any(), any(), any(), any()) }
     }
 }

@@ -33,24 +33,24 @@ dependencies {
     implementation("org.apache.commons:commons-csv:1.14.1")
 
     // AWS SDK for S3 (Feature 065 - S3 User Mapping Import)
-    implementation(platform("software.amazon.awssdk:bom:2.51.1"))
+    implementation(platform("software.amazon.awssdk:bom:2.54.16"))
     implementation("software.amazon.awssdk:s3")
     
     // Kotlin
-    implementation("org.jetbrains.kotlin:kotlin-reflect:2.4.10")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.4.10")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:2.4.20")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.4.20")
     
     // Logging
     runtimeOnly("ch.qos.logback:logback-classic:1.6.3")
-    runtimeOnly("org.yaml:snakeyaml:2.6")
+    runtimeOnly("org.yaml:snakeyaml:2.7")
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")
 
     // Test dependencies - Feature 056
-    testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.2")
-    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.2")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.3")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.3")
     testImplementation("io.mockk:mockk:1.14.11")
     testImplementation("org.assertj:assertj-core:3.27.7")
 }
@@ -69,12 +69,6 @@ kotlin {
 }
 
 tasks {
-    compileKotlin {
-        compilerOptions {
-            freeCompilerArgs.add("-Xannotation-default-target=param-property")
-        }
-    }
-
     // Enable JUnit 5 platform for tests - Feature 056
     test {
         useJUnitPlatform()

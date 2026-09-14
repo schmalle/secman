@@ -156,10 +156,9 @@ carries the same pattern; the backend is the boundary.
 
 For each `(account, owner)` pair:
 
-- **Basis** — an asset representing the account: name `AWS Account <id>`, type
-  `AWS_ACCOUNT`, `cloudAccountId` = the account id, `owner` = the mapped email.
-  Reused when it already exists. The owner reaches it through the unified asset
-  access rules (owner match and cloud-account UserMapping match).
+- **Basis** — the `aws_account` reference row for the 12-digit account id. The
+  assessment basis type is `AWS_ACCOUNT`; no synthetic asset is created and real
+  assets already associated with that account remain independent.
 - **Assessor** — a user with the `SECCHAMPION` role, chosen round-robin across all
   SECCHAMPION users so load spreads evenly.
 - **Requestor** — the ADMIN who ran the import; falls back to the assessor when
@@ -262,13 +261,12 @@ recipient address — see the skill for why both matter.
 
 `/aws-account-risk-assessment` covers the assessment path instead and asserts
 nothing about mail. It exercises both surfaces — CLI and MCP — and covers the
-opt-in default (no flag → no assessment, no asset, no mail), release pinning and
+opt-in default (no flag → no assessment, no account-basis row, no mail), release pinning and
 its stability, the idempotent skip *including* that it does not fail the run,
 the deadline bound on both surfaces, and the missing-ACTIVE-release and
 non-admin negatives. Its cleanup runs before and after and is keyed on the
 stable `e2e-awsra-` owner prefix, so it also sweeps up whatever an earlier
-interrupted run left behind — including the `AWS_ACCOUNT` basis assets, which
-nothing used to remove.
+interrupted run left behind. Shared AWS-account reference rows are retained.
 
 Reminder mails have **no manual trigger** — only the 08:15 scheduler — so nothing
 tests them end to end today.

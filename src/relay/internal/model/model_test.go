@@ -276,6 +276,18 @@ func TestControlValidation(t *testing.T) {
 		}
 	})
 
+	t.Run("google identity provider is accepted", func(t *testing.T) {
+		control := *valid
+		control.Principals = []Principal{{
+			Subject:    "markus",
+			Roles:      []string{"ADMIN"},
+			Identities: []ExternalIdentity{{Provider: ProviderGoogle, Subject: "1087654321"}},
+		}}
+		if err := control.Validate(now); err != nil {
+			t.Fatalf("a linked Google identity should validate: %v", err)
+		}
+	})
+
 	t.Run("duplicate principals are refused", func(t *testing.T) {
 		c := *valid
 		c.Principals = []Principal{
@@ -304,6 +316,9 @@ func TestIdentityKeyIsProviderScoped(t *testing.T) {
 	// must keep them apart or one provider could impersonate the other.
 	if IdentityKey(ProviderApple, "123") == IdentityKey(ProviderGitHub, "123") {
 		t.Fatal("identity keys must be scoped by provider")
+	}
+	if IdentityKey(ProviderApple, "123") == IdentityKey(ProviderGoogle, "123") {
+		t.Fatal("Apple and Google identities must remain distinct")
 	}
 }
 

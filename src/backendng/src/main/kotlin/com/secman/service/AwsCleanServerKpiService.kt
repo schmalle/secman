@@ -15,7 +15,7 @@ import java.time.LocalDateTime
 
 /**
  * Computes and caches the "AWS servers with no vulnerability older than 30 days"
- * security KPI: (AWS servers with zero vulnerabilities scanned >30 days ago) /
+ * security KPI: (AWS servers with zero vulnerabilities detected >30 days ago) /
  * (all AWS servers), as a percentage.
  *
  * Deliberately uses a fixed 30-day window rather than the admin-tunable
@@ -65,7 +65,7 @@ open class AwsCleanServerKpiService(
         try {
             val totalAwsServers = assetRepository.countAllAwsAssetsWithInstanceId()
 
-            val dirtyAwsServers = if (totalAwsServers == 0L) {
+            val awsServersWithOldDetections = if (totalAwsServers == 0L) {
                 0L
             } else {
                 vulnerabilityRepository.countDirtyAwsServers(
@@ -73,7 +73,7 @@ open class AwsCleanServerKpiService(
                 )
             }
 
-            val cleanAwsServers = (totalAwsServers - dirtyAwsServers).coerceAtLeast(0)
+            val cleanAwsServers = (totalAwsServers - awsServersWithOldDetections).coerceAtLeast(0)
             val percentage = computePercentage(cleanAwsServers, totalAwsServers)
 
             val json = objectMapper.writeValueAsString(

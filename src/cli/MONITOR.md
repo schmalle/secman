@@ -236,10 +236,10 @@ sudo systemctl status secman-monitor
 ## Related Documentation
 
 - [CrowdStrike Import](../../docs/CROWDSTRIKE_IMPORT.md)
-- [Feature Specification](../../specs/026-crowdstrike-polling-monitor/spec.md)
+- [CLI reference](../../docs/CLI.md)
 
 ## Support
 
 For issues or questions:
 - GitHub: https://github.com/schmalle/secman
-- Feature Spec: specs/026-crowdstrike-polling-monitor/spec.md
+- CLI reference: docs/CLI.md

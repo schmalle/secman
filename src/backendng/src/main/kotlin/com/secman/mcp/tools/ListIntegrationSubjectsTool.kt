@@ -21,7 +21,9 @@ class ListIntegrationSubjectsTool(private val reads: IntegrationReadService, pri
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
-        if (!context.hasPermission(McpPermission.ASSETS_READ) && !context.hasPermission(McpPermission.INTEGRATIONS_WRITE))
+        if (!context.hasPermission(McpPermission.INTEGRATIONS_READ) &&
+            !context.hasPermission(McpPermission.ASSETS_READ) &&
+            !context.hasPermission(McpPermission.INTEGRATIONS_WRITE))
             return McpToolResult.error("FORBIDDEN", "Asset read permission required")
         val scannerId = (arguments["scannerId"] as? Number)?.toLong()
             ?: return McpToolResult.error("VALIDATION_ERROR", "scannerId is required")

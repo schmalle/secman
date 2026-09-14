@@ -53,7 +53,10 @@ data class RiskAssessment(
     @Column(name = "release_locked_at")
     var releaseLockedAt: LocalDateTime? = null,
 
-    // New unified approach: Assessment basis can be either DEMAND or ASSET
+    @Column(name = "outstanding_reminder_sent_at")
+    var outstandingReminderSentAt: LocalDateTime? = null,
+
+    // Unified approach: the basis is a demand, asset, or AWS account.
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(name = "assessment_basis_type", nullable = false)
@@ -74,6 +77,10 @@ data class RiskAssessment(
     @JoinColumn(name = "asset_id")
     @Deprecated("Use assessmentBasisType and assessmentBasisId instead. This field is kept for migration compatibility.")
     var asset: Asset? = null,
+
+    @ManyToOne
+    @JoinColumn(name = "aws_account_id")
+    var awsAccount: AwsAccount? = null,
 
     @ManyToOne
     @JoinColumn(name = "assessor_id", nullable = false)
@@ -165,7 +172,7 @@ data class RiskAssessment(
     fun getDemandBasis(): Demand? {
         return when (assessmentBasisType) {
             AssessmentBasisType.DEMAND -> demand ?: throw IllegalStateException("Demand not loaded for DEMAND basis type")
-            AssessmentBasisType.ASSET -> null
+            AssessmentBasisType.ASSET, AssessmentBasisType.AWS_ACCOUNT -> null
         }
     }
 
@@ -176,8 +183,14 @@ data class RiskAssessment(
     fun getAssetBasis(): Asset? {
         return when (assessmentBasisType) {
             AssessmentBasisType.ASSET -> asset ?: throw IllegalStateException("Asset not loaded for ASSET basis type")
-            AssessmentBasisType.DEMAND -> null
+            AssessmentBasisType.DEMAND, AssessmentBasisType.AWS_ACCOUNT -> null
         }
+    }
+
+    fun getAwsAccountBasis(): AwsAccount? = when (assessmentBasisType) {
+        AssessmentBasisType.AWS_ACCOUNT -> awsAccount
+            ?: throw IllegalStateException("AWS account not loaded for AWS_ACCOUNT basis type")
+        AssessmentBasisType.DEMAND, AssessmentBasisType.ASSET -> null
     }
 
     /**
@@ -194,6 +207,7 @@ data class RiskAssessment(
                 }
             }
             AssessmentBasisType.ASSET -> getAssetBasis()
+            AssessmentBasisType.AWS_ACCOUNT -> null
         }
     }
 
@@ -204,6 +218,9 @@ data class RiskAssessment(
         return when (assessmentBasisType) {
             AssessmentBasisType.DEMAND -> getDemandBasis()?.getAssetName() ?: "Unknown Asset"
             AssessmentBasisType.ASSET -> getAssetBasis()?.name ?: "Unknown Asset"
+            AssessmentBasisType.AWS_ACCOUNT -> getAwsAccountBasis()?.name
+                ?: getAwsAccountBasis()?.awsAccountId
+                ?: "Unknown AWS Account"
         }
     }
 
@@ -214,6 +231,7 @@ data class RiskAssessment(
         return when (assessmentBasisType) {
             AssessmentBasisType.DEMAND -> getDemandBasis()?.getAssetType() ?: "Unknown"
             AssessmentBasisType.ASSET -> getAssetBasis()?.type ?: "Unknown"
+            AssessmentBasisType.AWS_ACCOUNT -> "AWS_ACCOUNT"
         }
     }
 
@@ -224,6 +242,8 @@ data class RiskAssessment(
         return when (assessmentBasisType) {
             AssessmentBasisType.DEMAND -> getDemandBasis()?.title ?: "Unknown Demand"
             AssessmentBasisType.ASSET -> getAssetBasis()?.name ?: "Unknown Asset"
+            AssessmentBasisType.AWS_ACCOUNT -> getAwsAccountBasis()?.let { it.name ?: it.awsAccountId }
+                ?: "Unknown AWS Account"
         }
     }
 
@@ -234,6 +254,7 @@ data class RiskAssessment(
         return when (assessmentBasisType) {
             AssessmentBasisType.DEMAND -> getDemandBasis()?.getAssetOwner() ?: "Unknown"
             AssessmentBasisType.ASSET -> getAssetBasis()?.owner ?: "Unknown"
+            AssessmentBasisType.AWS_ACCOUNT -> respondent?.email ?: "Unknown"
         }
     }
 
@@ -246,12 +267,17 @@ data class RiskAssessment(
             AssessmentBasisType.DEMAND -> {
                 demand != null &&
                 demand?.id == assessmentBasisId &&
-                asset == null
+                asset == null && awsAccount == null
             }
             AssessmentBasisType.ASSET -> {
                 asset != null &&
                 asset?.id == assessmentBasisId &&
-                demand == null
+                demand == null && awsAccount == null
+            }
+            AssessmentBasisType.AWS_ACCOUNT -> {
+                awsAccount != null &&
+                awsAccount?.id == assessmentBasisId &&
+                demand == null && asset == null
             }
         }
     }
@@ -274,6 +300,7 @@ data class RiskAssessment(
                 if (asset != null) {
                     errors.add("Asset must be null for DEMAND basis type")
                 }
+                if (awsAccount != null) errors.add("AWS account must be null for DEMAND basis type")
             }
             AssessmentBasisType.ASSET -> {
                 if (asset == null) {
@@ -285,6 +312,15 @@ data class RiskAssessment(
                 if (demand != null) {
                     errors.add("Demand must be null for ASSET basis type")
                 }
+                if (awsAccount != null) errors.add("AWS account must be null for ASSET basis type")
+            }
+            AssessmentBasisType.AWS_ACCOUNT -> {
+                if (awsAccount == null) errors.add("AWS account entity must be loaded for AWS_ACCOUNT basis type")
+                if (awsAccount?.id != assessmentBasisId) {
+                    errors.add("AWS account ID (${awsAccount?.id}) must match assessmentBasisId ($assessmentBasisId)")
+                }
+                if (demand != null) errors.add("Demand must be null for AWS_ACCOUNT basis type")
+                if (asset != null) errors.add("Asset must be null for AWS_ACCOUNT basis type")
             }
         }
 

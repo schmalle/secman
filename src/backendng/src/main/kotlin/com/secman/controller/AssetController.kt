@@ -77,6 +77,7 @@ open class AssetController(
     @Serdeable
     data class UpdateAssetRequest(
         @Nullable val name: String? = null,
+        val resetNameToCrowdStrike: Boolean = false,
         @Nullable val type: String? = null,
         @Nullable val ip: String? = null,
         @Nullable @Size(max = 2048) val uri: String? = null,
@@ -135,6 +136,10 @@ open class AssetController(
     data class AssetResponse(
         val id: Long,
         val name: String,
+        val crowdStrikeHostname: String? = null,
+        val nameOverridden: Boolean = false,
+        val nameOverriddenAt: String? = null,
+        val nameOverriddenBy: String? = null,
         val type: String,
         val ip: String?,
         val uri: String?,
@@ -185,6 +190,10 @@ open class AssetController(
                 return AssetResponse(
                     id = asset.id!!,
                     name = asset.name,
+                    crowdStrikeHostname = asset.crowdStrikeHostname,
+                    nameOverridden = asset.nameOverriddenAt != null,
+                    nameOverriddenAt = asset.nameOverriddenAt?.toString(),
+                    nameOverriddenBy = asset.nameOverriddenBy,
                     type = asset.type,
                     ip = asset.ip,
                     uri = asset.uri,
@@ -337,7 +346,8 @@ open class AssetController(
         return try {
             log.debug("Fetching asset by name: {} for user: {}", name, authentication.name)
 
-            val asset = assetRepository.findByNameIgnoreCase(name)
+            val asset = assetRepository.findByCrowdStrikeHostnameIgnoreCase(name)
+                ?: assetRepository.findByNameIgnoreCase(name)
 
             if (asset == null) {
                 return HttpResponse.notFound(ErrorResponse("Asset not found"))
@@ -495,6 +505,14 @@ open class AssetController(
 
             val asset = assetRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("Asset not found"))
+
+            if (request.name != null && request.resetNameToCrowdStrike) {
+                return HttpResponse.badRequest(ErrorResponse("Name and resetNameToCrowdStrike cannot be used together"))
+            }
+
+            if (request.resetNameToCrowdStrike && !asset.resetNameOverride()) {
+                return HttpResponse.badRequest(ErrorResponse("Asset has no CrowdStrike hostname to restore"))
+            }
             
             // Update fields if provided (partial update support like Java implementation)
             request.name?.let { newName ->
@@ -502,7 +520,9 @@ open class AssetController(
                 if (trimmedName.isBlank()) {
                     return HttpResponse.badRequest(ErrorResponse("Name cannot be empty"))
                 }
-                asset.name = trimmedName
+                if (trimmedName != asset.name) {
+                    asset.overrideName(trimmedName, authentication.name)
+                }
             }
             
             request.type?.let { newType ->
@@ -575,12 +595,35 @@ open class AssetController(
 
             val updatedAsset = assetRepository.update(asset)
 
-            log.info("Updated asset: {} with id: {}", updatedAsset.name, updatedAsset.id)
+            log.info(
+                "Asset update completed: actor={} assetId={} nameOverride={} outcome=updated",
+                authentication.name, updatedAsset.id, updatedAsset.nameOverriddenAt != null
+            )
             HttpResponse.ok(AssetResponse.from(updatedAsset))
         } catch (e: Exception) {
             log.error("Error updating asset with id: {}", id, e)
             HttpResponse.badRequest(ErrorResponse("An internal error occurred"))
         }
+    }
+
+    /** Clear a user display-name override and restore the latest CrowdStrike hostname. */
+    @Post("/{id}/name/reset")
+    @Transactional
+    open fun resetName(id: Long, authentication: Authentication): HttpResponse<*> {
+        if (!assetFilterService.canAccessAsset(id, authentication)) {
+            log.warn("Asset name reset denied: actor={} assetId={} outcome=denied", authentication.name, id)
+            return HttpResponse.notFound(ErrorResponse("Asset not found"))
+        }
+
+        val asset = assetRepository.findById(id).orElse(null)
+            ?: return HttpResponse.notFound(ErrorResponse("Asset not found"))
+        if (!asset.resetNameOverride()) {
+            return HttpResponse.badRequest(ErrorResponse("Asset has no CrowdStrike hostname to restore"))
+        }
+
+        val updated = assetRepository.update(asset)
+        log.info("Asset name reset: actor={} assetId={} outcome=updated", authentication.name, id)
+        return HttpResponse.ok(AssetResponse.from(updated))
     }
 
     /**

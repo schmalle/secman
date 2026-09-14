@@ -44,6 +44,12 @@ import jakarta.inject.Singleton
 @Singleton
 @Command(
     name = "manage-user-mappings",
+    footer = [
+        "After importing AWS owners, derive asset assignments from workgroup member emails:",
+        "  ./scripts/sync-workgroup-assets.sh [--dry-run]",
+        "This separate Python command requires ADMIN and verified HTTPS and preserves all links.",
+        "For display-name account linking, use link-workgroups. See docs/WORKGROUP_ASSET_SYNC.md."
+    ],
     description = [
         "Manage user mappings for domains and AWS accounts. " +
             "The 'list' subcommand supports --send-email to distribute a " +

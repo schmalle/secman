@@ -4,6 +4,8 @@ import com.secman.domain.Requirement
 import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
+import io.micronaut.data.model.Page
+import io.micronaut.data.model.Pageable
 import java.util.*
 
 @Repository
@@ -41,4 +43,53 @@ interface RequirementRepository : JpaRepository<Requirement, Long> {
             OR LOWER(COALESCE(r.usecase, '')) LIKE LOWER(CONCAT('%', :usecaseName, '%'))
         )""")
     fun findCurrentByUsecaseNameOrTextField(usecaseName: String): List<Requirement>
+
+    @Query(
+        value = """
+            SELECT DISTINCT r FROM Requirement r
+            LEFT JOIN r.usecases u
+            LEFT JOIN r.norms n
+            WHERE r.isCurrent = true
+              AND (:search = '' OR
+                   LOWER(r.shortreq) LIKE LOWER(CONCAT('%', :search, '%')) OR
+                   LOWER(COALESCE(r.details, '')) LIKE LOWER(CONCAT('%', :search, '%')) OR
+                   LOWER(COALESCE(r.usecase, '')) LIKE LOWER(CONCAT('%', :search, '%')) OR
+                   LOWER(COALESCE(r.example, '')) LIKE LOWER(CONCAT('%', :search, '%')) OR
+                   LOWER(COALESCE(r.chapter, '')) LIKE LOWER(CONCAT('%', :search, '%')) OR
+                   LOWER(COALESCE(r.norm, '')) LIKE LOWER(CONCAT('%', :search, '%')))
+              AND (:usecase = '' OR LOWER(u.name) = LOWER(:usecase) OR
+                   LOWER(COALESCE(r.usecase, '')) LIKE LOWER(CONCAT('%', :usecase, '%')))
+              AND (:norm = '' OR LOWER(n.name) = LOWER(:norm) OR
+                   LOWER(COALESCE(r.norm, '')) LIKE LOWER(CONCAT('%', :norm, '%')))
+              AND (:chapter = '' OR
+                   LOWER(COALESCE(r.chapter, '')) LIKE LOWER(CONCAT('%', :chapter, '%')))
+            ORDER BY r.internalId
+        """,
+        countQuery = """
+            SELECT COUNT(DISTINCT r.id) FROM Requirement r
+            LEFT JOIN r.usecases u
+            LEFT JOIN r.norms n
+            WHERE r.isCurrent = true
+              AND (:search = '' OR
+                   LOWER(r.shortreq) LIKE LOWER(CONCAT('%', :search, '%')) OR
+                   LOWER(COALESCE(r.details, '')) LIKE LOWER(CONCAT('%', :search, '%')) OR
+                   LOWER(COALESCE(r.usecase, '')) LIKE LOWER(CONCAT('%', :search, '%')) OR
+                   LOWER(COALESCE(r.example, '')) LIKE LOWER(CONCAT('%', :search, '%')) OR
+                   LOWER(COALESCE(r.chapter, '')) LIKE LOWER(CONCAT('%', :search, '%')) OR
+                   LOWER(COALESCE(r.norm, '')) LIKE LOWER(CONCAT('%', :search, '%')))
+              AND (:usecase = '' OR LOWER(u.name) = LOWER(:usecase) OR
+                   LOWER(COALESCE(r.usecase, '')) LIKE LOWER(CONCAT('%', :usecase, '%')))
+              AND (:norm = '' OR LOWER(n.name) = LOWER(:norm) OR
+                   LOWER(COALESCE(r.norm, '')) LIKE LOWER(CONCAT('%', :norm, '%')))
+              AND (:chapter = '' OR
+                   LOWER(COALESCE(r.chapter, '')) LIKE LOWER(CONCAT('%', :chapter, '%')))
+        """
+    )
+    fun findCurrentFiltered(
+        search: String,
+        usecase: String,
+        norm: String,
+        chapter: String,
+        pageable: Pageable
+    ): Page<Requirement>
 }

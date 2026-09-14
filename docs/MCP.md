@@ -1,6 +1,14 @@
 # MCP Integration
 
-Streamable HTTP / JSON-RPC 2.0 endpoint at `POST /mcp`. **85 tools** spanning requirements, releases, alignment, assets, the application register, vulnerabilities, exception requests, scans, workgroups, user mappings, AWS account sharing, users, the vulnerability heatmap, GitHub repositories, notifications, and maintenance jobs.
+Streamable HTTP / JSON-RPC 2.0 endpoint at `POST /mcp`. Tools span requirements, releases, alignment, assets, the application register, vulnerabilities, integration results, exception requests, scans, workgroups, user mappings, AWS account sharing, users, statistics, the vulnerability heatmap, GitHub repositories, notifications, and maintenance jobs.
+
+For an operator-ready command that creates a user, one-requirement use case, AWS
+account, and open risk assessment entirely through MCP, see
+[`MCP_RISK_ASSESSMENT_LIFECYCLE.md`](MCP_RISK_ASSESSMENT_LIFECYCLE.md#operator-provisioning-script).
+
+For complete requirement/use-case create, edit, assignment, list, and safe
+delete workflows, see
+[`MCP_REQUIREMENT_MANAGEMENT.md`](MCP_REQUIREMENT_MANAGEMENT.md).
 
 Every tool is listed in [Tool reference](#tool-reference) below — that section is exhaustive and is checked against the source by the commands in [Keeping this document in sync](#keeping-this-document-in-sync).
 
@@ -24,14 +32,14 @@ Implied per role:
 
 | Role | Implied permissions |
 |---|---|
-| `USER` | `REQUIREMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `TAGS_READ` |
+| `USER` | `INTEGRATIONS_READ/WRITE`, `REQUIREMENTS_READ`, `ASSETS_READ/WRITE`, `VULNERABILITIES_READ`, `TAGS_READ` |
 | `ADMIN` | all |
-| `VULN` | `VULNERABILITIES_READ`, `SCANS_READ`, `ASSETS_READ` |
+| `VULN` | `INTEGRATIONS_READ/WRITE`, `VULNERABILITIES_READ`, `SCANS_READ`, `ASSETS_READ/WRITE` |
 | `RELEASE_MANAGER` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ` |
-| `REQ` | `REQUIREMENTS_READ/WRITE`, `FILES_READ`, `TAGS_READ` |
+| `REQ` | `REQUIREMENTS_READ/WRITE/DELETE`, `FILES_READ`, `TAGS_READ` |
 | `REQADMIN` | `REQUIREMENTS_READ/WRITE` (also enables release create/delete + alignment) |
 | `RISK` | `ASSESSMENTS_READ/WRITE/EXECUTE` |
-| `SECCHAMPION` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `SCANS_READ` |
+| `SECCHAMPION` | `INTEGRATIONS_READ/WRITE`, `REQUIREMENTS_READ/WRITE/DELETE`, `ASSESSMENTS_READ/WRITE`, `ASSETS_READ/WRITE`, `VULNERABILITIES_READ`, `SCANS_READ`, `NOTIFICATIONS_SEND` |
 
 ## Quick start
 
@@ -56,40 +64,12 @@ curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
 
 ## Client setup
 
-### Claude Code (recommended, native HTTP)
-
-```bash
-claude mcp add --transport http secman http://localhost:8080/mcp \
-  --header "X-MCP-API-Key: sk-..." \
-  --header "X-MCP-User-Email: you@company.com"
-```
-
-### Claude Desktop (native `url`)
-
-`~/Library/Application Support/Claude/claude_desktop_config.json` (macOS), `%APPDATA%\Claude\…` (Win), `~/.config/Claude/…` (Linux):
-
-```json
-{ "mcpServers": { "secman": {
-  "url": "http://localhost:8080/mcp",
-  "headers": {
-    "X-MCP-API-Key": "sk-...",
-    "X-MCP-User-Email": "you@company.com"
-  }
-} } }
-```
-
-### Claude Desktop fallback (`mcp-remote` stdio→HTTP proxy)
-
-Use only if your Desktop version lacks native `url`:
-
-```json
-{ "mcpServers": { "secman": {
-  "command": "npx",
-  "args": ["-y","mcp-remote","http://localhost:8080/mcp",
-           "--header","X-MCP-API-Key: sk-...",
-           "--header","X-MCP-User-Email: you@company.com"]
-} } }
-```
+See [Connect SecMan MCP clients](MCP_CLIENT_SETUP.md) for secure, current setup
+instructions for Cursor, Codex, Claude Code, Claude web, and Claude Desktop.
+The guide includes environment-variable and Proton Pass examples, client
+verification, and troubleshooting. In particular, Claude's web/Desktop remote
+custom-connector UI cannot currently send SecMan's required static headers;
+use the documented Claude Desktop local bridge or Claude Code instead.
 
 ## Smoke test
 
@@ -114,16 +94,19 @@ This is the **API-key** permission each tool is gated on. It is only half the ch
 
 | API-key permission | Tools |
 |---|---|
-| `REQUIREMENTS_READ` | `get_requirements`, `export_requirements`, `list_releases`, `get_release`, `create_release`, `delete_release`, `set_release_status`, `compare_releases`, `start_alignment`, `submit_review`, `get_alignment_status`, `finalize_alignment` |
-| `REQUIREMENTS_WRITE` | `add_requirement`, `delete_all_requirements` |
+| `REQUIREMENTS_READ` | `get_requirements`, `list_use_cases`, `export_requirements`, `list_releases`, `get_release`, `create_release`, `delete_release`, `set_release_status`, `compare_releases`, `start_alignment`, `submit_review`, `get_alignment_status`, `finalize_alignment` |
+| `REQUIREMENTS_WRITE` | `add_requirement`, `update_requirement`, `set_requirement_use_cases`, `create_use_case`, `update_use_case`, `delete_all_requirements` |
+| `REQUIREMENTS_DELETE` | `delete_requirement`, `delete_use_case` |
 | `ASSETS_READ` | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile`, `delete_asset`, `delete_all_assets`, `delete_asset_not_seen`, `asset_match_clear` |
 | `ASSETS_WRITE` | `create_asset`, `update_asset` |
+| `INTEGRATIONS_READ` | `list_integration_subjects`, `get_integration_summary`, `list_integration_findings`, `get_integration_finding`, `list_integration_runs`, `get_integration_run` |
+| `INTEGRATIONS_WRITE` | `list_integration_subjects`, `submit_integration_run` |
 | `SCANS_READ` | `get_scans`, `get_asset_scan_results`, `search_products` |
 | `VULNERABILITIES_READ` | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_all_accessible_vulnerabilities`, `get_asset_most_vulnerabilities`, `get_overdue_assets`, `add_vulnerability`, `deduplicate_vulnerabilities`, `list_products`, all `*_exception_request*` tools, `list_vulnerability_exceptions`, `delete_all_vulnerability_exceptions`, `get_vulnerability_heatmap`, `refresh_vulnerability_heatmap`, `get_top_accounts_by_finding_age`, `get_crowdstrike_last_import`, `import_github_repos`, `*_github_owner_email_mapping*` |
 | `ASSESSMENTS_READ` | `list_aws_account_risk_assessments`, `list_account_onboarding_rules`, `preview_account_onboarding_rules` |
 | `USER_ACTIVITY` | `list_users`, `add_user`, `delete_user`, `import_user_mappings`, `list_user_mappings`, `list_/create_/delete_aws_account_sharing`, `simulate_account_onboarding` |
 | `WORKGROUPS_WRITE` | `create_workgroup`, `delete_workgroup`, `assign_assets_to_workgroup`, `assign_users_to_workgroup`, `list_/add_/remove_workgroup_aws_account`, `list_/add_/remove_workgroup_ad_domain`, `link_workgroup_aws_accounts` |
-| `NOTIFICATIONS_SEND` | `send_admin_summary`, `send_patch_notifications`, `send_exception_expiry_reminders`, `send_outdated_notifications`, `send_vulnerability_notifications`, `send_application_register_reminders`, `notify_new_accounts`, `send_github_repo_alerts` |
+| `NOTIFICATIONS_SEND` | `send_admin_summary`, `send_patch_notifications`, `send_exception_expiry_reminders`, `send_outdated_notifications`, `send_vulnerability_notifications`, `send_application_register_reminders`, `notify_new_accounts`, `send_github_repo_alerts`, `notify_risk_assessment_respondent` |
 | *(unmapped)* | `application_register` — see [Two permission maps](#two-permission-maps) |
 
 `get_asset_most_vulnerabilities` and `get_overdue_assets` accept `VULNERABILITIES_READ` **or** `ASSETS_READ`.
@@ -149,12 +132,20 @@ Within a map, a tool is authorized when the caller holds **any** of the permissi
 
 | Tool | Arguments | Roles | Deleg. |
 |---|---|---|---|
-| `get_requirements` | `search`, `usecase`, `norm`, `chapter`, `detailed`, `limit` (default 50), `offset` | any | — |
+| `get_requirements` | `search`, `usecase`, `norm`, `chapter`, `detailed`, `limit` (default 50, max 100), `offset` (max 10,000) | ADMIN, REQ, SECCHAMPION | ✓ |
 | `export_requirements` | `format`* (`xlsx\|docx`) | ADMIN, REQ, SECCHAMPION | — |
-| `add_requirement` | `shortreq`*, `details`, `motivation`, `example`, `norm`, `usecase`, `chapter` | any | — |
+| `add_requirement` | `shortreq`*, all optional content fields, `useCaseIds[]`, `normIds[]` | ADMIN, REQ, SECCHAMPION | ✓ |
+| `update_requirement` | `requirementId`*, optional content fields, `clearFields[]`, `useCaseIds[]`, `normIds[]` | ADMIN, REQ, SECCHAMPION | ✓ |
+| `set_requirement_use_cases` | `requirementId`*, `useCaseIds[]`* (complete replacement) | ADMIN, REQ, SECCHAMPION | ✓ |
+| `delete_requirement` | `requirementId`*, `confirm`* (`true`) | ADMIN, REQ, SECCHAMPION | ✓ |
+| `list_use_cases` | `search`, `page`, `pageSize` (max 100) | ADMIN, REQ, SECCHAMPION | ✓ |
+| `create_use_case` | `name`* | ADMIN, REQ, SECCHAMPION | ✓ |
+| `update_use_case` | `useCaseId`*, `name`* | ADMIN, REQ, SECCHAMPION | ✓ |
+| `delete_use_case` | `useCaseId`*, `confirm`* (`true`) | ADMIN, REQ, SECCHAMPION | ✓ |
 | `delete_all_requirements` | `confirm`* (boolean `true`) | ADMIN | — |
 
-- `get_requirements` — `search` is full-text across title, description, usecase, example, chapter and norm (case-insensitive). `usecase`/`norm` match both the linked entity names and the legacy free-text fields. `detailed: true` adds the legacy free-text usecase/norm fields and timestamps.
+- `get_requirements` — `search` is full-text across title, description, usecase, example, chapter and norm (case-insensitive). `usecase`/`norm` match both the linked entity names and the legacy free-text fields. Responses include relationship IDs in `useCaseAssignments` and `normAssignments`; `detailed: true` adds legacy fields and timestamps.
+- The complete two-step create/assign flow, update semantics, deletion order, JSON-RPC examples, and Paperclip contract are in [MCP requirement and use-case management](MCP_REQUIREMENT_MANAGEMENT.md).
 
 ### Releases
 
@@ -197,13 +188,13 @@ Within a map, a tool is authorized when the caller holds **any** of the permissi
 | `get_asset_complete_profile` | `assetId`*, `includeVulnerabilities`, `includeScanResults` | any | — |
 | `get_asset_most_vulnerabilities` | `topN` (default 1, max 10) | any | — |
 | `create_asset` | `name`*, `type`*, `owner`*, `ip`, `uri`, `description`, `criticality` (`CRITICAL\|HIGH\|MEDIUM\|LOW\|NA`), `adDomain`, `cloudAccountId` | any | ✓ |
-| `update_asset` | `assetId`* + any of `name`, `type`, `owner`, `ip`, `uri`, `description`, `criticality`, `adDomain` | any | ✓ |
+| `update_asset` | `assetId`* + any of `name`, `resetNameToCrowdStrike`, `type`, `owner`, `ip`, `uri`, `description`, `criticality`, `adDomain` | any | ✓ |
 | `delete_asset` | `assetId`*, `forceTimeout` | ADMIN | ✓ |
 | `delete_all_assets` | `confirm`* (boolean `true`) | ADMIN | ✓ |
 
 - All read tools scope results through [unified asset access](../CLAUDE.md#unified-asset-access-any-of).
 - `create_asset` rejects duplicate names case-insensitively and records the delegated user as `manualCreator`. `uri` accepts `http`, `https` or `urn` for endpoint-style assets.
-- `update_asset` is a partial update with row-level access control — an inaccessible ID returns `NOT_FOUND`, not `FORBIDDEN`. Workgroup membership is changed with `assign_assets_to_workgroup`, not here.
+- `update_asset` is a partial update with row-level access control — an inaccessible ID returns `NOT_FOUND`, not `FORBIDDEN`. Setting `name` creates a user-owned display-name override that later CrowdStrike imports preserve. Set `resetNameToCrowdStrike=true` (without `name`) to restore the latest source hostname and resume automatic hostname updates. The response includes `crowdStrikeHostname` and `nameOverridden`. Workgroup membership is changed with `assign_assets_to_workgroup`, not here.
 - `delete_asset` cascades to vulnerabilities, scan results and exception requests; it returns the deleted counts and an audit-log id.
 
 ### Application register
@@ -359,6 +350,63 @@ Delegation required throughout. Most are ADMIN-only; the three onboarding tools 
 - **`link_workgroup_aws_accounts`** — the correction path for the above: re-links every account whose stored display name has no workgroup assignment yet, with no file involved. Use it for mappings imported before display names were captured, or when the matching workgroup did not exist at import time. `dryRun` reports without creating or assigning. Returns the same `workgroupLinks` shape (as the top-level result). Idempotent; existing assignments are never removed, so an account renamed between imports keeps its old workgroup alongside the new one. Same code path as REST `POST /api/user-mappings/link-workgroup-accounts` and CLI `manage-user-mappings link-workgroups`. See `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`.
 - **`list_user_mappings`** returns the full `UserMappingDto` (id, email, awsAccountId, domain, userId, isFutureMapping, applied/created/updatedAt). `email` is a case-insensitive partial match.
 - **`simulate_account_onboarding`** runs the whole onboarding path against an AWS account id and email address you supply — the *same* code path a real import runs, not a mock — so the welcome mail and the guided questionnaire can be exercised without waiting for a real account. `mode` is `WELCOME_ONLY` | `DIRECT` | `GUIDED`; `riskAssessmentUseCase` is required for `DIRECT`. Returns `onboarding[]` and `riskAssessments[]` in the shapes above. **It really sends mail** unless `dryRun` is true, so it is rate limited (20 live runs per actor per hour), every simulated message says it is a test and names the actor, and the invite is stamped `simulated`. The invite **id** is returned; the token never is.
+
+### Complete risk-assessment lifecycle
+
+| Tool | Required arguments | Permission |
+|---|---|---|
+| `create_risk_assessment` | `awsAccountId` (12 digits), `useCaseIds` (one or more), `assessorEmail`, `respondentEmail`, `endDate` | `ASSESSMENTS_WRITE` |
+| `notify_risk_assessment_respondent` | `assessmentId`; optional `dryRun` | `NOTIFICATIONS_SEND` |
+| `list_risk_assessments` | none; optional `status`, `useCaseName`, `page`, `pageSize` | `ASSESSMENTS_READ` |
+| `get_risk_assessment_questionnaire` | `assessmentId` | `ASSESSMENTS_READ` |
+| `get_risk_assessment_answers` | `assessmentId` | `ASSESSMENTS_READ` |
+| `save_risk_assessment_answers` | `assessmentId`, `answers[]` | `ASSESSMENTS_EXECUTE` |
+| `submit_risk_assessment` | `assessmentId` | `ASSESSMENTS_EXECUTE` |
+| `evaluate_risk_assessment` | `assessmentId` | `ASSESSMENTS_READ` |
+| `get_risk_assessment_statistics` | optional exact `useCaseName` | `ASSESSMENTS_READ` |
+
+`create_risk_assessment` stores an `AWS_ACCOUNT` basis referencing the account
+record directly. It never creates or requires an asset. Requirements from all
+selected use cases form the questionnaire union. New clients use `useCaseIds`
+(1–50 unique IDs); deprecated `useCaseId` remains accepted by itself for
+compatibility. Creation is limited to
+delegated ADMIN and SECCHAMPION users. Read results include `awsAccountId` so
+Paperclip does not need to interpret the internal numeric `basisId`.
+
+`notify_risk_assessment_respondent` recomputes outstanding answers at call
+time. It sends only for a `STARTED` assessment with unanswered requirements and
+only when delegated as its assessor/requestor, an ADMIN, or a SECCHAMPION.
+`dryRun:true` returns counts without sending. The mail uses the authenticated
+assessment link and never creates or exposes a capability token. Live sends
+are atomically limited to one per assessment in 24 hours, survive restarts,
+and return `COOLDOWN_ACTIVE` without sending when called again too soon.
+
+`create_use_case`, the `add_requirement.useCaseIds` extension,
+`create_risk_assessment`, `list_risk_assessments`,
+`get_risk_assessment_questionnaire`, `get_risk_assessment_answers`, `save_risk_assessment_answers`,
+`submit_risk_assessment`, `notify_risk_assessment_respondent`, and
+`evaluate_risk_assessment` make creation through
+evaluation available to delegated MCP clients. `list_risk_assessments` supports
+the concrete open-by-use-case query with `status: "STARTED"` and `useCaseName`.
+The answer and submit operations require the assigned respondent; evaluation
+requires the assessor, requestor, ADMIN, or SECCHAMPION. See
+[MCP risk-assessment lifecycle](MCP_RISK_ASSESSMENT_LIFECYCLE.md) for schemas,
+PaperclipAI envelopes, permission requirements, and the holistic E2E driver.
+
+### Statistics for automation
+
+| Tool | Arguments | Roles | Permission |
+|---|---|---|---|
+| `get_secman_statistics` | *(none)* | ADMIN | `SYSTEM_INFO` |
+| `get_my_security_statistics` | *(none)* | ADMIN, VULN, SECCHAMPION | `VULNERABILITIES_READ` |
+| `get_risk_assessment_statistics` | optional exact `useCaseName` | ADMIN, RISK, SECCHAMPION | `ASSESSMENTS_READ` |
+
+The global tool returns estate counts plus users logged in during a rolling
+seven-day window. The security tool follows unified asset access and returns a
+severity distribution. The assessment tool reports visible workflow counts and
+supports cheap use-case-specific heartbeats. See
+[MCP statistics for automation](MCP_STATISTICS.md) for schemas, example calls,
+response semantics, privacy boundaries, and the recommended Paperclip pattern.
 - **`list_account_onboarding_rules`** returns the configured questions and the rules mapping answer combinations to use cases: `questionCount`, `choiceCount`, `activeRuleCount`, `hasDefaultRule`, `reachableUseCases[]`, `reachableRequirementCount`, `releaseVersion`, and `rules[]` (`name`, `description`, `isDefault`, `active`, `combination[]` as `questionKey=choiceKey`, `useCases[]`). `hasDefaultRule` is surfaced at the top because without a fallback, an owner whose answers match nothing is told to wait for a human.
 - **`preview_account_onboarding_rules`** resolves a set of answers to the use cases they would scope an assessment to, **writing nothing and consuming no invite**. Returns `matchedRules[]`, `useCases[]`, `requirementCount`, `usedDefault`, `releaseVersion`, `failure` (`NO_RULE_MATCHED` | `EMPTY_QUESTIONNAIRE` | `NO_ACTIVE_RELEASE`, or null). Every matching rule contributes — the result is the union, deduplicated. An unknown question or choice key is a `VALIDATION_ERROR`, never silently ignored: dropping one would resolve a different combination than the caller asked about.
 - **`list_aws_account_risk_assessments`** lists only the assessments auto-started by an import — manually created ones never appear. `ownerEmail` matches case-insensitively; `status` is e.g. `STARTED`. Returns `assessments[]` (`riskAssessmentId`, `awsAccountId`, `ownerEmail`, `useCase`, `releaseVersion` and `releaseName` — the requirements version the assessment is measured against, `null` for assessments started before release pinning — `assessor`, `respondent`, `startDate`, `endDate`, `status`, `reminderTwoDaysSentAt`, `reminderOneDaySentAt`, `createdAt`) and `count`.
@@ -395,6 +443,22 @@ Delegation required. See `docs/GITHUB_REPOS.md`.
 - `create_github_owner_email_mapping` returns 409 if the owner is already mapped, and immediately backfills `ownerEmail` on existing repos under that owner whose value is currently blank — a manually-set or previously auto-filled value is never overwritten.
 - `delete_github_owner_email_mapping` does not un-set any `ownerEmail` it previously backfilled.
 - `discover_github_owner_email_mappings` is best-effort auto-discovery: for already-imported repos with no `ownerEmail`, it reads the GitHub API's public profile field (`GET /users/{owner}`, works for orgs and users) and creates a mapping (with the usual backfill) for each owner that has one set. It only touches owners without an existing mapping and never calls GitHub's repo-listing API. Returns `discoveredMappings[]` (`owner`, `email`, `repoCount`) and `ownersSkippedNoPublicEmail[]`. Errors with `NO_GITHUB_CONFIG`. Mirrors CLI `manage-github-owner-mappings discover`.
+
+### Integration results
+
+All tools require delegation. Reads use the delegated user's asset visibility;
+run submission additionally requires the scanner's assigned service user and
+access to the bound asset.
+
+| Tool | Arguments | Permission |
+|---|---|---|
+| `list_integration_subjects` | `scannerId`*, `page`, `size` (max 100) | `INTEGRATIONS_READ`, `ASSETS_READ`, or `INTEGRATIONS_WRITE` |
+| `get_integration_summary` | *(none)* | `INTEGRATIONS_READ` |
+| `list_integration_findings` | `page`, `size` (max 100), `scannerId`, `subjectId`, `githubRepositoryId`, `source`, `owner`, `severity`, `state`, `search` | `INTEGRATIONS_READ` |
+| `get_integration_finding` | `id`* | `INTEGRATIONS_READ` |
+| `list_integration_runs` | `page`, `size` (max 100), `scannerId`, `subjectId` | `INTEGRATIONS_READ` |
+| `get_integration_run` | `id`* | `INTEGRATIONS_READ` |
+| `submit_integration_run` | version-1 run payload; see `docs/INTEGRATION_RESULTS.md` | `INTEGRATIONS_WRITE` |
 
 ### Notifications and reports
 

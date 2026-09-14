@@ -312,7 +312,7 @@ const UserTodoDashboard: React.FC = () => {
                             Answer risk assessment{item.basisName ? ` for ${item.basisName}` : ` #${item.id}`}
                           </p>
                           <p className="text-muted mb-1">
-                            {item.basisType === 'ASSET' ? 'Asset' : 'Demand'} assessment · due {item.endDate}
+                            {item.basisType === 'AWS_ACCOUNT' ? 'AWS account' : item.basisType === 'ASSET' ? 'Asset' : 'Demand'} assessment · due {item.endDate}
                           </p>
                           {deadlineBadge(item)}
                         </div>

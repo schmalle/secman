@@ -22,6 +22,12 @@ import jakarta.inject.Singleton
 @Command(
     name = "manage-workgroups",
     description = ["Manage workgroup asset assignments"],
+    footer = [
+        "AWS owner-email synchronization is available through the separate Python importer:",
+        "  ./scripts/sync-workgroup-assets.sh [--dry-run]",
+        "Requires ADMIN and verified HTTPS; preserves existing and stale asset links.",
+        "Run after imports. See docs/WORKGROUP_ASSET_SYNC.md."
+    ],
     mixinStandardHelpOptions = true,
     subcommands = [
         ListWorkgroupsCommand::class,

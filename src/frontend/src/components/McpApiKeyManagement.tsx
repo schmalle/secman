@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { parseServerDate, formatServerDateTime } from '../utils/dateUtils';
+import {
+  hasAllMcpPermissions,
+  MCP_PERMISSION_GROUPS,
+  selectAllMcpPermissions,
+} from './mcpPermissionSelection';
 
 interface ApiKey {
   id: number;
@@ -54,6 +59,8 @@ const McpApiKeyManagement: React.FC = () => {
     ASSETS_WRITE:         { label: 'Write Assets',           description: 'Create and update assets in the inventory' },
     SCANS_READ:           { label: 'Read Scans',             description: 'View scan data and results' },
     VULNERABILITIES_READ: { label: 'Read Vulnerabilities',   description: 'View vulnerability information' },
+    INTEGRATIONS_READ:    { label: 'Read Integrations',       description: 'View integration findings, runs, and health' },
+    INTEGRATIONS_WRITE:   { label: 'Write Integrations',      description: 'Submit integration results for assigned subjects' },
     TRANSLATION_USE:      { label: 'Use Translations',       description: 'Translate requirements to different languages' },
     SYSTEM_INFO:          { label: 'System Information',     description: 'Access system information and statistics', adminOnly: true },
     USER_ACTIVITY:        { label: 'User Activity',          description: 'Monitor user activity and sessions', adminOnly: true },
@@ -61,14 +68,6 @@ const McpApiKeyManagement: React.FC = () => {
     WORKGROUPS_WRITE:     { label: 'Manage Workgroups',      description: 'Create, delete, and manage workgroup memberships', adminOnly: true },
     NOTIFICATIONS_SEND:   { label: 'Send Notifications',     description: 'Send admin summary emails and trigger notifications', adminOnly: true },
   };
-
-  const permissionGroups = [
-    { title: 'Requirements', keys: ['REQUIREMENTS_READ', 'REQUIREMENTS_WRITE', 'REQUIREMENTS_DELETE'] },
-    { title: 'Assessments', keys: ['ASSESSMENTS_READ', 'ASSESSMENTS_EXECUTE', 'ASSESSMENTS_WRITE'] },
-    { title: 'Assets & Scans', keys: ['ASSETS_READ', 'ASSETS_WRITE', 'SCANS_READ', 'VULNERABILITIES_READ'] },
-    { title: 'Files & Tags', keys: ['FILES_READ', 'TAGS_READ', 'TRANSLATION_USE'] },
-    { title: 'Admin Only', keys: ['SYSTEM_INFO', 'USER_ACTIVITY', 'AUDIT_READ', 'WORKGROUPS_WRITE', 'NOTIFICATIONS_SEND'] },
-  ];
 
   useEffect(() => {
     fetchApiKeys();
@@ -207,6 +206,13 @@ const McpApiKeyManagement: React.FC = () => {
     }));
   };
 
+  const handleAllPermissionsChange = (checked: boolean) => {
+    setCreateForm(prev => ({
+      ...prev,
+      permissions: selectAllMcpPermissions(checked)
+    }));
+  };
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Never';
     return formatServerDateTime(dateString, undefined, 'Never');
@@ -319,7 +325,23 @@ const McpApiKeyManagement: React.FC = () => {
 
                   <div className="mb-3">
                     <label className="form-label">Permissions *</label>
-                    {permissionGroups.map(group => (
+                    <div className="border rounded bg-light p-2 mb-3">
+                      <div className="form-check">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          id="allPermissions"
+                          checked={hasAllMcpPermissions(createForm.permissions)}
+                          onChange={(e) => handleAllPermissionsChange(e.target.checked)}
+                        />
+                        <label className="form-check-label fw-semibold" htmlFor="allPermissions">
+                          All permissions
+                          <span className="badge bg-warning text-dark ms-1" style={{ fontSize: '0.65em' }}>Admin</span>
+                        </label>
+                        <div className="form-text">Grant every available MCP permission to this admin API key.</div>
+                      </div>
+                    </div>
+                    {MCP_PERMISSION_GROUPS.map(group => (
                       <div key={group.title} className="mb-3">
                         <div className="text-muted small fw-semibold mb-1">{group.title}</div>
                         <div className="row">

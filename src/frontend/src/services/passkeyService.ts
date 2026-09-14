@@ -132,7 +132,7 @@ class PasskeyService {
 
     } catch (error: any) {
       console.error('Passkey registration error:', error);
-      throw new Error(error.message || 'Failed to register passkey');
+      throw new Error(error.message || 'Failed to register passkey', { cause: error });
     }
   }
 

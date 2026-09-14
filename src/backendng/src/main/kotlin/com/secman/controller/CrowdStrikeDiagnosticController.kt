@@ -52,7 +52,8 @@ open class CrowdStrikeDiagnosticController(
         log.info("Host diagnostic requested for '{}'", trimmed)
 
         // 1. Exact lookup the buggy Lookup view uses.
-        val byName = assetRepository.findByNameIgnoreCase(trimmed)
+        val byName = assetRepository.findByCrowdStrikeHostnameIgnoreCase(trimmed)
+            ?: assetRepository.findByNameIgnoreCase(trimmed)
 
         // 2. Instance-id lookup when the query looks like an EC2 instance id.
         val looksLikeInstanceId = trimmed.startsWith("i-", ignoreCase = true)
@@ -62,7 +63,7 @@ open class CrowdStrikeDiagnosticController(
 
         // 3. Short-name vs FQDN duplicates — the exact query the importer uses.
         val shortName = trimmed.substringBefore(".")
-        val duplicates = assetRepository.findPotentialDuplicates(shortName)
+        val duplicates = assetRepository.findPotentialCrowdStrikeMatches(shortName)
 
         val nameDiag = byName?.let { toAssetDiag(it) }
         val instanceDiag = byInstanceId?.let { toAssetDiag(it) }

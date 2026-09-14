@@ -10,6 +10,39 @@ SECMAN_BACKEND_URL=https://secman.example.com SECMAN_SSL_INSECURE=true \
   --severity CRITICAL,HIGH --min-days-open 1 --last-seen-days 1 --save
 ```
 
+## User-edited asset names
+
+`Asset.name` is the user-facing display name. CrowdStrike's latest reported name is
+stored separately in `Asset.crowdStrikeHostname` and is used for later import and
+reconciliation matching. This prevents a user rename from making the next import create
+a second asset under the source hostname.
+
+The import resolves an existing asset by Falcon agent ID (AID), then cloud instance ID,
+then by the source hostname (short name or FQDN). Several AIDs can point to one SecMan
+asset, which covers reimaged Falcon hosts. Conflicting AID or cloud-instance mappings fail
+the host transaction instead of silently merging assets. The importer falls back to `Asset.name` only for legacy rows whose
+source hostname has not yet been adopted. When that legacy row is found by cloud instance
+ID and its display name differs, SecMan conservatively records it as a legacy user override.
+
+Editing `name` through `PUT /api/assets/{id}` or MCP `update_asset` sets override metadata.
+Imports continue updating `crowdStrikeHostname`, IP, groups, account/instance IDs, domain,
+OS and timestamps, but do not touch the overridden display name. To return control to
+CrowdStrike, either:
+
+```http
+POST /api/assets/{id}/name/reset
+```
+
+or call MCP `update_asset` with:
+
+```json
+{"assetId": 42, "resetNameToCrowdStrike": true}
+```
+
+Both reset paths use the normal unified asset-access check. A reset fails when the asset
+has never had a CrowdStrike hostname. Supplying `name` and `resetNameToCrowdStrike` in the
+same request is rejected as ambiguous.
+
 ## Operating system per asset
 
 The `query servers --save` import also captures the operating system of each host

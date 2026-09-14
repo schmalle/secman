@@ -41,9 +41,9 @@ export async function createMapping(userId: number, data: CreateMappingRequest):
     return response.data;
   } catch (error: any) {
     if (error.response?.data?.error) {
-      throw new Error(error.response.data.error);
+      throw new Error(error.response.data.error, { cause: error });
     }
-    throw new Error('Failed to create mapping');
+    throw new Error('Failed to create mapping', { cause: error });
   }
 }
 
@@ -64,6 +64,6 @@ export async function deleteMapping(userId: number, mappingId: number): Promise<
   try {
     await csrfDelete(`/api/users/${userId}/mappings/${mappingId}`);
   } catch (error: any) {
-    throw new Error('Failed to delete mapping');
+    throw new Error('Failed to delete mapping', { cause: error });
   }
 }

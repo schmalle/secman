@@ -4,6 +4,7 @@ import com.secman.domain.User
 import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
+import java.time.Instant
 import java.util.*
 
 @Repository
@@ -117,4 +118,8 @@ interface UserRepository : JpaRepository<User, Long> {
      * Used by the admin broadcast feature to skip pending (never-activated) accounts.
      */
     fun findByLastLoginIsNotNull(): List<User>
+
+    fun countByLastLoginGreaterThanEqual(since: Instant): Long
+
+    fun countByLastLoginIsNull(): Long
 }

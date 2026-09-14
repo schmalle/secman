@@ -86,11 +86,13 @@ class McpDelegationService {
             McpPermission.ASSETS_READ,
             McpPermission.ASSETS_WRITE,
             McpPermission.VULNERABILITIES_READ,
+            McpPermission.INTEGRATIONS_READ,
             McpPermission.TAGS_READ
         ),
         User.Role.ADMIN to McpPermission.entries.toSet(),
         User.Role.VULN to setOf(
             McpPermission.INTEGRATIONS_WRITE,
+            McpPermission.INTEGRATIONS_READ,
             McpPermission.VULNERABILITIES_READ,
             McpPermission.SCANS_READ,
             McpPermission.ASSETS_READ,
@@ -103,6 +105,7 @@ class McpDelegationService {
         User.Role.REQ to setOf(
             McpPermission.REQUIREMENTS_READ,
             McpPermission.REQUIREMENTS_WRITE,
+            McpPermission.REQUIREMENTS_DELETE,
             McpPermission.FILES_READ,
             McpPermission.TAGS_READ
         ),
@@ -113,12 +116,17 @@ class McpDelegationService {
         ),
         User.Role.SECCHAMPION to setOf(
             McpPermission.INTEGRATIONS_WRITE,
+            McpPermission.INTEGRATIONS_READ,
             McpPermission.REQUIREMENTS_READ,
+            McpPermission.REQUIREMENTS_WRITE,
+            McpPermission.REQUIREMENTS_DELETE,
             McpPermission.ASSESSMENTS_READ,
+            McpPermission.ASSESSMENTS_WRITE,
             McpPermission.ASSETS_READ,
             McpPermission.ASSETS_WRITE,
             McpPermission.VULNERABILITIES_READ,
-            McpPermission.SCANS_READ
+            McpPermission.SCANS_READ,
+            McpPermission.NOTIFICATIONS_SEND
         )
     )
 

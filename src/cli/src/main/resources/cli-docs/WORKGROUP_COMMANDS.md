@@ -2,7 +2,7 @@
 
 **Feature**: Workgroup Asset Management CLI
 **Version**: 1.0.0
-**Last Updated**: 2025-12-01
+**Last Updated**: 2026-09-14
 
 ## Overview
 
@@ -19,6 +19,30 @@ The `manage-workgroups` command suite provides CLI tools for ADMIN users to mana
 - Audit logging for all operations
 
 ## Prerequisites
+
+For the separate Python command below, use its own prerequisites; the Kotlin
+command flags in the rest of this document apply to `manage-workgroups`.
+
+### Assign AWS assets from member-email ownership
+
+After importing AD memberships, AWS owner mappings and assets, run from the
+repository root:
+
+```bash
+./scripts/sync-workgroup-assets.sh --dry-run
+./scripts/sync-workgroup-assets.sh
+```
+
+This Python importer command matches direct members' normalized emails to all
+stored AWS owner mappings, then assigns assets with matching cloud account IDs.
+It evaluates every workgroup, requires ADMIN, verified HTTPS, Python 3.11+, `uv`
+and authenticated `pass-cli`, and needs no Azure/AWS credentials. Dry-run emits
+JSON counters and performs no assignment writes. Existing manual and stale links
+are preserved because the relationship has no source marker.
+
+See [configuration, exit codes and limitations](../../../../../../docs/WORKGROUP_ASSET_SYNC.md).
+Display-name account linking is a separate operation:
+`./scripts/secman manage-user-mappings link-workgroups [--dry-run]`.
 
 ### Authentication
 All commands — including the read-only `list` command — require **ADMIN role** access on the backend account used to run them. Specify backend credentials via:

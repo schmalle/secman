@@ -10,6 +10,12 @@ Linking an account to a workgroup grants every member of that workgroup access t
 account's assets — unified asset access **rule #9** (`WorkgroupAwsAccount`). Treat it as
 an authorization change, not as bookkeeping.
 
+For asset assignments derived from workgroup members' email addresses, use
+[`./scripts/sync-workgroup-assets.sh [--dry-run]`](WORKGROUP_ASSET_SYNC.md).
+That command evaluates existing memberships and AWS owner mappings, adds missing
+`asset_workgroups` links, and preserves all existing links. It does not create
+workgroups or use the `display_name` naming rule described here.
+
 ## The rule, exactly
 
 | Question | Answer |

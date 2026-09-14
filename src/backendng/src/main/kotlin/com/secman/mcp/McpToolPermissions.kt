@@ -38,23 +38,33 @@ object McpToolPermissions {
      */
     val LISTING: Map<String, Set<McpPermission>> = table(
         setOf(INTEGRATIONS_WRITE) to listOf("submit_integration_run"),
-        setOf(ASSETS_READ, INTEGRATIONS_WRITE) to listOf("list_integration_subjects"),
+        setOf(INTEGRATIONS_READ, ASSETS_READ, INTEGRATIONS_WRITE) to listOf("list_integration_subjects"),
+        setOf(INTEGRATIONS_READ) to listOf(
+            "get_integration_summary", "list_integration_findings", "get_integration_finding",
+            "list_integration_runs", "get_integration_run",
+        ),
         setOf(REQUIREMENTS_READ) to listOf(
-            "get_requirements", "export_requirements",
+            "get_requirements", "list_use_cases", "export_requirements",
             // Releases and alignment — ADMIN/RELEASE_MANAGER/REQ role checked in execute()
             "list_releases", "get_release", "compare_releases",
             "create_release", "delete_release", "set_release_status",
             "start_alignment", "submit_review", "get_alignment_status", "finalize_alignment",
         ),
         setOf(REQUIREMENTS_WRITE) to listOf(
-            "add_requirement",
+            "add_requirement", "update_requirement", "set_requirement_use_cases",
+            "create_use_case", "update_use_case",
             "delete_all_requirements", // ADMIN role also checked in execute()
         ),
+        setOf(REQUIREMENTS_DELETE) to listOf("delete_requirement", "delete_use_case"),
         setOf(ASSESSMENTS_READ) to listOf(
             "list_aws_account_risk_assessments", // ADMIN role checked in execute()
+            "list_risk_assessments", "get_risk_assessment_questionnaire", "get_risk_assessment_answers",
+            "evaluate_risk_assessment", "get_risk_assessment_statistics",
             // Read-only views of the onboarding rule set. ADMIN/SECCHAMPION checked in execute().
             "list_account_onboarding_rules", "preview_account_onboarding_rules",
         ),
+        setOf(ASSESSMENTS_WRITE) to listOf("create_risk_assessment"),
+        setOf(ASSESSMENTS_EXECUTE) to listOf("save_risk_assessment_answers", "submit_risk_assessment"),
         setOf(USER_ACTIVITY) to listOf(
             // ADMIN role checked in execute() for all of these
             "list_users", "add_user", "delete_user",
@@ -77,7 +87,7 @@ object McpToolPermissions {
         ),
         setOf(VULNERABILITIES_READ) to listOf(
             "get_vulnerabilities", "get_all_vulnerabilities_detail", "get_all_accessible_vulnerabilities",
-            "list_products",
+            "list_products", "get_my_security_statistics",
             // Exception workflow — ownership/role checked per tool in execute()
             "create_exception_request", "get_my_exception_requests", "get_pending_exception_requests",
             "approve_exception_request", "reject_exception_request", "cancel_exception_request",
@@ -116,7 +126,9 @@ object McpToolPermissions {
             "send_outdated_notifications", "send_vulnerability_notifications",
             "send_application_register_reminders",
             "send_github_repo_alerts",
+            "notify_risk_assessment_respondent",
         ),
+        setOf(SYSTEM_INFO) to listOf("get_secman_statistics"),
     )
 
     /**
@@ -132,7 +144,11 @@ object McpToolPermissions {
      */
     val CALLING: Map<String, Set<McpPermission>> = buildMap {
         put("submit_integration_run", setOf(INTEGRATIONS_WRITE))
-        put("list_integration_subjects", setOf(ASSETS_READ, INTEGRATIONS_WRITE))
+        put("list_integration_subjects", setOf(INTEGRATIONS_READ, ASSETS_READ, INTEGRATIONS_WRITE))
+        putAll(listOf(
+            "get_integration_summary", "list_integration_findings", "get_integration_finding",
+            "list_integration_runs", "get_integration_run",
+        ).associateWith { setOf(INTEGRATIONS_READ) })
         putAll(table(
             setOf(ASSETS_READ) to listOf(
                 "get_assets", "get_asset_profile", "search_assets",
@@ -150,9 +166,11 @@ object McpToolPermissions {
             // not authorization) uncovered while adding the role guard this tool was
             // also missing (see requireAnyRole call in AddRequirementTool.execute()).
             setOf(REQUIREMENTS_WRITE) to listOf(
-                "add_requirement",
+                "add_requirement", "update_requirement", "set_requirement_use_cases",
+                "create_use_case", "update_use_case",
                 "delete_all_requirements", // ADMIN re-checked via context.isAdmin in execute()
             ),
+            setOf(REQUIREMENTS_DELETE) to listOf("delete_requirement", "delete_use_case"),
             // Releases and alignment tools: same LISTING group as get_requirements.
             // They were listed but absent from CALLING, so tools/call denied them
             // unconditionally (visible in tools/list but uncallable) — the same
@@ -160,6 +178,7 @@ object McpToolPermissions {
             // re-checks its own roles in execute() (ADMIN/RELEASE_MANAGER, ADMIN/REQADMIN
             // for create+delete, REQ/ADMIN for submit_review) and calls requireDelegation.
             setOf(REQUIREMENTS_READ) to listOf(
+                "get_requirements", "list_use_cases",
                 "list_releases", "get_release", "compare_releases",
                 "create_release", "delete_release", "set_release_status",
                 "start_alignment", "submit_review", "get_alignment_status", "finalize_alignment",
@@ -168,7 +187,7 @@ object McpToolPermissions {
                 "get_vulnerabilities", "search_vulnerabilities",
                 "get_all_vulnerabilities_detail", "get_asset_most_vulnerabilities",
                 "get_all_accessible_vulnerabilities",
-                "list_products",
+                "list_products", "get_my_security_statistics",
                 "get_overdue_assets", "create_exception_request", "get_my_exception_requests",
                 "get_pending_exception_requests", "approve_exception_request",
                 "reject_exception_request", "cancel_exception_request",
@@ -213,8 +232,12 @@ object McpToolPermissions {
             ),
             setOf(ASSESSMENTS_READ) to listOf(
                 "list_aws_account_risk_assessments",
+                "list_risk_assessments", "get_risk_assessment_questionnaire", "get_risk_assessment_answers",
+                "evaluate_risk_assessment", "get_risk_assessment_statistics",
                 "list_account_onboarding_rules", "preview_account_onboarding_rules",
             ),
+            setOf(ASSESSMENTS_WRITE) to listOf("create_risk_assessment"),
+            setOf(ASSESSMENTS_EXECUTE) to listOf("save_risk_assessment_answers", "submit_risk_assessment"),
             setOf(WORKGROUPS_WRITE) to listOf(
                 "create_workgroup", "delete_workgroup",
                 "assign_assets_to_workgroup", "assign_users_to_workgroup",
@@ -231,7 +254,9 @@ object McpToolPermissions {
                 "notify_new_accounts", "send_application_register_reminders",
                 "send_exception_expiry_reminders", "send_outdated_notifications",
                 "send_vulnerability_notifications",
+                "notify_risk_assessment_respondent",
             ),
+            setOf(SYSTEM_INFO) to listOf("get_secman_statistics"),
         ))
 
         ToolCategories.CATEGORY_PERMISSIONS.reversed().forEach { (tools, unlocking) ->

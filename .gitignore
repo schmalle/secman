@@ -126,3 +126,8 @@ crowdstrike-vulnerability-match-report-cs-owner-30d-post-sync.json
 !src/frontend/public/sample-files/user-mapping-template.xlsx
 # Excel lock/temp files are never wanted, not even inside testdata/
 ~$*.xlsx
+extensions/secman_web_check/
+.firecrawl/search-sslyze.json
+/.firecrawl
+gradle/wrapper/gradle-wrapper.jar
+gradle/wrapper/gradle-wrapper.jar

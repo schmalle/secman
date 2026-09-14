@@ -31,22 +31,22 @@ dependencies {
     implementation("io.micronaut.cache:micronaut-cache-caffeine")
 
     // Database
-    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.1.2")
-    implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.1.0")
-    implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.1.0")
+    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.1.4")
+    implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.1.2")
+    implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.1.2")
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.10")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:8.1.1")
-	runtimeOnly("org.flywaydb:flyway-core:13.3.0")
-	runtimeOnly("org.flywaydb:flyway-mysql:13.3.0")
+	runtimeOnly("org.flywaydb:flyway-core:13.6.0")
+	runtimeOnly("org.flywaydb:flyway-mysql:13.6.0")
 
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt:5.3.2")
     implementation("io.micronaut.security:micronaut-security-oauth2:5.3.2")
 
     // WebAuthn/Passkey support
-    implementation("com.webauthn4j:webauthn4j-core:0.31.9.RELEASE")
-    implementation("com.webauthn4j:webauthn4j-metadata:0.31.9.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-core:0.31.10.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-metadata:0.31.10.RELEASE")
 
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")
@@ -56,7 +56,7 @@ dependencies {
     implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20260313.1")
 
     // Email
-    implementation("io.micronaut.email:micronaut-email-javamail:3.1.0")
+    implementation("io.micronaut.email:micronaut-email-javamail:3.2.0")
     implementation("org.eclipse.angus:angus-mail:2.0.5")
 
     // Email templates (Thymeleaf) - Feature 035
@@ -96,7 +96,7 @@ dependencies {
     implementation("org.codehaus.janino:janino:3.1.12")
     
     // YAML configuration support
-    runtimeOnly("org.yaml:snakeyaml:2.6")
+    runtimeOnly("org.yaml:snakeyaml:2.7")
     
     // Password encoding
     implementation("org.springframework.security:spring-security-crypto:7.1.0")
@@ -114,7 +114,7 @@ dependencies {
     implementation("commons-net:commons-net:3.13.0")
 
     // HTML processing for email
-    implementation("org.jsoup:jsoup:1.23.1")
+    implementation("org.jsoup:jsoup:1.23.2")
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")
@@ -123,9 +123,9 @@ dependencies {
 
     // Test dependencies - Feature 056
     kspTest("io.micronaut:micronaut-inject-java")
-    testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.2")
-    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.2")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.3")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.3")
     testImplementation("io.micronaut.test:micronaut-test-junit5:5.1.1")
     testImplementation("io.mockk:mockk:1.14.11")
     // Tests assert on log output via Logback's ListAppender; main code stays
@@ -186,14 +186,6 @@ micronaut {
         optimizeClassLoading.set(true)
         deduceEnvironment.set(true)
         optimizeNetty.set(true)
-    }
-}
-
-
-// Configure Kotlin compiler options
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    compilerOptions {
-        freeCompilerArgs.add("-Xannotation-default-target=param-property")
     }
 }
 

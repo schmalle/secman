@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "secman": {
+      "type": "http",
+      "url": "${SECMAN_MCP_URL}",
+      "headers": {
+        "X-MCP-API-Key": "${SECMAN_MCP_KEY}",
+        "X-MCP-User-Email": "${SECMAN_MCP_USER_EMAIL}"
+      }
+    }
+  }
+}

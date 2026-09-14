@@ -3,13 +3,21 @@ package com.secman.repository
 import com.secman.domain.RiskAssessment
 import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
+import io.micronaut.data.model.Page
+import io.micronaut.data.model.Pageable
 import io.micronaut.data.jpa.repository.JpaRepository
+import java.time.LocalDateTime
 
 @Repository
 interface RiskAssessmentRepository : JpaRepository<RiskAssessment, Long> {
     
     // New unified basis-based queries
     fun findByAssessmentBasisTypeAndAssessmentBasisId(basisType: com.secman.domain.AssessmentBasisType, basisId: Long): List<RiskAssessment>
+
+    fun existsByAssessmentBasisTypeAndAssessmentBasisId(
+        basisType: com.secman.domain.AssessmentBasisType,
+        basisId: Long
+    ): Boolean
 
     // Convenience methods for common queries
     fun findByDemandId(demandId: Long): List<RiskAssessment> {
@@ -42,6 +50,25 @@ interface RiskAssessmentRepository : JpaRepository<RiskAssessment, Long> {
     
     fun findByStatus(status: String): List<RiskAssessment>
 
+    fun countByStatus(status: String): Long
+
+    @Query(
+        """
+        UPDATE RiskAssessment ra SET ra.outstandingReminderSentAt = :claimedAt
+        WHERE ra.id = :id
+          AND (ra.outstandingReminderSentAt IS NULL OR ra.outstandingReminderSentAt < :cutoff)
+        """
+    )
+    fun claimOutstandingReminder(id: Long, claimedAt: LocalDateTime, cutoff: LocalDateTime): Int
+
+    @Query(
+        """
+        UPDATE RiskAssessment ra SET ra.outstandingReminderSentAt = NULL
+        WHERE ra.id = :id AND ra.outstandingReminderSentAt = :claimedAt
+        """
+    )
+    fun releaseOutstandingReminderClaim(id: Long, claimedAt: LocalDateTime): Int
+
     // Query to find assessments that involve a specific asset (either directly or through demands)
     @Query("""
         SELECT ra FROM RiskAssessment ra 
@@ -55,6 +82,41 @@ interface RiskAssessmentRepository : JpaRepository<RiskAssessment, Long> {
     
     @Query("SELECT ra FROM RiskAssessment ra JOIN ra.useCases u WHERE u.id = :usecaseId")
     fun findByUsecaseId(usecaseId: Long): List<RiskAssessment>
+
+    @Query(
+        value = """
+            SELECT DISTINCT ra FROM RiskAssessment ra
+            LEFT JOIN ra.useCases uc
+            WHERE (:status IS NULL OR ra.status = :status)
+              AND (:useCaseName IS NULL OR LOWER(uc.name) = LOWER(:useCaseName))
+              AND (
+                    :privileged = true
+                    OR ra.assessor.id = :viewerId
+                    OR ra.requestor.id = :viewerId
+                    OR ra.respondent.id = :viewerId
+              )
+            ORDER BY ra.createdAt DESC
+        """,
+        countQuery = """
+            SELECT COUNT(DISTINCT ra.id) FROM RiskAssessment ra
+            LEFT JOIN ra.useCases uc
+            WHERE (:status IS NULL OR ra.status = :status)
+              AND (:useCaseName IS NULL OR LOWER(uc.name) = LOWER(:useCaseName))
+              AND (
+                    :privileged = true
+                    OR ra.assessor.id = :viewerId
+                    OR ra.requestor.id = :viewerId
+                    OR ra.respondent.id = :viewerId
+              )
+        """
+    )
+    fun findForMcp(
+        status: String?,
+        useCaseName: String?,
+        viewerId: Long,
+        privileged: Boolean,
+        pageable: Pageable
+    ): Page<RiskAssessment>
 
     /**
      * Nullify the respondent reference when a user is deleted.
