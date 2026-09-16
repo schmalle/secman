@@ -19,9 +19,22 @@ and SecMan REST APIs. It preserves manual and stale assignments. See
 ./scripts/sync-workgroup-assets.sh
 ```
 
-Requires Python 3.11+, `uv`, authenticated `pass-cli`, and a SecMan ADMIN account
-over verified HTTPS. The wrapper resolves `SECMAN_BACKEND_URL`,
-`SECMAN_ADMIN_NAME`, and `SECMAN_ADMIN_PASS`. Azure/AWS credentials are unnecessary.
+For production with AWS Secrets Manager, select your secret and use the `-aws`
+wrapper with the same options:
+
+```bash
+export SECMAN_AWS_SECRET_ID=prod/secman/credentials
+export AWS_REGION=eu-central-1
+./scripts/sync-workgroup-assets-aws.sh --dry-run
+./scripts/sync-workgroup-assets-aws.sh
+```
+
+Both wrappers require Python 3.11+, `uv`, and a SecMan ADMIN account over verified
+HTTPS. The original wrapper requires authenticated `pass-cli`; the AWS wrapper
+requires AWS CLI, `jq`, and permission to read the explicitly selected secret.
+They resolve `SECMAN_BACKEND_URL`, `SECMAN_ADMIN_NAME`, and `SECMAN_ADMIN_PASS`.
+See [secret fields and production setup](WORKGROUP_ASSET_SYNC.md#aws-secrets-manager-for-production).
+The synchronization itself uses stored SecMan data and needs no Azure access.
 This is a separate Python entry point, not a Kotlin `secman` subcommand; the
 Kotlin build, configuration-file resolution and TLS bypass flags below apply to
 the Kotlin client only. For private CAs, use `REQUESTS_CA_BUNDLE`.

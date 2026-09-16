@@ -72,6 +72,8 @@ specs/        historical implementation plans (frozen)
 
 # Python importer: preview AWS asset assignments from workgroup member emails
 ./scripts/sync-workgroup-assets.sh --dry-run
+# Production alternative (set SECMAN_AWS_SECRET_ID and AWS_REGION first):
+./scripts/sync-workgroup-assets-aws.sh --dry-run
 
 # Tests
 ./gradlew :backendng:test --tests "*ServiceTest*"      # unit

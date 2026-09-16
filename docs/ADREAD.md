@@ -21,6 +21,9 @@ for the complete data flow, statistics and removal limitations.
 
 The table's direct commands run from `src/adread/`. From the repository root,
 use `./scripts/sync-workgroup-assets.sh [--dry-run]` for asset synchronization.
+For production secrets in AWS Secrets Manager, use
+`./scripts/sync-workgroup-assets-aws.sh [--dry-run]` with an explicit
+`SECMAN_AWS_SECRET_ID`; see [AWS configuration](WORKGROUP_ASSET_SYNC.md#aws-secrets-manager-for-production).
 
 ## Prerequisites
 
@@ -29,6 +32,8 @@ use `./scripts/sync-workgroup-assets.sh [--dry-run]` for asset synchronization.
 - For SecMan imports or asset synchronization: a secman **ADMIN** account
 - For the canonical synchronization wrapper: `pass-cli` installed and authenticated,
   and an HTTPS backend whose certificate is trusted by Python
+- For the AWS synchronization wrapper: AWS CLI, `jq`, permission to read the
+  selected secret, and the same trusted HTTPS backend
 
 ## Environment Variables
 
@@ -145,7 +150,8 @@ src/adread/
 └── adread.env.local                # actual plain-env secrets (gitignored)
 ```
 
-The synchronization launcher lives at `scripts/sync-workgroup-assets.sh`.
+The synchronization launchers are `scripts/sync-workgroup-assets.sh` (Proton
+Pass) and `scripts/sync-workgroup-assets-aws.sh` (AWS Secrets Manager).
 
 ## Logging
 

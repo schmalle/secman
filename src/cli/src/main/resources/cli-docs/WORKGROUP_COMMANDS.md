@@ -35,8 +35,10 @@ repository root:
 
 This Python importer command matches direct members' normalized emails to all
 stored AWS owner mappings, then assigns assets with matching cloud account IDs.
-It evaluates every workgroup, requires ADMIN, verified HTTPS, Python 3.11+, `uv`
-and authenticated `pass-cli`, and needs no Azure/AWS credentials. Dry-run emits
+It evaluates every workgroup and requires ADMIN, verified HTTPS, Python 3.11+, `uv`
+and authenticated `pass-cli`. For AWS Secrets Manager, set `SECMAN_AWS_SECRET_ID`
+and use `./scripts/sync-workgroup-assets-aws.sh [--dry-run]`; this alternative
+requires AWS CLI and `jq` instead of Proton Pass. Dry-run emits
 JSON counters and performs no assignment writes. Existing manual and stale links
 are preserved because the relationship has no source marker.
 

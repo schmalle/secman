@@ -26,6 +26,8 @@ and verified HTTPS, preserves manual/stale links, and does not use display-name
 matching. See [the synchronization guide](../../../../../../docs/WORKGROUP_ASSET_SYNC.md)
 for its prerequisites, JSON counters and exit codes; the flags below belong to
 the Kotlin mapping commands.
+For AWS Secrets Manager, set `SECMAN_AWS_SECRET_ID` and use
+`./scripts/sync-workgroup-assets-aws.sh [--dry-run]` with the same sync behavior.
 
 ### Authentication
 All commands require **ADMIN role** access on the backend account used to run them. Specify backend credentials via:

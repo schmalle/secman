@@ -290,6 +290,10 @@ through Proton Pass, using `Test/SECMAN/SECMAN_BACKEND_BASE_URL`,
 corresponding environment variables are supplied. It does not consume
 `SECMAN_HOST`, AWS SDK credentials, or the Kotlin CLI's configuration files.
 For a private backend CA, set `REQUESTS_CA_BUNDLE` to a trusted PEM bundle.
+The production alternative `./scripts/sync-workgroup-assets-aws.sh` reads those
+three fields from AWS Secrets Manager and requires an explicit
+`SECMAN_AWS_SECRET_ID`. It honors `AWS_REGION` / `AWS_DEFAULT_REGION` and the AWS
+CLI's existing identity. See [secret schema and commands](WORKGROUP_ASSET_SYNC.md#aws-secrets-manager-for-production).
 The synchronization command rejects `--insecure` and a true `SECMAN_INSECURE`;
 the Kotlin CLI TLS options described above do not apply to it.
 

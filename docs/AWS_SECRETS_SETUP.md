@@ -12,9 +12,10 @@ covered:
 
 > Once the secret exists, no script needs to be re-edited. The launchers fetch
 > it via the standard AWS credential provider chain (instance profile on EC2,
-> `AWS_PROFILE` or static keys elsewhere) and call
-> `scripts/lib/aws-secrets.sh::secman_aws_export_envfile` to map JSON keys to
+> `AWS_PROFILE` or static keys elsewhere) using `scripts/lib/aws-secrets.sh`.
+> Most launchers use `secman_aws_export_envfile` to map the full JSON schema to
 > the env vars that `pass-cli run --env-file secmanpp.env` normally provides.
+> The production asset-sync wrapper exports only its three required fields.
 
 ## TL;DR
 
@@ -34,8 +35,9 @@ covered:
 
 The secret value is a **single flat JSON object**. Keys mirror the field names
 used by `pass-cli` under `test/secman` (see [`docs/PASS_CLI.md`](PASS_CLI.md)).
-Missing keys are skipped at runtime — every entry below is technically optional
-but the *Required for* column tells you what breaks if you omit it.
+The shared full-env exporter skips missing keys; the *Required for* column tells
+you what breaks if you omit them. The production asset-sync wrapper instead
+validates its required fields before launching the client; see below.
 
 | JSON key                       | Required for                                       | Notes                                                                 |
 |--------------------------------|----------------------------------------------------|-----------------------------------------------------------------------|
@@ -65,6 +67,24 @@ but the *Required for* column tells you what breaks if you omit it.
 `JWT_SECRET` is **not** stored in the secret — `startbackenddevaws.sh`
 regenerates it on every start (`openssl rand -base64 48`), matching the
 pass-cli flow.
+
+### Production workgroup asset sync
+
+`scripts/sync-workgroup-assets-aws.sh` requires `SECMAN_AWS_SECRET_ID` to identify
+your production secret explicitly. It reads that secret once through the shared
+helper and requires three non-empty strings:
+
+- `SECMAN_BACKEND_BASE_URL`: the trusted HTTPS SecMan URL. The existing production
+  key `SECMAN_BACKEND_URL` is accepted if the base-URL key is absent or null.
+- `SECMAN_ADMIN_NAME`: an existing SecMan ADMIN username.
+- `SECMAN_ADMIN_PASS`: that account's password.
+
+Those values replace any inherited SecMan connection/login variables. No
+database, Azure, CrowdStrike or application-side AWS credentials are exported
+from the secret. TLS bypass fields are ignored; use `REQUESTS_CA_BUNDLE` for a
+private CA. The AWS CLI uses the runner's existing AWS identity to read the
+secret. See [production preview/apply commands](WORKGROUP_ASSET_SYNC.md#aws-secrets-manager-for-production)
+for region selection, prerequisites and failure behavior.
 
 ### Template
 

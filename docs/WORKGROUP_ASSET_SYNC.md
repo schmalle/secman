@@ -28,14 +28,15 @@ and calls the existing argparse entry point:
 uv run --locked --project src/adread python src/adread/read.py sync-workgroup-assets --dry-run
 ```
 
-The direct invocation requires the same three environment variables, resolved
-through `pass-cli`. No Azure credentials are needed. The backend must use HTTPS
-with a trusted certificate; use `REQUESTS_CA_BUNDLE` for your organization's CA.
+The direct invocation requires the same three environment variables. Both
+credential wrappers resolve them for the client. No Azure credentials are needed.
+The backend must use HTTPS with a trusted certificate; use `REQUESTS_CA_BUNDLE`
+for your organization's CA.
 The command rejects `--insecure` and a true `SECMAN_INSECURE`. It requires an
 ADMIN login and refuses HTTP redirects. Existing AD import invocations retain
 their argument structure.
 
-| Environment variable | Wrapper default / purpose |
+| Environment variable | Proton Pass wrapper default / purpose |
 |---|---|
 | `SECMAN_BACKEND_URL` | `pass://Test/SECMAN/SECMAN_BACKEND_BASE_URL`; required HTTPS base URL |
 | `SECMAN_ADMIN_NAME` | `pass://Test/SECMAN/SECMAN_ADMIN_NAME` |
@@ -48,6 +49,52 @@ sync-workgroup-assets` is not a registered Kotlin command. `SECMAN_HOST` and
 Kotlin CLI configuration files are not read by this Python client. The supported
 sync options are `--dry-run` and `--help`/`-h`; the shared parser's `--import` and
 `--insecure` options are rejected in sync mode.
+
+## AWS Secrets Manager for production
+
+Use `scripts/sync-workgroup-assets-aws.sh` with the same preview/apply options.
+It requires AWS CLI, `jq`, `uv`, Python 3.11+, and an AWS identity allowed to read
+the selected secret. Proton Pass and the Kotlin CLI JAR are not required.
+See [AWS secret setup](AWS_SECRETS_SETUP.md#production-workgroup-asset-sync).
+
+Set your production secret name or ARN and its region, then preview and apply:
+
+```bash
+export SECMAN_AWS_SECRET_ID=prod/secman/credentials
+export AWS_REGION=eu-central-1
+# Optional for a named AWS CLI profile; omit when using an instance role:
+# export AWS_PROFILE=production
+
+./scripts/sync-workgroup-assets-aws.sh --dry-run
+./scripts/sync-workgroup-assets-aws.sh
+./scripts/sync-workgroup-assets-aws.sh --dry-run
+```
+
+Replace the example secret name and region with your deployment's values.
+`SECMAN_AWS_SECRET_ID` must be explicit; this wrapper does not fall back to
+`secman/dev`. Region resolution uses `AWS_REGION`, then `AWS_DEFAULT_REGION`,
+then `eu-central-1`, following the shared AWS helper.
+
+The secret must be a JSON object with these non-empty string fields:
+
+| Secret field | Exported environment variable |
+|---|---|
+| `SECMAN_BACKEND_BASE_URL` | `SECMAN_BACKEND_URL`; verified HTTPS backend URL |
+| `SECMAN_ADMIN_NAME` | `SECMAN_ADMIN_NAME`; existing SecMan ADMIN account |
+| `SECMAN_ADMIN_PASS` | `SECMAN_ADMIN_PASS`; that account's password |
+
+The existing production field `SECMAN_BACKEND_URL` is also accepted when
+`SECMAN_BACKEND_BASE_URL` is absent or null. When both are supplied, the base-URL
+field wins. All three settings come from one secret fetch and replace inherited
+SecMan credentials. Missing/invalid fields or a failed AWS fetch stop the wrapper
+before it launches synchronization; it does not fall back to Proton Pass.
+
+Only these three fields are exported from the secret. Database, Azure,
+CrowdStrike and application-side AWS key fields are unnecessary. The wrapper
+does not load `SECMAN_SSL_ACCEPT_ALL` or `SECMAN_INSECURE` from the secret;
+certificate verification remains enabled. `REQUESTS_CA_BUNDLE` and an inherited
+`SECMAN_INSECURE` are handled by the Python client as described above. Credentials
+are passed through the environment, never as command-line arguments.
 
 ## Data flow
 
@@ -165,8 +212,9 @@ remain; the command adds no new query or parallel persistence model.
 
 | Symptom | Check / action |
 |---|---|
-| Missing configuration | Use the Proton Pass wrapper, or resolve all three required SecMan variables before direct invocation. |
-| `http_status=401` / `403` | Verify the selected backend and ADMIN credentials in Proton Pass; the command does not accept a delegated MCP identity. |
+| Missing configuration | Use the Proton Pass or AWS wrapper, with all three required SecMan fields in the selected secret. The AWS wrapper also requires `SECMAN_AWS_SECRET_ID`. |
+| AWS fetch failed | Verify the secret name/ARN, region and the AWS identity's permission to read it. |
+| `http_status=401` / `403` | Verify the selected backend and ADMIN credentials in your secret store; the command does not accept a delegated MCP identity. |
 | `SSLError` | Verify the HTTPS URL and certificate chain; set `REQUESTS_CA_BUNDLE` to a trusted CA bundle for a private CA. |
 | Invalid-arguments exit with `SECMAN_INSECURE` | Unset the legacy TLS bypass or set it to false; keep certificate verification enabled. |
 | Zero additions with skipped accounts | Check direct workgroup membership, member/owner emails, AWS mapping rows and 12-digit asset `cloudAccountId` values. |
@@ -180,6 +228,7 @@ Run the offline fixture tests from the repository root:
 
 ```bash
 uv run --locked --project src/adread python -m unittest discover -s tests -p test_sync_workgroup_assets.py -v
+uv run --locked --project src/adread python -m unittest discover -s tests -p test_sync_workgroup_assets_aws.py -v
 ```
 
 Tests cover the ownership combinations, normalization, duplicate records,
@@ -188,3 +237,7 @@ repeat-run idempotency, mapping pagination including applied owners, bounded
 batching, read/write failures, authentication, TLS policy, and CLI exit status.
 The CLI fixture executes dry-run, apply, and apply again with a simulated SecMan
 client; it does not write to the configured live instance.
+The AWS wrapper tests require `jq` and use simulated `aws`/`uv` executables with
+the real shared helper. They cover secret selection, URL compatibility,
+credential/argument forwarding, failure handling and exit status without
+contacting AWS or SecMan.
