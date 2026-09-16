@@ -36,6 +36,16 @@ class FixtureClient:
     self.users = [user()] if users is None else users
     self.mappings = [mapping()] if mappings is None else mappings
     self.assets = [asset()] if assets is None else assets
+    self.assigned_assets = {}
+    for group in self.groups:
+      assigned = [
+        item["id"] for item in self.assets
+        if isinstance(item, dict)
+        and isinstance(item.get("workgroups"), list)
+        and any(ref.get("id") == group["id"] for ref in item["workgroups"])
+      ]
+      self.assigned_assets[group["id"]] = assigned
+      group["assetCount"] = len(assigned)
     self.reads = []
     self.writes = []
 
@@ -47,6 +57,9 @@ class FixtureClient:
       return deepcopy(self.users)
     if path == "/api/assets":
       return deepcopy(self.assets)
+    if path.startswith("/api/workgroups/") and path.endswith("/assets"):
+      gid = int(path.split("/")[3])
+      return [{"id": aid} for aid in self.assigned_assets.get(gid, [])]
     rows = self.mappings if path.endswith("/current") else []
     page = params["page"]
     return {"content": deepcopy(rows[page * BATCH_SIZE:(page + 1) * BATCH_SIZE]),
@@ -129,6 +142,11 @@ class MatchingTests(unittest.TestCase):
     self.assertEqual({}, plan.additions)
     self.assertEqual(0, plan.errors)
 
+  def test_non_aws_uuid_cloud_accounts_are_ignored(self):
+    plan = self.plan(assets=[asset(account="123e4567-e89b-12d3-a456-426614174000")])
+    self.assertEqual({}, plan.additions)
+    self.assertEqual(0, plan.errors)
+
   def test_existing_manual_and_stale_links_are_preserved(self):
     client = FixtureClient(assets=[asset(groups=(2, 3)), asset(20, None, (3,))])
     synchronize(client, False)
@@ -167,12 +185,37 @@ class MatchingTests(unittest.TestCase):
     self.assertEqual({}, plan.additions)
     self.assertEqual(1, plan.errors)
 
+  def test_omitted_empty_user_workgroups_use_zero_count(self):
+    empty_user = user(2, "unused@example.com", ())
+    empty_user.pop("workgroups")
+    empty_user["workgroupCount"] = 0
+    plan = self.plan(users=[user(), empty_user])
+    self.assertEqual({1: [10]}, plan.additions)
+    self.assertEqual(0, plan.errors)
+
   def test_deterministic_sorted_plan(self):
     plan = self.plan(users=[user(groups=(2, 1))], assets=[asset(20), asset(10)])
     self.assertEqual([(1, [10, 20]), (2, [10, 20])], list(plan.additions.items()))
 
 
 class TransportTests(unittest.TestCase):
+  def test_omitted_asset_workgroups_are_loaded_from_counted_workgroups(self):
+    linked = asset(groups=(2,))
+    client = FixtureClient(assets=[linked])
+    del client.assets[0]["workgroups"]
+    client.groups[1]["assetCount"] = 1
+    plan = synchronize(client, True)
+    self.assertEqual({1: [10]}, plan.additions)
+    self.assertIn(("/api/workgroups/2/assets", None), client.reads)
+
+  def test_incomplete_workgroup_asset_read_aborts_before_writes(self):
+    client = FixtureClient()
+    del client.assets[0]["workgroups"]
+    client.groups[0]["assetCount"] = 1
+    with self.assertRaisesRegex(RuntimeError, "Incomplete workgroup asset membership"):
+      synchronize(client, False)
+    self.assertEqual([], client.writes)
+
   def test_bulk_reads_and_bounded_assignment_batches(self):
     client = FixtureClient(assets=[asset(i) for i in range(1, 2 * BATCH_SIZE + 2)])
     plan = synchronize(client, False)
