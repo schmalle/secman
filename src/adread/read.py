@@ -5,6 +5,7 @@ import sys
 import time
 
 import requests
+import truststore
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
@@ -388,7 +389,18 @@ def main(argv=None):
          "during AD import only. Not allowed for sync-workgroup-assets. "
          "May also be set via SECMAN_INSECURE=1.",
   )
+  parser.add_argument(
+    "--use-system-ca",
+    action="store_true",
+    help="Use the operating system certificate store while keeping TLS verification enabled.",
+  )
   args = parser.parse_args(argv)
+
+  if args.use_system_ca and args.insecure:
+    parser.error("--use-system-ca cannot be combined with --insecure/SECMAN_INSECURE")
+  if args.use_system_ca:
+    truststore.inject_into_ssl()
+    log.info("SECMAN TLS trust source=system")
 
   if args.command == "sync-workgroup-assets":
     if args.do_import:

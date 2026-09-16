@@ -921,6 +921,8 @@ class SecmanCli {
                   ./scripts/sync-workgroup-assets.sh
                 This separate Python command requires ADMIN and verified HTTPS, preserves all
                 existing asset links, and uses member emails rather than account display names.
+                For AWS Secrets Manager, set SECMAN_AWS_SECRET_ID and use
+                  ./scripts/sync-workgroup-assets-aws.sh [--dry-run]
                 See docs/WORKGROUP_ASSET_SYNC.md for configuration, counters and exit codes.
 
                 See also: secman help manage-user-mappings-s3
@@ -1015,7 +1017,10 @@ class SecmanCli {
                 separate Python importer command from the repository root:
                   ./scripts/sync-workgroup-assets.sh --dry-run
                   ./scripts/sync-workgroup-assets.sh
-                Requires ADMIN, verified HTTPS, pass-cli and uv; no Azure/AWS credentials.
+                Requires ADMIN, verified HTTPS, Python 3.11+, uv and authenticated pass-cli.
+                For AWS Secrets Manager, set SECMAN_AWS_SECRET_ID and use
+                  ./scripts/sync-workgroup-assets-aws.sh [--dry-run]
+                The AWS wrapper requires aws CLI and jq instead of pass-cli.
                 Adds missing links only. Manual and stale links are preserved.
                 See docs/WORKGROUP_ASSET_SYNC.md for configuration, counters and exit codes.
             """.trimIndent(),

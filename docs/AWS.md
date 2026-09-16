@@ -1,4 +1,4 @@
-# AWS dev scripts (alternative to pass-cli)
+# AWS scripts (alternative to pass-cli)
 
 This document covers the AWS-flavored launchers — counterparts to every
 pass-cli script under `scripts/`. Each one resolves credentials from **AWS
@@ -19,6 +19,7 @@ developer workflows.
 | `scripts/deleteoutdated.sh` | `scripts/deleteoutdatedaws.sh` | CLI: dry-run delete-asset-not-seen |
 | `scripts/e2e-test.sh` | `scripts/e2e-testaws.sh` | E2E smoke + JS-error scanner |
 | `scripts/import.sh` | `scripts/importaws.sh` | CLI: query servers --save (CrowdStrike → backend) |
+| `scripts/sync-workgroup-assets.sh` | `scripts/sync-workgroup-assets-aws.sh` | Python: assign AWS assets through member emails; supports `--dry-run` |
 | `scripts/release-e2e-test.sh` | `scripts/release-e2e-testaws.sh` | Release lifecycle E2E (REQADMIN) |
 | `scripts/secmancli` | `scripts/secmancliaws.sh` | General-purpose CLI wrapper |
 | `scripts/secmanng` | `scripts/secmanngaws.sh` | CLI wrapper with insecure-SSL flag |
@@ -41,6 +42,12 @@ The shared library:
 
 The stop helpers (`stopbackenddev.sh`, `stopfrontenddev.sh`) work for both
 flavors — they kill whatever is bound to ports 8080 / 4321.
+
+For production asset synchronization, use
+[`sync-workgroup-assets-aws.sh`](WORKGROUP_ASSET_SYNC.md#aws-secrets-manager-for-production).
+It requires an explicit `SECMAN_AWS_SECRET_ID`, exports only the three SecMan
+connection/login fields, and keeps TLS verification enabled. This Python wrapper
+needs AWS CLI, `jq`, `uv` and Python 3.11+; it does not require Java, Gradle or Node.
 
 ## Required tools on Amazon Linux
 

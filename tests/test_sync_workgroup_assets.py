@@ -297,6 +297,13 @@ class CommandTests(unittest.TestCase):
         read.main(["sync-workgroup-assets", "--insecure"])
       factory.assert_not_called()
 
+  def test_system_ca_switch_injects_native_trust_before_sync(self):
+    with patch.object(read.truststore, "inject_into_ssl") as inject, \
+         patch("sync_workgroup_assets.run_command", return_value=0) as run_command:
+      self.assertEqual(0, read.main(["sync-workgroup-assets", "--dry-run", "--use-system-ca"]))
+    inject.assert_called_once_with()
+    run_command.assert_called_once_with(read.SecmanClient, True)
+
   def test_missing_configuration_has_nonzero_exit(self):
     with patch.dict(os.environ, {}, clear=True):
       self.assertEqual(1, read.main(["sync-workgroup-assets"]))
