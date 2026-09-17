@@ -4,11 +4,13 @@ import com.secman.domain.Asset
 import com.secman.domain.Criticality
 import com.secman.domain.User
 import com.secman.domain.Workgroup
+import com.secman.domain.WorkgroupAccessChangedEvent
 import com.secman.repository.AssetRepository
 import com.secman.repository.UserRepository
 import com.secman.repository.WorkgroupAdDomainRepository
 import com.secman.repository.WorkgroupAwsAccountRepository
 import com.secman.repository.WorkgroupRepository
+import io.micronaut.context.event.ApplicationEventPublisher
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
 
@@ -24,7 +26,8 @@ open class WorkgroupService(
     private val assetRepository: AssetRepository,
     private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository,
     private val workgroupAdDomainRepository: WorkgroupAdDomainRepository,
-    private val validationService: WorkgroupValidationService
+    private val validationService: WorkgroupValidationService,
+    private val workgroupAccessChangedPublisher: ApplicationEventPublisher<WorkgroupAccessChangedEvent>
 ) {
 
     /**
@@ -97,7 +100,7 @@ open class WorkgroupService(
     }
 
     /**
-     * Update workgroup name and/or description and/or criticality
+     * Update workgroup name, description, criticality, and/or enabled status.
      * FR-002: Allow administrators to edit workgroups
      * Feature 039: Accept criticality parameter
      *
@@ -113,7 +116,8 @@ open class WorkgroupService(
         id: Long,
         name: String? = null,
         description: String? = null,
-        criticality: Criticality? = null
+        criticality: Criticality? = null,
+        enabled: Boolean? = null
     ): Workgroup {
         val workgroup = workgroupRepository.findById(id).orElseThrow {
             IllegalArgumentException("Workgroup not found: $id")
@@ -135,7 +139,16 @@ open class WorkgroupService(
             workgroup.criticality = criticality
         }
 
-        return workgroupRepository.update(workgroup)
+        val enabledChanged = enabled != null && enabled != workgroup.enabled
+        if (enabledChanged) {
+            workgroup.enabled = requireNotNull(enabled)
+        }
+
+        val updated = workgroupRepository.update(workgroup)
+        if (enabledChanged) {
+            workgroupAccessChangedPublisher.publishEvent(WorkgroupAccessChangedEvent(setOf(id)))
+        }
+        return updated
     }
 
     /**

@@ -13,6 +13,12 @@ class IntegrationRunValidatorTest {
     private fun request() = IntegrationRunRequest(1, 2, "retry-key", "SUCCESS", true, time, time)
 
     @Test
+    fun `accepts every supported integration scanner source`() {
+        assertThat(IntegrationRunValidator.SOURCES)
+            .containsExactlyInAnyOrder("GITHUB_AI", "VISUAL", "WEB_SECURITY")
+    }
+
+    @Test
     fun `shared v1 contract deserializes and validates`() {
         val mapper = ObjectMapper().findAndRegisterModules().registerModule(com.fasterxml.jackson.module.kotlin.KotlinModule.Builder().build())
         val fixture = java.nio.file.Path.of("../../docs/contracts/integration-run-v1.json")

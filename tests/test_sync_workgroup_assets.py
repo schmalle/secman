@@ -109,6 +109,22 @@ class MatchingTests(unittest.TestCase):
   def test_member_in_multiple_workgroups(self):
     self.assertEqual({1: [10], 2: [10]}, self.plan(users=[user(groups=(1, 2))]).additions)
 
+  def test_disabled_workgroups_are_ignored(self):
+    client = FixtureClient(users=[user(groups=(1, 2))])
+    client.groups[0]["enabled"] = False
+    plan = build_plan(client.groups, client.users, client.mappings, client.assets)
+    self.assertEqual({2: [10]}, plan.additions)
+    self.assertEqual(2, plan.workgroups_evaluated)
+    self.assertEqual(1, plan.members_evaluated)
+
+  def test_member_of_only_disabled_workgroup_is_ignored(self):
+    client = FixtureClient(users=[user(groups=(1,))])
+    client.groups[0]["enabled"] = False
+    plan = build_plan(client.groups, client.users, client.mappings, client.assets)
+    self.assertEqual({}, plan.additions)
+    self.assertEqual(0, plan.members_evaluated)
+    self.assertEqual(0, plan.errors)
+
   def test_multiple_owners_in_different_workgroups(self):
     plan = self.plan(users=[user(), user(2, "d@example.com", (2,))],
                      mappings=[mapping(), mapping(email="d@example.com")])
@@ -199,6 +215,16 @@ class MatchingTests(unittest.TestCase):
 
 
 class TransportTests(unittest.TestCase):
+  def test_disabled_workgroups_are_not_hydrated_or_written(self):
+    linked = asset(groups=(1,))
+    client = FixtureClient(users=[user(groups=(1,))], assets=[linked])
+    client.groups[0]["enabled"] = False
+    del client.assets[0]["workgroups"]
+    plan = synchronize(client, False)
+    self.assertNotIn(("/api/workgroups/1/assets", None), client.reads)
+    self.assertEqual([], client.writes)
+    self.assertEqual({}, plan.additions)
+
   def test_omitted_asset_workgroups_are_loaded_from_counted_workgroups(self):
     linked = asset(groups=(2,))
     client = FixtureClient(assets=[linked])

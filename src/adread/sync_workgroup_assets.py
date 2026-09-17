@@ -45,6 +45,11 @@ def record_id(record: object) -> int | None:
   return value if type(value) is int and value > 0 else None
 
 
+def workgroup_is_enabled(record: object) -> bool:
+  """Treat old responses without the field as enabled; reject other non-booleans later."""
+  return isinstance(record, dict) and record.get("enabled", True) is True
+
+
 def http_status(error: Exception) -> int | None:
   if isinstance(error, requests.HTTPError) and error.response is not None:
     return error.response.status_code
@@ -77,13 +82,22 @@ class SyncPlan:
 
 def index_members(workgroups: list, users: list, plan: SyncPlan) -> dict[str, set[int]]:
   group_ids = set()
+  enabled_group_ids = set()
   for group in workgroups:
     gid = record_id(group)
     if gid is None:
       plan.invalid("workgroup", None)
+      continue
+    enabled = group.get("enabled", True)
+    if type(enabled) is not bool:
+      plan.invalid("workgroup enabled status", gid)
+      continue
+    group_ids.add(gid)
+    if enabled:
+      enabled_group_ids.add(gid)
     else:
-      group_ids.add(gid)
-  plan.workgroups_evaluated = len(group_ids)
+      log.info("Skipping disabled workgroup_id=%d", gid)
+  plan.workgroups_evaluated = len(enabled_group_ids)
   by_email = defaultdict(set)
   for user in users:
     uid = record_id(user)
@@ -96,12 +110,15 @@ def index_members(workgroups: list, users: list, plan: SyncPlan) -> dict[str, se
     memberships = {record_id(group) for group in memberships_value}
     if not memberships:
       continue
-    plan.members_evaluated += 1
     email = normalize_email(user.get("email"))
     if email is None or not memberships <= group_ids:
       plan.invalid("member", uid)
       continue
-    by_email[email].update(memberships)
+    enabled_memberships = memberships & enabled_group_ids
+    if not enabled_memberships:
+      continue
+    plan.members_evaluated += 1
+    by_email[email].update(enabled_memberships)
   plan.unique_email_addresses = len(by_email)
   return by_email
 
@@ -231,7 +248,7 @@ def synchronize(client, dry_run: bool) -> SyncPlan:
   assets = client.get_json("/api/assets")
   if not all(isinstance(rows, list) for rows in (workgroups, users, assets)):
     raise RuntimeError("Invalid collection response; synchronization aborted before writes")
-  hydrate_asset_workgroups(client, workgroups, assets)
+  hydrate_asset_workgroups(client, [group for group in workgroups if workgroup_is_enabled(group)], assets)
   plan = build_plan(workgroups, users, mappings, assets)
   for gid, ids in plan.additions.items():
     log.info("workgroup_id=%d relationships_to_add=%d dry_run=%s", gid, len(ids), dry_run)

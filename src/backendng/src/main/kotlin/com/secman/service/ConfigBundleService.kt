@@ -8,10 +8,12 @@ import com.secman.domain.McpApiKey
 import com.secman.domain.User
 import com.secman.domain.UserMapping
 import com.secman.domain.Workgroup
+import com.secman.domain.WorkgroupAccessChangedEvent
 import com.secman.domain.WorkgroupAdDomain
 import com.secman.domain.WorkgroupAwsAccount
 import com.secman.dto.*
 import com.secman.repository.*
+import io.micronaut.context.event.ApplicationEventPublisher
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Singleton
@@ -37,7 +39,8 @@ open class ConfigBundleService(
     private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository,
     private val workgroupAdDomainRepository: WorkgroupAdDomainRepository,
     private val entityManager: EntityManager,
-    private val auditLogService: AuditLogService
+    private val auditLogService: AuditLogService,
+    private val workgroupAccessChangedPublisher: ApplicationEventPublisher<WorkgroupAccessChangedEvent>
 ) {
     private val logger = LoggerFactory.getLogger(ConfigBundleService::class.java)
     private val passwordEncoder = BCryptPasswordEncoder()
@@ -358,6 +361,7 @@ open class ConfigBundleService(
                 name = workgroup.name,
                 description = workgroup.description,
                 criticality = workgroup.criticality.name,
+                enabled = workgroup.enabled,
                 parentName = workgroup.parent?.name,
                 createdAt = workgroup.createdAt
             )
@@ -488,6 +492,7 @@ open class ConfigBundleService(
         var skipped = 0
         val errors = mutableListOf<String>()
         val warnings = mutableListOf<String>()
+        val enabledStateChangedFor = mutableSetOf<Long>()
 
         // First pass: Create all workgroups without parent references
         val createdWorkgroups = mutableMapOf<String, Workgroup>()
@@ -504,6 +509,10 @@ open class ConfigBundleService(
                         val workgroup = existing.get()
                         workgroup.description = dto.description
                         workgroup.criticality = dto.criticality?.let { Criticality.valueOf(it) } ?: Criticality.MEDIUM
+                        if (workgroup.enabled != dto.enabled) {
+                            workgroup.enabled = dto.enabled
+                            workgroup.id?.let { enabledStateChangedFor += it }
+                        }
                         workgroupRepository.save(workgroup)
                         imported++
                         createdWorkgroups[dto.name] = workgroup
@@ -514,7 +523,8 @@ open class ConfigBundleService(
                     val workgroup = Workgroup(
                         name = dto.name,
                         description = dto.description,
-                        criticality = dto.criticality?.let { Criticality.valueOf(it) } ?: Criticality.MEDIUM
+                        criticality = dto.criticality?.let { Criticality.valueOf(it) } ?: Criticality.MEDIUM,
+                        enabled = dto.enabled
                     )
                     workgroupRepository.save(workgroup)
                     imported++
@@ -537,6 +547,12 @@ open class ConfigBundleService(
             } catch (e: Exception) {
                 warnings.add("Failed to set parent for workgroup '${dto.name}': ${e.message}")
             }
+        }
+
+        if (enabledStateChangedFor.isNotEmpty()) {
+            workgroupAccessChangedPublisher.publishEvent(
+                WorkgroupAccessChangedEvent(enabledStateChangedFor)
+            )
         }
 
         return ImportEntityResult(imported, skipped, errors, warnings)

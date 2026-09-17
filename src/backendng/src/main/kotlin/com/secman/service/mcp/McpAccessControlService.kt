@@ -79,6 +79,7 @@ open class McpAccessControlService(
             ?: throw IllegalStateException("Delegated user not found: ${delegation.delegatedUserId}")
 
         val isAdmin = user.roles.contains(User.Role.ADMIN)
+        val hasUniversalAssetAccess = isAdmin || user.roles.contains(User.Role.SECCHAMPION)
         val userRoles = user.roles.map { it.name }.toSet()
 
         logger.debug(
@@ -87,17 +88,17 @@ open class McpAccessControlService(
         )
 
         // For ADMIN users, no need to compute accessible assets
-        val accessibleAssetIds = if (isAdmin) {
-            null
-        } else {
-            getAccessibleAssetIds(delegation.delegatedUserId, delegation.delegatedUserEmail, user.username)
+        val accessibleAssetIds = when {
+            isAdmin -> null
+            hasUniversalAssetAccess -> assetRepository.findAllIds().toSet()
+            else -> getAccessibleAssetIds(delegation.delegatedUserId, delegation.delegatedUserEmail, user.username)
         }
 
         // Compute accessible workgroup IDs for potential workgroup-specific queries
         val accessibleWorkgroupIds = if (isAdmin) {
             null
         } else {
-            user.workgroups.mapNotNull { it.id }.toSet()
+            user.workgroups.filter { it.enabled }.mapNotNull { it.id }.toSet()
         }
 
         return McpExecutionContext.forDelegatedUser(
@@ -142,7 +143,7 @@ open class McpAccessControlService(
 
         // Criteria 1-3: Workgroup membership + manual creator + scan uploader
         val workgroupAssets = assetRepository
-            .findByWorkgroupsUsersIdOrManualCreatorIdOrScanUploaderIdOrderByNameAsc(
+            .findAccessibleByWorkgroupMembershipOrCreatorOrUploader(
                 userId = userId,
                 manualCreatorId = userId,
                 scanUploaderId = userId

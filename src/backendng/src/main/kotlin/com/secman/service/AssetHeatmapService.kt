@@ -124,9 +124,11 @@ open class AssetHeatmapService(
     private fun loadWorkgroupMap(): Map<Long, String?> {
         @Suppress("UNCHECKED_CAST")
         val rows = entityManager.createNativeQuery("""
-            SELECT asset_id, GROUP_CONCAT(workgroup_id ORDER BY workgroup_id) AS wg_ids
-            FROM asset_workgroups
-            GROUP BY asset_id
+            SELECT aw.asset_id, GROUP_CONCAT(aw.workgroup_id ORDER BY aw.workgroup_id) AS wg_ids
+            FROM asset_workgroups aw
+            JOIN workgroup w ON w.id = aw.workgroup_id
+            WHERE w.enabled = TRUE
+            GROUP BY aw.asset_id
         """).resultList as List<Array<Any?>>
 
         return rows.associate { row ->

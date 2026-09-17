@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getJson, ApiError, deleteJson } from '../utils/apiJson';
+import { getJson, ApiError, deleteJson, putJson } from '../utils/apiJson';
 import WorkgroupAccountsModal from './WorkgroupAccountsModal';
 import WorkgroupDomainsModal from './WorkgroupDomainsModal';
 import WorkgroupFormModal from './WorkgroupFormModal';
@@ -7,6 +7,7 @@ import WorkgroupAssignUsersModal from './WorkgroupAssignUsersModal';
 import WorkgroupAssignAssetsModal from './WorkgroupAssignAssetsModal';
 import { isAwsWorkgroup } from '../services/workgroupApi';
 import { formatServerDate } from '../utils/dateUtils';
+import { useClientHasRole } from '../utils/useClientAuth';
 import type { Workgroup, WorkgroupAsset, WorkgroupUser } from './workgroupTypes';
 
 interface WorkgroupManagementProps {
@@ -40,6 +41,7 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
     workgroupId: number | null;
     workgroupName: string;
   }>({ isOpen: false, workgroupId: null, workgroupName: '' });
+  const canChangeStatus = useClientHasRole(['ADMIN', 'SECCHAMPION']);
 
   useEffect(() => {
     fetchWorkgroups();
@@ -95,6 +97,23 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
     }
   };
 
+  const handleStatusChange = async (workgroup: Workgroup) => {
+    const nextEnabled = workgroup.enabled === false;
+    if (!nextEnabled && !window.confirm(
+      `Disable ${workgroup.name}? Its users, assets, accounts, and domains will remain stored but will no longer grant access.`
+    )) {
+      return;
+    }
+
+    try {
+      await putJson(`/api/workgroups/${workgroup.id}`, { enabled: nextEnabled }, 'Failed to update workgroup status');
+      await fetchWorkgroups();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred while updating the workgroup status');
+    }
+  };
+
   const closeForm = () => {
     setShowForm(false);
     setEditingWorkgroup(null);
@@ -105,8 +124,8 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
   }
 
   return (
-    <div className="container-fluid mt-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
+    <div className="container-fluid mt-4 d-flex flex-column flex-grow-1" style={{ minHeight: 0 }}>
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-shrink-0">
         <h2>Workgroup Management</h2>
         <button className="btn btn-primary" onClick={() => setShowForm(true)}>
           Create Workgroup
@@ -195,12 +214,13 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
       )}
 
       {/* Workgroups Table */}
-      <div className="table-responsive">
+      <div className="table-responsive flex-grow-1" style={{ minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain' }}>
         <table className="table table-striped table-hover">
-          <thead>
+          <thead className="table-light" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
             <tr>
               <th>Parent</th>
               <th>Name</th>
+              <th>Status</th>
               <th>Users</th>
               <th>Assets</th>
               <th>Accounts</th>
@@ -217,7 +237,7 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
               const hiddenAwsCount = workgroups.length - visibleWorkgroups.length;
               return visibleWorkgroups.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center text-muted">
+                <td colSpan={9} className="text-center text-muted">
                   {hiddenAwsCount > 0
                     ? 'AWS- workgroups are hidden. Enable "Show AWS- workgroups" to see them.'
                     : 'No visible workgroups found.'}
@@ -225,14 +245,20 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
               </tr>
             ) : (
               visibleWorkgroups.map(workgroup => {
+                const enabled = workgroup.enabled !== false;
                 return (
-                  <tr key={workgroup.id}>
+                  <tr key={workgroup.id} className={enabled ? undefined : 'table-secondary'}>
                     <td>
                       {workgroup.parentName
                         ? workgroup.parentName
                         : <span className="text-muted fst-italic">root</span>}
                     </td>
                     <td><strong>{workgroup.name}</strong></td>
+                    <td>
+                      <span className={`badge ${enabled ? 'bg-success' : 'bg-secondary'}`}>
+                        {enabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </td>
                     <td>
                       <span className="badge bg-info">{workgroup.userCount}</span>
                     </td>
@@ -300,6 +326,15 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
                       >
                         Assets
                       </button>
+                      {canChangeStatus && (
+                        <button
+                          className={`btn ${enabled ? 'btn-outline-warning' : 'btn-outline-success'}`}
+                          onClick={() => handleStatusChange(workgroup)}
+                          title={`${enabled ? 'Disable' : 'Enable'} workgroup`}
+                        >
+                          {enabled ? 'Disable' : 'Enable'}
+                        </button>
+                      )}
                       <button
                         className="btn btn-outline-danger"
                         onClick={() => handleDelete(workgroup.id)}

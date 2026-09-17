@@ -13,6 +13,7 @@ export interface Workgroup {
     name: string;
     description?: string;
     criticality: WorkgroupCriticality;
+    enabled?: boolean;
     userCount: number;
     assetCount: number;
     awsAccountsCount?: number;

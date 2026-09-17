@@ -119,7 +119,8 @@ is trimmed), preserving leading zeroes. Each owner can belong to several
 workgroups, and every mapped owner participates. Sets deduplicate desired links;
 workgroup IDs and asset IDs are processed in sorted order.
 
-All existing workgroups participate, regardless of their names. The `AWS-`
+All enabled workgroups participate, regardless of their names. Disabled workgroups are
+skipped, so their members never create new asset links. The `AWS-`
 prefix filter belongs to the AD import mode only. Membership inherited through
 a parent workgroup is not expanded by synchronization.
 
@@ -141,7 +142,7 @@ JSON summary to standard output with these fields:
 
 | Field | Meaning |
 |---|---|
-| `workgroups_evaluated` | Unique valid workgroup IDs, including empty groups |
+| `workgroups_evaluated` | Unique valid enabled workgroup IDs, including empty groups |
 | `members_evaluated` | User records with direct memberships; a user in several groups counts once |
 | `unique_email_addresses` | Distinct valid normalized member emails |
 | `aws_accounts_matched` | Distinct accounts linked to at least one member, including accounts with no assets |

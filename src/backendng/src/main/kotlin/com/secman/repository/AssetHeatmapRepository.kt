@@ -26,7 +26,8 @@ interface AssetHeatmapRepository : JpaRepository<AssetHeatmapEntry, Long> {
                 h.asset_id IN (
                     SELECT aw.asset_id FROM asset_workgroups aw
                     JOIN user_workgroups uw ON aw.workgroup_id = uw.workgroup_id
-                    WHERE uw.user_id = :userId
+                    JOIN workgroup w ON w.id = aw.workgroup_id
+                    WHERE uw.user_id = :userId AND w.enabled = TRUE
                 )
                 OR h.manual_creator_id = :userId
                 OR h.scan_uploader_id = :userId

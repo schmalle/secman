@@ -83,7 +83,8 @@ AWS owner mappings and CrowdStrike assets:
 ```
 
 With unchanged source data, the final preview reports `relationships_to_add: 0`.
-All workgroups are evaluated, including names without an `AWS-` prefix. Only
+All enabled workgroups are evaluated, including names without an `AWS-` prefix. Disabled
+workgroups and their members are ignored. Only
 direct members participate. Existing links, including stale automatic links,
 remain because `asset_workgroups` has no manual/automatic source marker.
 

@@ -55,6 +55,7 @@ data class WorkgroupExportDto(
     val name: String,
     val description: String? = null,
     val criticality: String? = null,
+    val enabled: Boolean = true,
     val parentName: String? = null, // Reference parent by name for hierarchy
     val createdAt: Instant? = null
 )

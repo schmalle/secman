@@ -79,7 +79,9 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
             TIMESTAMPDIFF(DAY, r.oldest_anchor, :now),
             r.oldest_vuln_id,
             COALESCE((SELECT GROUP_CONCAT(aw.workgroup_id ORDER BY aw.workgroup_id)
-                      FROM asset_workgroups aw WHERE aw.asset_id = r.asset_id), ''),
+                      FROM asset_workgroups aw
+                      JOIN workgroup w ON w.id = aw.workgroup_id
+                      WHERE aw.asset_id = r.asset_id AND w.enabled = TRUE), ''),
             a.ad_domain,
             :now
         FROM (
