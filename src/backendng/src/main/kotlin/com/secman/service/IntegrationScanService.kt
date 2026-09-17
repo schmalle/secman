@@ -61,7 +61,7 @@ open class IntegrationRunWriter(
             findingsJson = validated.findingsJson, accepted = request.findings.size)
         repository.persist(run)
         request.findings.forEachIndexed { index, input ->
-            observe(subject, asset, run, input, validated.attachments[index])
+            observe(scanner.source, subject, asset, run, input, validated.attachments[index])
         }
         if (IntegrationLifecycle.resolvesAbsent(request)) {
             val present = request.findings.mapTo(hashSetOf()) { it.externalId }
@@ -90,8 +90,8 @@ open class IntegrationRunWriter(
         return ack(run, false)
     }
 
-    private fun observe(subject: IntegrationSubject, asset: Asset, run: IntegrationRun, input: IntegrationFindingInput,
-                        attachments: List<ValidatedIntegrationAttachment>) {
+    private fun observe(scannerSource: String, subject: IntegrationSubject, asset: Asset, run: IntegrationRun,
+                        input: IntegrationFindingInput, attachments: List<ValidatedIntegrationAttachment>) {
         val finding = repository.finding(subject.id!!, input.externalId) ?: IntegrationFinding(
             subjectId = subject.id!!, externalId = input.externalId, firstSeenAt = run.completedAt
         )
@@ -113,7 +113,7 @@ open class IntegrationRunWriter(
         if (projection == null) projection = Vulnerability(asset = asset, scanTimestamp = timestamp)
         if (finding.projectionKey.isEmpty()) {
             finding.projectionKey = identifier(run.scannerId, subject.id!!, input.externalId)
-            finding.projectionProduct = input.externalId
+            finding.projectionProduct = if (scannerSource == "WEB_SECURITY") "Webserver" else input.externalId
         }
         projection.vulnerabilityId = finding.projectionKey
         projection.source = com.secman.constants.VulnerabilitySources.INTEGRATION

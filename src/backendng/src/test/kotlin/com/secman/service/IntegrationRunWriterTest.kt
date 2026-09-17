@@ -119,6 +119,24 @@ class IntegrationRunWriterTest {
     }
 
     @Test
+    fun `web security findings project to the generic Webserver product`() {
+        scanner.source = "WEB_SECURITY"
+
+        submit(run(1, present = listOf(finding())))
+
+        assertThat(projections.values.single().vulnerableProductVersions).isEqualTo("Webserver")
+        assertThat(findings.getValue("stable").projectionProduct).isEqualTo("Webserver")
+    }
+
+    @Test
+    fun `non web security findings retain their external identity as product`() {
+        submit(run(1, present = listOf(finding())))
+
+        assertThat(projections.values.single().vulnerableProductVersions).isEqualTo("stable")
+        assertThat(findings.getValue("stable").projectionProduct).isEqualTo("stable")
+    }
+
+    @Test
     fun `legacy adoption preserves exception identity product and earliest first seen`() {
         val oldTime = LocalDateTime.ofInstant(time.minusSeconds(5000), ZoneOffset.UTC)
         val legacy = Vulnerability(id = 44, asset = asset, vulnerabilityId = "LEGACY-1", source = "CLI_MANUAL",

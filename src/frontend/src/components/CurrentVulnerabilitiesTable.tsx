@@ -1146,7 +1146,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                             onClick={() => handleSort("vulnerabilityId")}
                             style={{ cursor: "pointer" }}
                           >
-                            CVE
+                            CVE/Finding
                             <SortIcon field="vulnerabilityId" />
                           </th>
                           <th
