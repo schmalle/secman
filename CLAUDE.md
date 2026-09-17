@@ -222,7 +222,7 @@ Code samples in `docs/ARCHITECTURE.md` §Patterns — CSV/Excel import (validate
 ### Auth
 - Backend: `@Secured(SecurityRule.IS_AUTHENTICATED)` + `authentication.roles.contains("…")`.
 - Frontend: the JWT lives in the **HttpOnly `secman_auth` cookie** (`AuthCookieService.AUTH_COOKIE_NAME`), not in JS-readable storage. Axios sends it via `withCredentials: true` (set globally in `utils/csrf.ts`); fetch calls use the `authenticated*` helpers in `utils/auth.ts` / `services/`. `sessionStorage["user"]` holds only the display/role payload — never a token.
-- External/CLI clients: `POST /api/auth/login` returns the JWT **only** in `Set-Cookie: secman_auth=…`; they re-send it as `Authorization: Bearer …` (the bearer reader stays active alongside cookie auth).
+- External/CLI clients: `POST /api/auth/login` returns the JWT **only** in `Set-Cookie: secman_auth=…`; clients either retain that cookie or extract the token and re-send it as `Authorization: Bearer …` (both readers stay active).
 - SSE: JWT in `?token=…` query param (EventSource has no header support).
 
 ### Chat notifications (Slack / Telegram)
@@ -307,7 +307,7 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-09-16*
+*Last updated: 2026-09-17*
 
 ## Recent Changes
 
