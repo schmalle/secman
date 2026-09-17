@@ -14,6 +14,7 @@ import requests
 log = logging.getLogger("adread.sync")
 BATCH_SIZE = 500
 EMAIL_PATTERN = re.compile(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+")
+UUID_PATTERN = re.compile(r"[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}")
 
 
 def normalize_email(value: object) -> str | None:
@@ -35,9 +36,18 @@ def account_id(value: object) -> str | None:
   return None
 
 
+def is_non_aws_cloud_account(value: object) -> bool:
+  return isinstance(value, str) and UUID_PATTERN.fullmatch(value.strip()) is not None
+
+
 def record_id(record: object) -> int | None:
   value = record.get("id") if isinstance(record, dict) else None
   return value if type(value) is int and value > 0 else None
+
+
+def workgroup_is_enabled(record: object) -> bool:
+  """Treat old responses without the field as enabled; reject other non-booleans later."""
+  return isinstance(record, dict) and record.get("enabled", True) is True
 
 
 def http_status(error: Exception) -> int | None:
@@ -72,28 +82,43 @@ class SyncPlan:
 
 def index_members(workgroups: list, users: list, plan: SyncPlan) -> dict[str, set[int]]:
   group_ids = set()
+  enabled_group_ids = set()
   for group in workgroups:
     gid = record_id(group)
     if gid is None:
       plan.invalid("workgroup", None)
+      continue
+    enabled = group.get("enabled", True)
+    if type(enabled) is not bool:
+      plan.invalid("workgroup enabled status", gid)
+      continue
+    group_ids.add(gid)
+    if enabled:
+      enabled_group_ids.add(gid)
     else:
-      group_ids.add(gid)
-  plan.workgroups_evaluated = len(group_ids)
+      log.info("Skipping disabled workgroup_id=%d", gid)
+  plan.workgroups_evaluated = len(enabled_group_ids)
   by_email = defaultdict(set)
   for user in users:
     uid = record_id(user)
-    if uid is None or not isinstance(user.get("workgroups"), list):
+    memberships_value = user.get("workgroups") if isinstance(user, dict) else None
+    if memberships_value is None and isinstance(user, dict) and user.get("workgroupCount") == 0:
+      memberships_value = []
+    if uid is None or not isinstance(memberships_value, list):
       plan.invalid("user", uid)
       continue
-    memberships = {record_id(group) for group in user["workgroups"]}
+    memberships = {record_id(group) for group in memberships_value}
     if not memberships:
       continue
-    plan.members_evaluated += 1
     email = normalize_email(user.get("email"))
     if email is None or not memberships <= group_ids:
       plan.invalid("member", uid)
       continue
-    by_email[email].update(memberships)
+    enabled_memberships = memberships & enabled_group_ids
+    if not enabled_memberships:
+      continue
+    plan.members_evaluated += 1
+    by_email[email].update(enabled_memberships)
   plan.unique_email_addresses = len(by_email)
   return by_email
 
@@ -135,6 +160,8 @@ def build_plan(workgroups: list, users: list, mappings: list, assets: list) -> S
       continue
     account = account_id(raw_account)
     if account is None:
+      if is_non_aws_cloud_account(raw_account):
+        continue
       plan.invalid("asset AWS account", aid)
       continue
     desired = by_account.setdefault(account, set())
@@ -182,13 +209,46 @@ def load_mappings(client) -> list:
   return mappings
 
 
+def hydrate_asset_workgroups(client, workgroups: list, assets: list) -> None:
+  """Recover omitted memberships without treating an incomplete response as empty."""
+  if all(not isinstance(asset, dict) or isinstance(asset.get("workgroups"), list)
+         for asset in assets):
+    return
+
+  assets_by_id = {
+    aid: asset for asset in assets
+    if isinstance(asset, dict) and (aid := record_id(asset)) is not None
+  }
+  memberships = defaultdict(list)
+  for group in workgroups:
+    gid = record_id(group)
+    count = group.get("assetCount") if isinstance(group, dict) else None
+    if gid is None or type(count) is not int or count < 0:
+      raise RuntimeError("Invalid workgroup asset count; synchronization aborted before writes")
+    if count == 0:
+      continue
+    assigned = client.get_json(f"/api/workgroups/{gid}/assets")
+    if not isinstance(assigned, list) or len(assigned) != count:
+      raise RuntimeError("Incomplete workgroup asset membership; synchronization aborted before writes")
+    for asset_ref in assigned:
+      aid = record_id(asset_ref)
+      if aid is None or aid not in assets_by_id:
+        raise RuntimeError("Invalid workgroup asset membership; synchronization aborted before writes")
+      memberships[aid].append({"id": gid})
+
+  for aid, asset in assets_by_id.items():
+    if asset.get("workgroups") is None:
+      asset["workgroups"] = memberships.get(aid, [])
+
+
 def synchronize(client, dry_run: bool) -> SyncPlan:
   workgroups = client.get_json("/api/workgroups")
-  users = client.get_json("/api/users", {"includeWorkgroups": "true"})
+  users = client.get_json("/api/users", {"includeWorkgroups": "true", "includePending": "false"})
   mappings = load_mappings(client)
   assets = client.get_json("/api/assets")
   if not all(isinstance(rows, list) for rows in (workgroups, users, assets)):
     raise RuntimeError("Invalid collection response; synchronization aborted before writes")
+  hydrate_asset_workgroups(client, [group for group in workgroups if workgroup_is_enabled(group)], assets)
   plan = build_plan(workgroups, users, mappings, assets)
   for gid, ids in plan.additions.items():
     log.info("workgroup_id=%d relationships_to_add=%d dry_run=%s", gid, len(ids), dry_run)

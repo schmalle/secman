@@ -100,6 +100,39 @@ class WorkgroupAuthorizationTest {
     }
 
     @Test
+    fun `security champion can disable a workgroup`() {
+        val workgroup = workgroup(id = 106L, createdBy = creator, users = mutableSetOf(member))
+        every { workgroupService.getWorkgroupById(106L) } returns workgroup
+        every {
+            workgroupService.updateWorkgroup(106L, null, null, null, false)
+        } returns workgroup.copy(enabled = false)
+
+        val response = controller.updateWorkgroup(
+            106L,
+            UpdateWorkgroupRequest(enabled = false),
+            auth(member, setOf("SECCHAMPION"))
+        )
+
+        assertEquals(HttpStatus.OK, response.status)
+        verify { workgroupService.updateWorkgroup(106L, null, null, null, false) }
+    }
+
+    @Test
+    fun `regular member cannot change workgroup status`() {
+        val workgroup = workgroup(id = 107L, createdBy = member, users = mutableSetOf(member))
+        every { workgroupService.getWorkgroupById(107L) } returns workgroup
+
+        val response = controller.updateWorkgroup(
+            107L,
+            UpdateWorkgroupRequest(enabled = false),
+            auth(member)
+        )
+
+        assertEquals(HttpStatus.FORBIDDEN, response.status)
+        verify(exactly = 0) { workgroupService.updateWorkgroup(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `regular member can add accessible assets to accessible workgroup`() {
         val workgroup = workgroup(id = 104L, createdBy = member, users = mutableSetOf(member))
         every { workgroupRepository.findById(104L) } returns Optional.of(workgroup)

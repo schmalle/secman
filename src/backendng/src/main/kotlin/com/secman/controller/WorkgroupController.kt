@@ -215,6 +215,7 @@ open class WorkgroupController(
                 name = wg.name,
                 description = wg.description,
                 criticality = wg.criticality,
+                enabled = wg.enabled,
                 userCount = (userCounts[id] ?: 0L).toInt(),
                 assetCount = (assetCounts[id] ?: 0L).toInt(),
                 awsAccountsCount = awsCounts[id] ?: 0L,
@@ -280,6 +281,7 @@ open class WorkgroupController(
                 name = workgroup.name,
                 description = workgroup.description,
                 criticality = workgroup.criticality,
+                enabled = workgroup.enabled,
                 userCount = workgroup.users.size,
                 assetCount = workgroup.assets.size,
                 createdAt = workgroup.createdAt!!,
@@ -308,7 +310,7 @@ open class WorkgroupController(
         authentication: Authentication
     ): HttpResponse<*> {
         return try {
-            workgroupService.getWorkgroupById(id)
+            val previousEnabled = workgroupService.getWorkgroupById(id).enabled
             if (!canManageWorkgroup(authentication)) {
                 return HttpResponse.status<Any>(io.micronaut.http.HttpStatus.FORBIDDEN)
             }
@@ -316,8 +318,17 @@ open class WorkgroupController(
                 id = id,
                 name = request.name,
                 description = request.description,
-                criticality = request.criticality
+                criticality = request.criticality,
+                enabled = request.enabled
             )
+            if (request.enabled != null && request.enabled != previousEnabled) {
+                logger.info(
+                    "AUDIT: operation=CHANGE_WORKGROUP_STATUS, actor={}, workgroup={}, enabled={}",
+                    authentication.name,
+                    id,
+                    request.enabled
+                )
+            }
             HttpResponse.ok(workgroup)
         } catch (e: IllegalArgumentException) {
             if (e.message?.contains("not found") == true) {
@@ -1234,6 +1245,7 @@ open class WorkgroupController(
             id = workgroup.id!!,
             name = workgroup.name,
             description = workgroup.description,
+            enabled = workgroup.enabled,
             parentId = workgroup.parent?.id,
             depth = workgroup.calculateDepth(),
             childCount = workgroup.children.size,
@@ -1295,7 +1307,9 @@ data class UpdateWorkgroupRequest(
     @field:Size(max = 512, message = "Description must not exceed 512 characters")
     val description: String? = null,
 
-    val criticality: Criticality? = null
+    val criticality: Criticality? = null,
+
+    val enabled: Boolean? = null
 )
 
 /**
@@ -1364,6 +1378,7 @@ data class WorkgroupListResponse(
     val name: String,
     val description: String?,
     val criticality: Criticality,
+    val enabled: Boolean,
     val userCount: Int,
     val assetCount: Int,
     val awsAccountsCount: Long,
@@ -1387,6 +1402,7 @@ data class WorkgroupDetailResponse(
     val name: String,
     val description: String?,
     val criticality: Criticality,
+    val enabled: Boolean,
     val userCount: Int,
     val assetCount: Int,
     val createdAt: java.time.Instant,

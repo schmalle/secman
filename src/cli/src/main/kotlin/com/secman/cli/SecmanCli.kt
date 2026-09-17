@@ -489,7 +489,8 @@ class SecmanCli {
                   command does not create assets.
 
                 Options:
-                  --device-type <type>     CrowdStrike host filter: SERVER, WORKSTATION, or ALL (default: SERVER)
+                  --device-type <type>     CrowdStrike host filter: SERVER, DOMAIN_CONTROLLER,
+                                           SERVER_FAMILY, WORKSTATION, or ALL (default: SERVER)
                   --dry-run                Query CrowdStrike only; print batch/summary counts without backend auth or writes
                   --limit <num>            CrowdStrike page size, coerced to 1..1000 (default: 1000)
                   --backend-url <url>      Backend API URL (overrides SECMAN_BACKEND_URL/SECMAN_HOST; SECMAN_HOST may be bare host)
@@ -503,9 +504,18 @@ class SecmanCli {
                   - Asset matching uses case-insensitive hostname, then short hostname for FQDNs.
                   - Product upsert uses CrowdStrike external ID scoped to the asset, or asset/name/vendor/version.
 
+                Device scopes (case-insensitive):
+                  SERVER             Falcon Server devices only
+                  DOMAIN_CONTROLLER  Falcon Domain Controller devices only
+                  SERVER_FAMILY      Server + Domain Controller; excludes workstations
+                  WORKSTATION        Falcon Workstation devices only
+                  ALL                Server + Domain Controller + Workstation
+                  Composite scopes query each exact Falcon category separately and
+                  deduplicate hosts by Falcon agent ID.
+
                 Examples:
-                  secman installed-products --device-type SERVER --dry-run
-                  secman installed-products --device-type SERVER --backend-url https://secman.example.com
+                  secman installed-products --device-type SERVER_FAMILY --dry-run
+                  secman installed-products --device-type SERVER_FAMILY --backend-url https://secman.example.com
                   secman installed-products --device-type ALL --limit 500 --verbose
             """.trimIndent(),
             "query-servers" to """
@@ -515,7 +525,8 @@ class SecmanCli {
 
                 Options:
                   --hostnames <list>       Comma-separated list of hostnames (default: all devices)
-                  --device-type <type>     Device type: SERVER, WORKSTATION, or ALL (default: SERVER)
+                  --device-type <type>     Device scope: SERVER, DOMAIN_CONTROLLER, SERVER_FAMILY,
+                                           WORKSTATION, or ALL (default: SERVER)
                   --severity <levels>      Severity filter (default: HIGH,CRITICAL)
                   --min-days-open <num>    Minimum days open filter (default: 30)
                   --last-seen-days <num>   Only include devices seen within N days (default: 0 = all)
@@ -528,11 +539,24 @@ class SecmanCli {
                   --dry-run                Query but don't import
                   --verbose                Enable verbose logging
 
+                Device scopes (case-insensitive):
+                  SERVER             Falcon Server devices only
+                  DOMAIN_CONTROLLER  Falcon Domain Controller devices only
+                  SERVER_FAMILY      Server + Domain Controller; production-safe server scope
+                  WORKSTATION        Falcon Workstation devices only
+                  ALL                Server + Domain Controller + Workstation
+                  Composite scopes query each exact Falcon category separately and
+                  deduplicate hosts by Falcon agent ID.
+                  Domain controllers are stored as SecMan SERVER assets.
+                  With --hostnames, this option is ignored.
+
                 Examples:
                   secman query servers --save
                   secman query servers --backend-url https://secman.example.com --save
                   secman query servers --hostnames server01,server02 --save --verbose
                   secman query servers --severity CRITICAL --min-days-open 60 --dry-run
+                  secman query servers --device-type DOMAIN_CONTROLLER --dry-run
+                  secman query servers --device-type SERVER_FAMILY --save --last-seen-days 30
                   secman query servers --device-type WORKSTATION --severity CRITICAL,HIGH --save
                   secman query servers --device-type ALL --dry-run --verbose
                   secman query servers --save --overdue-threshold 60

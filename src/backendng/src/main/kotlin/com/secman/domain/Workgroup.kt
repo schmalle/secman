@@ -58,6 +58,10 @@ data class Workgroup(
     @Column(name = "criticality", nullable = false, length = 20)
     var criticality: Criticality = Criticality.MEDIUM,
 
+    /** Whether this workgroup contributes to SecMan access and synchronization. */
+    @Column(name = "enabled", nullable = false)
+    var enabled: Boolean = true,
+
     /**
      * Parent workgroup in the hierarchy
      * Feature 040: Nested Workgroups

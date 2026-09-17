@@ -185,9 +185,27 @@ class SecmanCliTest {
         assertTrue(output.contains("secman installed-products"))
         assertTrue(output.contains("CrowdStrike Discover software inventory"))
         assertTrue(output.contains("--device-type"))
+        assertTrue(output.contains("DOMAIN_CONTROLLER"))
+        assertTrue(output.contains("SERVER_FAMILY"))
+        assertTrue(output.contains("Server + Domain Controller"))
         assertTrue(output.contains("--dry-run"))
         assertTrue(output.contains("unknown systems"))
         assertTrue(output.contains("POST /api/installed-products/import"))
+    }
+
+    @Test
+    fun `test query servers help documents domain controller scopes`() {
+        val cli = SecmanCli()
+
+        val (result, output) = captureStdout {
+            cli.execute(arrayOf("help", "query-servers"))
+        }
+
+        assertEquals(0, result)
+        assertTrue(output.contains("DOMAIN_CONTROLLER"))
+        assertTrue(output.contains("SERVER_FAMILY"))
+        assertTrue(output.contains("Domain controllers are stored as SecMan SERVER assets"))
+        assertTrue(output.contains("With --hostnames, this option is ignored"))
     }
 
     @Test

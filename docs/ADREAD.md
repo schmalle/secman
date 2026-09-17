@@ -31,7 +31,7 @@ For production secrets in AWS Secrets Manager, use
 - For AD read/import: an Azure service principal with `Group.Read.All` and `GroupMember.Read.All` Graph API permissions
 - For SecMan imports or asset synchronization: a secman **ADMIN** account
 - For the canonical synchronization wrapper: `pass-cli` installed and authenticated,
-  and an HTTPS backend whose certificate is trusted by Python
+  and an HTTPS backend whose hostname-valid certificate is trusted by the operating system
 - For the AWS synchronization wrapper: AWS CLI, `jq`, permission to read the
   selected secret, and the same trusted HTTPS backend
 
@@ -58,7 +58,7 @@ Optional:
 | Var | Default | Description |
 |---|---|---|
 | `LOG_LEVEL` | `INFO` | Standard log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
-| `REQUESTS_CA_BUNDLE` | Python's default trust store | PEM CA bundle for verifying a private backend certificate |
+| `REQUESTS_CA_BUNDLE` | Python's default trust store | PEM CA bundle for direct or AWS-wrapper connections to a private backend certificate |
 | `SECMAN_INSECURE` | unset | Legacy AD import option; a true value is rejected by asset synchronization |
 
 ## AD read/import behaviour
@@ -83,12 +83,15 @@ AWS owner mappings and CrowdStrike assets:
 ```
 
 With unchanged source data, the final preview reports `relationships_to_add: 0`.
-All workgroups are evaluated, including names without an `AWS-` prefix. Only
+All enabled workgroups are evaluated, including names without an `AWS-` prefix. Disabled
+workgroups and their members are ignored. Only
 direct members participate. Existing links, including stale automatic links,
 remain because `asset_workgroups` has no manual/automatic source marker.
 
-The wrapper resolves the three SecMan variables from Proton Pass; it does not
-load the Azure settings or accept `--import`/`--insecure` for this command.
+The wrapper resolves the three SecMan variables from Proton Pass and uses the
+operating system certificate store; it does not load the Azure settings or
+accept `--import`/`--insecure` for this command. Direct invocations can select
+the same trust source with `--use-system-ca`.
 See [configuration and exit codes](WORKGROUP_ASSET_SYNC.md#reconciliation-and-diagnostics).
 
 ### With Proton Pass (canonical)

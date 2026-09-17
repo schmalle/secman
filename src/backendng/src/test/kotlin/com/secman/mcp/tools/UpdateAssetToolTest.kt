@@ -63,11 +63,12 @@ class UpdateAssetToolTest {
     }
 
     @Test
-    fun `rename remains asset scoped`() = runBlocking<Unit> {
+    fun `disabled-workgroup-only asset is rejected by write tool`() = runBlocking<Unit> {
         val result = tool.execute(mapOf("assetId" to 7L, "name" to "hidden"), context(canAccess = false))
 
         assertThat(result.isError).isTrue()
         assertThat((result as McpToolResult.Error).code).isEqualTo("NOT_FOUND")
+        io.mockk.verify(exactly = 0) { assetRepository.findById(any()) }
     }
 
     private fun asset() = Asset(

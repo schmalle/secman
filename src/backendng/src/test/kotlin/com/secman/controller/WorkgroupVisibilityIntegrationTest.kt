@@ -115,6 +115,35 @@ class WorkgroupVisibilityIntegrationTest : BaseIntegrationTest() {
         assertThat(status.body()!!.workgroupCount).isEqualTo(2)
     }
 
+    @Test
+    fun `disabled workgroup and its descendants do not enter effective membership`() {
+        val suffix = System.nanoTime()
+        val disabledParent = workgroupRepository.save(
+            Workgroup(
+                name = "Disabled Visibility Parent $suffix",
+                criticality = Criticality.MEDIUM,
+                enabled = false
+            )
+        )
+        workgroupRepository.save(
+            Workgroup(
+                name = "Disabled Visibility Child $suffix",
+                criticality = Criticality.MEDIUM,
+                parent = disabledParent
+            )
+        )
+        val savedUser = userRepository.save(
+            TestDataFactory.createRegularUser(
+                username = "disabled-visibility-user-$suffix",
+                email = "disabled-visibility-user-$suffix@test.com"
+            )
+        )
+        assignUserToWorkgroup(savedUser.id!!, disabledParent.id!!)
+
+        assertThat(workgroupRepository.findEffectiveWorkgroupsByUserEmail(savedUser.email)).isEmpty()
+        assertThat(workgroupRepository.countEffectiveWorkgroupsByUserEmail(savedUser.email)).isZero()
+    }
+
     private fun assignUserToWorkgroup(userId: Long, workgroupId: Long) {
         transactionOperations.executeWrite<Unit> { status ->
             status.connection.prepareStatement("INSERT INTO user_workgroups (user_id, workgroup_id) VALUES (?, ?)").use { ps ->

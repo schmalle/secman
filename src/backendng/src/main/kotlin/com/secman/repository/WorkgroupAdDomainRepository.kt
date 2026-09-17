@@ -9,7 +9,7 @@ import java.util.Optional
 @Repository
 interface WorkgroupAdDomainRepository : JpaRepository<WorkgroupAdDomain, Long> {
 
-    @Query("SELECT DISTINCT wad.adDomain FROM WorkgroupAdDomain wad WHERE EXISTS (SELECT 1 FROM wad.workgroup w JOIN w.users u WHERE u.id = :userId)")
+    @Query("SELECT DISTINCT wad.adDomain FROM WorkgroupAdDomain wad WHERE EXISTS (SELECT 1 FROM wad.workgroup w JOIN w.users u WHERE u.id = :userId AND w.enabled = true)")
     fun findDistinctAdDomainsByUserId(userId: Long): List<String>
 
     @Query("SELECT wad FROM WorkgroupAdDomain wad LEFT JOIN FETCH wad.createdBy JOIN FETCH wad.workgroup WHERE wad.workgroup.id = :workgroupId")

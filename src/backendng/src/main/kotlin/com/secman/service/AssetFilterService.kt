@@ -130,7 +130,7 @@ open class AssetFilterService(
      */
     private fun getAccessibleAssetsMultiQuery(userId: Long, userEmail: String?, username: String): List<Asset> {
         // Regular users and VULN: filter by workgroup membership + ownership
-        val workgroupAssets = assetRepository.findByWorkgroupsUsersIdOrManualCreatorIdOrScanUploaderIdOrderByNameAsc(
+        val workgroupAssets = assetRepository.findAccessibleByWorkgroupMembershipOrCreatorOrUploader(
             userId = userId,
             manualCreatorId = userId,
             scanUploaderId = userId
@@ -235,7 +235,7 @@ open class AssetFilterService(
         }
 
         // Get all workgroups the user belongs to
-        val userWorkgroupIds = currentUser.workgroups.mapNotNull { it.id }
+        val userWorkgroupIds = currentUser.workgroups.filter { it.enabled }.mapNotNull { it.id }
 
         if (userWorkgroupIds.isEmpty()) {
             // User not in any workgroups - can only see their own scans

@@ -13,4 +13,4 @@ if [ ! -f "$JAR_PATH" ]; then
     exit 1
 fi
 
-pass-cli run --env-file "$REPO_ROOT/secmanpp.env" -- java -Xmx4g -Xms2g -jar ./src/cli/build/libs/cli-0.1.0-all.jar  installed-products --username $SECMAN_ADMIN_NAME --password $SECMAN_ADMIN_PASS
+pass-cli run --env-file "$REPO_ROOT/secmanpp.env" -- java -Xmx4g -Xms2g -jar ./src/cli/build/libs/cli-0.1.0-all.jar installed-products --device-type SERVER_FAMILY

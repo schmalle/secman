@@ -53,7 +53,7 @@ interface WorkgroupRepository : JpaRepository<Workgroup, Long> {
     @io.micronaut.data.annotation.Query("""
         SELECT DISTINCT w FROM Workgroup w
         JOIN w.users u
-        WHERE u.email = :email
+        WHERE u.email = :email AND w.enabled = true
         ORDER BY w.name ASC
     """)
     fun findWorkgroupsByUserEmail(email: String): List<Workgroup>
@@ -79,14 +79,14 @@ interface WorkgroupRepository : JpaRepository<Workgroup, Long> {
             FROM workgroup w
             INNER JOIN user_workgroups uw ON uw.workgroup_id = w.id
             INNER JOIN users u ON u.id = uw.user_id
-            WHERE u.email = :email
+            WHERE u.email = :email AND w.enabled = TRUE
 
             UNION ALL
 
             SELECT w.id, w.parent_id, e.depth + 1
             FROM workgroup w
             INNER JOIN effective e ON w.parent_id = e.id
-            WHERE e.depth < 10
+            WHERE e.depth < 10 AND w.enabled = TRUE
         )
         SELECT w.* FROM workgroup w
         WHERE w.id IN (SELECT DISTINCT id FROM effective)
@@ -100,14 +100,14 @@ interface WorkgroupRepository : JpaRepository<Workgroup, Long> {
             FROM workgroup w
             INNER JOIN user_workgroups uw ON uw.workgroup_id = w.id
             INNER JOIN users u ON u.id = uw.user_id
-            WHERE u.email = :email
+            WHERE u.email = :email AND w.enabled = TRUE
 
             UNION ALL
 
             SELECT w.id, w.parent_id, e.depth + 1
             FROM workgroup w
             INNER JOIN effective e ON w.parent_id = e.id
-            WHERE e.depth < 10
+            WHERE e.depth < 10 AND w.enabled = TRUE
         )
         SELECT COUNT(DISTINCT id) FROM effective
     """, nativeQuery = true)
@@ -123,6 +123,9 @@ interface WorkgroupRepository : JpaRepository<Workgroup, Long> {
      */
     @io.micronaut.data.annotation.Query("SELECT w.id, COUNT(u) FROM Workgroup w JOIN w.users u GROUP BY w.id")
     fun countUsersPerWorkgroup(): List<Array<Any>>
+
+    @io.micronaut.data.annotation.Query("SELECT COUNT(u) FROM Workgroup w LEFT JOIN w.users u WHERE w.id = :workgroupId")
+    fun countUsersByWorkgroupId(workgroupId: Long): Long
 
     @io.micronaut.data.annotation.Query("SELECT w.id, COUNT(a) FROM Workgroup w JOIN w.assets a GROUP BY w.id")
     fun countAssetsPerWorkgroup(): List<Array<Any>>

@@ -9,7 +9,7 @@ import java.util.Optional
 @Repository
 interface WorkgroupAwsAccountRepository : JpaRepository<WorkgroupAwsAccount, Long> {
 
-    @Query("SELECT DISTINCT waa.awsAccountId FROM WorkgroupAwsAccount waa WHERE EXISTS (SELECT 1 FROM waa.workgroup w JOIN w.users u WHERE u.id = :userId)")
+    @Query("SELECT DISTINCT waa.awsAccountId FROM WorkgroupAwsAccount waa WHERE EXISTS (SELECT 1 FROM waa.workgroup w JOIN w.users u WHERE u.id = :userId AND w.enabled = true)")
     fun findDistinctAwsAccountIdsByUserId(userId: Long): List<String>
 
     // LEFT JOIN FETCH on createdBy: nullable since V206 (the creator may have

@@ -44,7 +44,7 @@ class AssetFilterServiceWorkgroupAdDomainTest {
         val domainAsset = Asset(id = 501L, name = "host1", type = "SERVER", owner = "CrowdStrike Import", adDomain = "corp.example.com")
         every { memoryConfig.lazyLoadingEnabled } returns false
         every {
-            assetRepository.findByWorkgroupsUsersIdOrManualCreatorIdOrScanUploaderIdOrderByNameAsc(10L, 10L, 10L)
+            assetRepository.findAccessibleByWorkgroupMembershipOrCreatorOrUploader(10L, 10L, 10L)
         } returns emptyList()
         every { userMappingRepository.findDistinctAwsAccountIdByEmail("user@example.com") } returns emptyList()
         every { userMappingRepository.findDistinctDomainByEmail("user@example.com") } returns emptyList()
@@ -57,6 +57,22 @@ class AssetFilterServiceWorkgroupAdDomainTest {
         val assets = service.getAccessibleAssets(auth())
 
         assertEquals(listOf(domainAsset), assets)
+    }
+
+    @Test
+    fun `REST fallback excludes assets granted only by disabled workgroup membership`() {
+        every { memoryConfig.lazyLoadingEnabled } returns false
+        every {
+            assetRepository.findAccessibleByWorkgroupMembershipOrCreatorOrUploader(10L, 10L, 10L)
+        } returns emptyList()
+        every { userMappingRepository.findDistinctAwsAccountIdByEmail("user@example.com") } returns emptyList()
+        every { userMappingRepository.findDistinctDomainByEmail("user@example.com") } returns emptyList()
+        every { awsAccountSharingService.getSharedAwsAccountIdsByEmail("user@example.com") } returns emptyList()
+        every { assetRepository.findByOwner("regular") } returns emptyList()
+        every { workgroupAwsAccountRepository.findDistinctAwsAccountIdsByUserId(10L) } returns emptyList()
+        every { workgroupAdDomainRepository.findDistinctAdDomainsByUserId(10L) } returns emptyList()
+
+        assertEquals(emptyList<Asset>(), service.getAccessibleAssets(auth()))
     }
 
     private fun auth(): Authentication = mockk {

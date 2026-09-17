@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import WorkgroupTree from './WorkgroupTree';
 import CreateChildWorkgroupModal from './CreateChildWorkgroupModal';
 import MoveWorkgroupModal from './MoveWorkgroupModal';
 import DeleteWorkgroupConfirmation from './DeleteWorkgroupConfirmation';
 import WorkgroupBreadcrumb from './WorkgroupBreadcrumb';
 import WorkgroupManagement from './WorkgroupManagement';
-import type { WorkgroupResponse } from '../services/workgroupApi';
+import { getWorkgroupById, isAwsWorkgroup, type WorkgroupResponse } from '../services/workgroupApi';
 import { useClientHasRole } from '../utils/useClientAuth';
 import { formatServerDateTime } from '../utils/dateUtils';
 
@@ -42,6 +42,20 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
   // so non-admins don't see a "+" button that 403s on submit.
   const canCreateChild = useClientHasRole('ADMIN');
 
+  useEffect(() => {
+    const rawId = new URLSearchParams(window.location.search).get('workgroupId');
+    if (!rawId || !/^\d+$/.test(rawId)) return;
+
+    const workgroupId = Number(rawId);
+    getWorkgroupById(workgroupId)
+      .then((workgroup) => {
+        setSelectedWorkgroup(workgroup);
+        setViewMode('tree');
+        if (isAwsWorkgroup(workgroup.name)) setShowAwsWorkgroups(true);
+      })
+      .catch((error) => console.error('Failed to open linked workgroup details:', error));
+  }, []);
+
   const handleSelectWorkgroup = (workgroup: WorkgroupResponse) => {
     setSelectedWorkgroup(workgroup);
   };
@@ -77,9 +91,12 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
   };
 
   return (
-    <div className="container-fluid mt-4">
+    <div
+      className="container-fluid mt-4 d-flex flex-column"
+      style={{ height: 'calc(100dvh - 9.5rem)', minHeight: 0, overflow: 'hidden' }}
+    >
       {/* Header with view toggle */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-shrink-0">
         <h2>
           <i className="bi bi-diagram-3 me-2"></i>
           Workgroup Management
@@ -118,7 +135,7 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
 
       {/* Tree View */}
       {viewMode === 'tree' && (
-        <div className="row">
+        <div className="row flex-grow-1 overflow-auto" style={{ minHeight: 0, overscrollBehavior: 'contain' }}>
           {/* Left Panel: Tree */}
           <div className="col-md-5">
             <div className="card">
@@ -221,6 +238,13 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
                         {selectedWorkgroup.parentId ?? <span className="text-muted">None (Root level)</span>}
                       </dd>
 
+                      <dt className="col-sm-4">Status</dt>
+                      <dd className="col-sm-8">
+                        <span className={`badge ${selectedWorkgroup.enabled !== false ? 'bg-success' : 'bg-secondary'}`}>
+                          {selectedWorkgroup.enabled !== false ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </dd>
+
                       <dt className="col-sm-4">Created</dt>
                       <dd className="col-sm-8">
                         {formatServerDateTime(selectedWorkgroup.createdAt)}
@@ -272,12 +296,14 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
 
       {/* Table View (Existing Flat View) */}
       {viewMode === 'table' && (
-        <div className="alert alert-info mb-3">
-          <i className="bi bi-info-circle"></i>
-          <strong> Table View:</strong> This is the classic flat view of all workgroups. Switch to Tree View to see the hierarchy.
+        <div className="d-flex flex-column flex-grow-1" style={{ minHeight: 0 }}>
+          <div className="alert alert-info mb-3 flex-shrink-0">
+            <i className="bi bi-info-circle"></i>
+            <strong> Table View:</strong> This is the classic flat view of all workgroups. Switch to Tree View to see the hierarchy.
+          </div>
+          <WorkgroupManagement showAwsWorkgroups={showAwsWorkgroups} />
         </div>
       )}
-      {viewMode === 'table' && <WorkgroupManagement showAwsWorkgroups={showAwsWorkgroups} />}
 
       {/* Modals */}
       <CreateChildWorkgroupModal

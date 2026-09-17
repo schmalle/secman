@@ -222,7 +222,7 @@ Code samples in `docs/ARCHITECTURE.md` §Patterns — CSV/Excel import (validate
 ### Auth
 - Backend: `@Secured(SecurityRule.IS_AUTHENTICATED)` + `authentication.roles.contains("…")`.
 - Frontend: the JWT lives in the **HttpOnly `secman_auth` cookie** (`AuthCookieService.AUTH_COOKIE_NAME`), not in JS-readable storage. Axios sends it via `withCredentials: true` (set globally in `utils/csrf.ts`); fetch calls use the `authenticated*` helpers in `utils/auth.ts` / `services/`. `sessionStorage["user"]` holds only the display/role payload — never a token.
-- External/CLI clients: `POST /api/auth/login` returns the JWT **only** in `Set-Cookie: secman_auth=…`; they re-send it as `Authorization: Bearer …` (the bearer reader stays active alongside cookie auth).
+- External/CLI clients: `POST /api/auth/login` returns the JWT **only** in `Set-Cookie: secman_auth=…`; clients either retain that cookie or extract the token and re-send it as `Authorization: Bearer …` (both readers stay active).
 - SSE: JWT in `?token=…` query param (EventSource has no header support).
 
 ### Chat notifications (Slack / Telegram)
@@ -307,14 +307,14 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-09-06*
+*Last updated: 2026-09-17*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **CrowdStrike imports include domain controllers (2026-09-17)** — shared CrowdStrike scopes now include `DOMAIN_CONTROLLER` and composite `SERVER_FAMILY`; production vulnerability and product scripts use the composite scope and store discovered domain controllers as SecMan `SERVER` assets. See `docs/CROWDSTRIKE_IMPORT.md` and `docs/CHANGELOG.md`.
+
+- **Web findings identify as findings and group under Webserver (2026-09-17)** — the current-vulnerabilities table labels its identifier column `CVE/Finding`; `WEB_SECURITY` integration projections use `Webserver` as Product, including a V266 backfill. Other scanner sources and stable finding identities are unchanged. See `docs/CHANGELOG.md`.
+
 - **Source-review quick wins (2026-08-27)** — batched asset access, shorter transactions, shared `DeadlockRetry`, `GET /api/workgroups/tree`, and parallel dashboard loading. Build/startup and E2E gates remain owed. See `docs/SOURCE_REVIEW_COMPLEXITY_SPEED.md` §6 and `docs/CHANGELOG.md`.
-
-- **AWS account display names → workgroups (2026-08-25)** — imports and CLI `manage-user-mappings link-workgroups` / REST `POST /api/user-mappings/link-workgroup-accounts` / MCP `link_workgroup_aws_accounts` link accounts to `aws-<display name>`. Invalid names fail; existing links are idempotent. See `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`.
-
-- **Chunked exception recompute (2026-08-24)** — `AsyncExceptionRecompute.recomputeAllChunked` uses 10,000-ID keyset chunks with independent transactions/retries. Convergence is eventual; a failure preserves the completed prefix. Unbounded `recomputeExceptedAll()` is test-only. See `docs/CHANGELOG.md`.

@@ -24,6 +24,7 @@ const AppSettingsAdmin: React.FC = () => {
   const [globalCveApprovalAdminOnly, setGlobalCveApprovalAdminOnly] = useState(false);
   const [aiRiskAssessmentEnabled, setAiRiskAssessmentEnabled] = useState(false);
   const [aiRiskAssessmentModel, setAiRiskAssessmentModel] = useState('');
+  const [catchAllWorkgroupUserThreshold, setCatchAllWorkgroupUserThreshold] = useState(100);
 
   // Load settings on component mount
   useEffect(() => {
@@ -44,8 +45,12 @@ const AppSettingsAdmin: React.FC = () => {
       setGlobalCveApprovalAdminOnly(data.globalCveApprovalAdminOnly);
       setAiRiskAssessmentEnabled(data.aiRiskAssessmentEnabled);
       setAiRiskAssessmentModel(data.aiRiskAssessmentModel);
+      setCatchAllWorkgroupUserThreshold(data.catchAllWorkgroupUserThreshold);
     } catch (err) {
       console.error('[AppSettingsAdmin] Failed to load settings:', err);
+      // authenticatedGet clears sessionStorage before redirecting a 401 to
+      // login. Do not replace that useful transition with a generic alert.
+      if (!sessionStorage.getItem('user')) return;
       const errorMessage = err instanceof Error ? err.message : 'Failed to load application settings';
       setError(errorMessage);
     } finally {
@@ -73,6 +78,11 @@ const AppSettingsAdmin: React.FC = () => {
       return;
     }
 
+    if (!Number.isInteger(catchAllWorkgroupUserThreshold) || catchAllWorkgroupUserThreshold < 1 || catchAllWorkgroupUserThreshold > 1_000_000) {
+      setError('Catch-all workgroup threshold must be a whole number between 1 and 1,000,000');
+      return;
+    }
+
     try {
       setSaving(true);
       console.log('[AppSettingsAdmin] Saving settings:', { baseUrl });
@@ -81,7 +91,8 @@ const AppSettingsAdmin: React.FC = () => {
         baseUrl.replace(/\/$/, ''),
         globalCveApprovalAdminOnly,
         aiRiskAssessmentEnabled,
-        aiRiskAssessmentModel.trim()
+        aiRiskAssessmentModel.trim(),
+        catchAllWorkgroupUserThreshold
       );
 
       console.log('[AppSettingsAdmin] Settings saved successfully:', updatedSettings);
@@ -89,6 +100,7 @@ const AppSettingsAdmin: React.FC = () => {
       setBaseUrl(updatedSettings.baseUrl);
       setAiRiskAssessmentEnabled(updatedSettings.aiRiskAssessmentEnabled);
       setAiRiskAssessmentModel(updatedSettings.aiRiskAssessmentModel);
+      setCatchAllWorkgroupUserThreshold(updatedSettings.catchAllWorkgroupUserThreshold);
       setSuccessMessage('Settings saved successfully!');
 
       // Clear success message after 3 seconds
@@ -192,6 +204,29 @@ const AppSettingsAdmin: React.FC = () => {
             <small className="form-text text-muted">
               The base URL of your SecMan installation. This is used for generating links in email
               notifications. Example: <code>https://secman.example.com</code>
+            </small>
+          </div>
+
+          <div className="mb-4">
+            <label htmlFor="catchAllWorkgroupUserThreshold" className="form-label">
+              <strong>Catch-All Workgroup User Threshold</strong>
+            </label>
+            <input
+              type="number"
+              className="form-control"
+              id="catchAllWorkgroupUserThreshold"
+              value={catchAllWorkgroupUserThreshold}
+              min={1}
+              max={1_000_000}
+              step={1}
+              onChange={(e) => setCatchAllWorkgroupUserThreshold(Number(e.target.value))}
+              disabled={saving}
+              required
+            />
+            <small className="form-text text-muted">
+              Workgroups with this many direct users or more are treated as catch-all groups and
+              disabled automatically. The default is 100. Reducing membership never re-enables a
+              group; an administrator must re-enable it deliberately.
             </small>
           </div>
 

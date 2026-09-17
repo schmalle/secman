@@ -27,7 +27,7 @@ class IntegrationRunValidator(private val mapper: ObjectMapper) {
     companion object {
         val STATUSES = setOf("SUCCESS", "PARTIAL", "FAILED", "SKIPPED")
         val SEVERITIES = setOf("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
-        val SOURCES = setOf("GITHUB_AI", "VISUAL")
+        val SOURCES = setOf("GITHUB_AI", "VISUAL", "WEB_SECURITY")
         const val MAX_ATTACHMENT_BYTES = 1024 * 1024
         const val MAX_RUN_BYTES = 5 * MAX_ATTACHMENT_BYTES
     }

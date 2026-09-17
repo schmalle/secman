@@ -53,7 +53,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * @return Rows of [assetId, workgroupId] (both Long)
      */
     @io.micronaut.data.annotation.Query(
-        "SELECT a.id, w.id FROM Asset a JOIN a.workgroups w WHERE a.id IN (:assetIds)"
+        "SELECT a.id, w.id FROM Asset a JOIN a.workgroups w WHERE a.id IN (:assetIds) AND w.enabled = true"
     )
     fun findWorkgroupIdsByAssetIds(assetIds: List<Long>): List<Array<Any>>
 
@@ -73,7 +73,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
         FROM Asset a
         JOIN a.workgroups w
         JOIN w.users u
-        WHERE a.cloudAccountId = :cloudAccountId
+        WHERE a.cloudAccountId = :cloudAccountId AND w.enabled = true
     """)
     fun findDistinctWorkgroupMemberEmailsByCloudAccountId(cloudAccountId: String): List<String>
 
@@ -101,7 +101,8 @@ interface AssetRepository : JpaRepository<Asset, Long> {
                   a.id IN (
                       SELECT aw.asset_id FROM asset_workgroups aw
                       JOIN user_workgroups uw ON aw.workgroup_id = uw.workgroup_id
-                      WHERE uw.user_id = :userId
+                      JOIN workgroup w ON w.id = aw.workgroup_id
+                      WHERE uw.user_id = :userId AND w.enabled = TRUE
                   )
                   OR a.manual_creator_id = :userId
                   OR a.scan_uploader_id = :userId
@@ -136,7 +137,8 @@ interface AssetRepository : JpaRepository<Asset, Long> {
                 a.id IN (
                     SELECT aw.asset_id FROM asset_workgroups aw
                     JOIN user_workgroups uw ON aw.workgroup_id = uw.workgroup_id
-                    WHERE uw.user_id = :userId
+                    JOIN workgroup w ON w.id = aw.workgroup_id
+                    WHERE uw.user_id = :userId AND w.enabled = TRUE
                 )
                 OR a.manual_creator_id = :userId
                 OR a.scan_uploader_id = :userId
@@ -169,12 +171,14 @@ interface AssetRepository : JpaRepository<Asset, Long> {
                 OR a.cloud_account_id IN (
                     SELECT waa.aws_account_id FROM workgroup_aws_account waa
                     JOIN user_workgroups uw ON uw.workgroup_id = waa.workgroup_id
-                    WHERE uw.user_id = :userId
+                    JOIN workgroup w ON w.id = waa.workgroup_id
+                    WHERE uw.user_id = :userId AND w.enabled = TRUE
                 )
                 OR LOWER(a.ad_domain) COLLATE utf8mb4_general_ci IN (
                     SELECT wad.ad_domain COLLATE utf8mb4_general_ci FROM workgroup_ad_domain wad
                     JOIN user_workgroups uw ON uw.workgroup_id = wad.workgroup_id
-                    WHERE uw.user_id = :userId
+                    JOIN workgroup w ON w.id = wad.workgroup_id
+                    WHERE uw.user_id = :userId AND w.enabled = TRUE
                 )
                 OR a.owner = :username
             ORDER BY a.name ASC
@@ -552,7 +556,19 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * @param userId The user ID to filter by
      * @return List of assets accessible to the user
      */
-    fun findByWorkgroupsUsersIdOrManualCreatorIdOrScanUploaderIdOrderByNameAsc(
+    @io.micronaut.data.annotation.Query(
+        """
+        SELECT DISTINCT a
+        FROM Asset a
+        LEFT JOIN a.workgroups w
+        LEFT JOIN w.users u
+        WHERE (u.id = :userId AND w.enabled = true)
+           OR a.manualCreator.id = :manualCreatorId
+           OR a.scanUploader.id = :scanUploaderId
+        ORDER BY a.name ASC
+        """
+    )
+    fun findAccessibleByWorkgroupMembershipOrCreatorOrUploader(
         userId: Long,
         manualCreatorId: Long,
         scanUploaderId: Long

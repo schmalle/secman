@@ -5,19 +5,27 @@ package com.secman.crowdstrike.dto
  *
  * Maps to CrowdStrike's product_type_desc field values
  */
-enum class DeviceType(val fqlValue: String) {
+enum class DeviceType(val fqlValue: String?) {
     SERVER("Server"),
+    DOMAIN_CONTROLLER("Domain Controller"),
+    SERVER_FAMILY(null),
     WORKSTATION("Workstation"),
-    ALL("");  // Special case: queries both types
+    ALL(null);
 
     /**
      * Generate FQL filter string for CrowdStrike API
-     * Returns null for ALL (requires special handling - query both types)
+     * Returns null for composite scopes, which must be expanded with [atomicTypes].
      */
-    fun toFqlFilter(): String? = when (this) {
-        SERVER -> "product_type_desc:'Server'"
-        WORKSTATION -> "product_type_desc:'Workstation'"
-        ALL -> null
+    fun toFqlFilter(): String? = fqlValue?.let { "product_type_desc:'$it'" }
+
+    /**
+     * Expand a logical import scope into the exact Falcon product types it covers.
+     * Exact filters are queried independently and their AIDs are deduplicated by the client.
+     */
+    fun atomicTypes(): List<DeviceType> = when (this) {
+        SERVER_FAMILY -> listOf(SERVER, DOMAIN_CONTROLLER)
+        ALL -> listOf(SERVER, DOMAIN_CONTROLLER, WORKSTATION)
+        else -> listOf(this)
     }
 
     /**
@@ -25,6 +33,8 @@ enum class DeviceType(val fqlValue: String) {
      */
     fun displayName(): String = when (this) {
         SERVER -> "servers"
+        DOMAIN_CONTROLLER -> "domain controllers"
+        SERVER_FAMILY -> "servers and domain controllers"
         WORKSTATION -> "workstations"
         ALL -> "all devices"
     }

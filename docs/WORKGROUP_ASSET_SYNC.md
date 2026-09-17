@@ -30,8 +30,9 @@ uv run --locked --project src/adread python src/adread/read.py sync-workgroup-as
 
 The direct invocation requires the same three environment variables. Both
 credential wrappers resolve them for the client. No Azure credentials are needed.
-The backend must use HTTPS with a trusted certificate; use `REQUESTS_CA_BUNDLE`
-for your organization's CA.
+The Proton Pass wrapper uses the operating system certificate store. Direct
+invocations can add `--use-system-ca`, or use `REQUESTS_CA_BUNDLE` with a PEM CA
+bundle. The backend must use HTTPS with a certificate valid for its hostname.
 The command rejects `--insecure` and a true `SECMAN_INSECURE`. It requires an
 ADMIN login and refuses HTTP redirects. Existing AD import invocations retain
 their argument structure.
@@ -41,14 +42,14 @@ their argument structure.
 | `SECMAN_BACKEND_URL` | `pass://Test/SECMAN/SECMAN_BACKEND_BASE_URL`; required HTTPS base URL |
 | `SECMAN_ADMIN_NAME` | `pass://Test/SECMAN/SECMAN_ADMIN_NAME` |
 | `SECMAN_ADMIN_PASS` | `pass://Test/SECMAN/SECMAN_ADMIN_PASS` |
-| `REQUESTS_CA_BUNDLE` | Optional trusted PEM CA bundle; otherwise Python's default CA trust |
+| `REQUESTS_CA_BUNDLE` | Optional trusted PEM CA bundle for direct/AWS-wrapper invocations |
 | `LOG_LEVEL` | Optional log level; defaults to `INFO` |
 
 This command runs through the Python entry point; `./scripts/secman
 sync-workgroup-assets` is not a registered Kotlin command. `SECMAN_HOST` and
 Kotlin CLI configuration files are not read by this Python client. The supported
-sync options are `--dry-run` and `--help`/`-h`; the shared parser's `--import` and
-`--insecure` options are rejected in sync mode.
+sync options are `--dry-run`, `--use-system-ca`, and `--help`/`-h`; the shared
+parser's `--import` and `--insecure` options are rejected in sync mode.
 
 ## AWS Secrets Manager for production
 
@@ -118,7 +119,8 @@ is trimmed), preserving leading zeroes. Each owner can belong to several
 workgroups, and every mapped owner participates. Sets deduplicate desired links;
 workgroup IDs and asset IDs are processed in sorted order.
 
-All existing workgroups participate, regardless of their names. The `AWS-`
+All enabled workgroups participate, regardless of their names. Disabled workgroups are
+skipped, so their members never create new asset links. The `AWS-`
 prefix filter belongs to the AD import mode only. Membership inherited through
 a parent workgroup is not expanded by synchronization.
 
@@ -140,7 +142,7 @@ JSON summary to standard output with these fields:
 
 | Field | Meaning |
 |---|---|
-| `workgroups_evaluated` | Unique valid workgroup IDs, including empty groups |
+| `workgroups_evaluated` | Unique valid enabled workgroup IDs, including empty groups |
 | `members_evaluated` | User records with direct memberships; a user in several groups counts once |
 | `unique_email_addresses` | Distinct valid normalized member emails |
 | `aws_accounts_matched` | Distinct accounts linked to at least one member, including accounts with no assets |

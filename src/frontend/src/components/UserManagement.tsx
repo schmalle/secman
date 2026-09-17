@@ -1312,7 +1312,14 @@ const UserManagement = () => {
                                     {user.workgroups && user.workgroups.length > 0 ? (
                                         <div>
                                             {user.workgroups.map(wg => (
-                                                <span key={wg.id} className="badge bg-info me-1">{wg.name}</span>
+                                                <a
+                                                    key={wg.id}
+                                                    className="badge bg-info me-1 text-decoration-none"
+                                                    href={`/workgroups?workgroupId=${encodeURIComponent(wg.id)}`}
+                                                    title={`View ${wg.name} workgroup details`}
+                                                >
+                                                    {wg.name}
+                                                </a>
                                             ))}
                                         </div>
                                     ) : (

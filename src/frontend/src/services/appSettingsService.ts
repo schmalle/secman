@@ -22,6 +22,9 @@ export interface AppSettingsDto {
   aiRiskAssessmentEnabled: boolean;
   aiRiskAssessmentModel: string;
 
+  /** Direct-user count at which a workgroup is disabled as a catch-all group. */
+  catchAllWorkgroupUserThreshold: number;
+
   /** Username of admin who last updated settings */
   updatedBy: string | null;
 
@@ -83,12 +86,13 @@ export async function updateAppSettings(
   baseUrl: string,
   globalCveApprovalAdminOnly: boolean,
   aiRiskAssessmentEnabled: boolean,
-  aiRiskAssessmentModel: string
+  aiRiskAssessmentModel: string,
+  catchAllWorkgroupUserThreshold: number
 ): Promise<AppSettingsDto> {
-  console.log('[appSettingsService] updateAppSettings called with:', { baseUrl, globalCveApprovalAdminOnly, aiRiskAssessmentEnabled, aiRiskAssessmentModel });
+  console.log('[appSettingsService] updateAppSettings called with:', { baseUrl, globalCveApprovalAdminOnly, aiRiskAssessmentEnabled, aiRiskAssessmentModel, catchAllWorkgroupUserThreshold });
   console.log('[appSettingsService] Making authenticated PUT to /api/settings/app');
 
-  const response = await authenticatedPut('/api/settings/app', { baseUrl, globalCveApprovalAdminOnly, aiRiskAssessmentEnabled, aiRiskAssessmentModel });
+  const response = await authenticatedPut('/api/settings/app', { baseUrl, globalCveApprovalAdminOnly, aiRiskAssessmentEnabled, aiRiskAssessmentModel, catchAllWorkgroupUserThreshold });
 
   console.log('[appSettingsService] Response received:', {
     ok: response.ok,

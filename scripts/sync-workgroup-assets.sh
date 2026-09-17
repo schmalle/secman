@@ -8,4 +8,4 @@ export SECMAN_ADMIN_NAME="${SECMAN_ADMIN_NAME:-pass://Test/SECMAN/SECMAN_ADMIN_N
 export SECMAN_ADMIN_PASS="${SECMAN_ADMIN_PASS:-pass://Test/SECMAN/SECMAN_ADMIN_PASS}"
 
 exec pass-cli run -- uv run --locked --project "$SECMAN_SYNC_ROOT/src/adread" \
-  python "$SECMAN_SYNC_ROOT/src/adread/read.py" sync-workgroup-assets "$@"
+  python "$SECMAN_SYNC_ROOT/src/adread/read.py" sync-workgroup-assets --use-system-ca "$@"

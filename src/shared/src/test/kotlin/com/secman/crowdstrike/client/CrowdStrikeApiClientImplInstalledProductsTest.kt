@@ -16,6 +16,8 @@ import io.mockk.mockk
 import io.mockk.verify
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import java.time.Instant
 
 class CrowdStrikeApiClientImplInstalledProductsTest {
@@ -29,6 +31,27 @@ class CrowdStrikeApiClientImplInstalledProductsTest {
     }
     private val client = CrowdStrikeApiClientImpl(httpClient, authService)
     private val config = FalconConfigDto(clientId = "client", clientSecret = "secret")
+
+    @Test
+    fun `server family imports products for servers and domain controllers only`() {
+        val emptyPage = mapOf(
+            "resources" to emptyList<Any>(),
+            "meta" to mapOf("pagination" to mapOf("total" to 0))
+        )
+        val requests = mutableListOf<HttpRequest<Any>>()
+        every { blockingClient.exchange(capture(requests), Map::class.java) } returns HttpResponse.ok(emptyPage)
+
+        val total = client.queryInstalledProductsStreaming("SERVER_FAMILY", config, limit = 1000) { }
+
+        assertThat(total).isZero()
+        assertThat(requests).hasSize(2)
+        val decodedUris = requests.map {
+            URLDecoder.decode(it.uri.toString(), StandardCharsets.UTF_8)
+        }
+        assertThat(decodedUris).anyMatch { it.contains("host.product_type_desc:'Server'") }
+        assertThat(decodedUris).anyMatch { it.contains("host.product_type_desc:'Domain Controller'") }
+        assertThat(decodedUris).noneMatch { it.contains("host.product_type_desc:'Workstation'") }
+    }
 
     @Test
     fun `queryInstalledProductsStreaming requests the install_usage facet and maps the fields it unlocks`() {

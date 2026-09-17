@@ -88,7 +88,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   return (
     <div>
       <div
-        className={`d-flex align-items-center py-2 px-3 border-bottom ${isSelected ? 'bg-primary bg-opacity-10' : 'hover-bg-light'}`}
+        className={`d-flex align-items-center py-2 px-3 border-bottom ${isSelected ? 'bg-primary bg-opacity-10' : 'hover-bg-light'} ${workgroup.enabled === false ? 'text-muted bg-light' : ''}`}
         style={{ ...indentStyle, cursor: 'pointer' }}
         onClick={handleSelect}
       >
@@ -119,6 +119,10 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 
         {/* Workgroup name */}
         <span className="flex-grow-1 fw-medium">{workgroup.name}</span>
+
+        {workgroup.enabled === false && (
+          <span className="badge bg-secondary me-2">Disabled</span>
+        )}
 
         {/* Depth badge */}
         <span className="badge bg-secondary me-2">

@@ -19,16 +19,12 @@ cd "${PROJECT_ROOT}"
 # it's still empty.
 export DB_CONNECT="${DB_CONNECT:-jdbc:mariadb://127.0.0.1:3306/secman?useSsl=true}"
 
-# Same caveat as deleteoutdatedaws.sh: --username/--password arrive via env
-# (the CLI reads SECMAN_ADMIN_NAME / SECMAN_ADMIN_PASS) or as literal CLI args.
-# Pass them as args using the *resolved* values so the CLI sees real credentials,
-# not pass:// placeholders.
+# The CLI reads SECMAN_ADMIN_NAME / SECMAN_ADMIN_PASS from the environment
+# populated by secman_aws_export_envfile. Keep credentials out of process args.
 exec java -Xmx4g -Xms2g -jar "${CLI_JAR}" \
   query servers \
-  --device-type SERVER \
+  --device-type SERVER_FAMILY \
   --severity CRITICAL,HIGH \
   --min-days-open 1 \
   --save \
-  --username "${SECMAN_ADMIN_NAME}" \
-  --password "${SECMAN_ADMIN_PASS}" \
   --last-seen-days 30

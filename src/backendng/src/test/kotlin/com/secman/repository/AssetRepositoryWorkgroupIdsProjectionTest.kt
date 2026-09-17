@@ -86,4 +86,25 @@ open class AssetRepositoryWorkgroupIdsProjectionTest : BaseIntegrationTest() {
 
         assertThat(assetRepository.findWorkgroupIdsByAssetIds(listOf(asset!!.id!!))).isEmpty()
     }
+
+    @Test
+    fun `omits disabled workgroups from materialized access rows`() {
+        val suffix = System.nanoTime()
+        val enabled = workgroupRepository.save(
+            Workgroup(name = "wg-enabled-$suffix", criticality = Criticality.HIGH)
+        )
+        val disabled = workgroupRepository.save(
+            Workgroup(name = "wg-disabled-$suffix", criticality = Criticality.LOW, enabled = false)
+        )
+        workgroups += listOf(enabled, disabled)
+
+        val toSave = TestDataFactory.createAsset(name = "wg-status-asset-$suffix", owner = "owner-$suffix")
+        toSave.workgroups = mutableSetOf(enabled, disabled)
+        asset = assetRepository.save(toSave)
+
+        val rows = assetRepository.findWorkgroupIdsByAssetIds(listOf(asset!!.id!!))
+        val workgroupIds = rows.map { (it[1] as Number).toLong() }
+
+        assertThat(workgroupIds).containsExactly(enabled.id!!)
+    }
 }

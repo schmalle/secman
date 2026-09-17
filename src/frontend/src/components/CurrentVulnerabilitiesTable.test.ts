@@ -15,3 +15,9 @@ test('current vulnerabilities table ignores stale exact count responses', () => 
   assert.match(source, /countRequestKeyRef/);
   assert.match(source, /if\s*\(\s*countRequestKeyRef\.current\s*!==\s*requestKey\s*\)\s*return/);
 });
+
+test('current vulnerabilities table labels identifiers as CVE or findings', () => {
+  const source = readFileSync(new URL('./CurrentVulnerabilitiesTable.tsx', import.meta.url), 'utf8');
+
+  assert.match(source, /CVE\/Finding/);
+});
