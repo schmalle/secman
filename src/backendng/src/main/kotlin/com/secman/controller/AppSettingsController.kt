@@ -11,6 +11,8 @@ import io.micronaut.security.authentication.Authentication
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Min
 import org.slf4j.LoggerFactory
 
 /**
@@ -43,7 +45,10 @@ open class AppSettingsController(
         val globalCveApprovalAdminOnly: Boolean = false,
         val aiRiskAssessmentEnabled: Boolean = false,
         @field:NotBlank(message = "AI risk-assessment model is required")
-        val aiRiskAssessmentModel: String = "anthropic/claude-sonnet-4.6:online"
+        val aiRiskAssessmentModel: String = "anthropic/claude-sonnet-4.6:online",
+        @field:Min(1)
+        @field:Max(1_000_000)
+        val catchAllWorkgroupUserThreshold: Int? = null
     )
 
     /**
@@ -106,7 +111,8 @@ open class AppSettingsController(
                 updatedBy = username,
                 globalCveApprovalAdminOnly = request.globalCveApprovalAdminOnly,
                 aiRiskAssessmentEnabled = request.aiRiskAssessmentEnabled,
-                aiRiskAssessmentModel = request.aiRiskAssessmentModel
+                aiRiskAssessmentModel = request.aiRiskAssessmentModel,
+                catchAllWorkgroupUserThreshold = request.catchAllWorkgroupUserThreshold
             )
 
             logger.info("Application settings updated successfully by user '{}'", username)

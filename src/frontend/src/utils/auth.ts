@@ -82,6 +82,19 @@ export function clearAuth(): void {
 }
 
 /**
+ * Redirect an expired authenticated request to login while preserving the
+ * same-origin page the user was trying to use.
+ */
+export function redirectToLogin(): void {
+    if (typeof window === 'undefined') return;
+    const target = window.location.pathname + window.location.search;
+    const suffix = target && target !== '/'
+        ? `?redirect=${encodeURIComponent(target)}`
+        : '';
+    window.location.replace(`/login${suffix}`);
+}
+
+/**
  * Make an authenticated API request.
  * Authentication is handled via the HttpOnly secman_auth cookie sent automatically.
  */
@@ -98,9 +111,7 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
     // If we get 401, clear auth data and redirect to login
     if (response.status === 401) {
         clearAuth();
-        if (typeof window !== 'undefined') {
-            window.location.href = '/login';
-        }
+        redirectToLogin();
     }
 
     return response;
@@ -127,9 +138,7 @@ export async function authenticatedPost(url: string, data?: any): Promise<Respon
 
         if (response.status === 401) {
             clearAuth();
-            if (typeof window !== 'undefined') {
-                window.location.href = '/login';
-            }
+            redirectToLogin();
         }
 
         return response;
@@ -199,9 +208,7 @@ export async function refreshToken(): Promise<string | null> {
             // Token is invalid/expired, clear auth and redirect
             // Session expired
             clearAuth();
-            if (typeof window !== 'undefined') {
-                window.location.href = '/login';
-            }
+            redirectToLogin();
         }
     } catch (error) {
         console.error('[auth] Token refresh error:', error);

@@ -414,7 +414,7 @@ open class CrowdStrikeApiClientImpl(
             }
         } else {
             // TWO-STAGE OPTIMIZED QUERY:
-            // 1. Query devices first (using product_type_desc filter for SERVER/WORKSTATION/ALL)
+            // 1. Query devices first using the selected product_type_desc scope
             // 2. Query vulnerabilities only for those specific devices
             // This avoids querying ALL vulnerabilities (which caused 30-minute timeouts)
             val parsedDeviceType = DeviceType.fromString(deviceType)
@@ -575,10 +575,8 @@ open class CrowdStrikeApiClientImpl(
     ): Int {
         val parsedDeviceType = DeviceType.fromString(deviceType)
         val token = getAuthToken(config)
-        val filters = when (parsedDeviceType) {
-            DeviceType.SERVER -> listOf("host.product_type_desc:'Server'")
-            DeviceType.WORKSTATION -> listOf("host.product_type_desc:'Workstation'")
-            DeviceType.ALL -> listOf("host.product_type_desc:'Server'", "host.product_type_desc:'Workstation'")
+        val filters = parsedDeviceType.atomicTypes().map { atomicType ->
+            "host.${requireNotNull(atomicType.toFqlFilter())}"
         }
 
         var totalProcessed = 0
@@ -1025,10 +1023,10 @@ open class CrowdStrikeApiClientImpl(
     /**
      * Get device IDs from CrowdStrike using product_type_desc filter
      *
-     * Supports querying SERVER, WORKSTATION, or ALL device types
+     * Supports exact and composite [DeviceType] scopes.
      *
      * @param token OAuth2 access token
-     * @param deviceType Device type to query (SERVER, WORKSTATION, or ALL)
+     * @param deviceType Device scope to query
      * @param limit Maximum number of devices to retrieve per page
      * @return List of device IDs matching the specified type
      */
@@ -1045,14 +1043,14 @@ open class CrowdStrikeApiClientImpl(
         limit: Int = 5000,
         lastSeenDays: Int = 0
     ): List<String> {
-        // Handle ALL device type by querying both SERVER and WORKSTATION
-        if (deviceType == DeviceType.ALL) {
-            log.info(">>> Stage 1: Querying ALL devices (SERVER + WORKSTATION)")
-            val serverIds = getDeviceIdsFiltered(token, DeviceType.SERVER, limit, lastSeenDays)
-            val workstationIds = getDeviceIdsFiltered(token, DeviceType.WORKSTATION, limit, lastSeenDays)
-            val combined = (serverIds + workstationIds).distinct()
-            log.info(">>> Stage 1 complete: {} total devices ({} servers + {} workstations)",
-                combined.size, serverIds.size, workstationIds.size)
+        val atomicTypes = deviceType.atomicTypes()
+        if (atomicTypes.size > 1) {
+            log.info(">>> Stage 1: Expanding {} into exact Falcon types: {}",
+                deviceType.name, atomicTypes.joinToString { it.name })
+            val combined = atomicTypes
+                .flatMap { atomicType -> getDeviceIdsFiltered(token, atomicType, limit, lastSeenDays) }
+                .distinct()
+            log.info(">>> Stage 1 complete: {} unique {} devices found", combined.size, deviceType.name)
             return combined
         }
 
@@ -1066,10 +1064,11 @@ open class CrowdStrikeApiClientImpl(
         while (hasMore) {
             try {
                 // Filter by device type, optionally restricting to recently seen devices
-                // - product_type_desc:'Server' or 'Workstation' = Only specified device type
+                // - product_type_desc is an exact Falcon category such as Server,
+                //   Domain Controller, or Workstation
                 // - last_seen:>'now-Nd' = Only devices seen in the last N days (when lastSeenDays > 0)
                 val deviceTypeFilter = requireNotNull(deviceType.toFqlFilter()) {
-                    "DeviceType.ALL must be expanded before querying a single device type"
+                    "Composite device scopes must be expanded before querying a single device type"
                 }
                 val filter = if (lastSeenDays > 0) {
                     "$deviceTypeFilter+last_seen:>'now-${lastSeenDays}d'"

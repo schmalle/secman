@@ -52,6 +52,13 @@ data class AppSettings(
     var aiRiskAssessmentModel: String = "anthropic/claude-sonnet-4.6:online",
 
     /**
+     * Workgroups reaching this direct-user count are treated as catch-all
+     * groups and disabled automatically. They are never auto-enabled again.
+     */
+    @Column(nullable = false, name = "catch_all_workgroup_user_threshold")
+    var catchAllWorkgroupUserThreshold: Int = 100,
+
+    /**
      * Username of ADMIN who last updated these settings
      */
     @Column(nullable = true, length = 100, name = "updated_by")

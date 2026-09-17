@@ -15,6 +15,25 @@ interface WorkgroupManagementProps {
   showAwsWorkgroups?: boolean;
 }
 
+const scrollContainerStyle: React.CSSProperties = {
+  minHeight: 0,
+  overflowY: 'auto',
+  overscrollBehavior: 'contain',
+  WebkitOverflowScrolling: 'touch',
+  isolation: 'isolate',
+};
+
+// WebKit paints scrolled rows through a sticky <thead>. Keeping the row group
+// static and making each opaque header cell sticky avoids that compositor bug.
+const stickyHeaderCellStyle: React.CSSProperties = {
+  position: 'sticky',
+  top: 0,
+  zIndex: 2,
+  backgroundColor: 'var(--bs-table-bg, #f8f9fa)',
+  backgroundClip: 'padding-box',
+  boxShadow: 'inset 0 -1px 0 var(--bs-border-color, #dee2e6)',
+};
+
 /**
  * Workgroup admin screen: the table plus launcher state for the five dialogs.
  * Each dialog (create/edit form, assign users, manage assets, AWS accounts,
@@ -214,19 +233,19 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
       )}
 
       {/* Workgroups Table */}
-      <div className="table-responsive flex-grow-1" style={{ minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain' }}>
-        <table className="table table-striped table-hover">
-          <thead className="table-light" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+      <div className="table-responsive flex-grow-1" style={scrollContainerStyle}>
+        <table className="table table-striped table-hover" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+          <thead className="table-light">
             <tr>
-              <th>Parent</th>
-              <th>Name</th>
-              <th>Status</th>
-              <th>Users</th>
-              <th>Assets</th>
-              <th>Accounts</th>
-              <th>Domains</th>
-              <th>Created</th>
-              <th>Actions</th>
+              <th style={stickyHeaderCellStyle}>Parent</th>
+              <th style={stickyHeaderCellStyle}>Name</th>
+              <th style={stickyHeaderCellStyle}>Status</th>
+              <th style={stickyHeaderCellStyle}>Users</th>
+              <th style={stickyHeaderCellStyle}>Assets</th>
+              <th style={stickyHeaderCellStyle}>Accounts</th>
+              <th style={stickyHeaderCellStyle}>Domains</th>
+              <th style={stickyHeaderCellStyle}>Created</th>
+              <th style={stickyHeaderCellStyle}>Actions</th>
             </tr>
           </thead>
           <tbody>

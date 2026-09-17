@@ -124,6 +124,9 @@ interface WorkgroupRepository : JpaRepository<Workgroup, Long> {
     @io.micronaut.data.annotation.Query("SELECT w.id, COUNT(u) FROM Workgroup w JOIN w.users u GROUP BY w.id")
     fun countUsersPerWorkgroup(): List<Array<Any>>
 
+    @io.micronaut.data.annotation.Query("SELECT COUNT(u) FROM Workgroup w LEFT JOIN w.users u WHERE w.id = :workgroupId")
+    fun countUsersByWorkgroupId(workgroupId: Long): Long
+
     @io.micronaut.data.annotation.Query("SELECT w.id, COUNT(a) FROM Workgroup w JOIN w.assets a GROUP BY w.id")
     fun countAssetsPerWorkgroup(): List<Array<Any>>
 

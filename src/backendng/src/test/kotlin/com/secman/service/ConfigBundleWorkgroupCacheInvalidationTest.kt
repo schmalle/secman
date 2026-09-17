@@ -42,7 +42,8 @@ class ConfigBundleWorkgroupCacheInvalidationTest {
         workgroupAdDomainRepository = mockk<WorkgroupAdDomainRepository>(relaxed = true),
         entityManager = mockk<EntityManager>(relaxed = true),
         auditLogService = mockk<AuditLogService>(relaxed = true),
-        workgroupAccessChangedPublisher = publisher
+        workgroupAccessChangedPublisher = publisher,
+        catchAllWorkgroupSafetyService = mockk<CatchAllWorkgroupSafetyService>(relaxed = true)
     )
 
     @Test

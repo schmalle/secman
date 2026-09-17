@@ -10,15 +10,17 @@ import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import java.util.Optional
 
 class AppSettingsServiceTest {
     private val repository: AppSettingsRepository = mockk()
     private val config = AiRiskAssessmentConfig(model = "openai/gpt-4.1")
-    private val service = AppSettingsService(repository, config)
+    private val catchAllSafety = mockk<CatchAllWorkgroupSafetyService>(relaxed = true)
+    private val service = AppSettingsService(repository, config, catchAllSafety)
 
     @Test
     fun `get settings returns persisted ai model`() {
-        every { repository.findAll() } returns listOf(
+        every { repository.findFirstSettings() } returns Optional.of(
             AppSettings(
                 id = 1L,
                 baseUrl = "https://secman.example.com",
@@ -36,7 +38,7 @@ class AppSettingsServiceTest {
     @Test
     fun `update settings persists ai model`() {
         val existing = AppSettings(id = 1L, baseUrl = "https://secman.example.com", updatedBy = "system")
-        every { repository.findAll() } returns listOf(existing)
+        every { repository.findFirstSettings() } returns Optional.of(existing)
         val captured = slot<AppSettings>()
         every { repository.update(capture(captured)) } answers { captured.captured }
 
@@ -53,8 +55,44 @@ class AppSettingsServiceTest {
     }
 
     @Test
+    fun `update settings persists and enforces catch-all threshold`() {
+        val existing = AppSettings(id = 1L, baseUrl = "https://secman.example.com")
+        every { repository.findFirstSettings() } returns Optional.of(existing)
+        every { repository.update(any()) } answers { arg(0) }
+
+        val updated = service.updateSettings(
+            baseUrl = "https://secman.example.com",
+            updatedBy = "admin",
+            catchAllWorkgroupUserThreshold = 125
+        )
+
+        assertEquals(125, updated.catchAllWorkgroupUserThreshold)
+        verify(exactly = 1) { catchAllSafety.validateThreshold(125) }
+        verify(exactly = 1) { catchAllSafety.enforceAll(125, "admin") }
+    }
+
+    @Test
+    fun `legacy settings update preserves configured catch-all threshold`() {
+        val existing = AppSettings(
+            id = 1L,
+            baseUrl = "https://secman.example.com",
+            catchAllWorkgroupUserThreshold = 275
+        )
+        every { repository.findFirstSettings() } returns Optional.of(existing)
+        every { repository.update(any()) } answers { arg(0) }
+
+        val updated = service.updateSettings(
+            baseUrl = "https://secman.example.com",
+            updatedBy = "admin"
+        )
+
+        assertEquals(275, updated.catchAllWorkgroupUserThreshold)
+        verify(exactly = 1) { catchAllSafety.enforceAll(275, "admin") }
+    }
+
+    @Test
     fun `update settings rejects blank ai model`() {
-        every { repository.findAll() } returns listOf(AppSettings(id = 1L, baseUrl = "https://secman.example.com"))
+        every { repository.findFirstSettings() } returns Optional.of(AppSettings(id = 1L, baseUrl = "https://secman.example.com"))
 
         assertThrows(IllegalArgumentException::class.java) {
             service.updateSettings(

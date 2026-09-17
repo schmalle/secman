@@ -40,7 +40,8 @@ open class ConfigBundleService(
     private val workgroupAdDomainRepository: WorkgroupAdDomainRepository,
     private val entityManager: EntityManager,
     private val auditLogService: AuditLogService,
-    private val workgroupAccessChangedPublisher: ApplicationEventPublisher<WorkgroupAccessChangedEvent>
+    private val workgroupAccessChangedPublisher: ApplicationEventPublisher<WorkgroupAccessChangedEvent>,
+    private val catchAllWorkgroupSafetyService: CatchAllWorkgroupSafetyService
 ) {
     private val logger = LoggerFactory.getLogger(ConfigBundleService::class.java)
     private val passwordEncoder = BCryptPasswordEncoder()
@@ -213,6 +214,8 @@ open class ConfigBundleService(
             skippedCounts = skippedCounts.copy(workgroupAdDomains = wgAdResults.skipped)
             errors.addAll(wgAdResults.errors)
             warnings.addAll(wgAdResults.warnings)
+
+            catchAllWorkgroupSafetyService.enforceAll(actor = authentication.name)
 
             // Log the import action
             auditLogService.logAction(

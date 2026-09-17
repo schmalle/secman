@@ -313,8 +313,8 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **CrowdStrike imports include domain controllers (2026-09-17)** — shared CrowdStrike scopes now include `DOMAIN_CONTROLLER` and composite `SERVER_FAMILY`; production vulnerability and product scripts use the composite scope and store discovered domain controllers as SecMan `SERVER` assets. See `docs/CROWDSTRIKE_IMPORT.md` and `docs/CHANGELOG.md`.
+
 - **Web findings identify as findings and group under Webserver (2026-09-17)** — the current-vulnerabilities table labels its identifier column `CVE/Finding`; `WEB_SECURITY` integration projections use `Webserver` as Product, including a V266 backfill. Other scanner sources and stable finding identities are unchanged. See `docs/CHANGELOG.md`.
 
 - **Source-review quick wins (2026-08-27)** — batched asset access, shorter transactions, shared `DeadlockRetry`, `GET /api/workgroups/tree`, and parallel dashboard loading. Build/startup and E2E gates remain owed. See `docs/SOURCE_REVIEW_COMPLEXITY_SPEED.md` §6 and `docs/CHANGELOG.md`.
-
-- **AWS account display names → workgroups (2026-08-25)** — imports and CLI `manage-user-mappings link-workgroups` / REST `POST /api/user-mappings/link-workgroup-accounts` / MCP `link_workgroup_aws_accounts` link accounts to `aws-<display name>`. Invalid names fail; existing links are idempotent. See `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`.

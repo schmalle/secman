@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import WorkgroupTree from './WorkgroupTree';
 import CreateChildWorkgroupModal from './CreateChildWorkgroupModal';
 import MoveWorkgroupModal from './MoveWorkgroupModal';
 import DeleteWorkgroupConfirmation from './DeleteWorkgroupConfirmation';
 import WorkgroupBreadcrumb from './WorkgroupBreadcrumb';
 import WorkgroupManagement from './WorkgroupManagement';
-import type { WorkgroupResponse } from '../services/workgroupApi';
+import { getWorkgroupById, isAwsWorkgroup, type WorkgroupResponse } from '../services/workgroupApi';
 import { useClientHasRole } from '../utils/useClientAuth';
 import { formatServerDateTime } from '../utils/dateUtils';
 
@@ -41,6 +41,20 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
   // commit 265a6c9: "child-create/move remain admin-only"). Mirror that gate in the UI
   // so non-admins don't see a "+" button that 403s on submit.
   const canCreateChild = useClientHasRole('ADMIN');
+
+  useEffect(() => {
+    const rawId = new URLSearchParams(window.location.search).get('workgroupId');
+    if (!rawId || !/^\d+$/.test(rawId)) return;
+
+    const workgroupId = Number(rawId);
+    getWorkgroupById(workgroupId)
+      .then((workgroup) => {
+        setSelectedWorkgroup(workgroup);
+        setViewMode('tree');
+        if (isAwsWorkgroup(workgroup.name)) setShowAwsWorkgroups(true);
+      })
+      .catch((error) => console.error('Failed to open linked workgroup details:', error));
+  }, []);
 
   const handleSelectWorkgroup = (workgroup: WorkgroupResponse) => {
     setSelectedWorkgroup(workgroup);

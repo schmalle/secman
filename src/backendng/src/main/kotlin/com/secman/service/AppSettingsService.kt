@@ -15,7 +15,8 @@ import org.slf4j.LoggerFactory
 @Singleton
 open class AppSettingsService(
     private val appSettingsRepository: AppSettingsRepository,
-    private val aiRiskAssessmentConfig: AiRiskAssessmentConfig
+    private val aiRiskAssessmentConfig: AiRiskAssessmentConfig,
+    private val catchAllWorkgroupSafetyService: CatchAllWorkgroupSafetyService
 ) {
     private val logger = LoggerFactory.getLogger(AppSettingsService::class.java)
 
@@ -36,6 +37,7 @@ open class AppSettingsService(
         val globalCveApprovalAdminOnly: Boolean,
         val aiRiskAssessmentEnabled: Boolean,
         val aiRiskAssessmentModel: String,
+        val catchAllWorkgroupUserThreshold: Int,
         val updatedBy: String?,
         val updatedAt: String?
     )
@@ -52,6 +54,7 @@ open class AppSettingsService(
             globalCveApprovalAdminOnly = settings.globalCveApprovalAdminOnly,
             aiRiskAssessmentEnabled = settings.aiRiskAssessmentEnabled,
             aiRiskAssessmentModel = settings.aiRiskAssessmentModel,
+            catchAllWorkgroupUserThreshold = settings.catchAllWorkgroupUserThreshold,
             updatedBy = settings.updatedBy,
             updatedAt = settings.updatedAt?.toString()
         )
@@ -105,15 +108,20 @@ open class AppSettingsService(
         updatedBy: String,
         globalCveApprovalAdminOnly: Boolean = false,
         aiRiskAssessmentEnabled: Boolean = false,
-        aiRiskAssessmentModel: String = aiRiskAssessmentConfig.model
+        aiRiskAssessmentModel: String = aiRiskAssessmentConfig.model,
+        catchAllWorkgroupUserThreshold: Int? = null
     ): AppSettingsDto {
         val settings = getOrCreateSettings()
+        val effectiveCatchAllThreshold = catchAllWorkgroupUserThreshold
+            ?: settings.catchAllWorkgroupUserThreshold
 
         // Update the base URL
         settings.baseUrl = baseUrl.trimEnd('/')
         settings.globalCveApprovalAdminOnly = globalCveApprovalAdminOnly
         settings.aiRiskAssessmentEnabled = aiRiskAssessmentEnabled
         settings.aiRiskAssessmentModel = aiRiskAssessmentModel.trim()
+        catchAllWorkgroupSafetyService.validateThreshold(effectiveCatchAllThreshold)
+        settings.catchAllWorkgroupUserThreshold = effectiveCatchAllThreshold
         settings.updatedBy = updatedBy
 
         if (settings.aiRiskAssessmentModel.isBlank()) {
@@ -127,6 +135,7 @@ open class AppSettingsService(
         }
 
         val updated = appSettingsRepository.update(settings)
+        catchAllWorkgroupSafetyService.enforceAll(effectiveCatchAllThreshold, updatedBy)
         logger.info(
             "App settings updated by {}: baseUrl={}, globalCveApprovalAdminOnly={}, aiRiskAssessmentEnabled={}",
             updatedBy, updated.baseUrl, updated.globalCveApprovalAdminOnly, updated.aiRiskAssessmentEnabled
@@ -137,6 +146,7 @@ open class AppSettingsService(
             globalCveApprovalAdminOnly = updated.globalCveApprovalAdminOnly,
             aiRiskAssessmentEnabled = updated.aiRiskAssessmentEnabled,
             aiRiskAssessmentModel = updated.aiRiskAssessmentModel,
+            catchAllWorkgroupUserThreshold = updated.catchAllWorkgroupUserThreshold,
             updatedBy = updated.updatedBy,
             updatedAt = updated.updatedAt?.toString()
         )
@@ -146,8 +156,8 @@ open class AppSettingsService(
      * Get existing settings or create default ones.
      */
     private fun getOrCreateSettings(): AppSettings {
-        val existing = appSettingsRepository.findAll()
-        return if (existing.isEmpty()) {
+        val existing = appSettingsRepository.findFirstSettings()
+        return if (existing.isEmpty) {
             logger.info(
                 "Creating default app settings: baseUrl={}, aiRiskAssessmentEnabled={} (from env default)",
                 defaultBaseUrl, aiRiskAssessmentDefault
@@ -160,7 +170,7 @@ open class AppSettingsService(
             )
             appSettingsRepository.save(default)
         } else {
-            existing.first()
+            existing.get()
         }
     }
 }

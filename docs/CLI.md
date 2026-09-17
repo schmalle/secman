@@ -136,15 +136,15 @@ stored matches and supports `--include-already-eol`, `--only-email`, and
 
 ```bash
 ./scripts/secman query servers --hostnames web-01,web-02 --severity HIGH,CRITICAL --min-days-open 30 --save
-./scripts/secmanng query servers --severity CRITICAL,HIGH --save --device-type SERVER \
-  --last-seen-days 1 --min-days-open 1 --insecure --verbose
+./scripts/secmanng query servers --severity CRITICAL,HIGH --save --device-type SERVER_FAMILY \
+  --last-seen-days 30 --min-days-open 1 --insecure --verbose
 ```
 
 | Option | Default | Notes |
 |---|---|---|
 | `--hostnames` | — (all devices) | comma-separated; switches to per-host mode, see below |
 | `--severity` | `HIGH,CRITICAL` | `CRITICAL,HIGH,MEDIUM,LOW` |
-| `--device-type` | `SERVER` | `SERVER`, `WORKSTATION`, `ALL`; **ignored with `--hostnames`** |
+| `--device-type` | `SERVER` | `SERVER`, `DOMAIN_CONTROLLER`, `SERVER_FAMILY`, `WORKSTATION`, `ALL`; `SERVER_FAMILY` queries servers and domain controllers separately, while `ALL` also includes workstations. **Ignored with `--hostnames`.** |
 | `--min-days-open` | 30 | |
 | `--last-seen-days` | 0 (= all) | recent-checkin window; **ignored with `--hostnames`** |
 | `--limit` | 800 | Spotlight page size |
@@ -153,6 +153,11 @@ stored matches and supports `--include-already-eol`, `--only-email`, and
 | `--backend-url` | `http://localhost:8080` | |
 | `--output-file` / `--format` | — / `json` | `json|csv` |
 | `--verbose` / `--insecure` | false | `--insecure` allows self-signed TLS |
+
+`--device-type` values are case-insensitive but use the underscore-separated
+names shown above. For production server imports, prefer `SERVER_FAMILY`; the
+bare CLI default remains `SERVER` for backward compatibility. Domain controllers
+are persisted as SecMan `SERVER` assets, not as a new asset type.
 
 **Per-host mode (`--hostnames`)**: each hostname is resolved to **all** matching
 CrowdStrike device ids (5-strategy FQL cascade; the first strategy that matches
@@ -178,10 +183,10 @@ Imports installed product/application rows from CrowdStrike Discover into SecMan
 
 ```bash
 # Preview Discover coverage without authenticating to SecMan or writing backend data
-./scripts/secman installed-products --device-type SERVER --dry-run
+./scripts/secman installed-products --device-type SERVER_FAMILY --dry-run
 
 # Import software inventory for known servers
-./scripts/secman installed-products --device-type SERVER --backend-url https://secman.example.com
+./scripts/secman installed-products --device-type SERVER_FAMILY --backend-url https://secman.example.com
 
 # Include servers and workstations, with smaller CrowdStrike pages for constrained environments
 ./scripts/secman installed-products --device-type ALL --limit 500 --verbose
@@ -189,12 +194,17 @@ Imports installed product/application rows from CrowdStrike Discover into SecMan
 
 | Option | Default | Notes |
 |---|---|---|
-| `--device-type` | `SERVER` | CrowdStrike Discover host filter: `SERVER`, `WORKSTATION`, or `ALL`. `ALL` queries servers and workstations separately. |
+| `--device-type` | `SERVER` | CrowdStrike Discover host filter: `SERVER`, `DOMAIN_CONTROLLER`, `SERVER_FAMILY`, `WORKSTATION`, or `ALL`. Composite scopes query exact categories separately and deduplicate by Falcon agent ID. |
 | `--dry-run` | false | Queries CrowdStrike and prints per-batch/summary counts only; does not authenticate to SecMan and does not write backend data. |
 | `--limit` | 1000 | CrowdStrike page size; values are coerced to the API-safe range `1..1000`. This is not a total-row cap. |
 | `--backend-url` | `SECMAN_BACKEND_URL`, then `SECMAN_HOST`, then `http://localhost:8080` | Backend API URL for import mode. `SECMAN_HOST` may be a bare hostname; the CLI prefixes `https://`. |
 | `--client-id` / `--client-secret` | config/env | CrowdStrike API credentials; both must be provided to override `FALCON_CLIENT_ID` / `FALCON_CLIENT_SECRET` or `~/.secman` config. |
 | `--verbose` | false | Prints backend import errors, capped by the backend response. |
+
+As with `query servers`, the device-scope names are case-insensitive and
+underscore-separated. Production inventory imports should use `SERVER_FAMILY`
+to include both Falcon `Server` and `Domain Controller` categories while still
+excluding workstations.
 
 Import mode requires `SECMAN_ADMIN_NAME` and `SECMAN_ADMIN_PASS`; the authenticated user must have backend access to `POST /api/installed-products/import` (`ADMIN` or `VULN`). The UI/API listing endpoint `GET /api/installed-products` is available to `ADMIN`, `VULN`, and `SECCHAMPION`, and non-admin listings are filtered to assets the user can access.
 

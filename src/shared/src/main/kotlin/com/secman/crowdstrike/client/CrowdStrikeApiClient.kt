@@ -193,7 +193,7 @@ interface CrowdStrikeApiClient {
     /**
      * Query installed products from CrowdStrike Discover in streaming pages.
      *
-     * @param deviceType Device type filter (SERVER, WORKSTATION, or ALL)
+     * @param deviceType Device scope filter (including DOMAIN_CONTROLLER and SERVER_FAMILY)
      * @param config CrowdStrike Falcon configuration
      * @param limit Page size for pagination (max 1000)
      * @param batchProcessor Callback invoked with each page of installed products

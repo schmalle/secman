@@ -27,7 +27,8 @@ open class WorkgroupService(
     private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository,
     private val workgroupAdDomainRepository: WorkgroupAdDomainRepository,
     private val validationService: WorkgroupValidationService,
-    private val workgroupAccessChangedPublisher: ApplicationEventPublisher<WorkgroupAccessChangedEvent>
+    private val workgroupAccessChangedPublisher: ApplicationEventPublisher<WorkgroupAccessChangedEvent>,
+    private val catchAllWorkgroupSafetyService: CatchAllWorkgroupSafetyService
 ) {
 
     /**
@@ -218,6 +219,7 @@ open class WorkgroupService(
             user.workgroups.add(workgroup)
             userRepository.update(user)
         }
+        catchAllWorkgroupSafetyService.enforceAffected(setOf(workgroupId))
     }
 
     /**

@@ -31,7 +31,8 @@ open class UserController(
     private val userMappingService: UserMappingService,
     private val adminNotificationService: com.secman.service.AdminNotificationService,
     private val userService: com.secman.service.UserService,
-    private val userMappingRepository: com.secman.repository.UserMappingRepository
+    private val userMappingRepository: com.secman.repository.UserMappingRepository,
+    private val catchAllWorkgroupSafetyService: com.secman.service.CatchAllWorkgroupSafetyService
 ) {
 
     private val passwordEncoder = BCryptPasswordEncoder()
@@ -260,6 +261,7 @@ open class UserController(
                 savedUser.workgroups.clear()
                 savedUser.workgroups.addAll(workgroups)
                 userRepository.update(savedUser)
+                catchAllWorkgroupSafetyService.enforceAffected(workgroupIds, authentication.name)
             }
 
             // Send email notification to ADMIN users (async, non-blocking)
@@ -298,7 +300,11 @@ open class UserController(
 
     @Put("/{id}")
     @Transactional
-    open fun update(@PathVariable id: Long, @Valid @Body request: UpdateUserRequest): HttpResponse<*> {
+    open fun update(
+        @PathVariable id: Long,
+        @Valid @Body request: UpdateUserRequest,
+        authentication: io.micronaut.security.authentication.Authentication
+    ): HttpResponse<*> {
         val userOptional = userRepository.findById(id)
         
         if (userOptional.isEmpty) {
@@ -385,6 +391,9 @@ open class UserController(
             }
 
             val savedUser = userRepository.update(user)
+            request.workgroupIds?.let {
+                catchAllWorkgroupSafetyService.enforceAffected(it, authentication.name)
+            }
             return HttpResponse.ok(UserResponse.from(savedUser, includeWorkgroups = true))
             
         } catch (e: Exception) {

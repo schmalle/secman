@@ -26,7 +26,8 @@ class WorkgroupEnabledCacheInvalidationTest {
         workgroupAwsAccountRepository = mockk<WorkgroupAwsAccountRepository>(),
         workgroupAdDomainRepository = mockk<WorkgroupAdDomainRepository>(),
         validationService = mockk<WorkgroupValidationService>(),
-        workgroupAccessChangedPublisher = publisher
+        workgroupAccessChangedPublisher = publisher,
+        catchAllWorkgroupSafetyService = mockk<CatchAllWorkgroupSafetyService>(relaxed = true)
     )
 
     @Test

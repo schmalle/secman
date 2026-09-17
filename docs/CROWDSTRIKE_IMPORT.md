@@ -5,10 +5,37 @@ Spec: `specs/048-prevent-duplicate-vulnerabilities/`.
 
 CLI invocation:
 ```bash
-SECMAN_BACKEND_URL=https://secman.example.com SECMAN_SSL_INSECURE=true \
-  ./scripts/secmanng query servers --device-type SERVER \
-  --severity CRITICAL,HIGH --min-days-open 1 --last-seen-days 1 --save
+SECMAN_BACKEND_URL=https://secman.example.com \
+  ./scripts/secman query servers --device-type SERVER_FAMILY \
+  --severity CRITICAL,HIGH --min-days-open 1 --last-seen-days 30 --save
 ```
+
+## Domain controller coverage
+
+CrowdStrike classifies domain controllers separately from ordinary servers. Use
+`SERVER_FAMILY` to query both exact Falcon device categories without including
+workstations. The production vulnerability and installed-product import scripts
+use this scope.
+
+Available scopes are:
+
+- `SERVER` — ordinary Falcon `Server` devices only.
+- `DOMAIN_CONTROLLER` — Falcon `Domain Controller` devices only.
+- `SERVER_FAMILY` — `Server` plus `Domain Controller`, queried separately and
+  deduplicated by Falcon agent ID.
+- `WORKSTATION` — Falcon `Workstation` devices only.
+- `ALL` — all three exact device categories.
+
+The values are case-insensitive CLI inputs, but their spelling is otherwise
+literal: use `DOMAIN_CONTROLLER` and `SERVER_FAMILY` with underscores. The CLI
+keeps `SERVER` as its backward-compatible default; the production wrapper
+scripts explicitly select `SERVER_FAMILY` so domain controllers are not omitted.
+
+Domain controllers are stored as SecMan `SERVER` assets. This intentionally
+preserves the existing authorization, risk, KPI, and notification semantics; no
+schema migration or new SecMan asset type is required. Asset identity still
+resolves fail-closed by Falcon agent ID, cloud instance ID, and hostname as
+described below.
 
 ## User-edited asset names
 
@@ -70,8 +97,8 @@ other host metadata (IP, AD domain, cloud account/instance).
 Installed products are synchronized from CrowdStrike Discover with the separate CLI command `secman installed-products`. This is a software-inventory import, not a vulnerability import, and it intentionally only attaches rows to assets that already exist in SecMan. Run a vulnerability/asset import such as `query servers --save` first when onboarding a new environment.
 
 ```bash
-./scripts/secman installed-products --device-type SERVER --dry-run
-./scripts/secman installed-products --device-type SERVER --backend-url https://secman.example.com
+./scripts/secman installed-products --device-type SERVER_FAMILY --dry-run
+./scripts/secman installed-products --device-type SERVER_FAMILY --backend-url https://secman.example.com
 ./scripts/secman installed-products --device-type ALL --limit 500 --verbose
 ```
 
@@ -79,7 +106,7 @@ Operational notes:
 
 1. `--dry-run` queries CrowdStrike Discover and reports row/host counts without authenticating to the SecMan backend.
 2. Import mode authenticates with `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` and posts each page to `POST /api/installed-products/import`; the backend allows `ADMIN` and `VULN` roles for this endpoint.
-3. CrowdStrike host filters are `SERVER`, `WORKSTATION`, or `ALL`; `ALL` runs the server and workstation filters separately.
+3. CrowdStrike host filters are `SERVER`, `DOMAIN_CONTROLLER`, `SERVER_FAMILY`, `WORKSTATION`, or `ALL`; composite scopes run the exact Falcon filters separately and deduplicate hosts by agent ID.
 4. Backend matching is hostname-based and case-insensitive, with a fallback from FQDN to short hostname. Missing assets are counted as `unknown systems` and skipped rather than auto-created.
 5. Upserts prefer CrowdStrike external ID scoped to the asset, then fall back to logical duplicate matching on asset, product name, vendor, and version. Conflicting external IDs assigned to another asset are skipped.
 6. `GET /api/installed-products` lists imported products for `ADMIN`, `VULN`, and `SECCHAMPION`; non-admin callers only see products for accessible assets.
