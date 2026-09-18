@@ -9,9 +9,10 @@ Legacy `java -jar secman-cli.jar` invocation is shown in some examples for clari
 
 ## Python workgroup asset synchronization
 
-`./scripts/sync-workgroup-assets.sh [--dry-run]` adds AWS assets to workgroups
-through normalized member-email ownership, using the existing Python AD importer
-and SecMan REST APIs. It preserves manual and stale assignments. See
+`./scripts/sync-workgroup-assets.sh [--dry-run]` replaces the assets in each
+enabled, owner-backed workgroup with the AWS assets resolved through its normalized
+canonical owner email, using the existing Python AD importer and SecMan REST APIs.
+Manual and stale assignments in touched workgroups are removed. See
 [command syntax, data flow, and limitations](WORKGROUP_ASSET_SYNC.md).
 
 ```bash

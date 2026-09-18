@@ -21,6 +21,11 @@ test('workgroup list uses WebKit-safe sticky header cells inside the fixed shell
   assert.doesNotMatch(tableSource, /<thead[^>]+position: 'sticky'/);
 });
 
+test('workgroup list exposes the canonical AD owner for audit', () => {
+  assert.match(tableSource, />AD Owner</);
+  assert.match(tableSource, /workgroup\.ownerEmail/);
+});
+
 test('workgroup detail links select the requested workgroup in tree view', () => {
   assert.match(shellSource, /new URLSearchParams\(window\.location\.search\)\.get\('workgroupId'\)/);
   assert.match(shellSource, /getWorkgroupById\(workgroupId\)/);

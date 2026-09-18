@@ -23,7 +23,7 @@ The `manage-workgroups` command suite provides CLI tools for ADMIN users to mana
 For the separate Python command below, use its own prerequisites; the Kotlin
 command flags in the rest of this document apply to `manage-workgroups`.
 
-### Assign AWS assets from member-email ownership
+### Replace AWS assets from canonical owner-email ownership
 
 After importing AD memberships, AWS owner mappings and assets, run from the
 repository root:
@@ -33,14 +33,15 @@ repository root:
 ./scripts/sync-workgroup-assets.sh
 ```
 
-This Python importer command matches direct members' normalized emails to all
-stored AWS owner mappings, then assigns assets with matching cloud account IDs.
+This Python importer command matches each workgroup's normalized canonical owner
+email to stored AWS owner mappings, then replaces that workgroup's assets with
+assets carrying the matching cloud account IDs.
 It evaluates every workgroup and requires ADMIN, verified HTTPS, Python 3.11+, `uv`
 and authenticated `pass-cli`. For AWS Secrets Manager, set `SECMAN_AWS_SECRET_ID`
 and use `./scripts/sync-workgroup-assets-aws.sh [--dry-run]`; this alternative
 requires AWS CLI and `jq` instead of Proton Pass. Dry-run emits
-JSON counters and performs no assignment writes. Existing manual and stale links
-are preserved because the relationship has no source marker.
+JSON counters and performs no removal or assignment writes. Existing manual and
+stale links in enabled, owner-backed workgroups are removed during an apply run.
 
 See [configuration, exit codes and limitations](../../../../../../docs/WORKGROUP_ASSET_SYNC.md).
 Display-name account linking is a separate operation:

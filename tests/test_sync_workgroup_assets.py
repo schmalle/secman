@@ -17,8 +17,8 @@ import read
 from sync_workgroup_assets import BATCH_SIZE, build_plan, load_mappings, normalize_email, synchronize
 
 
-def user(uid=1, email="a@example.com", groups=(1,)):
-  return {"id": uid, "email": email, "workgroups": [{"id": gid} for gid in groups]}
+def workgroup(gid, name, owner_email=None):
+  return {"id": gid, "name": name, "ownerEmail": owner_email}
 
 
 def mapping(account="000000000001", email="a@example.com"):
@@ -31,13 +31,18 @@ def asset(aid=10, account="000000000001", groups=()):
 
 
 class FixtureClient:
-  def __init__(self, users=None, mappings=None, assets=None):
-    self.groups = [{"id": 1, "name": "X"}, {"id": 2, "name": "Y"}, {"id": 3, "name": "Manual"}]
-    self.users = [user()] if users is None else users
+  def __init__(self, groups=None, mappings=None, assets=None):
+    self.groups = [
+      workgroup(1, "X", "a@example.com"),
+      workgroup(2, "Y", "b@example.com"),
+      workgroup(3, "Manual"),
+    ] if groups is None else groups
     self.mappings = [mapping()] if mappings is None else mappings
     self.assets = [asset()] if assets is None else assets
     self.assigned_assets = {}
     for group in self.groups:
+      if not isinstance(group, dict) or type(group.get("id")) is not int:
+        continue
       assigned = [
         item["id"] for item in self.assets
         if isinstance(item, dict)
@@ -48,13 +53,12 @@ class FixtureClient:
       group["assetCount"] = len(assigned)
     self.reads = []
     self.writes = []
+    self.removals = []
 
   def get_json(self, path, params=None):
     self.reads.append((path, params))
     if path == "/api/workgroups":
       return deepcopy(self.groups)
-    if path == "/api/users":
-      return deepcopy(self.users)
     if path == "/api/assets":
       return deepcopy(self.assets)
     if path.startswith("/api/workgroups/") and path.endswith("/assets"):
@@ -71,17 +75,25 @@ class FixtureClient:
       if item["id"] in ids and {"id": gid} not in item["workgroups"]:
         item["workgroups"].append({"id": gid})
 
+  def remove_assets(self, gid, ids):
+    self.removals.append((gid, list(ids)))
+    for item in self.assets:
+      if item["id"] in ids:
+        item["workgroups"] = [group for group in item["workgroups"] if group["id"] != gid]
+    self.assigned_assets[gid] = [aid for aid in self.assigned_assets.get(gid, []) if aid not in ids]
+
 
 class MatchingTests(unittest.TestCase):
   def plan(self, **kwargs):
     client = FixtureClient(**kwargs)
-    return build_plan(client.groups, client.users, client.mappings, client.assets)
+    return build_plan(client.groups, client.mappings, client.assets)
 
   def test_basic_mapping(self):
     plan = self.plan()
     self.assertEqual({1: [10]}, plan.additions)
-    self.assertEqual((3, 1, 1, 1, 1, 1, 0, 0), (
-      plan.workgroups_evaluated, plan.members_evaluated, plan.unique_email_addresses,
+    self.assertEqual((3, 2, 2, 1, 1, 1, 1, 0, 0), (
+      plan.workgroups_evaluated, plan.owners_evaluated, plan.unique_owner_email_addresses,
+      plan.workgroups_without_owner,
       plan.aws_accounts_matched, plan.assets_matched, plan.relationships_to_add,
       plan.relationships_to_remove, plan.errors))
 
@@ -93,45 +105,46 @@ class MatchingTests(unittest.TestCase):
                      assets=[asset(), asset(20, "000000000002")])
     self.assertEqual({1: [10, 20]}, plan.additions)
 
-  def test_multiple_members_and_accounts(self):
-    plan = self.plan(users=[user(), user(2, "b@example.com")],
-                     mappings=[mapping(), mapping("000000000002", "b@example.com")],
+  def test_multiple_owner_accounts(self):
+    plan = self.plan(mappings=[mapping(), mapping("000000000002")],
                      assets=[asset(), asset(20, "000000000002")])
     self.assertEqual({1: [10, 20]}, plan.additions)
 
   def test_duplicate_ownership_and_records(self):
-    plan = self.plan(users=[user(), user(2, "b@example.com")],
-                     mappings=[mapping(), mapping(), mapping(email="b@example.com")],
+    plan = self.plan(mappings=[mapping(), mapping()],
                      assets=[asset(), asset()])
     self.assertEqual({1: [10]}, plan.additions)
     self.assertEqual(1, plan.assets_matched)
 
-  def test_member_in_multiple_workgroups(self):
-    self.assertEqual({1: [10], 2: [10]}, self.plan(users=[user(groups=(1, 2))]).additions)
+  def test_same_owner_in_multiple_workgroups(self):
+    groups = [workgroup(1, "X", "a@example.com"), workgroup(2, "Y", "A@EXAMPLE.COM")]
+    self.assertEqual({1: [10], 2: [10]}, self.plan(groups=groups).additions)
 
   def test_disabled_workgroups_are_ignored(self):
-    client = FixtureClient(users=[user(groups=(1, 2))])
+    client = FixtureClient(groups=[
+      workgroup(1, "X", "a@example.com"),
+      workgroup(2, "Y", "a@example.com"),
+    ])
     client.groups[0]["enabled"] = False
-    plan = build_plan(client.groups, client.users, client.mappings, client.assets)
+    plan = build_plan(client.groups, client.mappings, client.assets)
     self.assertEqual({2: [10]}, plan.additions)
-    self.assertEqual(2, plan.workgroups_evaluated)
-    self.assertEqual(1, plan.members_evaluated)
+    self.assertEqual(1, plan.workgroups_evaluated)
+    self.assertEqual(1, plan.owners_evaluated)
 
-  def test_member_of_only_disabled_workgroup_is_ignored(self):
-    client = FixtureClient(users=[user(groups=(1,))])
+  def test_owner_of_only_disabled_workgroup_is_ignored(self):
+    client = FixtureClient(groups=[workgroup(1, "X", "a@example.com")])
     client.groups[0]["enabled"] = False
-    plan = build_plan(client.groups, client.users, client.mappings, client.assets)
+    plan = build_plan(client.groups, client.mappings, client.assets)
     self.assertEqual({}, plan.additions)
-    self.assertEqual(0, plan.members_evaluated)
+    self.assertEqual(0, plan.owners_evaluated)
     self.assertEqual(0, plan.errors)
 
-  def test_multiple_owners_in_different_workgroups(self):
-    plan = self.plan(users=[user(), user(2, "d@example.com", (2,))],
-                     mappings=[mapping(), mapping(email="d@example.com")])
-    self.assertEqual({1: [10], 2: [10]}, plan.additions)
+  def test_non_owner_member_mapping_does_not_assign_asset(self):
+    plan = self.plan(mappings=[mapping(email="member@example.com")])
+    self.assertEqual({}, plan.additions)
 
   def test_normalized_emails_and_account_whitespace(self):
-    plan = self.plan(users=[user(email=" A.User@Example.COM ")],
+    plan = self.plan(groups=[workgroup(1, "X", " A.User@Example.COM ")],
                      mappings=[mapping(" 000000000001 ", "a.user@example.com")])
     self.assertEqual({1: [10]}, plan.additions)
 
@@ -149,6 +162,17 @@ class MatchingTests(unittest.TestCase):
         self.assertEqual(1, plan.skipped_accounts)
         self.assertEqual(0, plan.errors)
 
+  def test_workgroup_without_owner_is_skipped(self):
+    plan = self.plan(groups=[workgroup(1, "X")])
+    self.assertEqual({}, plan.additions)
+    self.assertEqual(1, plan.workgroups_without_owner)
+    self.assertEqual(0, plan.errors)
+
+  def test_invalid_workgroup_owner_is_an_error(self):
+    plan = self.plan(groups=[workgroup(1, "X", "invalid")])
+    self.assertEqual({}, plan.additions)
+    self.assertEqual(1, plan.errors)
+
   def test_accounts_on_assets_without_mapping_are_reported(self):
     plan = self.plan(mappings=[])
     self.assertEqual(1, plan.skipped_accounts)
@@ -163,32 +187,41 @@ class MatchingTests(unittest.TestCase):
     self.assertEqual({}, plan.additions)
     self.assertEqual(0, plan.errors)
 
-  def test_existing_manual_and_stale_links_are_preserved(self):
-    client = FixtureClient(assets=[asset(groups=(2, 3)), asset(20, None, (3,))])
-    synchronize(client, False)
-    client.users = []
-    before = deepcopy(client.assets)
+  def test_owned_workgroup_is_cleared_while_ownerless_workgroup_is_preserved(self):
+    client = FixtureClient(
+      groups=[workgroup(2, "Y", "b@example.com"), workgroup(3, "Manual")],
+      mappings=[],
+      assets=[asset(groups=(2, 3)), asset(20, None, (2, 3))],
+    )
     plan = synchronize(client, False)
-    self.assertEqual(before, client.assets)
-    self.assertEqual(0, plan.relationships_to_remove)
+    self.assertEqual([[{"id": 3}], [{"id": 3}]], [item["workgroups"] for item in client.assets])
+    self.assertEqual({2: [10, 20]}, plan.removals)
+    self.assertEqual(2, plan.relationships_removed)
 
-  def test_idempotency(self):
+  def test_repeat_run_replaces_existing_links(self):
     client = FixtureClient()
     self.assertEqual(1, synchronize(client, False).relationships_added)
-    self.assertEqual(0, synchronize(client, False).relationships_added)
-    self.assertEqual([(1, [10])], client.writes)
+    second = synchronize(client, False)
+    self.assertEqual(1, second.relationships_removed)
+    self.assertEqual(1, second.relationships_added)
+    self.assertEqual([(1, [10])], client.removals)
+    self.assertEqual([(1, [10]), (1, [10])], client.writes)
 
   def test_dry_run_calculates_complete_plan_without_writes(self):
-    client = FixtureClient()
+    client = FixtureClient(assets=[asset(groups=(1, 3))])
     before = deepcopy(client.assets)
     plan = synchronize(client, True)
     self.assertEqual({1: [10]}, plan.additions)
+    self.assertEqual({1: [10]}, plan.removals)
+    self.assertEqual(1, plan.relationships_to_remove)
     self.assertEqual(0, plan.relationships_added)
+    self.assertEqual(0, plan.relationships_removed)
     self.assertEqual([], client.writes)
+    self.assertEqual([], client.removals)
     self.assertEqual(before, client.assets)
 
   def test_malformed_records_do_not_stop_valid_records(self):
-    plan = self.plan(users=[None, user(), user(2, "invalid")],
+    plan = self.plan(groups=[None, workgroup(1, "X", "a@example.com"), workgroup(2, "Y", "invalid")],
                      mappings=[None, mapping(), mapping("bad")],
                      assets=[None, asset(), asset(20, "bad")])
     self.assertEqual({1: [10]}, plan.additions)
@@ -201,23 +234,54 @@ class MatchingTests(unittest.TestCase):
     self.assertEqual({}, plan.additions)
     self.assertEqual(1, plan.errors)
 
-  def test_omitted_empty_user_workgroups_use_zero_count(self):
-    empty_user = user(2, "unused@example.com", ())
-    empty_user.pop("workgroups")
-    empty_user["workgroupCount"] = 0
-    plan = self.plan(users=[user(), empty_user])
-    self.assertEqual({1: [10]}, plan.additions)
-    self.assertEqual(0, plan.errors)
-
   def test_deterministic_sorted_plan(self):
-    plan = self.plan(users=[user(groups=(2, 1))], assets=[asset(20), asset(10)])
+    groups = [workgroup(2, "Y", "a@example.com"), workgroup(1, "X", "a@example.com")]
+    plan = self.plan(groups=groups, assets=[asset(20), asset(10)])
     self.assertEqual([(1, [10, 20]), (2, [10, 20])], list(plan.additions.items()))
 
 
 class TransportTests(unittest.TestCase):
+  def test_canonical_owner_requires_one_valid_user_email(self):
+    self.assertEqual(
+      "owner@example.com",
+      read.canonical_owner_email([{"mail": None, "userPrincipalName": " Owner@Example.COM "}]),
+    )
+    self.assertEqual(
+      "owner@example.com",
+      read.canonical_owner_email([{"mail": "invalid", "userPrincipalName": "owner@example.com"}]),
+    )
+    for owners in ([], [{"mail": "a@example.com"}, {"mail": "b@example.com"}], [{"mail": None}]):
+      with self.subTest(owners=owners), self.assertRaises(ValueError):
+        read.canonical_owner_email(owners)
+
+  def test_graph_get_rejects_unexpected_host_and_redirects(self):
+    session = Mock()
+    token_provider = Mock()
+    with self.assertRaisesRegex(ValueError, "unexpected Microsoft Graph URL"):
+      read._graph_get(session, "https://example.com/v1.0/groups", token_provider)
+    session.get.return_value = Mock(status_code=200, ok=True, content=b"{}", json=lambda: {})
+    read._graph_get(session, "https://graph.microsoft.com/v1.0/groups", token_provider)
+    self.assertFalse(session.get.call_args.kwargs["allow_redirects"])
+
+  def test_existing_workgroup_owner_is_updated_without_logging_email(self):
+    with patch.object(read.requests, "Session") as factory:
+      session = factory.return_value
+      create = Mock(status_code=409)
+      listing = Mock(ok=True, json=lambda: [{"id": 7, "name": "AWS-X", "ownerEmail": None}])
+      update = Mock(status_code=200)
+      session.post.return_value = create
+      session.get.return_value = listing
+      session.put.return_value = update
+      client = read.SecmanClient("https://secman.example", "operator", secrets.token_urlsafe())
+      with self.assertLogs("adread", level="INFO") as logs:
+        self.assertEqual(7, client.ensure_workgroup("AWS-X", "owner@example.com"))
+      self.assertEqual({"ownerEmail": "owner@example.com"}, session.put.call_args.kwargs["json"])
+      self.assertFalse(session.put.call_args.kwargs["allow_redirects"])
+      self.assertNotIn("owner@example.com", " ".join(logs.output))
+
   def test_disabled_workgroups_are_not_hydrated_or_written(self):
     linked = asset(groups=(1,))
-    client = FixtureClient(users=[user(groups=(1,))], assets=[linked])
+    client = FixtureClient(assets=[linked])
     client.groups[0]["enabled"] = False
     del client.assets[0]["workgroups"]
     plan = synchronize(client, False)
@@ -245,8 +309,16 @@ class TransportTests(unittest.TestCase):
   def test_bulk_reads_and_bounded_assignment_batches(self):
     client = FixtureClient(assets=[asset(i) for i in range(1, 2 * BATCH_SIZE + 2)])
     plan = synchronize(client, False)
-    self.assertEqual(5, len(client.reads))
+    self.assertEqual(4, len(client.reads))
     self.assertEqual([500, 500, 1], [len(ids) for _, ids in client.writes])
+    self.assertEqual(1001, plan.relationships_added)
+
+  def test_removals_are_batched_before_reassignment(self):
+    client = FixtureClient(assets=[asset(i, groups=(1,)) for i in range(1, 2 * BATCH_SIZE + 2)])
+    plan = synchronize(client, False)
+    self.assertEqual([500, 500, 1], [len(ids) for _, ids in client.removals])
+    self.assertEqual([500, 500, 1], [len(ids) for _, ids in client.writes])
+    self.assertEqual(1001, plan.relationships_removed)
     self.assertEqual(1001, plan.relationships_added)
 
   def test_mapping_pagination_includes_applied_owners(self):
@@ -269,9 +341,13 @@ class TransportTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
           synchronize(client, False)
         self.assertEqual([], client.writes)
+        self.assertEqual([], client.removals)
 
   def test_partial_assignment_failure_keeps_other_workgroups_and_reports_error(self):
-    client = FixtureClient(users=[user(groups=(1, 2))])
+    client = FixtureClient(groups=[
+      workgroup(1, "X", "a@example.com"),
+      workgroup(2, "Y", "a@example.com"),
+    ])
     assign = client.assign_assets
     def assign_assets(gid, ids):
       if gid == 1:
@@ -282,19 +358,40 @@ class TransportTests(unittest.TestCase):
     self.assertEqual(1, plan.errors)
     self.assertEqual([(2, [10])], client.writes)
 
+  def test_removal_failure_skips_reassignment_for_that_workgroup(self):
+    client = FixtureClient(groups=[
+      workgroup(1, "X", "a@example.com"),
+      workgroup(2, "Y", "a@example.com"),
+    ], assets=[asset(groups=(1, 2))])
+    remove = client.remove_assets
+    def remove_assets(gid, ids):
+      if gid == 1:
+        raise RuntimeError("HTTP 500")
+      remove(gid, ids)
+    client.remove_assets = remove_assets
+    plan = synchronize(client, False)
+    self.assertEqual(1, plan.errors)
+    self.assertEqual([(2, [10])], client.removals)
+    self.assertEqual([(2, [10])], client.writes)
+
   def test_client_uses_existing_bulk_contract_and_never_follows_redirects(self):
     with patch.object(read.requests, "Session") as factory:
       session = factory.return_value
       session.get.return_value.status_code = 200
       session.post.return_value.status_code = 200
+      session.delete.return_value.status_code = 204
       client = read.SecmanClient("https://secman.example", "operator", secrets.token_urlsafe())
       client.get_json("/api/workgroups")
       client.assign_assets(1, [10, 20])
+      client.remove_assets(1, [10, 20])
       self.assertTrue(session.verify)
       self.assertFalse(session.get.call_args.kwargs["allow_redirects"])
       self.assertFalse(session.post.call_args.kwargs["allow_redirects"])
+      self.assertFalse(session.delete.call_args.kwargs["allow_redirects"])
       self.assertEqual({"assetIds": [10, 20]}, session.post.call_args.kwargs["json"])
+      self.assertEqual({"assetIds": [10, 20]}, session.delete.call_args.kwargs["json"])
       self.assertEqual("https://secman.example/api/workgroups/1/assets", session.post.call_args.args[0])
+      self.assertEqual("https://secman.example/api/workgroups/1/assets", session.delete.call_args.args[0])
 
   def test_login_requires_admin_and_redacts_error_response(self):
     with patch.object(read.requests, "Session") as factory:
@@ -315,10 +412,39 @@ class TransportTests(unittest.TestCase):
     client = read.SecmanClient("https://secman.example", "operator", secrets.token_urlsafe(), dry_run=True)
     with self.assertRaises(RuntimeError):
       client.assign_assets(1, [10])
+    with self.assertRaises(RuntimeError):
+      client.remove_assets(1, [10])
     client._session.close()
 
 
 class CommandTests(unittest.TestCase):
+  def test_ad_import_reads_and_persists_canonical_group_owner(self):
+    group_id = "123e4567-e89b-12d3-a456-426614174000"
+    groups = [{"id": group_id, "displayName": "AWS-X", "mail": "aws-x@example.com"}]
+    owners = [{"id": "owner", "mail": "Owner@Example.COM", "userPrincipalName": None}]
+    members = [{"id": "member", "mail": "member@example.com", "userPrincipalName": None}]
+    secman = Mock()
+    secman.ensure_workgroup.return_value = None
+    config = {
+      "AZURE_TENANT_ID": "tenant",
+      "AZURE_CLIENT_ID": "client",
+      "AZURE_CLIENT_SECRET": secrets.token_urlsafe(),
+      "SECMAN_BACKEND_URL": "https://secman.example",
+      "SECMAN_ADMIN_NAME": "operator",
+      "SECMAN_ADMIN_PASS": secrets.token_urlsafe(),
+    }
+    output = io.StringIO()
+    with patch.dict(os.environ, config, clear=True), \
+         patch.object(read, "GraphTokenProvider"), \
+         patch.object(read, "SecmanClient", return_value=secman), \
+         patch.object(read, "graph_get_all", side_effect=[groups, owners, members]) as get_all, \
+         redirect_stdout(output):
+      self.assertIsNone(read.main(["--import", "--dry-run"]))
+    self.assertIn(f"/groups/{group_id}/owners/microsoft.graph.user", get_all.call_args_list[1].args[1])
+    self.assertIn("AD group owner email: owner@example.com", output.getvalue())
+    secman.ensure_workgroup.assert_called_once_with("AWS-X", "owner@example.com")
+    secman.add_members.assert_called_once_with(None, ["member@example.com"])
+
   def test_cli_dry_run_then_apply_twice_without_azure_credentials(self):
     fixture = FixtureClient()
     session = Mock(headers={})
@@ -333,7 +459,11 @@ class CommandTests(unittest.TestCase):
         return Mock(ok=True, is_redirect=False, json=lambda: {"roles": ["ADMIN"]})
       fixture.assign_assets(int(urlsplit(url).path.split("/")[3]), kwargs["json"]["assetIds"])
       return Mock(status_code=200)
-    session.get.side_effect, session.post.side_effect = get, post
+    def delete(url, **kwargs):
+      self.assertFalse(kwargs["allow_redirects"])
+      fixture.remove_assets(int(urlsplit(url).path.split("/")[3]), kwargs["json"]["assetIds"])
+      return Mock(status_code=204)
+    session.get.side_effect, session.post.side_effect, session.delete.side_effect = get, post, delete
     config = {"SECMAN_BACKEND_URL": "https://secman.example", "SECMAN_ADMIN_NAME": "operator",
               "SECMAN_ADMIN_PASS": secrets.token_urlsafe()}
     with patch.dict(os.environ, config, clear=True), patch.object(read.requests, "Session", return_value=session):
@@ -343,12 +473,16 @@ class CommandTests(unittest.TestCase):
         with redirect_stdout(output):
           self.assertEqual(0, read.main(args))
         summaries.append(json.loads(output.getvalue()))
-      self.assertEqual([1, 1, 0], [item["relationships_to_add"] for item in summaries])
-      self.assertEqual([0, 1, 0], [item["relationships_added"] for item in summaries])
-      self.assertEqual([(1, [10])], fixture.writes)
+      self.assertEqual([1, 1, 1], [item["relationships_to_add"] for item in summaries])
+      self.assertEqual([0, 1, 1], [item["relationships_added"] for item in summaries])
+      self.assertEqual([0, 0, 1], [item["relationships_to_remove"] for item in summaries])
+      self.assertEqual([0, 0, 1], [item["relationships_removed"] for item in summaries])
+      self.assertEqual([(1, [10]), (1, [10])], fixture.writes)
+      self.assertEqual([(1, [10])], fixture.removals)
       self.assertEqual(3, session.close.call_count)
       self.assertTrue(session.verify)
-      self.assertEqual(4, session.post.call_count)  # Three logins, one asset batch.
+      self.assertEqual(5, session.post.call_count)  # Three logins, two assignment batches.
+      self.assertEqual(1, session.delete.call_count)
 
   def test_error_logs_do_not_expose_credentials_or_response_details(self):
     sentinel = secrets.token_urlsafe()

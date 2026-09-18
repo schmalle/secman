@@ -940,11 +940,11 @@ class SecmanCli {
 
                 Run 'secman manage-user-mappings <subcommand> --help' for subcommand-specific options.
 
-                After importing AWS owners, synchronize assets through workgroup member emails:
+                After importing AWS owners, synchronize assets through canonical workgroup owner emails:
                   ./scripts/sync-workgroup-assets.sh --dry-run
                   ./scripts/sync-workgroup-assets.sh
-                This separate Python command requires ADMIN and verified HTTPS, preserves all
-                existing asset links, and uses member emails rather than account display names.
+                This separate Python command requires ADMIN and verified HTTPS, replaces all
+                asset links in participating workgroups, and uses owner emails rather than account display names.
                 For AWS Secrets Manager, set SECMAN_AWS_SECRET_ID and use
                   ./scripts/sync-workgroup-assets-aws.sh [--dry-run]
                 See docs/WORKGROUP_ASSET_SYNC.md for configuration, counters and exit codes.
@@ -1037,7 +1037,7 @@ class SecmanCli {
 
                 Run 'secman manage-workgroups <subcommand> --help' for subcommand-specific options.
 
-                To derive asset assignments from members' AWS account ownership, run the
+                To replace asset assignments from canonical-owner AWS account ownership, run the
                 separate Python importer command from the repository root:
                   ./scripts/sync-workgroup-assets.sh --dry-run
                   ./scripts/sync-workgroup-assets.sh
@@ -1045,7 +1045,7 @@ class SecmanCli {
                 For AWS Secrets Manager, set SECMAN_AWS_SECRET_ID and use
                   ./scripts/sync-workgroup-assets-aws.sh [--dry-run]
                 The AWS wrapper requires aws CLI and jq instead of pass-cli.
-                Adds missing links only. Manual and stale links are preserved.
+                Removes every existing link from participating workgroups, then adds desired links.
                 See docs/WORKGROUP_ASSET_SYNC.md for configuration, counters and exit codes.
             """.trimIndent(),
 

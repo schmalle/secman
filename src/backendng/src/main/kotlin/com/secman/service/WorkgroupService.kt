@@ -31,6 +31,10 @@ open class WorkgroupService(
     private val catchAllWorkgroupSafetyService: CatchAllWorkgroupSafetyService
 ) {
 
+    companion object {
+        private const val DEVOPS_WORKGROUP_PREFIX = "aws-DevOps-"
+    }
+
     /**
      * Create a new workgroup with validation
      * FR-001, FR-004, FR-006: Create with unique name (case-insensitive)
@@ -47,7 +51,8 @@ open class WorkgroupService(
         name: String,
         description: String? = null,
         criticality: Criticality = Criticality.MEDIUM,
-        creatorUserId: Long? = null
+        creatorUserId: Long? = null,
+        ownerEmail: String? = null
     ): Workgroup {
         // Validate name uniqueness (case-insensitive)
         if (workgroupRepository.existsByNameIgnoreCase(name)) {
@@ -63,11 +68,14 @@ open class WorkgroupService(
             }
         }
 
+        val normalizedOwnerEmail = normalizeOwnerEmail(ownerEmail)
         val workgroup = Workgroup(
             name = name,
             description = description,
             criticality = criticality,
-            createdBy = creator
+            createdBy = creator,
+            enabled = !requiresOwnerToEnable(name, normalizedOwnerEmail),
+            ownerEmail = normalizedOwnerEmail
         )
 
         return workgroupRepository.save(workgroup)
@@ -89,9 +97,10 @@ open class WorkgroupService(
         name: String,
         description: String? = null,
         criticality: Criticality = Criticality.MEDIUM,
-        creatorUserId: Long
+        creatorUserId: Long,
+        ownerEmail: String? = null
     ): Workgroup {
-        val workgroup = createWorkgroup(name, description, criticality, creatorUserId)
+        val workgroup = createWorkgroup(name, description, criticality, creatorUserId, ownerEmail)
         val creator = userRepository.findByIdWithWorkgroups(creatorUserId).orElseThrow {
             IllegalArgumentException("Creator user not found: $creatorUserId")
         }
@@ -118,11 +127,13 @@ open class WorkgroupService(
         name: String? = null,
         description: String? = null,
         criticality: Criticality? = null,
-        enabled: Boolean? = null
+        enabled: Boolean? = null,
+        ownerEmail: String? = null
     ): Workgroup {
         val workgroup = workgroupRepository.findById(id).orElseThrow {
             IllegalArgumentException("Workgroup not found: $id")
         }
+        val previousEnabled = workgroup.enabled
 
         // If name is being changed, validate uniqueness
         if (name != null && name != workgroup.name) {
@@ -140,17 +151,31 @@ open class WorkgroupService(
             workgroup.criticality = criticality
         }
 
-        val enabledChanged = enabled != null && enabled != workgroup.enabled
-        if (enabledChanged) {
-            workgroup.enabled = requireNotNull(enabled)
+        if (ownerEmail != null) {
+            workgroup.ownerEmail = normalizeOwnerEmail(ownerEmail)
         }
 
+        workgroup.enabled = if (requiresOwnerToEnable(workgroup.name, workgroup.ownerEmail)) {
+            false
+        } else {
+            enabled ?: workgroup.enabled
+        }
+
+        val enabledChanged = workgroup.enabled != previousEnabled
         val updated = workgroupRepository.update(workgroup)
         if (enabledChanged) {
             workgroupAccessChangedPublisher.publishEvent(WorkgroupAccessChangedEvent(setOf(id)))
         }
         return updated
     }
+
+    private fun normalizeOwnerEmail(ownerEmail: String?): String? =
+        ownerEmail?.trim()?.lowercase()?.also {
+            require(it.isNotEmpty()) { "Workgroup owner email must not be blank" }
+        }
+
+    private fun requiresOwnerToEnable(name: String, ownerEmail: String?): Boolean =
+        name.startsWith(DEVOPS_WORKGROUP_PREFIX) && ownerEmail.isNullOrBlank()
 
     /**
      * Delete workgroup

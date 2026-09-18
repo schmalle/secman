@@ -24,6 +24,7 @@ import jakarta.transaction.Transactional
 import jakarta.validation.ConstraintViolationException
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import org.slf4j.LoggerFactory
@@ -145,6 +146,10 @@ open class WorkgroupController(
         authentication: Authentication
     ): HttpResponse<*> {
         return try {
+            if (request.ownerEmail != null && !isAdmin(authentication)) {
+                return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
+                    .body(mapOf("error" to "Only administrators can set a workgroup owner"))
+            }
             val criticality = request.criticality ?: Criticality.MEDIUM
             val creator = currentUser(authentication)
             val workgroup = if (isAdminOrSecChampion(authentication)) {
@@ -152,7 +157,8 @@ open class WorkgroupController(
                     name = request.name,
                     description = request.description,
                     criticality = criticality,
-                    creatorUserId = creator.id!!
+                    creatorUserId = creator.id!!,
+                    ownerEmail = request.ownerEmail
                 )
             } else {
                 // Non-admin creators are auto-enrolled so they can subsequently
@@ -161,7 +167,8 @@ open class WorkgroupController(
                     name = request.name,
                     description = request.description,
                     criticality = criticality,
-                    creatorUserId = creator.id!!
+                    creatorUserId = creator.id!!,
+                    ownerEmail = request.ownerEmail
                 )
             }
             HttpResponse.created(workgroup)
@@ -214,6 +221,7 @@ open class WorkgroupController(
                 id = id,
                 name = wg.name,
                 description = wg.description,
+                ownerEmail = wg.ownerEmail,
                 criticality = wg.criticality,
                 enabled = wg.enabled,
                 userCount = (userCounts[id] ?: 0L).toInt(),
@@ -280,6 +288,7 @@ open class WorkgroupController(
                 id = workgroup.id!!,
                 name = workgroup.name,
                 description = workgroup.description,
+                ownerEmail = workgroup.ownerEmail,
                 criticality = workgroup.criticality,
                 enabled = workgroup.enabled,
                 userCount = workgroup.users.size,
@@ -314,19 +323,31 @@ open class WorkgroupController(
             if (!canManageWorkgroup(authentication)) {
                 return HttpResponse.status<Any>(io.micronaut.http.HttpStatus.FORBIDDEN)
             }
+            if (request.ownerEmail != null && !isAdmin(authentication)) {
+                return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
+                    .body(mapOf("error" to "Only administrators can set a workgroup owner"))
+            }
             val workgroup = workgroupService.updateWorkgroup(
                 id = id,
                 name = request.name,
                 description = request.description,
                 criticality = request.criticality,
-                enabled = request.enabled
+                enabled = request.enabled,
+                ownerEmail = request.ownerEmail
             )
-            if (request.enabled != null && request.enabled != previousEnabled) {
+            if (workgroup.enabled != previousEnabled) {
                 logger.info(
                     "AUDIT: operation=CHANGE_WORKGROUP_STATUS, actor={}, workgroup={}, enabled={}",
                     authentication.name,
                     id,
-                    request.enabled
+                    workgroup.enabled
+                )
+            }
+            if (request.ownerEmail != null) {
+                logger.info(
+                    "AUDIT: operation=CHANGE_WORKGROUP_OWNER, actor={}, workgroup={}, outcome=UPDATED",
+                    authentication.name,
+                    id
                 )
             }
             HttpResponse.ok(workgroup)
@@ -1245,6 +1266,7 @@ open class WorkgroupController(
             id = workgroup.id!!,
             name = workgroup.name,
             description = workgroup.description,
+            ownerEmail = workgroup.ownerEmail,
             enabled = workgroup.enabled,
             parentId = workgroup.parent?.id,
             depth = workgroup.calculateDepth(),
@@ -1291,6 +1313,10 @@ data class CreateWorkgroupRequest(
     @field:Size(max = 512, message = "Description must not exceed 512 characters")
     val description: String? = null,
 
+    @field:Email(message = "Invalid workgroup owner email format")
+    @field:Size(max = 254, message = "Workgroup owner email must not exceed 254 characters")
+    val ownerEmail: String? = null,
+
     val criticality: Criticality? = null
 )
 
@@ -1306,6 +1332,10 @@ data class UpdateWorkgroupRequest(
 
     @field:Size(max = 512, message = "Description must not exceed 512 characters")
     val description: String? = null,
+
+    @field:Email(message = "Invalid workgroup owner email format")
+    @field:Size(max = 254, message = "Workgroup owner email must not exceed 254 characters")
+    val ownerEmail: String? = null,
 
     val criticality: Criticality? = null,
 
@@ -1377,6 +1407,7 @@ data class WorkgroupListResponse(
     val id: Long,
     val name: String,
     val description: String?,
+    val ownerEmail: String?,
     val criticality: Criticality,
     val enabled: Boolean,
     val userCount: Int,
@@ -1401,6 +1432,7 @@ data class WorkgroupDetailResponse(
     val id: Long,
     val name: String,
     val description: String?,
+    val ownerEmail: String?,
     val criticality: Criticality,
     val enabled: Boolean,
     val userCount: Int,

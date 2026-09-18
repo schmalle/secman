@@ -59,14 +59,17 @@ def http_status(error: Exception) -> int | None:
 @dataclass
 class SyncPlan:
   additions: dict[int, list[int]] = field(default_factory=dict)
+  removals: dict[int, list[int]] = field(default_factory=dict)
   workgroups_evaluated: int = 0
-  members_evaluated: int = 0
-  unique_email_addresses: int = 0
+  owners_evaluated: int = 0
+  unique_owner_email_addresses: int = 0
+  workgroups_without_owner: int = 0
   aws_accounts_matched: int = 0
   assets_matched: int = 0
   relationships_to_add: int = 0
   relationships_to_remove: int = 0
   relationships_added: int = 0
+  relationships_removed: int = 0
   skipped_accounts: int = 0
   errors: int = 0
 
@@ -76,13 +79,12 @@ class SyncPlan:
 
   def summary(self, dry_run: bool) -> dict:
     return {"dry_run": dry_run, **{
-      key: value for key, value in vars(self).items() if key != "additions"
+      key: value for key, value in vars(self).items() if key not in ("additions", "removals")
     }}
 
 
-def index_members(workgroups: list, users: list, plan: SyncPlan) -> dict[str, set[int]]:
-  group_ids = set()
-  enabled_group_ids = set()
+def index_owners(workgroups: list, plan: SyncPlan) -> dict[str, set[int]]:
+  by_email = defaultdict(set)
   for group in workgroups:
     gid = record_id(group)
     if gid is None:
@@ -92,34 +94,22 @@ def index_members(workgroups: list, users: list, plan: SyncPlan) -> dict[str, se
     if type(enabled) is not bool:
       plan.invalid("workgroup enabled status", gid)
       continue
-    group_ids.add(gid)
-    if enabled:
-      enabled_group_ids.add(gid)
-    else:
+    if not enabled:
       log.info("Skipping disabled workgroup_id=%d", gid)
-  plan.workgroups_evaluated = len(enabled_group_ids)
-  by_email = defaultdict(set)
-  for user in users:
-    uid = record_id(user)
-    memberships_value = user.get("workgroups") if isinstance(user, dict) else None
-    if memberships_value is None and isinstance(user, dict) and user.get("workgroupCount") == 0:
-      memberships_value = []
-    if uid is None or not isinstance(memberships_value, list):
-      plan.invalid("user", uid)
       continue
-    memberships = {record_id(group) for group in memberships_value}
-    if not memberships:
+    plan.workgroups_evaluated += 1
+    raw_owner = group.get("ownerEmail")
+    if raw_owner is None or raw_owner == "":
+      plan.workgroups_without_owner += 1
+      log.info("Skipping workgroup_id=%d: no canonical owner email", gid)
       continue
-    email = normalize_email(user.get("email"))
-    if email is None or not memberships <= group_ids:
-      plan.invalid("member", uid)
+    email = normalize_email(raw_owner)
+    if email is None:
+      plan.invalid("workgroup owner", gid)
       continue
-    enabled_memberships = memberships & enabled_group_ids
-    if not enabled_memberships:
-      continue
-    plan.members_evaluated += 1
-    by_email[email].update(enabled_memberships)
-  plan.unique_email_addresses = len(by_email)
+    plan.owners_evaluated += 1
+    by_email[email].add(gid)
+  plan.unique_owner_email_addresses = len(by_email)
   return by_email
 
 
@@ -145,16 +135,26 @@ def index_accounts(mappings: list, by_email: dict[str, set[int]], plan: SyncPlan
   return by_account
 
 
-def build_plan(workgroups: list, users: list, mappings: list, assets: list) -> SyncPlan:
+def build_plan(workgroups: list, mappings: list, assets: list) -> SyncPlan:
   plan = SyncPlan()
-  by_account = index_accounts(mappings, index_members(workgroups, users, plan), plan)
+  owners = index_owners(workgroups, plan)
+  touched_workgroups = {gid for group_ids in owners.values() for gid in group_ids}
+  by_account = index_accounts(mappings, owners, plan)
   additions = defaultdict(set)
+  removals = defaultdict(set)
   matched_assets = set()
   for asset in assets:
     aid = record_id(asset)
     if aid is None:
       plan.invalid("asset", aid)
       continue
+    groups = asset.get("workgroups")
+    if not isinstance(groups, list) or any(record_id(group) is None for group in groups):
+      plan.invalid("asset workgroups", aid)
+      continue  # A missing collection is not evidence of zero assignments.
+    existing = {record_id(group) for group in groups}
+    for gid in existing & touched_workgroups:
+      removals[gid].add(aid)
     raw_account = asset.get("cloudAccountId")
     if raw_account is None or raw_account == "":
       continue
@@ -167,22 +167,19 @@ def build_plan(workgroups: list, users: list, mappings: list, assets: list) -> S
     desired = by_account.setdefault(account, set())
     if not desired:
       continue
-    groups = asset.get("workgroups")
-    if not isinstance(groups, list) or any(record_id(group) is None for group in groups):
-      plan.invalid("asset workgroups", aid)
-      continue  # A missing collection is not evidence of zero assignments.
     matched_assets.add(aid)
-    existing = {record_id(group) for group in groups}
-    for gid in desired - existing:
+    for gid in desired:
       additions[gid].add(aid)
   plan.additions = {gid: sorted(ids) for gid, ids in sorted(additions.items())}
+  plan.removals = {gid: sorted(ids) for gid, ids in sorted(removals.items())}
   plan.assets_matched = len(matched_assets)
   plan.aws_accounts_matched = sum(bool(groups) for groups in by_account.values())
   skipped = sorted(account for account, groups in by_account.items() if not groups)
   plan.skipped_accounts = len(skipped)
   for account in skipped:
-    log.info("Skipping AWS account=%s: no owner email matching a workgroup member", account)
+    log.info("Skipping AWS account=%s: no mapping email matching a workgroup owner", account)
   plan.relationships_to_add = sum(len(ids) for ids in plan.additions.values())
+  plan.relationships_to_remove = sum(len(ids) for ids in plan.removals.values())
   return plan
 
 
@@ -243,19 +240,42 @@ def hydrate_asset_workgroups(client, workgroups: list, assets: list) -> None:
 
 def synchronize(client, dry_run: bool) -> SyncPlan:
   workgroups = client.get_json("/api/workgroups")
-  users = client.get_json("/api/users", {"includeWorkgroups": "true", "includePending": "false"})
   mappings = load_mappings(client)
   assets = client.get_json("/api/assets")
-  if not all(isinstance(rows, list) for rows in (workgroups, users, assets)):
+  if not all(isinstance(rows, list) for rows in (workgroups, assets)):
     raise RuntimeError("Invalid collection response; synchronization aborted before writes")
   hydrate_asset_workgroups(client, [group for group in workgroups if workgroup_is_enabled(group)], assets)
-  plan = build_plan(workgroups, users, mappings, assets)
-  for gid, ids in plan.additions.items():
-    log.info("workgroup_id=%d relationships_to_add=%d dry_run=%s", gid, len(ids), dry_run)
+  plan = build_plan(workgroups, mappings, assets)
+  touched_ids = sorted(set(plan.removals) | set(plan.additions))
+  for gid in touched_ids:
+    remove_ids = plan.removals.get(gid, [])
+    add_ids = plan.additions.get(gid, [])
+    log.info(
+      "workgroup_id=%d relationships_to_remove=%d relationships_to_add=%d dry_run=%s",
+      gid, len(remove_ids), len(add_ids), dry_run,
+    )
     if dry_run:
       continue
-    for offset in range(0, len(ids), BATCH_SIZE):
-      batch = ids[offset:offset + BATCH_SIZE]
+    removal_failed = False
+    for offset in range(0, len(remove_ids), BATCH_SIZE):
+      batch = remove_ids[offset:offset + BATCH_SIZE]
+      try:
+        client.remove_assets(gid, batch)
+      except (requests.RequestException, RuntimeError) as exc:
+        plan.errors += 1
+        removal_failed = True
+        log.error(
+          "workgroup_id=%d asset_ids=%s operation=remove outcome=unconfirmed "
+          "error_type=%s http_status=%s; additions skipped; rerun to reconcile",
+          gid, batch, type(exc).__name__, http_status(exc),
+        )
+        break
+      plan.relationships_removed += len(batch)
+      log.info("workgroup_id=%d asset_ids=%s outcome=removed", gid, batch)
+    if removal_failed:
+      continue
+    for offset in range(0, len(add_ids), BATCH_SIZE):
+      batch = add_ids[offset:offset + BATCH_SIZE]
       try:
         client.assign_assets(gid, batch)
       except (requests.RequestException, RuntimeError) as exc:

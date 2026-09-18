@@ -22,6 +22,7 @@ export interface WorkgroupResponse {
   id: number;
   name: string;
   description?: string;
+  ownerEmail?: string | null;
   enabled?: boolean;
   parentId?: number;
   depth: number;
