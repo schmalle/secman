@@ -70,7 +70,7 @@ specs/        historical implementation plans (frozen)
 ./scripts/secman add-vulnerability --hostname host --cve CVE-2024-1234 --criticality HIGH
 ./scripts/secman export-requirements --format xlsx
 
-# Python importer: preview AWS asset assignments from workgroup member emails
+# Python importer: preview AWS asset assignments from canonical workgroup owners
 ./scripts/sync-workgroup-assets.sh --dry-run
 # Production alternative (set SECMAN_AWS_SECRET_ID and AWS_REGION first):
 ./scripts/sync-workgroup-assets-aws.sh --dry-run
@@ -154,7 +154,7 @@ Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings):
 | [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) | All env vars (backend, frontend, CLI) |
 | [docs/CLI.md](docs/CLI.md) | CLI commands, cron, S3 ops |
 | [docs/ADREAD.md](docs/ADREAD.md) | Python AD group/member import and AWS asset synchronization |
-| [docs/WORKGROUP_ASSET_SYNC.md](docs/WORKGROUP_ASSET_SYNC.md) | Member-email → AWS account → asset assignments, dry-run, and preservation semantics |
+| [docs/WORKGROUP_ASSET_SYNC.md](docs/WORKGROUP_ASSET_SYNC.md) | Owner-email → AWS account → full workgroup asset replacement and dry-run |
 | [docs/MCP.md](docs/MCP.md) | MCP tools, API keys, delegation, troubleshooting |
 | [docs/MCP_RISK_ASSESSMENT_LIFECYCLE.md](docs/MCP_RISK_ASSESSMENT_LIFECYCLE.md) | AWS-account assessment REST/UI/MCP contract, Paperclip calls, Proton Pass script, E2E and cleanup |
 | [docs/MCP_STATISTICS.md](docs/MCP_STATISTICS.md) | Admin, delegated security, and risk-assessment aggregate MCP tools for Paperclip |

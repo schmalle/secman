@@ -12,6 +12,7 @@ export interface Workgroup {
     id: number;
     name: string;
     description?: string;
+    ownerEmail?: string | null;
     criticality: WorkgroupCriticality;
     enabled?: boolean;
     userCount: number;

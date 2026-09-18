@@ -59,6 +59,7 @@ data class WorkgroupResponse(
     val id: Long,
     val name: String,
     val description: String?,
+    val ownerEmail: String?,
     val enabled: Boolean,
     val parentId: Long?,  // Feature 040: Hierarchy support
     val depth: Int,  // Feature 040: Calculated depth

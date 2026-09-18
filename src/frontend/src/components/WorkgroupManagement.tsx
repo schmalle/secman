@@ -239,6 +239,7 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
             <tr>
               <th style={stickyHeaderCellStyle}>Parent</th>
               <th style={stickyHeaderCellStyle}>Name</th>
+              <th style={stickyHeaderCellStyle}>AD Owner</th>
               <th style={stickyHeaderCellStyle}>Status</th>
               <th style={stickyHeaderCellStyle}>Users</th>
               <th style={stickyHeaderCellStyle}>Assets</th>
@@ -256,7 +257,7 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
               const hiddenAwsCount = workgroups.length - visibleWorkgroups.length;
               return visibleWorkgroups.length === 0 ? (
               <tr>
-                <td colSpan={9} className="text-center text-muted">
+                <td colSpan={10} className="text-center text-muted">
                   {hiddenAwsCount > 0
                     ? 'AWS- workgroups are hidden. Enable "Show AWS- workgroups" to see them.'
                     : 'No visible workgroups found.'}
@@ -273,6 +274,9 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
                         : <span className="text-muted fst-italic">root</span>}
                     </td>
                     <td><strong>{workgroup.name}</strong></td>
+                    <td>
+                      {workgroup.ownerEmail ?? <span className="text-muted fst-italic">not set</span>}
+                    </td>
                     <td>
                       <span className={`badge ${enabled ? 'bg-success' : 'bg-secondary'}`}>
                         {enabled ? 'Enabled' : 'Disabled'}

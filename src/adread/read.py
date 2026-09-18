@@ -1,13 +1,19 @@
 import argparse
 import logging
 import os
+import re
 import sys
 import time
+from urllib.parse import urlsplit
 
 import requests
 import truststore
 
+from sync_workgroup_assets import normalize_email
+
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
+GRAPH_HOST = "graph.microsoft.com"
+GRAPH_GROUP_ID_PATTERN = re.compile(r"[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}")
 
 # (connect, read) timeouts for every HTTP call so a stalled socket can never hang
 # the run indefinitely.
@@ -90,11 +96,15 @@ def _backoff_seconds(attempt):
 
 def _graph_get(session, url, token_provider):
   """Single Graph GET with throttle/transient-error retries; returns parsed JSON."""
+  parsed = urlsplit(url)
+  if (parsed.scheme != "https" or parsed.hostname != GRAPH_HOST or parsed.port not in (None, 443)
+      or parsed.username is not None or parsed.password is not None):
+    raise ValueError("Refusing unexpected Microsoft Graph URL")
   for attempt in range(1, MAX_RETRIES + 1):
     headers = token_provider.headers()
     start = time.monotonic()
     try:
-      response = session.get(url, headers=headers, timeout=HTTP_TIMEOUT)
+      response = session.get(url, headers=headers, timeout=HTTP_TIMEOUT, allow_redirects=False)
     except requests.exceptions.RequestException as exc:
       if attempt == MAX_RETRIES:
         log.error("Request error for %s after %d attempts: %s", url, attempt, exc)
@@ -163,6 +173,25 @@ def graph_get_all(session, url, token_provider):
 
   log.info("Finished paged GET: %d pages, %d items total", page, len(items))
   return items
+
+
+def canonical_owner_email(owners):
+  """Return the only valid user-owner email, rejecting ambiguous AD groups."""
+  owner_emails = set()
+  for owner in owners:
+    if not isinstance(owner, dict):
+      continue
+    email = normalize_email(owner.get("mail"))
+    if email is None:
+      email = normalize_email(owner.get("userPrincipalName"))
+    if email is not None:
+      owner_emails.add(email)
+  if len(owners) != 1 or len(owner_emails) != 1:
+    raise ValueError(
+      f"expected exactly one user owner with a valid email; "
+      f"owners={len(owners)} valid_emails={len(owner_emails)}"
+    )
+  return next(iter(owner_emails))
 
 
 class SecmanClient:
@@ -245,13 +274,25 @@ class SecmanClient:
     if resp.status_code != 200:
       raise requests.HTTPError(f"Asset assignment failed: HTTP {resp.status_code}", response=resp)
 
+  def remove_assets(self, workgroup_id, asset_ids):
+    if self.dry_run:
+      raise RuntimeError("Asset writes are forbidden during dry-run")
+    resp = self._session.delete(
+      f"{self.base}/api/workgroups/{workgroup_id}/assets",
+      json={"assetIds": asset_ids}, timeout=HTTP_TIMEOUT, allow_redirects=False,
+    )
+    if resp.status_code != 204:
+      raise requests.HTTPError(f"Asset removal failed: HTTP {resp.status_code}", response=resp)
+
   def _load_workgroup_cache(self):
-    resp = self._session.get(f"{self.base}/api/workgroups", timeout=HTTP_TIMEOUT)
+    resp = self._session.get(
+      f"{self.base}/api/workgroups", timeout=HTTP_TIMEOUT, allow_redirects=False
+    )
     resp.raise_for_status()
-    self._workgroup_cache = {wg["name"].lower(): wg["id"] for wg in resp.json()}
+    self._workgroup_cache = {wg["name"].lower(): wg for wg in resp.json()}
     log.debug("Loaded %d existing workgroups into cache", len(self._workgroup_cache))
 
-  def ensure_workgroup(self, name):
+  def ensure_workgroup(self, name, owner_email):
     """Return the secman workgroup id for *name*, creating it if absent."""
     if len(name) > self.MAX_WORKGROUP_NAME_LEN:
       raise ValueError(
@@ -260,29 +301,53 @@ class SecmanClient:
       )
 
     if self.dry_run:
-      log.info("[DRY-RUN] Would ensure workgroup '%s'", name)
+      log.info("[DRY-RUN] Would ensure workgroup '%s' has its canonical AD owner", name)
       return None
 
     resp = self._session.post(
       f"{self.base}/api/workgroups",
-      json={"name": name, "description": f"Imported from AD group '{name}'"},
+      json={
+        "name": name,
+        "description": f"Imported from AD group '{name}'",
+        "ownerEmail": owner_email,
+      },
       timeout=HTTP_TIMEOUT,
+      allow_redirects=False,
     )
 
     if resp.status_code == 201:
       wg_id = resp.json()["id"]
       log.info("AUDIT: operation=CREATE_WORKGROUP, name='%s', id=%s", name, wg_id)
       if self._workgroup_cache is not None:
-        self._workgroup_cache[name.lower()] = wg_id
+        self._workgroup_cache[name.lower()] = resp.json()
       return wg_id
 
     # Name already taken — resolve via the list endpoint (cached).
     if resp.status_code in (400, 409):
       if self._workgroup_cache is None:
         self._load_workgroup_cache()
-      wg_id = self._workgroup_cache.get(name.lower())
-      if wg_id is not None:
-        log.info("Workgroup '%s' already exists with id=%s", name, wg_id)
+      workgroup = self._workgroup_cache.get(name.lower())
+      if workgroup is not None:
+        wg_id = workgroup["id"]
+        if normalize_email(workgroup.get("ownerEmail")) != owner_email:
+          update = self._session.put(
+            f"{self.base}/api/workgroups/{wg_id}",
+            json={"ownerEmail": owner_email},
+            timeout=HTTP_TIMEOUT,
+            allow_redirects=False,
+          )
+          if update.status_code != 200:
+            raise requests.HTTPError(
+              f"Workgroup owner update failed: HTTP {update.status_code}", response=update
+            )
+          workgroup["ownerEmail"] = owner_email
+          log.info(
+            "AUDIT: operation=UPDATE_WORKGROUP_OWNER, name='%s', id=%s, outcome=UPDATED",
+            name,
+            wg_id,
+          )
+        else:
+          log.info("Workgroup '%s' already exists with id=%s and current owner", name, wg_id)
         return wg_id
       log.error(
         "Workgroup '%s' returned %d on create but was not found in the list",
@@ -319,6 +384,7 @@ class SecmanClient:
       f"{self.base}/api/workgroups/{workgroup_id}/users",
       json={"userRefs": user_refs},
       timeout=HTTP_TIMEOUT,
+      allow_redirects=False,
     )
     if not resp.ok:
       log.error(
@@ -341,8 +407,8 @@ def main(argv=None):
     description="Import Azure AD workgroups or synchronize their AWS assets from SecMan ownership mappings.",
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog="""AWS asset synchronization (from the repository root):
-  ./scripts/sync-workgroup-assets.sh --dry-run   # preview missing links
-  ./scripts/sync-workgroup-assets.sh             # apply missing links
+  ./scripts/sync-workgroup-assets.sh --dry-run   # preview full replacements
+  ./scripts/sync-workgroup-assets.sh             # replace touched workgroups
 
   Direct invocation with the same credentials already resolved:
   uv run --locked --project src/adread python src/adread/read.py sync-workgroup-assets --dry-run
@@ -351,9 +417,9 @@ def main(argv=None):
   The wrapper resolves these through Proton Pass. No Azure/AWS credentials are
   needed for synchronization. Use REQUESTS_CA_BUNDLE for a private CA.
 
-  Matches direct workgroup members by normalized email to stored AWS mappings,
-  then assigns matching assets. Evaluates all workgroups, regardless of name.
-  Existing links, including stale links, are preserved: their source is unknown.
+  Matches each workgroup's canonical AD owner email to stored AWS mappings,
+  then replaces that workgroup's complete asset set. Every existing asset link
+  in an enabled, owner-backed workgroup is removed before desired links are added.
   Run after imports, with one sync process at a time. Dry-run still authenticates.
   JSON counters go to stdout; diagnostics go to stderr.
 
@@ -365,7 +431,7 @@ def main(argv=None):
   )
   parser.add_argument(
     "command", nargs="?", choices=["sync-workgroup-assets"],
-    help="Assign AWS assets using existing SecMan member emails and account mappings.",
+    help="Assign AWS assets using stored workgroup owner emails and account mappings.",
   )
   parser.add_argument(
     "--import",
@@ -451,6 +517,7 @@ def main(argv=None):
   log.info("Retrieved %d group(s) with leading 'AWS-'", len(groups))
 
   total_members = 0
+  total_owners = 0
   failed_groups = []
 
   for index, group in enumerate(groups, start=1):
@@ -465,6 +532,32 @@ def main(argv=None):
       group_mail,
       group_id,
     )
+
+    if not isinstance(group_id, str) or not GRAPH_GROUP_ID_PATTERN.fullmatch(group_id):
+      log.error("Group '%s' has an invalid Graph id — skipping", group_name)
+      failed_groups.append(group_name)
+      continue
+
+    owners_url = (
+      f"{GRAPH_BASE}/groups/{group_id}/owners/microsoft.graph.user"
+      "?$select=id,mail,userPrincipalName"
+      "&$top=999"
+    )
+
+    try:
+      owners = graph_get_all(graph_session, owners_url, token_provider)
+    except Exception as exc:
+      log.error("FAILED to read owner of group '%s': %s — skipping", group_name, exc)
+      failed_groups.append(group_name)
+      continue
+
+    try:
+      owner_email = canonical_owner_email(owners)
+    except ValueError as exc:
+      log.error("Group '%s' has no unambiguous canonical owner: %s — skipping", group_name, exc)
+      failed_groups.append(group_name)
+      continue
+    total_owners += 1
 
     members_url = (
       f"{GRAPH_BASE}/groups/{group_id}/members/microsoft.graph.user"
@@ -483,6 +576,7 @@ def main(argv=None):
     log.info("Group %s has %d user member(s)", group_name, len(users))
 
     print(f"\nGroup: {group_name} ({group_mail})")
+    print(f" AD group owner email: {owner_email}")
 
     emails = []
     logged_empty_sample = False
@@ -505,7 +599,7 @@ def main(argv=None):
 
     if secman is not None:
       try:
-        wg_id = secman.ensure_workgroup(group_name)
+        wg_id = secman.ensure_workgroup(group_name, owner_email)
         secman.add_members(wg_id, emails)
       except ValueError as exc:
         log.warning("SKIP group '%s': %s", group_name, exc)
@@ -516,9 +610,10 @@ def main(argv=None):
 
   elapsed = time.monotonic() - overall_start
   log.info(
-    "Run complete in %.2fs: %d groups, %d total user members",
+    "Run complete in %.2fs: %d groups, %d canonical owners, %d total user members",
     elapsed,
     len(groups),
+    total_owners,
     total_members,
   )
 

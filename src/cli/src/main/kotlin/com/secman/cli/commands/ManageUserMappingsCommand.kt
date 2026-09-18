@@ -45,10 +45,10 @@ import jakarta.inject.Singleton
 @Command(
     name = "manage-user-mappings",
     footer = [
-        "After importing AWS owners, derive asset assignments from workgroup member emails:",
+        "After importing AWS owners, derive asset assignments from canonical workgroup owner emails:",
         "  ./scripts/sync-workgroup-assets.sh [--dry-run]",
         "AWS Secrets Manager: set SECMAN_AWS_SECRET_ID, then use sync-workgroup-assets-aws.sh.",
-        "This separate Python command requires ADMIN and verified HTTPS and preserves all links.",
+        "This separate Python command requires ADMIN and replaces all links in participating workgroups.",
         "For display-name account linking, use link-workgroups. See docs/WORKGROUP_ASSET_SYNC.md."
     ],
     description = [

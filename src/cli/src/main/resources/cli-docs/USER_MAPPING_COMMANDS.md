@@ -21,8 +21,8 @@ The `manage-user-mappings` command suite provides CLI tools for ADMIN users to m
 
 After importing AWS owner mappings, the separate Python command
 `./scripts/sync-workgroup-assets.sh [--dry-run]` assigns matching assets to the
-owners' existing workgroups using normalized member emails. It requires ADMIN
-and verified HTTPS, preserves manual/stale links, and does not use display-name
+owners' existing workgroups using normalized canonical owner emails. It requires ADMIN
+and verified HTTPS, replaces every asset link in participating workgroups, and does not use display-name
 matching. See [the synchronization guide](../../../../../../docs/WORKGROUP_ASSET_SYNC.md)
 for its prerequisites, JSON counters and exit codes; the flags below belong to
 the Kotlin mapping commands.

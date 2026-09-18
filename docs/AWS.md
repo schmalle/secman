@@ -19,7 +19,7 @@ developer workflows.
 | `scripts/deleteoutdated.sh` | `scripts/deleteoutdatedaws.sh` | CLI: dry-run delete-asset-not-seen |
 | `scripts/e2e-test.sh` | `scripts/e2e-testaws.sh` | E2E smoke + JS-error scanner |
 | `scripts/import.sh` | `scripts/importaws.sh` | CLI: query servers --save (CrowdStrike → backend) |
-| `scripts/sync-workgroup-assets.sh` | `scripts/sync-workgroup-assets-aws.sh` | Python: assign AWS assets through member emails; supports `--dry-run` |
+| `scripts/sync-workgroup-assets.sh` | `scripts/sync-workgroup-assets-aws.sh` | Python: assign AWS assets through canonical workgroup owner emails; supports `--dry-run` |
 | `scripts/release-e2e-test.sh` | `scripts/release-e2e-testaws.sh` | Release lifecycle E2E (REQADMIN) |
 | `scripts/secmancli` | `scripts/secmancliaws.sh` | General-purpose CLI wrapper |
 | `scripts/secmanng` | `scripts/secmanngaws.sh` | CLI wrapper with insecure-SSL flag |

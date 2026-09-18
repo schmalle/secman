@@ -6,6 +6,7 @@ import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.Pattern
 import jakarta.validation.constraints.Size
 import java.time.Instant
@@ -61,6 +62,12 @@ data class Workgroup(
     /** Whether this workgroup contributes to SecMan access and synchronization. */
     @Column(name = "enabled", nullable = false)
     var enabled: Boolean = true,
+
+    /** Canonical business owner imported from the corresponding AD group. */
+    @Column(name = "owner_email", length = 254)
+    @Email(message = "Invalid workgroup owner email format")
+    @Size(max = 254, message = "Workgroup owner email must not exceed 254 characters")
+    var ownerEmail: String? = null,
 
     /**
      * Parent workgroup in the hierarchy

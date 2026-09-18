@@ -133,6 +133,39 @@ class WorkgroupAuthorizationTest {
     }
 
     @Test
+    fun `security champion cannot change canonical workgroup owner`() {
+        val workgroup = workgroup(id = 108L, createdBy = creator, users = mutableSetOf(member))
+        every { workgroupService.getWorkgroupById(108L) } returns workgroup
+
+        val response = controller.updateWorkgroup(
+            108L,
+            UpdateWorkgroupRequest(ownerEmail = "owner@example.com"),
+            auth(member, setOf("SECCHAMPION"))
+        )
+
+        assertEquals(HttpStatus.FORBIDDEN, response.status)
+        verify(exactly = 0) { workgroupService.updateWorkgroup(any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `admin can change canonical workgroup owner`() {
+        val workgroup = workgroup(id = 109L, createdBy = creator, users = mutableSetOf(member))
+        every { workgroupService.getWorkgroupById(109L) } returns workgroup
+        every {
+            workgroupService.updateWorkgroup(109L, null, null, null, null, "owner@example.com")
+        } returns workgroup.copy(ownerEmail = "owner@example.com")
+
+        val response = controller.updateWorkgroup(
+            109L,
+            UpdateWorkgroupRequest(ownerEmail = "owner@example.com"),
+            auth(creator, setOf("ADMIN"))
+        )
+
+        assertEquals(HttpStatus.OK, response.status)
+        verify { workgroupService.updateWorkgroup(109L, null, null, null, null, "owner@example.com") }
+    }
+
+    @Test
     fun `regular member can add accessible assets to accessible workgroup`() {
         val workgroup = workgroup(id = 104L, createdBy = member, users = mutableSetOf(member))
         every { workgroupRepository.findById(104L) } returns Optional.of(workgroup)

@@ -2,10 +2,10 @@
 
 `src/adread/read.py` reads Azure AD groups whose `displayName` starts with `AWS-`
 (case-insensitive) and, optionally, creates matching workgroups in secman with the AD
-group members assigned.
+group owner stored and members assigned.
 
 Its `sync-workgroup-assets` command uses data already stored in SecMan to assign
-AWS assets through direct workgroup members' email ownership. This mode needs no
+AWS assets through each workgroup's canonical AD owner email. This mode needs no
 Azure or AWS credentials. See [the synchronization guide](WORKGROUP_ASSET_SYNC.md)
 for the complete data flow, statistics and removal limitations.
 
@@ -28,7 +28,7 @@ For production secrets in AWS Secrets Manager, use
 ## Prerequisites
 
 - Python 3.11+ with [`uv`](https://docs.astral.sh/uv/)
-- For AD read/import: an Azure service principal with `Group.Read.All` and `GroupMember.Read.All` Graph API permissions
+- For AD read/import: an Azure service principal with `Group.Read.All`, `GroupMember.Read.All`, and `User.Read.All` Graph application permissions
 - For SecMan imports or asset synchronization: a secman **ADMIN** account
 - For the canonical synchronization wrapper: `pass-cli` installed and authenticated,
   and an HTTPS backend whose hostname-valid certificate is trusted by the operating system
@@ -65,7 +65,8 @@ Optional:
 
 - **Group filter:** AD groups are fetched with a server-side `startswith` filter on `AWS-`, `aws-`, and `Aws-`.
 - **Workgroup naming:** The AD group `displayName` is used verbatim as the secman workgroup name. Names longer than 100 characters are skipped with a warning.
-- **Sync mode:** Additive only. Members are added; no members are ever removed. Re-runs are safe and idempotent.
+- **Canonical owner:** The importer reads user owners from Microsoft Graph and stores the normalized `mail` value, falling back to `userPrincipalName`. A group is skipped unless it has exactly one user owner with a valid email address.
+- **Membership import:** Additive only. Members are added; no members are ever removed.
 - **Lazy user creation:** If an AD member's email does not exist in secman, a User row is created automatically (username derived from the email prefix, roles set to `USER, VULN, REQ`). The ADMIN account is required for this to work across email domains.
 - **Error handling:** If one group fails (HTTP error, name too long, etc.) the run continues with the remaining groups and exits non-zero when done so cron/CI notices.
 
@@ -82,11 +83,12 @@ AWS owner mappings and CrowdStrike assets:
 ./scripts/sync-workgroup-assets.sh --dry-run
 ```
 
-With unchanged source data, the final preview reports `relationships_to_add: 0`.
+With unchanged source data, the final preview reports the same replacement counts:
+existing desired links are removed and re-added.
 All enabled workgroups are evaluated, including names without an `AWS-` prefix. Disabled
-workgroups and their members are ignored. Only
-direct members participate. Existing links, including stale automatic links,
-remain because `asset_workgroups` has no manual/automatic source marker.
+workgroups and workgroups without a canonical owner are ignored. Only the stored
+owner email participates. For every participating workgroup, all existing asset
+links—including manual links—are removed before the owner's desired AWS assets are added.
 
 The wrapper resolves the three SecMan variables from Proton Pass and uses the
 operating system certificate store; it does not load the Azure settings or

@@ -27,7 +27,7 @@ Stack: Kotlin 2.4.20 / Java 25 · Micronaut 5.1 · Hibernate JPA · Astro 7.3 / 
 | [ENVIRONMENT.md](./ENVIRONMENT.md) | All env vars (backend / frontend / CLI) |
 | [CLI.md](./CLI.md) | CLI commands, cron, S3, AWS Secrets Manager |
 | [ADREAD.md](./ADREAD.md) | Python AD group/member import and AWS asset synchronization |
-| [WORKGROUP_ASSET_SYNC.md](./WORKGROUP_ASSET_SYNC.md) | Assign AWS assets through workgroup member emails; preview, counters, and preservation semantics |
+| [WORKGROUP_ASSET_SYNC.md](./WORKGROUP_ASSET_SYNC.md) | Replace workgroup assets through canonical owner emails; preview, counters, and destructive semantics |
 | [MCP.md](./MCP.md) | MCP tools, API keys, delegation, troubleshooting |
 | [MCP_REQUIREMENT_MANAGEMENT.md](./MCP_REQUIREMENT_MANAGEMENT.md) | Complete MCP requirement/use-case CRUD, assignment workflow, and Paperclip contract |
 | [MCP_STATISTICS.md](./MCP_STATISTICS.md) | Aggregate estate, scoped vulnerability, and risk-assessment MCP statistics for Paperclip |

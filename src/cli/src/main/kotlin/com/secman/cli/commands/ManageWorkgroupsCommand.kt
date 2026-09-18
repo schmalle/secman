@@ -26,7 +26,7 @@ import jakarta.inject.Singleton
         "AWS owner-email synchronization is available through the separate Python importer:",
         "  ./scripts/sync-workgroup-assets.sh [--dry-run]",
         "AWS Secrets Manager: set SECMAN_AWS_SECRET_ID, then use sync-workgroup-assets-aws.sh.",
-        "Requires ADMIN and verified HTTPS; preserves existing and stale asset links.",
+        "Requires ADMIN and verified HTTPS; replaces all links in participating workgroups.",
         "Run after imports. See docs/WORKGROUP_ASSET_SYNC.md."
     ],
     mixinStandardHelpOptions = true,
