@@ -80,6 +80,13 @@ class LinkWorkgroupAwsAccountsTool(
                     "linked" to summary.linked,
                     "alreadyLinked" to summary.alreadyLinked,
                     "failed" to summary.failed,
+                    "ownersSet" to summary.ownersSet,
+                    "ownersPreserved" to summary.ownersPreserved,
+                    "ownerConflicts" to summary.ownerConflicts,
+                    "membersAdded" to summary.membersAdded,
+                    "assetsRemoved" to summary.assetsRemoved,
+                    "emptyWorkgroups" to summary.emptyWorkgroups,
+                    "disabledWorkgroups" to summary.disabledWorkgroups,
                     "dryRun" to summary.dryRun,
                     // True when more accounts were processed than links[] reports, or more
                     // exist than one run covers — never a silent cap.
@@ -96,7 +103,13 @@ class LinkWorkgroupAwsAccountsTool(
                             "dryRun" to link.dryRun,
                             "skipped" to link.skipped,
                             "skipReason" to link.skipReason,
-                            "error" to link.error
+                            "error" to link.error,
+                            "ownerOutcome" to link.ownerOutcome,
+                            "memberOutcome" to link.memberOutcome,
+                            "assetsRemoved" to link.assetsRemoved,
+                            "emptyMembership" to link.emptyMembership,
+                            "statusOutcome" to link.statusOutcome,
+                            "statusReason" to link.statusReason
                         )
                     }
                 )

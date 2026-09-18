@@ -44,7 +44,9 @@ class LinkWorkgroupAwsAccountsToolTest {
                     workgroupName = "aws-DevOps-x",
                     workgroupId = 42L,
                     workgroupCreated = true,
-                    linked = true
+                    linked = true,
+                    statusOutcome = "ENABLED",
+                    statusReason = "READY"
                 )
             )
         )
@@ -91,11 +93,17 @@ class LinkWorkgroupAwsAccountsToolTest {
         // no-op as a failure.
         assertThat(result["alreadyLinked"]).isEqualTo(1)
         assertThat(result["failed"]).isEqualTo(0)
+        assertThat(result["membersAdded"]).isEqualTo(0)
+        assertThat(result["assetsRemoved"]).isEqualTo(0L)
+        assertThat(result["emptyWorkgroups"]).isEqualTo(0)
+        assertThat(result["disabledWorkgroups"]).isEqualTo(0)
 
         @Suppress("UNCHECKED_CAST")
         val rows = result["links"] as List<Map<String, Any?>>
         assertThat(rows.single()["workgroupName"]).isEqualTo("aws-DevOps-x")
         assertThat(rows.single()["workgroupCreated"]).isEqualTo(true)
+        assertThat(rows.single()["statusOutcome"]).isEqualTo("ENABLED")
+        assertThat(rows.single()["statusReason"]).isEqualTo("READY")
     }
 
     @Test

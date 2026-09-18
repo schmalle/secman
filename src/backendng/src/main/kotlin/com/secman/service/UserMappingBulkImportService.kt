@@ -166,9 +166,10 @@ open class UserMappingBulkImportService(
         requestorUserId: Long?
     ): WorkgroupAccountLinkSummary? {
         val pairs = request.mappings.mapNotNull { entry ->
+            if (!EmailAddressValidator.isValidRecipient(entry.email.trim())) return@mapNotNull null
             val accountId = entry.awsAccountId?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
             val displayName = entry.displayName?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            WorkgroupAccountLinkService.AccountDisplayName(accountId, displayName)
+            WorkgroupAccountLinkService.AccountDisplayName(accountId, displayName, entry.ownerEmail)
         }
         if (pairs.isEmpty()) return null
 

@@ -40,14 +40,16 @@ open class WorkgroupAccountLinkService(
     private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository,
     private val workgroupService: WorkgroupService,
     private val workgroupAwsAccountService: WorkgroupAwsAccountService,
-    private val userMappingRepository: UserMappingRepository
+    private val userMappingRepository: UserMappingRepository,
+    private val reconciliationService: AwsWorkgroupReconciliationService
 ) {
     private val log = LoggerFactory.getLogger(WorkgroupAccountLinkService::class.java)
 
     /** One (account, display name) pair to link. */
     data class AccountDisplayName(
         val awsAccountId: String,
-        val displayName: String
+        val displayName: String,
+        val ownerEmail: String? = null
     )
 
     /**
@@ -75,7 +77,7 @@ open class WorkgroupAccountLinkService(
                 val accountId = pair.awsAccountId.trim()
                 val displayName = pair.displayName.trim()
                 if (accountId.isEmpty() || displayName.isEmpty()) null
-                else AccountDisplayName(accountId, displayName)
+                else AccountDisplayName(accountId, displayName, pair.ownerEmail?.trim()?.lowercase()?.takeIf { it.isNotEmpty() })
             }
             .toCollection(LinkedHashSet())
 
@@ -91,7 +93,16 @@ open class WorkgroupAccountLinkService(
             )
         }
 
-        val results = deduped.take(MAX_PAIRS).map { pair -> linkOne(pair, actorId, dryRun) }
+        val ownersByName = deduped.groupBy { workgroupNameFor(it.displayName).lowercase() }
+            .mapValues { (_, candidates) -> candidates.mapNotNull { it.ownerEmail }.toSet() }
+        val accountsByName = deduped.groupBy { workgroupNameFor(it.displayName).lowercase() }
+            .mapValues { (_, candidates) -> candidates.map { it.awsAccountId }.toSet() }
+        val results = deduped.distinctBy { it.awsAccountId to it.displayName.lowercase() }
+            .take(MAX_PAIRS).map { pair ->
+                val owners = ownersByName.getValue(workgroupNameFor(pair.displayName).lowercase())
+                linkOne(pair.copy(ownerEmail = owners.singleOrNull()), actorId, dryRun, owners.size > 1,
+                    accountsByName.getValue(workgroupNameFor(pair.displayName).lowercase()).size > 1)
+            }
         return summarize(results, dryRun, truncatedInput = capped)
     }
 
@@ -152,8 +163,12 @@ open class WorkgroupAccountLinkService(
     private fun linkOne(
         pair: AccountDisplayName,
         actorId: Long?,
-        dryRun: Boolean
+        dryRun: Boolean,
+        ownerConflict: Boolean = false,
+        accountConflict: Boolean = false
     ): WorkgroupAccountLinkInfo {
+        var ownerOutcome = if (ownerConflict) "CONFLICT" else "NO_CANDIDATE"
+        var reconciliation = AwsWorkgroupReconciliationService.Outcome()
         val workgroupName = workgroupNameFor(pair.displayName)
         val safeDisplayName = UserMappingService.sanitizeForMessage(pair.displayName)
         val safeWorkgroupName = UserMappingService.sanitizeForMessage(workgroupName)
@@ -177,7 +192,13 @@ open class WorkgroupAccountLinkService(
             workgroupCreated = workgroupCreated,
             linked = linked,
             alreadyLinked = alreadyLinked,
-            dryRun = dryRun
+            dryRun = dryRun,
+            ownerOutcome = ownerOutcome,
+            memberOutcome = reconciliation.memberOutcome,
+            assetsRemoved = reconciliation.assetsRemoved,
+            emptyMembership = reconciliation.emptyMembership,
+            statusOutcome = reconciliation.statusOutcome,
+            statusReason = reconciliation.statusReason
         )
 
         fun failure(message: String) = WorkgroupAccountLinkInfo(
@@ -196,11 +217,17 @@ open class WorkgroupAccountLinkService(
         }
 
         validateWorkgroupName(workgroupName)?.let { return failure(it) }
+        if (accountConflict) return failure("Multiple imported accounts target the same workgroup; no workgroup changes made")
+        if (pair.ownerEmail != null && !com.secman.util.EmailAddressValidator.isValidRecipient(pair.ownerEmail)) {
+            return failure("Invalid account owner email")
+        }
 
         return try {
             val existing = workgroupRepository.findByNameIgnoreCase(workgroupName).orElse(null)
 
             if (existing == null && dryRun) {
+                if (pair.ownerEmail != null) ownerOutcome = "WOULD_SET"
+                reconciliation = reconciliationService.reconcile(null, pair.ownerEmail, actorId, true, pair.awsAccountId)
                 // Nothing to look up an assignment against — say what would happen.
                 return result(workgroupCreated = true, linked = true)
             }
@@ -209,25 +236,44 @@ open class WorkgroupAccountLinkService(
             val workgroupId = workgroup.id
                 ?: return failure("Workgroup '$safeWorkgroupName' has no id after creation")
 
+            if (workgroupAwsAccountRepository.findByWorkgroupId(workgroupId).any { it.awsAccountId != pair.awsAccountId }) {
+                return failure("Workgroup has a different AWS account; existing assignments preserved")
+            }
+
+            if (!workgroup.ownerEmail.isNullOrBlank()) {
+                ownerOutcome = "PRESERVED"
+            } else if (pair.ownerEmail != null) {
+                ownerOutcome = if (dryRun) "WOULD_SET" else {
+                    if (workgroupRepository.fillMissingOwner(workgroupId, pair.ownerEmail) > 0) "SET" else "PRESERVED"
+                }
+                log.info("AUDIT: operation=FILL_WORKGROUP_OWNER, actorId={}, workgroupId={}, outcome={}",
+                    actorId, workgroupId, ownerOutcome)
+            }
+
             val alreadyLinked = workgroupAwsAccountRepository
                 .existsByWorkgroupIdAndAwsAccountId(workgroupId, pair.awsAccountId)
 
             if (alreadyLinked) {
+                reconciliation = reconciliationService.reconcile(workgroupId, pair.ownerEmail, actorId, dryRun, pair.awsAccountId)
                 return result(resolvedName = workgroup.name, workgroupId = workgroupId, alreadyLinked = true)
             }
 
             if (dryRun) {
+                reconciliation = reconciliationService.reconcile(workgroupId, pair.ownerEmail, actorId, true, pair.awsAccountId)
                 return result(resolvedName = workgroup.name, workgroupId = workgroupId, linked = true)
             }
 
             try {
-                workgroupAwsAccountService.add(workgroupId, pair.awsAccountId, actorId)
+                workgroupAwsAccountService.addForImport(workgroupId, pair.awsAccountId, actorId)
             } catch (e: DuplicateAccountException) {
                 // Another import linked the same account between the check and the write.
                 // The unique index is the arbiter; the desired end state holds either way.
                 log.debug("AWS account {} was already linked to workgroup {}", pair.awsAccountId, workgroupId)
+                reconciliation = reconciliationService.reconcile(workgroupId, pair.ownerEmail, actorId, false, pair.awsAccountId)
                 return result(resolvedName = workgroup.name, workgroupId = workgroupId, alreadyLinked = true)
             }
+
+            reconciliation = reconciliationService.reconcile(workgroupId, pair.ownerEmail, actorId, false, pair.awsAccountId)
 
             log.info(
                 "AUDIT: operation=LINK_WORKGROUP_ACCOUNT, actorId={}, awsAccountId={}, " +
@@ -246,7 +292,7 @@ open class WorkgroupAccountLinkService(
                 "Failed to link AWS account {} to workgroup {}: {}",
                 pair.awsAccountId, safeWorkgroupName, e.message
             )
-            failure(e.message?.let { UserMappingService.sanitizeForMessage(it) } ?: "Linking failed")
+            failure("Workgroup reconciliation failed; see server log")
         }
     }
 
@@ -306,6 +352,13 @@ open class WorkgroupAccountLinkService(
         linked = results.count { it.linked && it.error == null },
         alreadyLinked = results.count { it.alreadyLinked },
         failed = results.count { it.error != null },
+        ownersSet = results.count { it.ownerOutcome in setOf("SET", "WOULD_SET") },
+        ownersPreserved = results.count { it.ownerOutcome == "PRESERVED" },
+        ownerConflicts = results.count { it.ownerOutcome == "CONFLICT" },
+        membersAdded = results.count { it.memberOutcome in setOf("ADDED", "WOULD_ADD") },
+        assetsRemoved = results.sumOf { it.assetsRemoved },
+        emptyWorkgroups = results.count { it.emptyMembership },
+        disabledWorkgroups = results.count { it.statusReason !in setOf("", "READY") },
         dryRun = dryRun,
         links = results.take(MAX_REPORTED_LINKS),
         truncated = truncatedInput || results.size > MAX_REPORTED_LINKS

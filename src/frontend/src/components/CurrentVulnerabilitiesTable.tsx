@@ -35,10 +35,16 @@ import ExceptionRequestModal from "./ExceptionRequestModal";
 import CveLink from "./CveLink";
 import { isAdmin, hasRole, hasVulnAccess } from "../utils/auth";
 import SearchableSelect from "./SearchableSelect";
+import { scrollContainerStyle, stickyHeaderCellStyle } from "./scrollableTableStyles";
 import {
   buildVulnerabilityExportFilters,
   describeExportScope,
 } from "./currentVulnerabilitiesExportFilters";
+
+interface CurrentVulnerabilitiesTableProps {
+  /** Removes duplicate page padding when this view is hosted inside Analytics. */
+  embedded?: boolean;
+}
 
 function formatDuration(totalSec: number): string {
   if (totalSec < 60) return `${totalSec}s`;
@@ -50,7 +56,9 @@ function formatDuration(totalSec: number): string {
   return mr > 0 ? `${h}h ${mr}m` : `${h}h`;
 }
 
-const CurrentVulnerabilitiesTable: React.FC = () => {
+const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = ({
+  embedded = false,
+}) => {
   const [paginatedResponse, setPaginatedResponse] =
     useState<PaginatedVulnerabilitiesResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,6 +94,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
   const [cveFilter, setCveFilter] = useState<string>("");
   const [debouncedCveFilter, setDebouncedCveFilter] = useState<string>("");
   const cveFilterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const [adDomainFilter, setAdDomainFilter] = useState<string>("");
   const [cloudAccountIdFilter, setCloudAccountIdFilter] = useState<string>("");
 
@@ -524,7 +533,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
 
   const handlePageChange = (newPage: number) => {
     setCurrentPage(newPage);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    tableScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const renderPagination = () => {
@@ -542,7 +551,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
 
     if (totalExact === false) {
       return (
-        <div className="d-flex justify-content-between align-items-center mt-4">
+        <div className="d-flex justify-content-between align-items-center mt-3 flex-shrink-0">
           <div className="text-muted">
             Showing {startItem} to {endItem} of {totalLabel} vulnerabilities
           </div>
@@ -591,7 +600,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     }
 
     return (
-      <div className="d-flex justify-content-between align-items-center mt-4">
+      <div className="d-flex justify-content-between align-items-center mt-3 flex-shrink-0">
         <div className="text-muted">
           Showing {startItem} to {endItem} of {totalLabel} vulnerabilities
         </div>
@@ -702,11 +711,18 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
   const totalCount = paginatedResponse?.totalElements || 0;
 
   return (
-    <div className="container-fluid p-4">
-      <div className="row">
+    <div
+      className={`container-fluid d-flex flex-column ${embedded ? "p-0" : "p-4"}`}
+      style={{
+        height: embedded ? "100%" : "calc(100dvh - 9.5rem)",
+        minHeight: 0,
+        overflow: "hidden",
+      }}
+    >
+      <div className="row flex-shrink-0">
         <div className="col-12">
-          <div className="d-flex justify-content-between align-items-center mb-4">
-            <h2>
+          <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h2 className={embedded ? "h4 mb-0" : "mb-0"}>
               <i className="bi bi-shield-exclamation me-2"></i>
               Current Vulnerabilities
             </h2>
@@ -895,7 +911,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
       )}
 
       {/* Filters */}
-      <div className="row mb-4">
+      <div className="row g-2 mb-2 flex-shrink-0">
         <div className="col-md-3">
           <label htmlFor="severityFilter" className="form-label">
             Severity
@@ -985,7 +1001,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
       </div>
 
       {/* Second row of filters */}
-      <div className="row mb-4">
+      <div className="row g-2 mb-3 flex-shrink-0">
         <div className="col-md-3">
           <label htmlFor="cveFilter" className="form-label">
             <i className="bi bi-search me-2"></i>
@@ -1094,11 +1110,11 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
       </div>
 
       {/* Table */}
-      <div className="row">
-        <div className="col-12">
-          <div className="card">
-            <div className="card-body">
-              <h5 className="card-title">
+      <div className="row flex-grow-1" style={{ minHeight: 0 }}>
+        <div className="col-12 h-100">
+          <div className="card h-100">
+            <div className="card-body d-flex flex-column" style={{ minHeight: 0, overflow: "hidden" }}>
+              <h5 className="card-title flex-shrink-0">
                 Vulnerabilities ({totalCount}
                 {exceptionFilter === "not_excepted" && " not excepted"}
                 {exceptionFilter === "excepted" && " excepted"}
@@ -1121,37 +1137,44 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                 </p>
               ) : (
                 <>
-                  <div className="table-responsive">
-                    <table className="table table-striped table-hover">
-                      <thead>
+                  <div
+                    ref={tableScrollRef}
+                    className="table-responsive flex-grow-1"
+                    style={scrollContainerStyle}
+                  >
+                    <table
+                      className="table table-striped table-hover"
+                      style={{ borderCollapse: "separate", borderSpacing: 0 }}
+                    >
+                      <thead className="table-light">
                         <tr>
                           <th
                             onClick={() => handleSort("assetName")}
-                            style={{ cursor: "pointer" }}
+                            style={{ ...stickyHeaderCellStyle, cursor: "pointer" }}
                           >
                             System
                             <SortIcon field="assetName" />
                           </th>
                           <th
                             onClick={() => handleSort("assetIp")}
-                            style={{ cursor: "pointer" }}
+                            style={{ ...stickyHeaderCellStyle, cursor: "pointer" }}
                           >
                             IP
                             <SortIcon field="assetIp" />
                           </th>
-                          <th>
+                          <th style={stickyHeaderCellStyle}>
                             Instance ID
                           </th>
                           <th
                             onClick={() => handleSort("vulnerabilityId")}
-                            style={{ cursor: "pointer" }}
+                            style={{ ...stickyHeaderCellStyle, cursor: "pointer" }}
                           >
                             CVE/Finding
                             <SortIcon field="vulnerabilityId" />
                           </th>
                           <th
                             onClick={() => handleSort("cvssSeverity")}
-                            style={{ cursor: "pointer" }}
+                            style={{ ...stickyHeaderCellStyle, cursor: "pointer" }}
                           >
                             Severity
                             <SortIcon field="cvssSeverity" />
@@ -1160,20 +1183,20 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                             onClick={() =>
                               handleSort("vulnerableProductVersions")
                             }
-                            style={{ cursor: "pointer" }}
+                            style={{ ...stickyHeaderCellStyle, cursor: "pointer" }}
                           >
                             Product
                             <SortIcon field="vulnerableProductVersions" />
                           </th>
                           <th
                             onClick={() => handleSort("daysOpen")}
-                            style={{ cursor: "pointer" }}
+                            style={{ ...stickyHeaderCellStyle, cursor: "pointer" }}
                           >
                             Open
                             <SortIcon field="daysOpen" />
                           </th>
-                          <th>Overdue Status</th>
-                          <th>Actions</th>
+                          <th style={stickyHeaderCellStyle}>Overdue Status</th>
+                          <th style={stickyHeaderCellStyle}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1279,14 +1302,16 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
       </div>
 
       {/* Back to Home button */}
-      <div className="row mt-4">
-        <div className="col-12">
-          <a href="/" className="btn btn-secondary">
-            <i className="bi bi-house me-2"></i>
-            Back to Home
-          </a>
+      {!embedded && (
+        <div className="row mt-3 flex-shrink-0">
+          <div className="col-12">
+            <a href="/" className="btn btn-secondary">
+              <i className="bi bi-house me-2"></i>
+              Back to Home
+            </a>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Exception Request Modal */}
       {selectedVulnerability && (

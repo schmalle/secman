@@ -58,7 +58,10 @@ data class BulkUserMappingEntry(
      * workgroup named "aws-<displayName>". Null or blank means neither happens —
      * which is why every pre-existing caller (Excel, plain CSV) is unaffected.
      */
-    val displayName: String? = null
+    val displayName: String? = null,
+    /** Explicit account owner, never inferred from an AWS root mailbox. */
+    @field:jakarta.validation.constraints.Email
+    val ownerEmail: String? = null
 )
 
 @Serdeable

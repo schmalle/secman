@@ -49,7 +49,10 @@ import jakarta.inject.Singleton
 @Singleton
 @Command(
     name = "import",
-    description = ["Batch import user mappings from CSV or JSON file"],
+    description = ["Batch import user mappings from CSV or JSON file",
+        "AWS display-name workgroups use one account and no direct assets. Matching existing account owners are added as members.",
+        "Ready workgroups are enabled on import, overriding manual disables; incomplete groups stay disabled and safety limits apply.",
+        "Invalid cov:owner values fall back to a valid top-level email for mapping only, never for ownership."],
     mixinStandardHelpOptions = true,
     // Worked examples in --help, because that is the documentation operators actually read.
     footer = [
@@ -512,7 +515,7 @@ class ImportCommand(
             println()
 
             // Exit status
-            if (result.errors.isNotEmpty()) {
+            if (result.errors.isNotEmpty() || linkFailures > 0) {
                 if (dryRun) {
                     println("✗ Validation failed (dry-run)")
                 } else {
@@ -535,12 +538,6 @@ class ImportCommand(
                     // entries carrying an `error`, never a `skipped`.
                     if (onboardingFailures > 0) {
                         println("⚠️  $onboardingFailures account(s) could not be onboarded")
-                        System.exit(1)
-                    }
-                    // Same rule as the two blocks above: only genuine errors, never the
-                    // idempotent "already linked" no-ops, affect the exit status.
-                    if (linkFailures > 0) {
-                        println("⚠️  $linkFailures account(s) could not be linked to a workgroup")
                         System.exit(1)
                     }
                 }

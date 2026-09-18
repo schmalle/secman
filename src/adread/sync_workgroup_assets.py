@@ -97,6 +97,9 @@ def index_owners(workgroups: list, plan: SyncPlan) -> dict[str, set[int]]:
     if not enabled:
       log.info("Skipping disabled workgroup_id=%d", gid)
       continue
+    if group.get("awsAccountManaged") is True:
+      log.info("Skipping AWS-managed workgroup_id=%d: access uses the linked account", gid)
+      continue
     plan.workgroups_evaluated += 1
     raw_owner = group.get("ownerEmail")
     if raw_owner is None or raw_owner == "":

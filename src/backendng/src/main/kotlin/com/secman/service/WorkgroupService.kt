@@ -319,6 +319,8 @@ open class WorkgroupService(
             IllegalArgumentException("Workgroup not found: $workgroupId")
         }
 
+        workgroup.requireDirectAssetAssignmentAllowed()
+
         assetIds.forEach { assetId ->
             // Feature 073: Use findByIdWithWorkgroups() to load workgroups with LAZY loading
             val asset = assetRepository.findByIdWithWorkgroups(assetId).orElseThrow {

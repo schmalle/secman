@@ -203,7 +203,8 @@ class ImportUserMappingsToolTest {
                     mapOf(
                         "email" to "alice@corp.com",
                         "awsAccountId" to "111111111111",
-                        "displayName" to "  DevOps-x  "
+                        "displayName" to "  DevOps-x  ",
+                        "ownerEmail" to "  owner@example.test  "
                     )
                 )
             ),
@@ -211,6 +212,7 @@ class ImportUserMappingsToolTest {
         )
 
         assertThat(request.captured.mappings.single().displayName).isEqualTo("DevOps-x")
+        assertThat(request.captured.mappings.single().ownerEmail).isEqualTo("owner@example.test")
     }
 
     @Test

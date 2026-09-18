@@ -112,41 +112,51 @@ const AnalyticsTabs: React.FC = () => {
   };
 
   return (
-    <div className="container-fluid py-4">
-      <p className="scand-label mb-2">Vulnerability Management · Analyze</p>
-      <h1 className="mb-2">Analytics</h1>
-      <p className="text-secondary mb-4">
-        One destination for the analysis views that used to be separate entries in the rail.
-      </p>
+    <div
+      className="container-fluid py-3 d-flex flex-column"
+      style={{ height: 'calc(100dvh - 9.5rem)', minHeight: 0, overflow: 'hidden' }}
+    >
+      <div className="flex-shrink-0">
+        <p className="scand-label mb-1">Vulnerability Management · Analyze</p>
+        <h1 className="mb-1">Analytics</h1>
+        <p className="text-secondary mb-2">
+          One destination for the analysis views that used to be separate entries in the rail.
+        </p>
 
-      <div className="d-flex flex-wrap align-items-center gap-3 mb-4">
-        <div className="btn-group" role="tablist" aria-label="Analysis view">
-          {visibleTabs.map((tab) => {
-            const selected = tab.id === active;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                className={`btn ${selected ? 'btn-primary' : 'btn-outline-dark'}`}
-                onClick={() => selectTab(tab.id)}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+        <div className="d-flex flex-wrap align-items-center gap-3 mb-3">
+          <div className="btn-group" role="tablist" aria-label="Analysis view">
+            {visibleTabs.map((tab) => {
+              const selected = tab.id === active;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  className={`btn ${selected ? 'btn-primary' : 'btn-outline-dark'}`}
+                  onClick={() => selectTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+          {visibleTabs.some((tab) => tab.id === active) && (
+            <a className="small" href={TABS.find((tab) => tab.id === active)!.standalone}>
+              Open this view on its own page
+            </a>
+          )}
         </div>
-        {visibleTabs.some((tab) => tab.id === active) && (
-          <a className="small" href={TABS.find((tab) => tab.id === active)!.standalone}>
-            Open this view on its own page
-          </a>
-        )}
       </div>
 
-      {active === 'overview' && <CurrentVulnerabilitiesTable />}
-      {active === 'lense' && <VulnerabilityStatisticsPage />}
-      {active === 'heatmap' && <VulnerabilityHeatmap />}
+      <div
+        className={`flex-grow-1 ${active === 'overview' ? '' : 'overflow-auto'}`}
+        style={{ minHeight: 0 }}
+      >
+        {active === 'overview' && <CurrentVulnerabilitiesTable embedded />}
+        {active === 'lense' && <VulnerabilityStatisticsPage />}
+        {active === 'heatmap' && <VulnerabilityHeatmap />}
+      </div>
     </div>
   );
 };

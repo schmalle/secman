@@ -577,13 +577,21 @@ class UserMappingCliService(
 
             log.info("Processing ${mappingsData.size} entries")
 
-            mappingsData.forEach { mapping ->
-                // Prefer vars["cov:owner"] (real owner email) over top-level "email"
+            mappingsData.forEachIndexed { index, mapping ->
+                // Only a valid explicit owner can grant ownership; the root email is a mapping fallback.
                 @Suppress("UNCHECKED_CAST")
                 val vars = mapping["vars"] as? Map<String, Any>
                 val covOwner = vars?.get("cov:owner")?.toString()?.trim()
+                val validOwner = covOwner?.takeIf { validator.validateEmail(it) }
                 val rawEmail = (mapping["email"] ?: mapping["Email"]) as? String
-                val email = if (!covOwner.isNullOrBlank()) covOwner else rawEmail
+                val email = validOwner ?: rawEmail
+                if (!covOwner.isNullOrBlank() && validOwner == null &&
+                    rawEmail != null && validator.validateEmail(rawEmail.trim())) {
+                    val accountId = mapping["account_id"]?.toString()?.trim()
+                        ?.takeIf { validator.validateAwsAccountId(it) } ?: "not supplied or invalid"
+                    log.warn("JSON record {} (account_id={}): invalid cov:owner; using top-level email for mapping only, ownerEmail unset",
+                        index + 1, accountId)
+                }
 
                 // Account display name (Cloud Custodian `display_name`). Linked to the
                 // workgroup "aws-<display_name>" by the backend; see
@@ -598,7 +606,7 @@ class UserMappingCliService(
 
                 if (email.isNullOrBlank()) {
                     errors.add("Missing or invalid email field")
-                    return@forEach
+                    return@forEachIndexed
                 }
 
                 // Process domains
@@ -625,7 +633,8 @@ class UserMappingCliService(
                             mapOf(
                                 "email" to email.trim(),
                                 "awsAccountId" to accountStr.trim(),
-                                "displayName" to displayName
+                                "displayName" to displayName,
+                                "ownerEmail" to validOwner?.lowercase()
                             )
                         )
                     }
@@ -675,6 +684,7 @@ class UserMappingCliService(
                     // missing display name as "no linking", which is what keeps plain
                     // mapping files behaving exactly as they did.
                     (entry["displayName"] as? String)?.let { put("displayName", it) }
+                    (entry["ownerEmail"] as? String)?.let { put("ownerEmail", it) }
                 }
             })
             put("dryRun", dryRun)
@@ -1027,6 +1037,12 @@ class UserMappingCliService(
                 displayName = it["displayName"]?.toString() ?: "",
                 workgroupName = it["workgroupName"]?.toString() ?: "",
                 workgroupId = (it["workgroupId"] as? Number)?.toLong(),
+                ownerOutcome = it["ownerOutcome"]?.toString() ?: "NO_CANDIDATE",
+                memberOutcome = it["memberOutcome"]?.toString() ?: "NO_MATCH",
+                assetsRemoved = (it["assetsRemoved"] as? Number)?.toLong() ?: 0,
+                emptyMembership = it["emptyMembership"] as? Boolean ?: false,
+                statusOutcome = it["statusOutcome"]?.toString() ?: "NOT_EVALUATED",
+                statusReason = it["statusReason"]?.toString() ?: "",
                 workgroupCreated = (it["workgroupCreated"] as? Boolean) ?: false,
                 linked = (it["linked"] as? Boolean) ?: false,
                 alreadyLinked = (it["alreadyLinked"] as? Boolean) ?: false,
@@ -1036,6 +1052,13 @@ class UserMappingCliService(
         } ?: emptyList()
 
         return CliWorkgroupLinkSummary(
+            ownersSet = (body["ownersSet"] as? Number)?.toInt() ?: 0,
+            ownersPreserved = (body["ownersPreserved"] as? Number)?.toInt() ?: 0,
+            ownerConflicts = (body["ownerConflicts"] as? Number)?.toInt() ?: 0,
+            membersAdded = (body["membersAdded"] as? Number)?.toInt() ?: 0,
+            assetsRemoved = (body["assetsRemoved"] as? Number)?.toLong() ?: 0,
+            emptyWorkgroups = (body["emptyWorkgroups"] as? Number)?.toInt() ?: 0,
+            disabledWorkgroups = (body["disabledWorkgroups"] as? Number)?.toInt() ?: 0,
             processed = (body["processed"] as? Number)?.toInt() ?: 0,
             workgroupsCreated = (body["workgroupsCreated"] as? Number)?.toInt() ?: 0,
             linked = (body["linked"] as? Number)?.toInt() ?: 0,
@@ -1165,6 +1188,13 @@ data class MappingResult(
  * exist than one run covers — printed so a capped run never reads as a complete one.
  */
 data class CliWorkgroupLinkSummary(
+    val ownersSet: Int = 0,
+    val ownersPreserved: Int = 0,
+    val ownerConflicts: Int = 0,
+    val membersAdded: Int = 0,
+    val assetsRemoved: Long = 0,
+    val emptyWorkgroups: Int = 0,
+    val disabledWorkgroups: Int = 0,
     val processed: Int = 0,
     val workgroupsCreated: Int = 0,
     val linked: Int = 0,
@@ -1185,7 +1215,13 @@ data class CliWorkgroupLink(
     val linked: Boolean = false,
     val alreadyLinked: Boolean = false,
     val dryRun: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val ownerOutcome: String = "NO_CANDIDATE",
+    val memberOutcome: String = "NO_MATCH",
+    val assetsRemoved: Long = 0,
+    val emptyMembership: Boolean = false,
+    val statusOutcome: String = "NOT_EVALUATED",
+    val statusReason: String = ""
 )
 
 /**

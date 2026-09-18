@@ -1,11 +1,14 @@
 package com.secman.service
 
 import com.secman.domain.User
+import com.secman.domain.Workgroup
 import com.secman.domain.WorkgroupAwsAccount
 import com.secman.repository.UserRepository
 import com.secman.repository.WorkgroupAwsAccountRepository
 import com.secman.repository.WorkgroupRepository
 import jakarta.inject.Singleton
+import jakarta.persistence.EntityManager
+import jakarta.persistence.LockModeType
 import jakarta.transaction.Transactional
 import org.slf4j.LoggerFactory
 
@@ -20,10 +23,22 @@ import org.slf4j.LoggerFactory
 open class WorkgroupAwsAccountService(
     private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository,
     private val workgroupRepository: WorkgroupRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val entityManager: EntityManager
 ) {
     private val logger = LoggerFactory.getLogger(WorkgroupAwsAccountService::class.java)
     private val accountIdPattern = Regex("^\\d{12}$")
+
+    @Transactional
+    open fun addForImport(workgroupId: Long, awsAccountId: String, actorId: Long?): WorkgroupAwsAccount {
+        val workgroup = entityManager.find(Workgroup::class.java, workgroupId, LockModeType.PESSIMISTIC_WRITE)
+            ?: throw IllegalArgumentException("Workgroup not found: $workgroupId")
+        require(workgroupAwsAccountRepository.findByWorkgroupId(workgroupId).none { it.awsAccountId != awsAccountId }) {
+            "Workgroup has a different AWS account; existing assignments preserved"
+        }
+        workgroup.awsAccountManaged = true
+        return add(workgroupId, awsAccountId, actorId)
+    }
 
     /**
      * List all AWS accounts assigned to the given workgroup.
@@ -54,9 +69,8 @@ open class WorkgroupAwsAccountService(
             "AWS Account ID must be exactly 12 numeric digits (got '$awsAccountId')"
         }
 
-        val workgroup = workgroupRepository.findById(workgroupId).orElseThrow {
-            IllegalArgumentException("Workgroup not found: $workgroupId")
-        }
+        val workgroup = entityManager.find(Workgroup::class.java, workgroupId, LockModeType.PESSIMISTIC_WRITE)
+            ?: throw IllegalArgumentException("Workgroup not found: $workgroupId")
         val actor: User? = actorId?.let {
             userRepository.findById(it).orElseThrow {
                 IllegalArgumentException("Actor user not found: $actorId")
@@ -67,6 +81,10 @@ open class WorkgroupAwsAccountService(
             throw DuplicateAccountException(
                 "AWS account $awsAccountId is already assigned to workgroup $workgroupId"
             )
+        }
+
+        require(!workgroup.awsAccountManaged || workgroupAwsAccountRepository.countByWorkgroupId(workgroupId) == 0L) {
+            "AWS-managed workgroups may have only one AWS account"
         }
 
         val entity = WorkgroupAwsAccount(

@@ -21,6 +21,16 @@ class CatchAllWorkgroupSafetyServiceTest {
     private val service = CatchAllWorkgroupSafetyService(settingsRepository, workgroupRepository, publisher)
 
     @Test
+    fun `import eligibility respects default and configured threshold inclusively`() {
+        every { settingsRepository.findFirstSettings() } returns Optional.empty()
+        assertFalse(service.exceedsMembershipLimit(99))
+        assertEquals(true, service.exceedsMembershipLimit(100))
+        every { settingsRepository.findFirstSettings() } returns Optional.of(AppSettings(catchAllWorkgroupUserThreshold = 2))
+        assertFalse(service.exceedsMembershipLimit(1))
+        assertEquals(true, service.exceedsMembershipLimit(2))
+    }
+
+    @Test
     fun `qualifying enabled workgroup is disabled and access cache is invalidated`() {
         val workgroup = Workgroup(id = 42L, name = "catch-all")
         every { settingsRepository.findFirstSettings() } returns Optional.of(AppSettings(catchAllWorkgroupUserThreshold = 100))

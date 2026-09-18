@@ -131,17 +131,21 @@ class S3DownloadService {
             }
 
         } catch (e: NoSuchBucketException) {
-            throw S3DownloadException("Bucket '$bucket' does not exist or is not accessible")
+            throw S3DownloadException(
+                "Bucket '$bucket' does not exist or is not accessible\n${formatS3Diagnostics(e)}"
+            )
         } catch (e: NoSuchKeyException) {
-            throw S3DownloadException("File 's3://$bucket/$key' not found")
+            throw S3DownloadException(
+                "File 's3://$bucket/$key' not found\n${formatS3Diagnostics(e)}"
+            )
         } catch (e: S3Exception) {
             if (e.statusCode() == 403) {
                 throw S3DownloadException(
                     "Access denied. Check IAM permissions for bucket '$bucket'. " +
-                    "Required permission: s3:GetObject"
+                    "Required permission: s3:GetObject\n${formatS3Diagnostics(e)}"
                 )
             }
-            throw S3DownloadException("S3 error: ${e.awsErrorDetails()?.errorMessage() ?: e.message}")
+            throw S3DownloadException(formatS3Diagnostics(e))
         } catch (e: SdkClientException) {
             val message = e.message ?: "Unknown error"
             when {
@@ -197,7 +201,7 @@ class S3DownloadService {
         // Configure credentials provider (explicit > profile > default chain)
         when {
             accessKeyId != null && secretAccessKey != null -> {
-                log.debug("Using explicit AWS credentials (access key ID: ${accessKeyId.take(4)}...)")
+                log.debug("Using explicit AWS credentials")
                 // ASIA prefix = temporary STS credentials; session token is mandatory
                 if (accessKeyId.startsWith("ASIA") && sessionToken == null) {
                     throw S3DownloadException(
@@ -257,6 +261,29 @@ class S3DownloadService {
                 .build()
         )
         return headResponse.contentLength()
+    }
+
+    internal fun formatS3Diagnostics(exception: S3Exception): String {
+        val details = exception.awsErrorDetails()
+        val response = details?.sdkHttpResponse()
+
+        return buildString {
+            append("S3 request failed")
+            append("\n  HTTP status: ").append(exception.statusCode())
+            append("\n  AWS error code: ").append(safeDiagnosticValue(details?.errorCode()))
+            append("\n  AWS message: ").append(safeDiagnosticValue(details?.errorMessage()))
+            append("\n  Request ID: ").append(safeDiagnosticValue(exception.requestId()))
+            append("\n  x-amz-bucket-region: ").append(
+                safeDiagnosticValue(
+                    response?.firstMatchingHeader("x-amz-bucket-region")?.orElse(null)
+                )
+            )
+        }
+    }
+
+    private fun safeDiagnosticValue(value: String?): String {
+        if (value.isNullOrBlank()) return "<not provided>"
+        return value.replace(Regex("[\\r\\n\\t]"), " ").take(1024)
     }
 
     /**

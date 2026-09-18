@@ -69,6 +69,10 @@ data class Workgroup(
     @Size(max = 254, message = "Workgroup owner email must not exceed 254 characters")
     var ownerEmail: String? = null,
 
+    /** Reconciled by the AWS mapping importer; access is through its account, not asset links. */
+    @Column(name = "aws_account_managed", nullable = false)
+    var awsAccountManaged: Boolean = false,
+
     /**
      * Parent workgroup in the hierarchy
      * Feature 040: Nested Workgroups
@@ -150,6 +154,10 @@ data class Workgroup(
     @Column(name = "updated_at")
     var updatedAt: Instant? = null
 ) {
+    fun requireDirectAssetAssignmentAllowed() {
+        require(!awsAccountManaged) { "AWS-managed workgroups use account access and cannot have direct assets" }
+    }
+
     @PrePersist
     fun onCreate() {
         val now = Instant.now()

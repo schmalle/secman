@@ -329,7 +329,7 @@ class SecmanClient:
       workgroup = self._workgroup_cache.get(name.lower())
       if workgroup is not None:
         wg_id = workgroup["id"]
-        if normalize_email(workgroup.get("ownerEmail")) != owner_email:
+        if owner_email and normalize_email(workgroup.get("ownerEmail")) != owner_email:
           update = self._session.put(
             f"{self.base}/api/workgroups/{wg_id}",
             json={"ownerEmail": owner_email},
@@ -544,20 +544,24 @@ def main(argv=None):
       "&$top=999"
     )
 
+    owner_email = None
     try:
       owners = graph_get_all(graph_session, owners_url, token_provider)
-    except Exception as exc:
-      log.error("FAILED to read owner of group '%s': %s — skipping", group_name, exc)
-      failed_groups.append(group_name)
-      continue
-
-    try:
       owner_email = canonical_owner_email(owners)
-    except ValueError as exc:
-      log.error("Group '%s' has no unambiguous canonical owner: %s — skipping", group_name, exc)
-      failed_groups.append(group_name)
-      continue
-    total_owners += 1
+    except Exception as exc:
+      log.warning("Owner unresolved for group '%s': %s — continuing without owner", group_name, exc)
+    if owner_email:
+      total_owners += 1
+
+    # Ensure the group independently of owner and member lookup success.
+    wg_id = None
+    if secman is not None:
+      try:
+        wg_id = secman.ensure_workgroup(group_name, owner_email)
+      except Exception as exc:
+        log.error("FAILED to ensure group '%s': %s", group_name, exc)
+        failed_groups.append(group_name)
+        continue
 
     members_url = (
       f"{GRAPH_BASE}/groups/{group_id}/members/microsoft.graph.user"
@@ -599,7 +603,6 @@ def main(argv=None):
 
     if secman is not None:
       try:
-        wg_id = secman.ensure_workgroup(group_name, owner_email)
         secman.add_members(wg_id, emails)
       except ValueError as exc:
         log.warning("SKIP group '%s': %s", group_name, exc)

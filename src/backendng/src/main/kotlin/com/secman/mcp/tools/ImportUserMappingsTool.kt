@@ -77,6 +77,10 @@ class ImportUserMappingsTool(
                             "description" to "AWS account display name (optional). Stored on the " +
                                 "mapping and used to link the account to the workgroup named " +
                                 "'aws-<displayName>', creating that workgroup if it does not exist."
+                        ),
+                        "ownerEmail" to mapOf(
+                            "type" to "string",
+                            "description" to "Explicit account owner email, not the AWS root email. Fills an empty workgroup owner and enrolls a matching existing SecMan user."
                         )
                     ),
                     "required" to listOf("email")
@@ -166,7 +170,8 @@ class ImportUserMappingsTool(
                     email = (entry["email"] as? String)?.trim().orEmpty(),
                     awsAccountId = (entry["awsAccountId"] as? String)?.trim()?.takeIf { it.isNotBlank() },
                     domain = (entry["domain"] as? String)?.trim()?.takeIf { it.isNotBlank() },
-                    displayName = (entry["displayName"] as? String)?.trim()?.takeIf { it.isNotBlank() }
+                    displayName = (entry["displayName"] as? String)?.trim()?.takeIf { it.isNotBlank() },
+                    ownerEmail = (entry["ownerEmail"] as? String)?.trim()?.takeIf { it.isNotBlank() }
                 )
             },
             dryRun = arguments["dryRun"] as? Boolean ?: false,
@@ -240,6 +245,13 @@ class ImportUserMappingsTool(
                             "linked" to links.linked,
                             "alreadyLinked" to links.alreadyLinked,
                             "failed" to links.failed,
+                            "ownersSet" to links.ownersSet,
+                            "ownersPreserved" to links.ownersPreserved,
+                            "ownerConflicts" to links.ownerConflicts,
+                            "membersAdded" to links.membersAdded,
+                            "assetsRemoved" to links.assetsRemoved,
+                            "emptyWorkgroups" to links.emptyWorkgroups,
+                            "disabledWorkgroups" to links.disabledWorkgroups,
                             "dryRun" to links.dryRun,
                             "truncated" to links.truncated,
                             "links" to links.links.map { link ->
@@ -252,7 +264,13 @@ class ImportUserMappingsTool(
                                     "linked" to link.linked,
                                     "alreadyLinked" to link.alreadyLinked,
                                     "dryRun" to link.dryRun,
-                                    "error" to link.error
+                                    "error" to link.error,
+                                    "ownerOutcome" to link.ownerOutcome,
+                                    "memberOutcome" to link.memberOutcome,
+                                    "assetsRemoved" to link.assetsRemoved,
+                                    "emptyMembership" to link.emptyMembership,
+                                    "statusOutcome" to link.statusOutcome,
+                                    "statusReason" to link.statusReason
                                 )
                             }
                         )
