@@ -7,6 +7,7 @@ import VulnerabilityHistory from './VulnerabilityHistory';
 import { BulkDeleteConfirmModal } from './BulkDeleteConfirmModal';
 import { bulkDeleteAssets, type BulkDeleteResult } from '../services/assetService';
 import { exportVulnerabilitiesServerSide, cancelExportJob, type ExportJob } from '../services/vulnerabilityManagementService';
+import { scrollContainerStyle, stickyHeaderCellStyle } from './scrollableTableStyles';
 
 interface WorkgroupSummary {
   id: number;
@@ -507,7 +508,12 @@ const AssetManagement: React.FC = () => {
   }
 
   return (
-    <div className="container-fluid p-4">
+    <div
+      className="container-fluid p-4 d-flex flex-column"
+      style={showForm
+        ? { minHeight: 0 }
+        : { height: 'calc(100dvh - 9.5rem)', minHeight: 0, overflow: 'hidden' }}
+    >
       <div className="row">
         <div className="col-12">
           <div className="d-flex justify-content-between align-items-center mb-4">
@@ -810,7 +816,7 @@ const AssetManagement: React.FC = () => {
       )}
 
       {/* Filters */}
-      <div className="row mb-4">
+      <div className="row mb-3 flex-shrink-0">
         <div className="col-12">
           <div className="card">
             <div className="card-body">
@@ -922,11 +928,11 @@ const AssetManagement: React.FC = () => {
         </div>
       </div>
 
-      <div className="row">
-        <div className="col-12">
-          <div className="card">
-            <div className="card-body">
-              <h5 className="card-title">Assets ({filteredAssets.length})</h5>
+      <div className="row flex-grow-1" style={{ minHeight: 0 }}>
+        <div className="col-12 h-100">
+          <div className="card h-100">
+            <div className="card-body d-flex flex-column" style={{ minHeight: 0, overflow: 'hidden' }}>
+              <h5 className="card-title flex-shrink-0">Assets ({filteredAssets.length})</h5>
               {filteredAssets.length === 0 ? (
                 <p className="text-muted">
                   {assets.length === 0
@@ -934,18 +940,18 @@ const AssetManagement: React.FC = () => {
                     : 'No assets match the current filters.'}
                 </p>
               ) : (
-                <div className="table-responsive">
-                  <table className="table table-striped table-hover">
-                    <thead>
+                <div className="table-responsive flex-grow-1" style={scrollContainerStyle}>
+                  <table className="table table-striped table-hover" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+                    <thead className="table-light">
                       <tr>
-                        <th>Name</th>
-                        <th>IP Address</th>
-                        <th>URI</th>
-                        <th>Instance ID</th>
-                        <th>Account ID</th>
-                        <th>AD Domain</th>
-                        <th>OS</th>
-                        <th>Actions</th>
+                        <th style={stickyHeaderCellStyle}>Name</th>
+                        <th style={stickyHeaderCellStyle}>IP Address</th>
+                        <th style={stickyHeaderCellStyle}>URI</th>
+                        <th style={stickyHeaderCellStyle}>Instance ID</th>
+                        <th style={stickyHeaderCellStyle}>Account ID</th>
+                        <th style={stickyHeaderCellStyle}>AD Domain</th>
+                        <th style={stickyHeaderCellStyle}>OS</th>
+                        <th style={stickyHeaderCellStyle}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1030,7 +1036,7 @@ const AssetManagement: React.FC = () => {
       </div>
 
       {/* Back to Home button */}
-      <div className="row mt-4">
+      <div className="row mt-3 flex-shrink-0">
         <div className="col-12">
           <a href="/" className="btn btn-secondary">Back to Home</a>
         </div>
