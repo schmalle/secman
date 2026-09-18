@@ -59,7 +59,9 @@ import jakarta.inject.Singleton
     description = [
         "Import user mappings from AWS S3 bucket. " +
             "Use --send-email to email statistics to ADMIN/REPORT users " +
-            "after a successful import."
+            "after a successful import. AWS display-name workgroups use one account and no direct assets; matching existing owners become members. " +
+            "Ready workgroups are enabled on import, overriding manual disables; incomplete groups stay disabled and safety limits apply. " +
+            "Invalid cov:owner values fall back to a valid top-level email for mapping only, never for ownership."
     ],
     mixinStandardHelpOptions = true
 )
@@ -504,8 +506,9 @@ class ImportS3Command(
                 sendStatisticsEmail(backendUrl, token, dryRun, result, "s3://$effectiveBucket/$effectiveKey")
             }
 
+            val linkFailures = WorkgroupLinkPrinter.print(result.workgroupLinks)
             // Exit status (T019-T022: cron-friendly exit codes)
-            if (result.errors.isNotEmpty()) {
+            if (result.errors.isNotEmpty() || linkFailures > 0) {
                 if (dryRun) {
                     println("Validation failed (dry-run)")
                 } else {

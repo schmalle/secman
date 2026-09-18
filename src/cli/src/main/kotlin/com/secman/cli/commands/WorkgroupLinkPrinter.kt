@@ -13,8 +13,8 @@ object WorkgroupLinkPrinter {
 
     /**
      * Returns the number of accounts that failed to link — the caller's exit-status
-     * input. Accounts reported as `alreadyLinked` are idempotent no-ops and never
-     * count as failures.
+     * input. An existing link is not a failure, but its workgroup can still be
+     * incomplete after status reconciliation.
      */
     fun print(summary: CliWorkgroupLinkSummary?): Int {
         if (summary == null) return 0
@@ -26,6 +26,13 @@ object WorkgroupLinkPrinter {
             println("Workgroup linking:")
         }
         println("  Accounts processed: ${summary.processed}")
+        println("  Owner assignments${if (summary.dryRun) " planned" else ""}: ${summary.ownersSet}")
+        println("  Existing owners preserved: ${summary.ownersPreserved}")
+        println("  Owner conflicts: ${summary.ownerConflicts}")
+        println("  Owner memberships${if (summary.dryRun) " planned" else " added"}: ${summary.membersAdded}")
+        println("  Direct asset links${if (summary.dryRun) " to remove" else " removed"}: ${summary.assetsRemoved}")
+        println("  Empty workgroups (disabled; membership unresolved): ${summary.emptyWorkgroups}")
+        println("  Workgroups disabled or incomplete${if (summary.dryRun) " (planned)" else ""}: ${summary.disabledWorkgroups}")
         if (summary.workgroupsCreated > 0) {
             val verb = if (summary.dryRun) "would be created" else "created"
             println("  Workgroups $verb:  ${summary.workgroupsCreated}")
@@ -41,6 +48,9 @@ object WorkgroupLinkPrinter {
 
         summary.links.forEach { link ->
             val where = "${link.awsAccountId}  ->  ${link.workgroupName}"
+            if (link.ownerOutcome != "NO_CANDIDATE") println("  Owner: $where: ${link.ownerOutcome}")
+            println("  Membership: $where: ${link.memberOutcome}; direct asset links removed${if (link.dryRun) " (planned)" else ""}: ${link.assetsRemoved}")
+            if (link.statusOutcome != "NOT_EVALUATED") println("  Status: $where: ${link.statusOutcome} (${link.statusReason})")
             when {
                 link.error != null -> println("  ❌ $where: ${link.error}")
                 link.alreadyLinked -> println("  ⏭️  $where: already linked")
@@ -60,6 +70,6 @@ object WorkgroupLinkPrinter {
             )
         }
 
-        return summary.failed
+        return summary.failed + summary.ownerConflicts + maxOf(summary.emptyWorkgroups, summary.disabledWorkgroups)
     }
 }

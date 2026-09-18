@@ -36,6 +36,26 @@ class ImportCommandTest {
     }
 
     @Test
+    fun `rendered help explains account only workgroup reconciliation`() {
+        val output = java.io.StringWriter()
+        picocli.CommandLine(ImportCommand(service)).usage(java.io.PrintWriter(output))
+        assertThat(output.toString()).contains("no direct assets", "added as members", "Ready workgroups", "overriding manual disables")
+        assertThat(output.toString().replace(Regex("\\s+"), " "))
+            .contains("Invalid cov:owner values fall back", "never for ownership")
+    }
+
+    @Test
+    fun `S3 and correction help explain managed status ownership`() {
+        val commands = listOf(ImportS3Command(io.mockk.mockk(), service), LinkWorkgroupsCommand(service))
+        for (command in commands) {
+            val output = java.io.StringWriter()
+            picocli.CommandLine(command).usage(java.io.PrintWriter(output))
+            val rendered = output.toString().replace(Regex("\\s+"), " ")
+            assertThat(rendered).contains("overriding manual disables", "safety limits apply")
+        }
+    }
+
+    @Test
     fun `createnotify without notify-address is rejected`() {
         assertThat(cmd(createnotify = true, notifyAddress = null).validateNotifyOptions()).isNotNull()
     }

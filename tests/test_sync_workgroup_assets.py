@@ -84,6 +84,13 @@ class FixtureClient:
 
 
 class MatchingTests(unittest.TestCase):
+  def test_aws_managed_group_is_not_repopulated_but_manual_group_is_unchanged(self):
+    managed = {**workgroup(1, "aws-DevOps-test", "a@example.com"), "awsAccountManaged": True}
+    manual = workgroup(2, "aws-manual", "a@example.com")
+    plan = build_plan([managed, manual], [mapping()], [asset(groups=(1, 2))])
+    self.assertEqual({2: [10]}, plan.additions)
+    self.assertEqual({2: [10]}, plan.removals)
+
   def plan(self, **kwargs):
     client = FixtureClient(**kwargs)
     return build_plan(client.groups, client.mappings, client.assets)
@@ -279,6 +286,15 @@ class TransportTests(unittest.TestCase):
       self.assertFalse(session.put.call_args.kwargs["allow_redirects"])
       self.assertNotIn("owner@example.com", " ".join(logs.output))
 
+  def test_unresolved_ad_owner_preserves_existing_owner(self):
+    with patch.object(read.requests, "Session") as factory:
+      session = factory.return_value
+      session.post.return_value = Mock(status_code=409)
+      session.get.return_value = Mock(json=lambda: [{"id": 7, "name": "AWS-X", "ownerEmail": "owner@example.com"}])
+      client = read.SecmanClient("https://secman.example", "operator", secrets.token_urlsafe())
+      self.assertEqual(7, client.ensure_workgroup("AWS-X", None))
+      session.put.assert_not_called()
+
   def test_disabled_workgroups_are_not_hydrated_or_written(self):
     linked = asset(groups=(1,))
     client = FixtureClient(assets=[linked])
@@ -418,6 +434,25 @@ class TransportTests(unittest.TestCase):
 
 
 class CommandTests(unittest.TestCase):
+  def test_ad_import_continues_when_owner_lookup_fails(self):
+    groups = [{"id": "123e4567-e89b-12d3-a456-426614174000", "displayName": "AWS-X"}]
+    config = {"AZURE_TENANT_ID": "tenant", "AZURE_CLIENT_ID": "client",
+              "AZURE_CLIENT_SECRET": secrets.token_urlsafe(),
+              "SECMAN_BACKEND_URL": "https://secman.example",
+              "SECMAN_ADMIN_NAME": "operator", "SECMAN_ADMIN_PASS": secrets.token_urlsafe()}
+    for owners in ([], RuntimeError("Owner lookup failed")):
+      with self.subTest(owners=type(owners).__name__):
+        secman = Mock()
+        secman.ensure_workgroup.return_value = 7
+        with patch.dict(os.environ, config, clear=True), \
+             patch.object(read, "GraphTokenProvider"), \
+             patch.object(read, "SecmanClient", return_value=secman), \
+             patch.object(read, "graph_get_all", side_effect=[groups, owners, []]), \
+             redirect_stdout(io.StringIO()):
+          read.main(["--import"])
+        secman.ensure_workgroup.assert_called_once_with("AWS-X", None)
+        secman.add_members.assert_called_once_with(7, [])
+
   def test_ad_import_reads_and_persists_canonical_group_owner(self):
     group_id = "123e4567-e89b-12d3-a456-426614174000"
     groups = [{"id": group_id, "displayName": "AWS-X", "mail": "aws-x@example.com"}]

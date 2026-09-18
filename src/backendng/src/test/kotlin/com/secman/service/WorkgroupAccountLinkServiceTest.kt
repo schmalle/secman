@@ -29,6 +29,7 @@ class WorkgroupAccountLinkServiceTest {
     private val workgroupService = mockk<WorkgroupService>()
     private val workgroupAwsAccountService = mockk<WorkgroupAwsAccountService>()
     private val userMappingRepository = mockk<UserMappingRepository>()
+    private val reconciliationService = mockk<AwsWorkgroupReconciliationService>()
 
     private lateinit var service: WorkgroupAccountLinkService
 
@@ -36,12 +37,15 @@ class WorkgroupAccountLinkServiceTest {
 
     @BeforeEach
     fun setUp() {
+        every { workgroupAwsAccountRepository.findByWorkgroupId(any()) } returns emptyList()
+        every { reconciliationService.reconcile(any(), any(), any(), any(), any()) } returns AwsWorkgroupReconciliationService.Outcome()
         service = WorkgroupAccountLinkService(
             workgroupRepository,
             workgroupAwsAccountRepository,
             workgroupService,
             workgroupAwsAccountService,
-            userMappingRepository
+            userMappingRepository,
+            reconciliationService
         )
     }
 
@@ -61,11 +65,86 @@ class WorkgroupAccountLinkServiceTest {
 
     private fun notYetLinked() {
         every { workgroupAwsAccountRepository.existsByWorkgroupIdAndAwsAccountId(any(), any()) } returns false
-        every { workgroupAwsAccountService.add(any(), any(), any()) } returns
+        every { workgroupAwsAccountService.addForImport(any(), any(), any()) } returns
             mockk<WorkgroupAwsAccount>(relaxed = true)
     }
 
     // --- Naming rule ---
+
+    @Test
+    fun `already linked groups still reconcile membership and assets`() {
+        existingWorkgroup("aws-DevOps-x")
+        every { workgroupAwsAccountRepository.existsByWorkgroupIdAndAwsAccountId(any(), any()) } returns true
+        every { workgroupRepository.fillMissingOwner(any(), any()) } returns 1
+        every { reconciliationService.reconcile(42L, "owner@example.com", 7L, false, ACCOUNT) } returns
+            AwsWorkgroupReconciliationService.Outcome("ADDED", 12, false, "ENABLED", "READY")
+        val summary = service.link(listOf(pair().copy(ownerEmail = " OWNER@example.com ")), 7L, false)
+        assertThat(summary.membersAdded).isEqualTo(1)
+        assertThat(summary.assetsRemoved).isEqualTo(12)
+        assertThat(summary.alreadyLinked).isEqualTo(1)
+        assertThat(summary.links.single().statusOutcome).isEqualTo("ENABLED")
+        assertThat(summary.links.single().statusReason).isEqualTo("READY")
+    }
+
+    @Test
+    fun `different stored account is reported without changing relationships`() {
+        existingWorkgroup("aws-DevOps-x")
+        every { workgroupAwsAccountRepository.findByWorkgroupId(42L) } returns listOf(
+            WorkgroupAwsAccount(workgroup = workgroup(42L, "aws-DevOps-x"), awsAccountId = "000000000002", createdBy = null))
+        val summary = service.link(listOf(pair()), 7L, false)
+        assertThat(summary.failed).isEqualTo(1)
+        verify(exactly = 0) { reconciliationService.reconcile(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { workgroupAwsAccountService.addForImport(any(), any(), any()) }
+    }
+
+    @Test
+    fun `multiple imported accounts for the same name are rejected before writes`() {
+        val summary = service.link(listOf(pair(), pair(accountId = "000000000002", displayName = "devops-X")), 7L, false)
+        assertThat(summary.failed).isEqualTo(2)
+        verify(exactly = 0) { workgroupRepository.findByNameIgnoreCase(any()) }
+    }
+
+    @Test
+    fun `fills owner even when account already linked and delegates status reconciliation`() {
+        val group = workgroup(42L, "aws-DevOps-x").apply { enabled = false }
+        every { workgroupRepository.findByNameIgnoreCase(any()) } returns Optional.of(group)
+        every { workgroupAwsAccountRepository.existsByWorkgroupIdAndAwsAccountId(any(), any()) } returns true
+        every { workgroupRepository.fillMissingOwner(42L, "owner@example.com") } returns 1
+        val result = service.link(listOf(pair().copy(ownerEmail = " Owner@Example.com ")), 1L, false)
+        assertThat(result.links.single().ownerOutcome).isEqualTo("SET")
+        verify { reconciliationService.reconcile(42L, "owner@example.com", 1L, false, ACCOUNT) }
+        verify(exactly = 1) { workgroupRepository.fillMissingOwner(42L, "owner@example.com") }
+    }
+
+    @Test
+    fun `conflicting owners do not prevent account linking or choose an owner`() {
+        existingWorkgroup("aws-DevOps-x")
+        notYetLinked()
+        val result = service.link(listOf(pair().copy(ownerEmail = "a@example.com"),
+            pair().copy(ownerEmail = "b@example.com")), 1L, false)
+        assertThat(result.links.single().ownerOutcome).isEqualTo("CONFLICT")
+        assertThat(result.linked).isEqualTo(1)
+        verify(exactly = 0) { workgroupRepository.fillMissingOwner(any(), any()) }
+    }
+
+    @Test
+    fun `owner dry run makes no owner writes`() {
+        existingWorkgroup("aws-DevOps-x")
+        notYetLinked()
+        val result = service.link(listOf(pair().copy(ownerEmail = "a@example.com")), 1L, true)
+        assertThat(result.links.single().ownerOutcome).isEqualTo("WOULD_SET")
+        verify(exactly = 0) { workgroupRepository.fillMissingOwner(any(), any()) }
+    }
+
+    @Test
+    fun `existing owner is preserved`() {
+        val group = workgroup(42L, "aws-DevOps-x").apply { ownerEmail = "ad@example.com" }
+        every { workgroupRepository.findByNameIgnoreCase(any()) } returns Optional.of(group)
+        notYetLinked()
+        val result = service.link(listOf(pair().copy(ownerEmail = "a@example.com")), 1L, false)
+        assertThat(result.links.single().ownerOutcome).isEqualTo("PRESERVED")
+        verify(exactly = 0) { workgroupRepository.fillMissingOwner(any(), any()) }
+    }
 
     @Test
     fun `the workgroup name is the display name with the aws prefix`() {
@@ -86,7 +165,7 @@ class WorkgroupAccountLinkServiceTest {
         assertThat(lookedUpName.captured).isEqualTo("aws-devops-X")
 
         verify(exactly = 0) { workgroupService.createWorkgroup(any(), any(), any(), any()) }
-        verify { workgroupAwsAccountService.add(42L, ACCOUNT, 7L) }
+        verify { workgroupAwsAccountService.addForImport(42L, ACCOUNT, 7L) }
         assertThat(summary.linked).isEqualTo(1)
         assertThat(summary.workgroupsCreated).isZero()
         // The stored name is reported, not the one derived from the file's casing.
@@ -105,7 +184,7 @@ class WorkgroupAccountLinkServiceTest {
         val createdName = slot<String>()
         verify { workgroupService.createWorkgroup(capture(createdName), any(), any(), 7L) }
         assertThat(createdName.captured).isEqualTo("aws-DevOps-x")
-        verify { workgroupAwsAccountService.add(99L, ACCOUNT, 7L) }
+        verify { workgroupAwsAccountService.addForImport(99L, ACCOUNT, 7L) }
         assertThat(summary.workgroupsCreated).isEqualTo(1)
         assertThat(summary.linked).isEqualTo(1)
         assertThat(summary.links.single().workgroupCreated).isTrue
@@ -118,7 +197,7 @@ class WorkgroupAccountLinkServiceTest {
 
         val summary = service.link(listOf(pair()), actorId = 7L, dryRun = false)
 
-        verify(exactly = 0) { workgroupAwsAccountService.add(any(), any(), any()) }
+        verify(exactly = 0) { workgroupAwsAccountService.addForImport(any(), any(), any()) }
         assertThat(summary.alreadyLinked).isEqualTo(1)
         assertThat(summary.linked).isZero()
         assertThat(summary.failed).isZero()
@@ -128,7 +207,7 @@ class WorkgroupAccountLinkServiceTest {
     fun `losing the race to another import counts as already linked`() {
         existingWorkgroup("aws-DevOps-x")
         every { workgroupAwsAccountRepository.existsByWorkgroupIdAndAwsAccountId(any(), any()) } returns false
-        every { workgroupAwsAccountService.add(any(), any(), any()) } throws
+        every { workgroupAwsAccountService.addForImport(any(), any(), any()) } throws
             DuplicateAccountException("already assigned")
 
         val summary = service.link(listOf(pair()), actorId = 7L, dryRun = false)
@@ -150,7 +229,7 @@ class WorkgroupAccountLinkServiceTest {
 
         val summary = service.link(listOf(pair()), actorId = 7L, dryRun = false)
 
-        verify { workgroupAwsAccountService.add(77L, ACCOUNT, 7L) }
+        verify { workgroupAwsAccountService.addForImport(77L, ACCOUNT, 7L) }
         assertThat(summary.failed).isZero()
         assertThat(summary.linked).isEqualTo(1)
     }
@@ -167,7 +246,7 @@ class WorkgroupAccountLinkServiceTest {
         )
 
         verify(exactly = 0) { workgroupService.createWorkgroup(any(), any(), any(), any()) }
-        verify(exactly = 0) { workgroupAwsAccountService.add(any(), any(), any()) }
+        verify(exactly = 0) { workgroupAwsAccountService.addForImport(any(), any(), any()) }
         assertThat(summary.failed).isEqualTo(1)
         assertThat(summary.links.single().error).contains("letters, numbers, spaces and hyphens")
     }
@@ -236,7 +315,7 @@ class WorkgroupAccountLinkServiceTest {
         )
 
         assertThat(summary.processed).isEqualTo(1)
-        verify(exactly = 1) { workgroupAwsAccountService.add(any(), any(), any()) }
+        verify(exactly = 1) { workgroupAwsAccountService.addForImport(any(), any(), any()) }
     }
 
     @Test
@@ -246,7 +325,7 @@ class WorkgroupAccountLinkServiceTest {
         val summary = service.link(listOf(pair()), actorId = 7L, dryRun = true)
 
         verify(exactly = 0) { workgroupService.createWorkgroup(any(), any(), any(), any()) }
-        verify(exactly = 0) { workgroupAwsAccountService.add(any(), any(), any()) }
+        verify(exactly = 0) { workgroupAwsAccountService.addForImport(any(), any(), any()) }
         assertThat(summary.dryRun).isTrue
         assertThat(summary.workgroupsCreated).isEqualTo(1)  // what *would* be created
         assertThat(summary.links.single().dryRun).isTrue
@@ -275,7 +354,7 @@ class WorkgroupAccountLinkServiceTest {
 
         val summary = service.linkFromStoredMappings(actorId = 7L, dryRun = false)
 
-        verify { workgroupAwsAccountService.add(42L, ACCOUNT, 7L) }
+        verify { workgroupAwsAccountService.addForImport(42L, ACCOUNT, 7L) }
         assertThat(summary.linked).isEqualTo(1)
     }
 

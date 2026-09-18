@@ -50,6 +50,13 @@ open class CatchAllWorkgroupSafetyService(
     private fun currentThreshold(): Int =
         appSettingsRepository.findFirstSettings().orElse(null)?.catchAllWorkgroupUserThreshold ?: DEFAULT_THRESHOLD
 
+    /** Shared by import previews and writes; never bypass the configured safety limit. */
+    open fun exceedsMembershipLimit(userCount: Long): Boolean {
+        val threshold = currentThreshold()
+        validateThreshold(threshold)
+        return userCount >= threshold
+    }
+
     private fun disableQualifying(userCounts: Map<Long, Long>, threshold: Int, actor: String): Set<Long> {
         val disabledIds = userCounts.mapNotNullTo(mutableSetOf()) { (id, count) ->
             if (count < threshold) return@mapNotNullTo null

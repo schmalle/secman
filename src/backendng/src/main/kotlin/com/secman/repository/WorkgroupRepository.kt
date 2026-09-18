@@ -13,6 +13,10 @@ import java.util.Optional
 @Repository
 interface WorkgroupRepository : JpaRepository<Workgroup, Long> {
 
+    @jakarta.transaction.Transactional
+    @io.micronaut.data.annotation.Query("UPDATE Workgroup w SET w.ownerEmail = :email WHERE w.id = :id AND (w.ownerEmail IS NULL OR TRIM(w.ownerEmail) = '')")
+    fun fillMissingOwner(id: Long, email: String): Int
+
     /**
      * Check if a workgroup with the given name exists (case-insensitive)
      * Used for duplicate detection per FR-004, FR-006
@@ -126,6 +130,12 @@ interface WorkgroupRepository : JpaRepository<Workgroup, Long> {
 
     @io.micronaut.data.annotation.Query("SELECT COUNT(u) FROM Workgroup w LEFT JOIN w.users u WHERE w.id = :workgroupId")
     fun countUsersByWorkgroupId(workgroupId: Long): Long
+
+    @io.micronaut.data.annotation.Query("SELECT COUNT(a) FROM Workgroup w JOIN w.assets a WHERE w.id = :workgroupId")
+    fun countAssetsByWorkgroupId(workgroupId: Long): Long
+
+    @io.micronaut.data.annotation.Query(value = "DELETE FROM asset_workgroups WHERE workgroup_id = :workgroupId", nativeQuery = true)
+    fun removeDirectAssetLinks(workgroupId: Long): Int
 
     @io.micronaut.data.annotation.Query("SELECT w.id, COUNT(a) FROM Workgroup w JOIN w.assets a GROUP BY w.id")
     fun countAssetsPerWorkgroup(): List<Array<Any>>

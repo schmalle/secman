@@ -258,6 +258,7 @@ open class AssetImportService(
         for (name in names) {
             val workgroup = workgroupRepository.findByNameIgnoreCase(name).orElse(null)
             if (workgroup != null) {
+                workgroup.requireDirectAssetAssignmentAllowed()
                 workgroups.add(workgroup)
             } else {
                 log.warn("Workgroup not found: '{}', skipping", name)

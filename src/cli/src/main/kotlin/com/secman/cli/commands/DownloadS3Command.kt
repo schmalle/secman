@@ -187,15 +187,15 @@ class DownloadS3Command(
             val resolvedAccessKeyId = awsAccessKeyId ?: System.getenv("AWS_ACCESS_KEY_ID")
             val resolvedSecretAccessKey = awsSecretAccessKey ?: System.getenv("AWS_SECRET_ACCESS_KEY")
             val resolvedSessionToken = awsSessionToken ?: System.getenv("AWS_SESSION_TOKEN")
+            val resolvedRegion = resolveAwsRegion()
 
             if (!quiet) {
-                if (awsRegion != null) println("AWS Region: $awsRegion")
+                println("AWS Region: ${resolvedRegion ?: "SDK default chain"}")
                 if (awsProfile != null) println("AWS Profile: $awsProfile")
                 if (resolvedEndpointUrl != null) println("S3 Endpoint: $resolvedEndpointUrl")
                 println(
                     "AWS Credentials: " + when {
-                        resolvedAccessKeyId != null ->
-                            "explicit (access key ${resolvedAccessKeyId.take(4)}...)"
+                        resolvedAccessKeyId != null -> "explicit"
                         awsProfile != null -> "profile '$awsProfile'"
                         else -> "default chain (env/config/IAM)"
                     }
@@ -207,7 +207,7 @@ class DownloadS3Command(
             tempFilePath = s3DownloadService.downloadToTempFile(
                 bucket = bucket,
                 key = key,
-                region = awsRegion,
+                region = resolvedRegion,
                 profile = awsProfile,
                 accessKeyId = resolvedAccessKeyId,
                 secretAccessKey = resolvedSecretAccessKey,
@@ -246,13 +246,6 @@ class DownloadS3Command(
         } catch (e: S3DownloadException) {
             System.err.println()
             System.err.println("ERROR: ${e.message}")
-            System.err.println()
-            System.err.println(
-                "Usage: manage-user-mappings download-s3 --bucket <bucket-name> " +
-                    "--key <object-key> --output <file>"
-            )
-            System.err.println("  The --bucket value must be a plain S3 bucket name (e.g. 'my-bucket'),")
-            System.err.println("  not a URL or ARN.")
             System.exit(2)
         } catch (e: IllegalArgumentException) {
             System.err.println()
@@ -266,5 +259,15 @@ class DownloadS3Command(
         } finally {
             s3DownloadService.cleanupTempFile(tempFilePath)
         }
+    }
+
+    internal fun resolveAwsRegion(environment: Map<String, String> = System.getenv()): String? {
+        val region = awsRegion ?: environment["AWS_REGION"] ?: environment["AWS_DEFAULT_REGION"]
+        if (region != null && !region.matches(Regex("^[a-z0-9-]{1,64}$"))) {
+            throw IllegalArgumentException(
+                "AWS region must contain only lowercase letters, numbers, and hyphens"
+            )
+        }
+        return region
     }
 }

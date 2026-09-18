@@ -34,7 +34,8 @@ import picocli.CommandLine.*
     description = [
         "Link AWS accounts to the workgroup named after their display name " +
             "(aws-<display name>), creating missing workgroups. Corrects mappings " +
-            "imported before display names were captured."
+            "imported before display names were captured. Removes direct asset links from matched workgroups; conflicting accounts are reported. " +
+            "Ready workgroups are enabled on import, overriding manual disables; incomplete groups stay disabled and safety limits apply."
     ],
     mixinStandardHelpOptions = true,
     footer = [
@@ -47,7 +48,7 @@ import picocli.CommandLine.*
         "  secman manage-user-mappings link-workgroups",
         "",
         "Exit codes: 0 success (accounts already linked are NOT failures) -",
-        "1 one or more accounts could not be linked.",
+        "1 workgroup reconciliation failed or a workgroup remains disabled/incomplete.",
         ""
     ]
 )

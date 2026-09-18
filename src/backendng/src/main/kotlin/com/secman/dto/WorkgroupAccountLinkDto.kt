@@ -10,8 +10,8 @@ import io.micronaut.serde.annotation.Serdeable
  * the REST response — renders all of them by one rule:
  *
  * - **done**    — [error] null, [skipped] false. [linked] true when a new assignment
- *                 was made, [alreadyLinked] true when it already existed (an idempotent
- *                 no-op). [workgroupCreated] says whether the workgroup itself had to be
+ *                 was made, [alreadyLinked] true when it already existed (membership
+ *                 and status are still reconciled). [workgroupCreated] says whether the workgroup itself had to be
  *                 created for this account.
  * - **skipped** — [skipped] true and [skipReason] set. Not a failure; callers must not
  *                 let these drive a non-zero exit status.
@@ -34,7 +34,13 @@ data class WorkgroupAccountLinkInfo(
     val dryRun: Boolean = false,
     val skipped: Boolean = false,
     val skipReason: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val ownerOutcome: String = "NO_CANDIDATE",
+    val memberOutcome: String = "NO_MATCH",
+    val assetsRemoved: Long = 0,
+    val emptyMembership: Boolean = false,
+    val statusOutcome: String = "NOT_EVALUATED",
+    val statusReason: String = ""
 )
 
 /**
@@ -54,7 +60,14 @@ data class WorkgroupAccountLinkSummary(
     val failed: Int = 0,
     val dryRun: Boolean = false,
     val links: List<WorkgroupAccountLinkInfo> = emptyList(),
-    val truncated: Boolean = false
+    val truncated: Boolean = false,
+    val ownersSet: Int = 0,
+    val ownersPreserved: Int = 0,
+    val ownerConflicts: Int = 0,
+    val membersAdded: Int = 0,
+    val assetsRemoved: Long = 0,
+    val emptyWorkgroups: Int = 0,
+    val disabledWorkgroups: Int = 0
 )
 
 /**

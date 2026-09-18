@@ -494,7 +494,7 @@ cloud_custodian_json() {
     local file="$1"; shift
     local entries="[]"
     while [[ $# -ge 2 ]]; do
-        entries=$(jq -c --arg a "$1" --arg d "$2" --arg o "${E2E_PREFIX}$(echo "$2" | tr '[:upper:]' '[:lower:]')-owner@e2e.local" \
+        entries=$(jq -c --arg a "$1" --arg d "$2" --arg o "$PLAIN_EMAIL" \
             '. + [{account_id:$a, email:("aws-root-" + $a + "@e2e.local"), display_name:$d,
                    name:$a, org_id:"o-e2e00000001", status:"ACTIVE",
                    vars:{"cov:owner":$o}}]' <<<"$entries")
@@ -563,8 +563,8 @@ phase_fixture_dryrun() {
     phase "1. Shipped testdata fixtures (dry run)"
 
     # docs/AWS_ACCOUNT_WORKGROUP_LINKING.md documents this exact outcome for the
-    # sample: 4 pairs, 3 linkable across 2 workgroups, and Data_Platform.01 as an
-    # error because "_" and "." are outside Workgroup.name's charset.
+    # sample: 4 pairs, one linkable; two conflicting accounts share a display
+    # name, and Data_Platform.01 is an invalid workgroup name.
     FIXTURE_MAPPINGS_BEFORE="$(fixture_mapping_count)"
     FIXTURE_WORKGROUPS_BEFORE="$(fixture_workgroup_count)"
 
@@ -579,12 +579,11 @@ phase_fixture_dryrun() {
     linked=$(cli_link_field "$out" "Accounts (would be )?linked")
 
     assert_eq "$processed" "4" "JSON fixture: 4 (account, display name) pairs processed"
-    assert_eq "$failed" "1" "JSON fixture: Data_Platform.01 reported as the single error"
+    assert_eq "$failed" "3" "JSON fixture: two conflicting accounts plus the invalid name"
 
-    # linked + alreadyLinked == 3, because an environment that already has an
-    # aws-DevOps-beta workgroup reports those rows as alreadyLinked instead.
+    # An existing assignment can be reported as alreadyLinked instead.
     already=$(cli_link_field "$out" "Already linked")
-    assert_eq "$(( linked + already ))" "3" "JSON fixture: 3 accounts linkable"
+    assert_eq "$(( linked + already ))" "1" "JSON fixture: one account linkable"
 
     # A dry run must not CHANGE anything — which is not the same as "nothing is
     # there afterwards". These fixtures carry fixed account ids and the linking doc
@@ -600,7 +599,7 @@ phase_fixture_dryrun() {
     # The CSV fixture is the same data in the CLI dialect and must agree.
     out=$(run_cli manage-user-mappings import -f "$FIXTURES/mappings-with-display-name.csv" --dry-run)
     assert_eq "$(cli_link_field "$out" "Accounts processed")" "4" "CSV fixture: 4 pairs processed (DOMAIN row is not a candidate)"
-    assert_eq "$(cli_link_field "$out" "Failed")" "1" "CSV fixture: same single error row"
+    assert_eq "$(cli_link_field "$out" "Failed")" "3" "CSV fixture: same conflicts and invalid name"
 }
 
 # =============================================================================
@@ -610,12 +609,11 @@ phase_fixture_dryrun() {
 phase_cli_json_import() {
     phase "2. CLI import — Cloud Custodian JSON with display_name"
 
-    # Two accounts, two display names, one of them shared by neither — plus a
-    # second account on the SAME display name, which must land in one workgroup.
+    # Each account needs its own group; the shared-name conflict is tested above.
     cloud_custodian_json "$WORK_DIR/accounts.json" \
         "$ACC_JSON_A" "$DN_ALPHA" \
         "$ACC_JSON_B" "$DN_BETA" \
-        "$ACC_XSURFACE" "$DN_BETA"
+        "$ACC_XSURFACE" "${DN_BETA}Other"
 
     local out
     out=$(run_cli manage-user-mappings import -f "$WORK_DIR/accounts.json")
@@ -623,7 +621,7 @@ phase_cli_json_import() {
 
     assert_linked "$ACC_JSON_A" "$DN_ALPHA" "CLI JSON"
     assert_linked "$ACC_JSON_B" "$DN_BETA" "CLI JSON"
-    assert_linked "$ACC_XSURFACE" "$DN_BETA" "CLI JSON (two accounts share one display name)"
+    assert_linked "$ACC_XSURFACE" "${DN_BETA}Other" "CLI JSON (one account per group)"
 
     # The display name must be persisted, or the correction path in phase 9 has
     # nothing to work from.
@@ -643,7 +641,7 @@ phase_cli_csv_import() {
 
     local out
     out=$(run_cli manage-user-mappings import -f "$WORK_DIR/mappings.csv")
-    assert_eq "$CLI_RC" "0" "CLI CSV import exited 0"
+    assert_eq "$CLI_RC" "1" "CLI CSV reports incomplete membership without an explicit owner"
 
     assert_linked "$ACC_CLI_CSV" "$DN_CSV" "CLI CSV"
     assert_eq "$(cli_link_field "$out" "Accounts processed")" "1" "DOMAIN row with blank display name is not a link candidate"
@@ -824,7 +822,7 @@ phase_cross_surface() {
         cli_csv "$WORK_DIR/xsurface.csv" "$ACC_BULK" "$DN_BULK"
         local out
         out=$(run_cli manage-user-mappings import -f "$WORK_DIR/xsurface.csv")
-        assert_eq "$CLI_RC" "0" "CLI re-import of an already-linked account exits 0"
+        assert_eq "$CLI_RC" "1" "CLI re-import reports the still-empty group"
         assert_eq "$(cli_link_field "$out" "Accounts processed")" "1" "CLI re-import agrees on processed"
         assert_eq "$(cli_link_field "$out" "Failed")" "0" "CLI re-import reports no failure for alreadyLinked"
     fi
@@ -853,7 +851,7 @@ phase_correction_path() {
         # Dry run first: it must report the work without doing any of it.
         local out
         out=$(run_cli manage-user-mappings link-workgroups --dry-run)
-        assert_eq "$CLI_RC" "0" "link-workgroups --dry-run exited 0"
+        assert_eq "$CLI_RC" "1" "link-workgroups dry-run reports empty fixture groups"
         if workgroup_has_account "$wg_id" "$ACC_JSON_A"; then
             log_fail "link-workgroups --dry-run actually created the assignment"
         else
@@ -861,12 +859,12 @@ phase_correction_path() {
         fi
 
         out=$(run_cli manage-user-mappings link-workgroups)
-        assert_eq "$CLI_RC" "0" "link-workgroups exited 0"
+        assert_eq "$CLI_RC" "1" "link-workgroups reports empty fixture groups"
         assert_linked "$ACC_JSON_A" "$DN_ALPHA" "CLI link-workgroups (from stored names, no file)"
 
         # Second run: everything is alreadyLinked, and that must not be a failure.
         out=$(run_cli manage-user-mappings link-workgroups)
-        assert_eq "$CLI_RC" "0" "link-workgroups is idempotent — alreadyLinked never fails the run"
+        assert_eq "$CLI_RC" "1" "link-workgroups repeats the incomplete membership report"
         assert_eq "$(cli_link_field "$out" "Accounts linked")" "0" "second link-workgroups run linked nothing new"
     fi
 
@@ -939,6 +937,10 @@ phase_rule9_visibility() {
 
     api POST "/api/workgroups/${RULE9_WG_ID}/users" "$(jq -nc --argjson u "[$VIEWER_ID]" '{userIds:$u}')" >/dev/null
     [[ "$(api_status)" =~ ^20 ]] || { log_fail "Could not add viewer to workgroup (HTTP $(api_status))"; return; }
+
+    # An ownerless import starts disabled; membership does not silently enable it.
+    api PUT "/api/workgroups/${RULE9_WG_ID}" '{"enabled":true}' >/dev/null
+    [[ "$(api_status)" =~ ^20 ]] || { log_fail "Could not enable populated rule-9 workgroup"; return; }
 
     assert_eq "$(viewer_sees_rule9_asset)" "1" "Member of a workgroup holding the account: asset IS visible"
 }

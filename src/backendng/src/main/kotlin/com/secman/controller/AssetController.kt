@@ -589,6 +589,7 @@ open class AssetController(
                 }
 
                 // Update workgroup assignments
+                workgroups.forEach { it.requireDirectAssetAssignmentAllowed() }
                 asset.workgroups.clear()
                 asset.workgroups.addAll(workgroups)
             }

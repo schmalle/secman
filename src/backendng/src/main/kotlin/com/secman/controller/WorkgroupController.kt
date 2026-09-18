@@ -222,6 +222,7 @@ open class WorkgroupController(
                 name = wg.name,
                 description = wg.description,
                 ownerEmail = wg.ownerEmail,
+                awsAccountManaged = wg.awsAccountManaged,
                 criticality = wg.criticality,
                 enabled = wg.enabled,
                 userCount = (userCounts[id] ?: 0L).toInt(),
@@ -1071,6 +1072,7 @@ open class WorkgroupController(
 
         return try {
             val workgroup = workgroupService.getWorkgroupById(id)
+            workgroup.requireDirectAssetAssignmentAllowed()
 
             // Resolve asset IDs from pattern or direct IDs
             val assetIds = resolveAssetIds(request)
@@ -1419,7 +1421,8 @@ data class WorkgroupListResponse(
     val parentId: Long?,
     val parentName: String?,
     val depth: Int,
-    val ancestors: List<BreadcrumbItem>
+    val ancestors: List<BreadcrumbItem>,
+    val awsAccountManaged: Boolean = false
 )
 
 /**
