@@ -15,7 +15,10 @@ import java.util.Base64
 import javax.imageio.ImageIO
 
 data class ValidatedIntegrationAttachment(val fileName: String, val contentType: String, val bytes: ByteArray, val decodedSize: Int = bytes.size)
-data class ValidatedIntegrationRun(val request: IntegrationRunRequest, val digest: String, val findingsJson: String, val attachments: List<List<ValidatedIntegrationAttachment>>)
+data class ValidatedIntegrationRun(
+    val request: IntegrationRunRequest, val digest: String, val findingsJson: String,
+    val inventoryJson: String, val attachments: List<List<ValidatedIntegrationAttachment>>
+)
 
 object IntegrationLifecycle {
     fun resolvesAbsent(run: IntegrationRunRequest) = run.status == "SUCCESS" && run.completeCoverage
@@ -28,6 +31,9 @@ class IntegrationRunValidator(private val mapper: ObjectMapper) {
         val STATUSES = setOf("SUCCESS", "PARTIAL", "FAILED", "SKIPPED")
         val SEVERITIES = setOf("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
         val SOURCES = setOf("GITHUB_AI", "VISUAL", "WEB_SECURITY")
+        val COMPONENT_CATEGORIES = setOf("JAVASCRIPT_LIBRARY", "CSS_LIBRARY", "WEB_SERVER")
+        val REACHABILITY = setOf("REACHABLE", "UNREACHABLE", "UNKNOWN")
+        val EVIDENCE_TYPES = setOf("RESOURCE_URL", "HTTP_HEADER")
         const val MAX_ATTACHMENT_BYTES = 1024 * 1024
         const val MAX_RUN_BYTES = 5 * MAX_ATTACHMENT_BYTES
     }
@@ -54,12 +60,59 @@ class IntegrationRunValidator(private val mapper: ObjectMapper) {
                 attachment
             }
         }
+        total += request.inventory?.let(::validateInventory) ?: 0
         check(total <= MAX_RUN_BYTES, "Evidence exceeds 5 MiB")
         // Hash the fixed DTO representation, so HTTP and MCP retries share a digest.
         val digest = MessageDigest.getInstance("SHA-256").digest(mapper.writeValueAsBytes(request))
             .joinToString("") { "%02x".format(it) }
-        return ValidatedIntegrationRun(request, digest,
-            mapper.writeValueAsString(request.findings.map { it.copy(attachments = emptyList()) }), attachments)
+        return ValidatedIntegrationRun(
+            request,
+            digest,
+            mapper.writeValueAsString(request.findings.map { it.copy(attachments = emptyList()) }),
+            mapper.writeValueAsString(request.inventory),
+            attachments
+        )
+    }
+
+    private fun validateInventory(inventory: WebInventoryInput): Long {
+        check(inventory.components.size <= 500, "At most 500 components are allowed")
+        check(inventory.components.map { it.componentKey }.toSet().size == inventory.components.size,
+            "Duplicate component keys")
+        if (inventory.completeCoverage) {
+            check(inventory.exposure?.reachability == "REACHABLE",
+                "Complete inventory requires a reachable exposure observation")
+        }
+        inventory.exposure?.let { exposure ->
+            inventoryUrl(exposure.configuredUrl, true)
+            inventoryUrl(exposure.effectiveUrl)
+            check(exposure.reachability in REACHABILITY, "Invalid reachability")
+            check(exposure.httpStatus == null || exposure.httpStatus in 100..599, "Invalid HTTP status")
+            check(exposure.redirectCount in 0..20, "Invalid redirect count")
+            text(exposure.vantagePoint, 100, true)
+            check(exposure.vantagePoint.matches(Regex("[A-Za-z0-9._:-]+")), "Invalid vantage point")
+        }
+        inventory.components.forEach { component ->
+            text(component.componentKey, 128, true)
+            check(component.componentKey.matches(Regex("[A-Za-z0-9._:-]+")), "Invalid component key")
+            check(component.category in COMPONENT_CATEGORIES, "Invalid component category")
+            text(component.name, 255, true)
+            text(component.version, 100)
+            check(component.confidence.isFinite() && component.confidence in 0.0..1.0,
+                "Invalid component confidence")
+            check(component.evidenceType in EVIDENCE_TYPES, "Invalid component evidence type")
+            text(component.evidence, 512, true)
+            inventoryUrl(component.sourceUrl)
+        }
+        return mapper.writeValueAsBytes(inventory).size.toLong()
+    }
+
+    private fun inventoryUrl(value: String?, required: Boolean = false) {
+        text(value, 2048, required)
+        if (value == null) return
+        val uri = try { URI(value) } catch (_: Exception) { invalid("Invalid inventory URL") }
+        check(uri.scheme in setOf("https", "http") && !uri.host.isNullOrBlank() &&
+            uri.userInfo == null && uri.rawQuery == null && uri.rawFragment == null,
+            "Invalid inventory URL")
     }
 
     private fun validateFinding(f: IntegrationFindingInput) {

@@ -87,6 +87,51 @@ export interface IntegrationFinding {
   excepted: boolean;
   attachments: { id: number; fileName: string; contentType: string }[];
 }
+export interface WebExposureSummary {
+  configuredAssets: number;
+  scannedAssets: number;
+  reachableAssets: number;
+  unreachableAssets: number;
+  unknownAssets: number;
+  activeComponents: number;
+  javascriptLibraries: number;
+  cssLibraries: number;
+  webServers: number;
+  lastObservedAt: string | null;
+}
+export interface WebExposure {
+  id: number;
+  subjectId: number;
+  assetId: number;
+  assetName: string;
+  owner: string;
+  configuredUrl: string;
+  effectiveUrl: string | null;
+  reachability: 'REACHABLE' | 'UNREACHABLE' | 'UNKNOWN';
+  httpStatus: number | null;
+  redirectCount: number;
+  vantagePoint: string;
+  observedAt: string;
+}
+export interface WebComponent {
+  id: number;
+  subjectId: number;
+  assetId: number;
+  assetName: string;
+  owner: string;
+  componentKey: string;
+  category: 'JAVASCRIPT_LIBRARY' | 'CSS_LIBRARY' | 'WEB_SERVER';
+  name: string;
+  version: string | null;
+  confidence: number;
+  evidenceType: string;
+  evidence: string;
+  sourceUrl: string | null;
+  state: 'OPEN' | 'RESOLVED';
+  firstSeenAt: string;
+  lastSeenAt: string;
+  resolvedAt: string | null;
+}
 
 async function read<T>(path: string): Promise<T> {
   const response = await authenticatedGet(ROOT + path);
@@ -111,6 +156,22 @@ export const getIntegrationRuns = (scannerId?: number, page = 0) =>
 export const getIntegrationFindings = (filters: FindingFilters, page = 0) =>
   readPage<IntegrationFinding>(`/findings?${findingQuery(filters, page)}`);
 export const getIntegrationFinding = (id: number) => read<IntegrationFinding>(`/findings/${id}`);
+export const getWebExposureSummary = () => read<WebExposureSummary>('/web-exposure/summary');
+export const getWebExposures = (page = 0, reachability?: string) => {
+  const query = new URLSearchParams({ page: String(page), size: '25' });
+  if (reachability) query.set('reachability', reachability);
+  return readPage<WebExposure>(`/web-exposures?${query}`);
+};
+export const getWebComponents = (
+  page = 0,
+  filters: { category?: string; state?: string; search?: string } = {},
+) => {
+  const query = new URLSearchParams({ page: String(page), size: '25' });
+  if (filters.category) query.set('category', filters.category);
+  if (filters.state) query.set('state', filters.state);
+  if (filters.search) query.set('search', filters.search);
+  return readPage<WebComponent>(`/web-components?${query}`);
+};
 export interface IntegrationRunDetail {
   run: IntegrationRun;
   findings: Pick<IntegrationFinding, 'externalId' | 'severity' | 'title' | 'description' | 'recommendation' | 'evidence' | 'filePath' | 'lineRange' | 'url' | 'confidence' | 'engine' | 'model' | 'commitSha' | 'issueUrl' | 'fixPrUrl'>[];

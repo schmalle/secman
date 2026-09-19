@@ -3,6 +3,8 @@ package com.secman.mcp.tools
 import com.secman.domain.McpOperation
 import com.secman.domain.McpPermission
 import com.secman.dto.IntegrationFindingFilter
+import com.secman.dto.WebComponentFilter
+import com.secman.dto.WebExposureFilter
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.UserRepository
 import com.secman.service.IntegrationReadService
@@ -177,5 +179,100 @@ class GetIntegrationRunTool(
             return McpToolResult.error("FORBIDDEN", "Integration read permission required")
         val runId = id(arguments) ?: return McpToolResult.error("VALIDATION_ERROR", "id is required")
         return integrationRead(users, context) { reads.run(runId, it) }
+    }
+}
+
+/** Summarizes external exposure and current web components within delegated asset scope. */
+@Singleton
+class GetWebExposureSummaryTool(
+    private val reads: IntegrationReadService,
+    private val users: UserRepository,
+) : McpTool {
+    override val name = "get_web_exposure_summary"
+    override val description = "Get asset-scoped external exposure and software component totals."
+    override val operation = McpOperation.READ
+    override val inputSchema = emptySchema
+
+    override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
+        requireDelegation(context)?.let { return it }
+        requireAnyRole(context, "ADMIN", "VULN", "SECCHAMPION")?.let { return it }
+        if (!context.hasPermission(McpPermission.INTEGRATIONS_READ))
+            return McpToolResult.error("FORBIDDEN", "Integration read permission required")
+        return integrationRead(users, context, reads::webExposureSummary)
+    }
+}
+
+/** Lists current reachability observations within delegated asset scope. */
+@Singleton
+class ListWebExposuresTool(
+    private val reads: IntegrationReadService,
+    private val users: UserRepository,
+) : McpTool {
+    override val name = "list_web_exposures"
+    override val description = "List asset-scoped external web reachability observations."
+    override val operation = McpOperation.READ
+    override val inputSchema: Map<String, Any> = mapOf(
+        "type" to "object",
+        "properties" to pageProperties + mapOf(
+            "reachability" to mapOf(
+                "type" to "string",
+                "enum" to listOf("REACHABLE", "UNREACHABLE", "UNKNOWN")
+            )
+        ),
+    )
+
+    override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
+        requireDelegation(context)?.let { return it }
+        requireAnyRole(context, "ADMIN", "VULN", "SECCHAMPION")?.let { return it }
+        if (!context.hasPermission(McpPermission.INTEGRATIONS_READ))
+            return McpToolResult.error("FORBIDDEN", "Integration read permission required")
+        val (page, size) = page(arguments)
+        return integrationRead(users, context) {
+            reads.webExposures(
+                page, size, WebExposureFilter(arguments["reachability"] as? String), it
+            )
+        }
+    }
+}
+
+/** Lists detected JavaScript, CSS and web-server components within delegated asset scope. */
+@Singleton
+class ListWebComponentsTool(
+    private val reads: IntegrationReadService,
+    private val users: UserRepository,
+) : McpTool {
+    override val name = "list_web_components"
+    override val description = "List asset-scoped web software components with bounded filters."
+    override val operation = McpOperation.READ
+    override val inputSchema: Map<String, Any> = mapOf(
+        "type" to "object",
+        "properties" to pageProperties + mapOf(
+            "category" to mapOf(
+                "type" to "string",
+                "enum" to listOf("JAVASCRIPT_LIBRARY", "CSS_LIBRARY", "WEB_SERVER")
+            ),
+            "state" to mapOf("type" to "string", "enum" to listOf("OPEN", "RESOLVED")),
+            "search" to mapOf("type" to "string", "maxLength" to 200),
+        ),
+    )
+
+    override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
+        requireDelegation(context)?.let { return it }
+        requireAnyRole(context, "ADMIN", "VULN", "SECCHAMPION")?.let { return it }
+        if (!context.hasPermission(McpPermission.INTEGRATIONS_READ))
+            return McpToolResult.error("FORBIDDEN", "Integration read permission required")
+        val (page, size) = page(arguments)
+        return integrationRead(users, context) {
+            reads.webComponents(
+                page,
+                size,
+                WebComponentFilter(
+                    arguments["category"] as? String,
+                    (arguments["state"] as? String) ?: "OPEN",
+                    arguments["search"] as? String,
+                ),
+                it,
+            )
+        }
     }
 }

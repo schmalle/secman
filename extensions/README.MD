@@ -11,6 +11,7 @@ in this repository compiles or exercises them.
 | `secman_ai_github/` | https://github.com/schmalle/secman_ai_github | GitHub security scanner. Pushes findings into secman. |
 | `secman_app_ios/` | https://github.com/schmalle/secman_app_ios | iOS/iPadOS status app. Talks **only** to the relay, never to secman. |
 | `secman_web_check/` | https://github.com/schmalle/secman_web_check | web security checker for secman. |
+| `secman_intra_mon/` | https://github.com/schmalle/secman_intranet_mon | intranet discovery tool for secman. |
 
 ## Two different kinds of client
 

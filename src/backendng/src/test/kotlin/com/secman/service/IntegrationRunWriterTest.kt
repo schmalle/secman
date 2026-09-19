@@ -36,6 +36,8 @@ class IntegrationRunWriterTest {
     private val runs = mutableMapOf<String, IntegrationRun>()
     private val projections = mutableMapOf<Long, Vulnerability>()
     private val attachments = mutableListOf<IntegrationAttachment>()
+    private val components = mutableMapOf<String, WebComponent>()
+    private var exposure: WebExposure? = null
     private var nextId = 100L
 
     @BeforeEach
@@ -47,9 +49,15 @@ class IntegrationRunWriterTest {
         every { users.findByUsername(user.username) } returns Optional.of(user)
         every { repository.replay(1, 2, any()) } answers { runs[thirdArg()] }
         every { repository.finding(2, any()) } answers { findings[secondArg()] }
+        every { repository.webExposure(2) } answers { exposure }
+        every { repository.webComponent(2, any()) } answers { components[secondArg()] }
         every { repository.find(Vulnerability::class.java, any()) } answers { projections[secondArg()] }
         every { repository.openFindingPage(2, any()) } answers {
             findings.values.filter { it.state == "OPEN" && it.id!! > secondArg<Long>() }.sortedBy { it.id }.take(500)
+        }
+        every { repository.openWebComponentPage(2, any()) } answers {
+            components.values.filter { it.state == "OPEN" && it.id!! > secondArg<Long>() }
+                .sortedBy { it.id }.take(500)
         }
         every { repository.persist(any()) } answers {
             when (val entity = firstArg<Any>()) {
@@ -57,6 +65,8 @@ class IntegrationRunWriterTest {
                 is IntegrationRun -> { entity.id = nextId++; runs[entity.runKey] = entity }
                 is Vulnerability -> { entity.id = nextId++; projections[entity.id!!] = entity }
                 is IntegrationAttachment -> { entity.id = nextId++; attachments += entity }
+                is WebExposure -> { entity.id = nextId++; exposure = entity }
+                is WebComponent -> { entity.id = nextId++; components[entity.componentKey] = entity }
             }
         }
         every { repository.remove(any()) } answers { projections.remove(firstArg<Vulnerability>().id); Unit }
@@ -126,6 +136,45 @@ class IntegrationRunWriterTest {
 
         assertThat(projections.values.single().vulnerableProductVersions).isEqualTo("Webserver")
         assertThat(findings.getValue("stable").projectionProduct).isEqualTo("Webserver")
+    }
+
+    @Test
+    fun `web inventory observes resolves and reopens components independently from findings`() {
+        scanner.source = "WEB_SECURITY"
+        val component = WebComponentInput(
+            "javascript_library:abc", "JAVASCRIPT_LIBRARY", "jQuery", "3.7.1",
+            0.95, "RESOURCE_URL", "Matched jQuery resource URL",
+            "https://cdn.example.test/jquery-3.7.1.min.js"
+        )
+        val inventory = WebInventoryInput(
+            true,
+            WebExposureInput(
+                "https://example.test/", "https://example.test/", "REACHABLE",
+                200, 0, "secman-web-check"
+            ),
+            listOf(component)
+        )
+
+        submit(run(1).copy(inventory = inventory))
+        val firstSeen = components.getValue(component.componentKey).firstSeenAt
+        submit(run(2, status = "PARTIAL").copy(inventory = inventory.copy(components = emptyList())))
+        assertThat(components.getValue(component.componentKey).state).isEqualTo("OPEN")
+        submit(run(3).copy(inventory = inventory.copy(components = emptyList())))
+        assertThat(components.getValue(component.componentKey).state).isEqualTo("RESOLVED")
+        submit(run(4).copy(inventory = inventory.copy(components = listOf(component))))
+
+        assertThat(components.getValue(component.componentKey).state).isEqualTo("OPEN")
+        assertThat(components.getValue(component.componentKey).firstSeenAt).isEqualTo(firstSeen)
+        assertThat(exposure?.reachability).isEqualTo("REACHABLE")
+    }
+
+    @Test
+    fun `non web scanners cannot submit component inventory`() {
+        val inventory = WebInventoryInput(components = emptyList())
+
+        assertThatThrownBy { submit(run(1).copy(inventory = inventory)) }
+            .isInstanceOf(HttpStatusException::class.java)
+        assertThat(runs).isEmpty()
     }
 
     @Test

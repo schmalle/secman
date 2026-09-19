@@ -41,7 +41,8 @@ object McpToolPermissions {
         setOf(INTEGRATIONS_READ, ASSETS_READ, INTEGRATIONS_WRITE) to listOf("list_integration_subjects"),
         setOf(INTEGRATIONS_READ) to listOf(
             "get_integration_summary", "list_integration_findings", "get_integration_finding",
-            "list_integration_runs", "get_integration_run",
+            "list_integration_runs", "get_integration_run", "get_web_exposure_summary",
+            "list_web_exposures", "list_web_components",
         ),
         setOf(REQUIREMENTS_READ) to listOf(
             "get_requirements", "list_use_cases", "export_requirements",
@@ -147,7 +148,8 @@ object McpToolPermissions {
         put("list_integration_subjects", setOf(INTEGRATIONS_READ, ASSETS_READ, INTEGRATIONS_WRITE))
         putAll(listOf(
             "get_integration_summary", "list_integration_findings", "get_integration_finding",
-            "list_integration_runs", "get_integration_run",
+            "list_integration_runs", "get_integration_run", "get_web_exposure_summary",
+            "list_web_exposures", "list_web_components",
         ).associateWith { setOf(INTEGRATIONS_READ) })
         putAll(table(
             setOf(ASSETS_READ) to listOf(

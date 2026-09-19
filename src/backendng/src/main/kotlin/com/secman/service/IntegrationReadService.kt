@@ -84,6 +84,78 @@ open class IntegrationReadService(private val repository: IntegrationRepository,
 
     open fun summary(auth: Authentication): IntegrationSummaryDto = summaryFor(access.assetIds(auth))
 
+    open fun webExposureSummary(auth: Authentication): WebExposureSummaryDto {
+        val ids = access.assetIds(auth)
+        if (ids.isEmpty()) return WebExposureSummaryDto(0, 0, 0, 0, 0, 0, 0, 0, 0, null)
+        fun count(query: IntegrationCountQuery) = repository.count(query, ids)
+        return WebExposureSummaryDto(
+            count(IntegrationCountQuery.WEB_CONFIGURED), count(IntegrationCountQuery.WEB_SCANNED),
+            count(IntegrationCountQuery.WEB_REACHABLE), count(IntegrationCountQuery.WEB_UNREACHABLE),
+            count(IntegrationCountQuery.WEB_UNKNOWN), count(IntegrationCountQuery.WEB_COMPONENTS),
+            count(IntegrationCountQuery.WEB_JAVASCRIPT), count(IntegrationCountQuery.WEB_CSS),
+            count(IntegrationCountQuery.WEB_SERVERS), repository.latestWebExposure(ids)
+        )
+    }
+
+    open fun webExposures(
+        page: Int, size: Int, filter: WebExposureFilter, auth: Authentication
+    ): IntegrationPage<WebExposureDto> {
+        pagination(page, size)
+        if (filter.reachability != null && filter.reachability !in IntegrationRunValidator.REACHABILITY)
+            invalid("Invalid exposure filter")
+        val ids = access.assetIds(auth)
+        if (ids.isEmpty()) return emptyPage(page, size)
+        val result = repository.page(
+            WebExposure::class.java, IntegrationPageQuery.WEB_EXPOSURES,
+            mapOf("assets" to ids, "reachability" to filter.reachability), page, size
+        )
+        val subjects = repository.findMany(IntegrationSubject::class.java, result.content.map { it.subjectId })
+            .associateBy { it.id }
+        val assets = repository.findMany(Asset::class.java, subjects.values.map { it.assetId })
+            .associateBy { it.id }
+        return mapped(result, result.content.map { exposure ->
+            val subject = subjects.getValue(exposure.subjectId)
+            val asset = assets.getValue(subject.assetId)
+            WebExposureDto(
+                exposure.id!!, subject.id!!, asset.id!!, asset.name, asset.owner,
+                exposure.configuredUrl, exposure.effectiveUrl, exposure.reachability,
+                exposure.httpStatus, exposure.redirectCount, exposure.vantagePoint, exposure.observedAt
+            )
+        })
+    }
+
+    open fun webComponents(
+        page: Int, size: Int, filter: WebComponentFilter, auth: Authentication
+    ): IntegrationPage<WebComponentDto> {
+        pagination(page, size)
+        if (filter.category != null && filter.category !in IntegrationRunValidator.COMPONENT_CATEGORIES ||
+            filter.state != null && filter.state !in setOf("OPEN", "RESOLVED") ||
+            (filter.search?.length ?: 0) > 200) invalid("Invalid component filter")
+        val ids = access.assetIds(auth)
+        if (ids.isEmpty()) return emptyPage(page, size)
+        val result = repository.page(
+            WebComponent::class.java, IntegrationPageQuery.WEB_COMPONENTS,
+            mapOf(
+                "assets" to ids, "category" to filter.category, "state" to filter.state,
+                "search" to filter.search?.takeIf { it.isNotBlank() }?.lowercase()
+            ), page, size
+        )
+        val subjects = repository.findMany(IntegrationSubject::class.java, result.content.map { it.subjectId })
+            .associateBy { it.id }
+        val assets = repository.findMany(Asset::class.java, subjects.values.map { it.assetId })
+            .associateBy { it.id }
+        return mapped(result, result.content.map { component ->
+            val subject = subjects.getValue(component.subjectId)
+            val asset = assets.getValue(subject.assetId)
+            WebComponentDto(
+                component.id!!, subject.id!!, asset.id!!, asset.name, asset.owner,
+                component.componentKey, component.category, component.name, component.version,
+                component.confidence, component.evidenceType, component.evidence, component.sourceUrl,
+                component.state, component.firstSeenAt, component.lastSeenAt, component.resolvedAt
+            )
+        })
+    }
+
     open fun run(id: Long, auth: Authentication): IntegrationRunDetailDto {
         val r = repository.find(IntegrationRun::class.java, id) ?: access.notFound()
         val s = repository.find(IntegrationSubject::class.java, r.subjectId) ?: access.notFound()
@@ -96,7 +168,9 @@ open class IntegrationReadService(private val repository: IntegrationRepository,
         val attachments = repository.runAttachmentMetadata(r.id!!).map {
             IntegrationRunAttachmentDto(it[0] as Long, it[1] as Long, it[2] as String, it[3] as String)
         }
-        return IntegrationRunDetailDto(dto, historical, attachments)
+        val inventory = if (r.inventoryJson.trim() == "null") null else
+            mapper.readValue(r.inventoryJson, WebInventoryInput::class.java)
+        return IntegrationRunDetailDto(dto, historical, attachments, inventory)
     }
 
     /** Internal aggregate only; callers exposing this must enforce their ADMIN/SECCHAMPION policy. */

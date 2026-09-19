@@ -49,7 +49,7 @@ class IntegrationPersistenceTest : BaseIntegrationTest() {
         asset = assets.save(TestDataFactory.createAsset(name = "integration-$suffix", owner = user.username).apply {
             cloudAccountId = "111122223333"
         })
-        scannerId = admin.saveScanner(null, IntegrationScannerRequest("Integration persistence test", "VISUAL", user.id!!), auth).id
+        scannerId = admin.saveScanner(null, IntegrationScannerRequest("Integration persistence test", "WEB_SECURITY", user.id!!), auth).id
         subjectId = admin.bind(scannerId, IntegrationSubjectRequest(assetId = asset.id), auth)
     }
 
@@ -103,6 +103,36 @@ class IntegrationPersistenceTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `web inventory is queryable scoped and retained with its historical run`() {
+        val component = WebComponentInput(
+            "web_server:abc", "WEB_SERVER", "nginx", "1.25.4", 0.9,
+            "HTTP_HEADER", "Server header matched nginx"
+        )
+        val inventory = WebInventoryInput(
+            true,
+            WebExposureInput(
+                "https://example.test/", "https://example.test/", "REACHABLE",
+                200, 0, "secman-web-check"
+            ),
+            listOf(component)
+        )
+
+        val accepted = scans.submit(body(1).copy(inventory = inventory), auth)
+
+        assertThat(reads.webExposureSummary(auth).reachableAssets).isGreaterThanOrEqualTo(1)
+        assertThat(reads.webExposures(0, 100, WebExposureFilter("REACHABLE"), auth).content)
+            .anyMatch { it.assetId == asset.id && it.httpStatus == 200 }
+        assertThat(reads.webComponents(0, 100, WebComponentFilter(search = "nginx"), auth).content)
+            .anyMatch { it.assetId == asset.id && it.componentKey == component.componentKey }
+        assertThat(reads.run(accepted.id, auth).inventory?.components?.single()?.name).isEqualTo("nginx")
+
+        scans.submit(body(2).copy(inventory = inventory.copy(components = emptyList())), auth)
+        assertThat(reads.webComponents(
+            0, 100, WebComponentFilter(state = "RESOLVED", search = "nginx"), auth
+        ).content).anyMatch { it.assetId == asset.id && it.state == "RESOLVED" }
+    }
+
+    @Test
     fun `account and domain current queries retain other sources and older open scanner observations`() {
         vulnerabilities.save(Vulnerability(asset = asset, vulnerabilityId = "MANUAL-OBSERVATION", source = "CLI_MANUAL",
             cvssSeverity = "High", scanTimestamp = java.time.LocalDateTime.now()))
@@ -148,6 +178,10 @@ class IntegrationPersistenceTest : BaseIntegrationTest() {
 open class IntegrationPersistenceCleanup(private val em: EntityManager) {
     @Transactional
     open fun remove(scannerId: Long, assetId: Long, userId: Long) {
+        em.createQuery("DELETE FROM WebComponent x WHERE x.subjectId IN (SELECT s.id FROM IntegrationSubject s WHERE s.scannerId = :scanner)")
+            .setParameter("scanner", scannerId).executeUpdate()
+        em.createQuery("DELETE FROM WebExposure x WHERE x.subjectId IN (SELECT s.id FROM IntegrationSubject s WHERE s.scannerId = :scanner)")
+            .setParameter("scanner", scannerId).executeUpdate()
         em.createQuery("DELETE FROM IntegrationAttachment a WHERE a.runId IN (SELECT r.id FROM IntegrationRun r WHERE r.scannerId = :scanner)")
             .setParameter("scanner", scannerId).executeUpdate()
         em.createQuery("DELETE FROM IntegrationFinding f WHERE f.subjectId IN (SELECT s.id FROM IntegrationSubject s WHERE s.scannerId = :scanner)")

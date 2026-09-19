@@ -99,7 +99,7 @@ This is the **API-key** permission each tool is gated on. It is only half the ch
 | `REQUIREMENTS_DELETE` | `delete_requirement`, `delete_use_case` |
 | `ASSETS_READ` | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile`, `delete_asset`, `delete_all_assets`, `delete_asset_not_seen`, `asset_match_clear` |
 | `ASSETS_WRITE` | `create_asset`, `update_asset` |
-| `INTEGRATIONS_READ` | `list_integration_subjects`, `get_integration_summary`, `list_integration_findings`, `get_integration_finding`, `list_integration_runs`, `get_integration_run` |
+| `INTEGRATIONS_READ` | `list_integration_subjects`, `get_integration_summary`, `list_integration_findings`, `get_integration_finding`, `list_integration_runs`, `get_integration_run`, `get_web_exposure_summary`, `list_web_exposures`, `list_web_components` |
 | `INTEGRATIONS_WRITE` | `list_integration_subjects`, `submit_integration_run` |
 | `SCANS_READ` | `get_scans`, `get_asset_scan_results`, `search_products` |
 | `VULNERABILITIES_READ` | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_all_accessible_vulnerabilities`, `get_asset_most_vulnerabilities`, `get_overdue_assets`, `add_vulnerability`, `deduplicate_vulnerabilities`, `list_products`, all `*_exception_request*` tools, `list_vulnerability_exceptions`, `delete_all_vulnerability_exceptions`, `get_vulnerability_heatmap`, `refresh_vulnerability_heatmap`, `get_top_accounts_by_finding_age`, `get_crowdstrike_last_import`, `import_github_repos`, `*_github_owner_email_mapping*` |
@@ -458,6 +458,9 @@ access to the bound asset.
 | `get_integration_finding` | `id`* | `INTEGRATIONS_READ` |
 | `list_integration_runs` | `page`, `size` (max 100), `scannerId`, `subjectId` | `INTEGRATIONS_READ` |
 | `get_integration_run` | `id`* | `INTEGRATIONS_READ` |
+| `get_web_exposure_summary` | *(none)* | `INTEGRATIONS_READ`; ADMIN / VULN / SECCHAMPION |
+| `list_web_exposures` | `page`, `size` (max 100), `reachability` | `INTEGRATIONS_READ`; ADMIN / VULN / SECCHAMPION |
+| `list_web_components` | `page`, `size` (max 100), `category`, `state`, `search` | `INTEGRATIONS_READ`; ADMIN / VULN / SECCHAMPION |
 | `submit_integration_run` | version-1 run payload; see `docs/INTEGRATION_RESULTS.md` | `INTEGRATIONS_WRITE` |
 
 ### Notifications and reports

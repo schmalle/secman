@@ -4,6 +4,7 @@ import com.secman.domain.McpPermission
 import com.secman.dto.IntegrationPage
 import com.secman.dto.IntegrationSummaryDto
 import com.secman.dto.IntegrationSubjectDto
+import com.secman.dto.WebExposureSummaryDto
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.UserRepository
 import com.secman.service.IntegrationReadService
@@ -60,5 +61,27 @@ class IntegrationToolsTest {
             summaryTool.execute(emptyMap(), context().copy(effectivePermissions = emptySet())).isError
         ).isTrue()
         verify(exactly = 1) { reads.summary(any()) }
+    }
+
+    @Test
+    fun `web exposure summary requires both integration permission and vulnerability role`() = runBlocking {
+        val summaryTool = GetWebExposureSummaryTool(reads, users)
+        val summary = WebExposureSummaryDto(4, 3, 2, 0, 1, 7, 3, 2, 2, null)
+        every { users.findById(50) } returns Optional.of(user)
+        every { reads.webExposureSummary(any()) } returns summary
+        val allowed = context().copy(
+            delegatedUserRoles = setOf("VULN"),
+            effectivePermissions = setOf(McpPermission.INTEGRATIONS_READ),
+            isAdmin = false,
+        )
+
+        assertThat(summaryTool.execute(emptyMap(), allowed)).isEqualTo(McpToolResult.success(summary))
+        assertThat(summaryTool.execute(
+            emptyMap(), allowed.copy(delegatedUserRoles = setOf("USER"))
+        ).isError).isTrue()
+        assertThat(summaryTool.execute(
+            emptyMap(), allowed.copy(effectivePermissions = emptySet())
+        ).isError).isTrue()
+        verify(exactly = 1) { reads.webExposureSummary(any()) }
     }
 }

@@ -33,6 +33,9 @@ class McpToolPermissionsTest {
             "get_integration_finding",
             "list_integration_runs",
             "get_integration_run",
+            "get_web_exposure_summary",
+            "list_web_exposures",
+            "list_web_components",
         )
 
         for (tool in tools) {

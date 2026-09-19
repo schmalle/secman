@@ -15,10 +15,17 @@ Base path: `/api/integrations/v1`.
 | Health summary | `GET /summary` | `get_integration_summary` |
 | Current findings | `GET /findings[/{id}]` | `list_integration_findings`, `get_integration_finding` |
 | Run history | `GET /runs[/{id}]` | `list_integration_runs`, `get_integration_run` |
+| Web exposure summary | `GET /web-exposure/summary` | `get_web_exposure_summary` |
+| Web exposure observations | `GET /web-exposures` | `list_web_exposures` |
+| Web software components | `GET /web-components` | `list_web_components` |
 
 Every MCP tool requires delegated identity. Writes require
 `INTEGRATIONS_WRITE`; the read tools require `INTEGRATIONS_READ`. REST and MCP
 delegate to the same services, so asset access is identical on both transports.
+The three web-inventory reads additionally require `ADMIN`, `VULN`, or
+`SECCHAMPION`. SecMan has no SOAP integration boundary; adding a second transport
+without a concrete consumer would duplicate authentication and authorization logic,
+so scanner integrations use the existing REST and MCP contracts.
 
 The canonical request fixture is `docs/contracts/integration-run-v1.json`. The
 three checker repositories keep an exact copy under `tests/fixtures/`; verify all
@@ -48,9 +55,44 @@ finding changes or resolves. Open findings project into SecMan vulnerabilities,
 so ownership, asset access, exceptions, ageing, reporting, and notification
 behavior remain central.
 
+`WEB_SECURITY` runs may also carry an additive `inventory` object:
+
+```json
+{
+  "completeCoverage": true,
+  "exposure": {
+    "configuredUrl": "https://example.test/",
+    "effectiveUrl": "https://example.test/login",
+    "reachability": "REACHABLE",
+    "httpStatus": 200,
+    "redirectCount": 1,
+    "vantagePoint": "secman-web-check"
+  },
+  "components": [{
+    "componentKey": "javascript_library:stable-hash",
+    "category": "JAVASCRIPT_LIBRARY",
+    "name": "jQuery",
+    "version": "3.7.1",
+    "confidence": 0.95,
+    "evidenceType": "RESOURCE_URL",
+    "evidence": "Matched jQuery resource URL",
+    "sourceUrl": "https://cdn.example.test/jquery-3.7.1.min.js"
+  }]
+}
+```
+
+Categories are `JAVASCRIPT_LIBRARY`, `CSS_LIBRARY`, and `WEB_SERVER`.
+Reachability is an observation from the scanner's vantage point, not a promise that
+the target is reachable from every external network. Component fingerprints are
+inventory evidence, not vulnerability findings and not installed-product records.
+Inventory has its own coverage flag: only a successful inventory snapshot with
+`completeCoverage=true` resolves components absent from the next snapshot. Finding
+coverage remains independent.
+
 Limits are enforced atomically:
 
 - 500 findings per run;
+- 500 software components per run;
 - 10 attachments per finding;
 - 1 MiB per attachment and 5 MiB combined evidence per run;
 - 100 records per read page;
@@ -65,12 +107,15 @@ scanner to distinguish identical hostnames that belong to different AWS accounts
 The assigned service user must already have access to every bound asset;
 registration does not grant access.
 
-### Web checker CSV and Proton Pass workflow
+### Web checker targets and Proton Pass workflow
 
 The independent `extensions/secman_web_check` repository can import scan results
 directly through `POST /api/integrations/v1/runs`. Its `--targets-csv` input associates
 each target with a 12-digit AWS account number, which is matched against the authorized
 subject's `cloudAccountId` before URI or hostname matching.
+Alternatively, `--targets-from-secman` scans the authorized subjects already bound to
+the selected scanner. Those targets retain the exact subject and asset IDs, so upload
+does not rely on hostname matching and never creates or auto-binds an asset.
 
 For unattended credential resolution, use the extension's
 `scripts/scan-with-proton-pass.sh` wrapper and a file containing only Proton Pass
@@ -90,6 +135,9 @@ Recommended rollout:
 5. Configure the scanner ID and explicitly enable upload in each checker.
 6. Run `/integration-contract-test` before publishing a client revision.
 
+Operators with a vulnerability-management role can review current exposure and
+component inventory under **Analytics → External exposure**. Reads remain asset-scoped.
+
 Disable a scanner to stop ingestion without deleting history. A rejected v1
 request never falls back to a legacy write path. Do not delete integration
 tables as a rollback shortcut; their foreign keys intentionally retain history.
@@ -101,6 +149,8 @@ tables as a rollback shortcut; their foreign keys intentionally retain history.
 - Only the assigned service user can submit a subject run, and it must retain
   asset access.
 - Evidence is decoded, bounded, validated, and re-encoded before storage.
+- Inventory URLs must be credential-free HTTP(S) URLs without queries or fragments;
+  raw response bodies and raw header values are never stored in inventory evidence.
 - Scanner health notifications carry generic status and an authenticated SecMan
   link, not finding or asset detail.
 - Relay/iOS exposes only aggregate integration counts under an `ADMIN` policy;

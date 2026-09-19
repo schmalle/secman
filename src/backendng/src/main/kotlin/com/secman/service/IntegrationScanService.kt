@@ -55,10 +55,13 @@ open class IntegrationRunWriter(
         if (!IntegrationLifecycle.isNewer(request, subject.lastScanAt)) conflict("A newer or simultaneous snapshot already exists")
         // Also serialize adoption across different scanners bound to the same asset.
         val asset = repository.lock(Asset::class.java, subject.assetId) ?: access.notFound()
+        if (request.inventory != null && scanner.source != "WEB_SECURITY")
+            invalid("Component inventory is only accepted from WEB_SECURITY scanners")
         val run = IntegrationRun(scannerId = request.scannerId, subjectId = request.subjectId, runKey = request.runKey,
             contentDigest = validated.digest, status = request.status, completeCoverage = request.completeCoverage,
             startedAt = request.startedAt, completedAt = request.completedAt, metadataJson = request.metadataJson,
-            findingsJson = validated.findingsJson, accepted = request.findings.size)
+            findingsJson = validated.findingsJson, inventoryJson = validated.inventoryJson,
+            accepted = request.findings.size)
         repository.persist(run)
         request.findings.forEachIndexed { index, input ->
             observe(scanner.source, subject, asset, run, input, validated.attachments[index])
@@ -80,14 +83,68 @@ open class IntegrationRunWriter(
                 after = batch.lastOrNull()?.id ?: after
             } while (batch.size == 500)
         }
+        request.inventory?.let { applyInventory(subject, run, it, request.status) }
         subject.lastScanAt = request.completedAt
         subject.lastStatus = request.status
         if (request.status == "SUCCESS") subject.lastSuccessfulScanAt = request.completedAt
         repository.flush()
         exceptions.recomputeForAsset(asset.id!!)
-        log.info("Integration run accepted: actorId={} scannerId={} subjectId={} runId={} accepted={} resolved={}",
-            scanner.serviceUserId, scanner.id, subject.id, run.id, run.accepted, run.resolved)
+        log.info("Integration run accepted: actorId={} scannerId={} subjectId={} runId={} accepted={} resolved={} components={} inventoryComplete={}",
+            scanner.serviceUserId, scanner.id, subject.id, run.id, run.accepted, run.resolved,
+            request.inventory?.components?.size ?: 0, request.inventory?.completeCoverage ?: false)
         return ack(run, false)
+    }
+
+    private fun applyInventory(
+        subject: IntegrationSubject,
+        run: IntegrationRun,
+        inventory: WebInventoryInput,
+        runStatus: String
+    ) {
+        inventory.exposure?.let { input ->
+            val exposure = repository.webExposure(subject.id!!) ?: WebExposure(subjectId = subject.id!!)
+            exposure.lastRunId = run.id!!
+            exposure.configuredUrl = input.configuredUrl
+            exposure.effectiveUrl = input.effectiveUrl
+            exposure.reachability = input.reachability
+            exposure.httpStatus = input.httpStatus
+            exposure.redirectCount = input.redirectCount
+            exposure.vantagePoint = input.vantagePoint
+            exposure.observedAt = run.completedAt
+            if (exposure.id == null) repository.persist(exposure)
+        }
+        inventory.components.forEach { input ->
+            val component = repository.webComponent(subject.id!!, input.componentKey)
+                ?: WebComponent(
+                    subjectId = subject.id!!,
+                    componentKey = input.componentKey,
+                    firstSeenAt = run.completedAt
+                )
+            component.category = input.category
+            component.name = input.name
+            component.version = input.version
+            component.confidence = input.confidence
+            component.evidenceType = input.evidenceType
+            component.evidence = input.evidence
+            component.sourceUrl = input.sourceUrl
+            component.state = "OPEN"
+            component.lastSeenAt = run.completedAt
+            component.resolvedAt = null
+            component.lastRunId = run.id!!
+            if (component.id == null) repository.persist(component)
+        }
+        if (runStatus == "SUCCESS" && inventory.completeCoverage) {
+            val present = inventory.components.mapTo(hashSetOf()) { it.componentKey }
+            var after = 0L
+            do {
+                val batch = repository.openWebComponentPage(subject.id!!, after)
+                batch.filter { it.componentKey !in present }.forEach { component ->
+                    component.state = "RESOLVED"
+                    component.resolvedAt = run.completedAt
+                }
+                after = batch.lastOrNull()?.id ?: after
+            } while (batch.size == 500)
+        }
     }
 
     private fun observe(scannerSource: String, subject: IntegrationSubject, asset: Asset, run: IntegrationRun,
@@ -148,4 +205,5 @@ open class IntegrationRunWriter(
     private fun ack(run: IntegrationRun, replayed: Boolean) =
         IntegrationRunAck(run.id!!, run.scannerId, run.subjectId, run.status, run.accepted, run.resolved, replayed)
     private fun conflict(message: String): Nothing = throw HttpStatusException(HttpStatus.CONFLICT, message)
+    private fun invalid(message: String): Nothing = throw HttpStatusException(HttpStatus.BAD_REQUEST, message)
 }

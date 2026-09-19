@@ -9,7 +9,8 @@ import java.time.Instant
 @Serdeable data class IntegrationRunRequest(
     val scannerId: Long, val subjectId: Long, val runKey: String, val status: String,
     val completeCoverage: Boolean, val startedAt: Instant, val completedAt: Instant,
-    val metadataJson: String = "{}", val findings: List<IntegrationFindingInput> = emptyList()
+    val metadataJson: String = "{}", val findings: List<IntegrationFindingInput> = emptyList(),
+    val inventory: WebInventoryInput? = null
 )
 @Serdeable data class IntegrationFindingInput(
     val externalId: String, val legacyIds: List<String> = emptyList(), val severity: String, val title: String,
@@ -20,6 +21,19 @@ import java.time.Instant
     val attachments: List<IntegrationAttachmentInput> = emptyList()
 )
 @Serdeable data class IntegrationAttachmentInput(val fileName: String, val contentType: String, val base64: String)
+@Serdeable data class WebInventoryInput(
+    val completeCoverage: Boolean = false,
+    val exposure: WebExposureInput? = null,
+    val components: List<WebComponentInput> = emptyList()
+)
+@Serdeable data class WebExposureInput(
+    val configuredUrl: String, val effectiveUrl: String? = null, val reachability: String,
+    val httpStatus: Int? = null, val redirectCount: Int = 0, val vantagePoint: String
+)
+@Serdeable data class WebComponentInput(
+    val componentKey: String, val category: String, val name: String, val version: String? = null,
+    val confidence: Double, val evidenceType: String, val evidence: String, val sourceUrl: String? = null
+)
 @Serdeable data class IntegrationRunAck(val id: Long, val scannerId: Long, val subjectId: Long, val status: String, val accepted: Int, val resolved: Int, val replayed: Boolean)
 @Serdeable data class IntegrationPage<T>(val content: List<T>, val totalElements: Long, val totalPages: Int, val number: Int, val size: Int)
 @Serdeable data class IntegrationSummaryDto(val scanners: Long, val totalSubjects: Long, val healthySubjects: Long, val failedSubjects: Long, val unscannedSubjects: Long, val staleSubjects: Long, val openFindings: Long)
@@ -36,7 +50,10 @@ import java.time.Instant
 )
 @Serdeable data class IntegrationAttachmentDto(val id: Long, val fileName: String, val contentType: String)
 @Serdeable data class IntegrationRunAttachmentDto(val id: Long, val findingId: Long, val fileName: String, val contentType: String)
-@Serdeable data class IntegrationRunDetailDto(val run: IntegrationRunDto, val findings: List<IntegrationFindingInput>, val attachments: List<IntegrationRunAttachmentDto>)
+@Serdeable data class IntegrationRunDetailDto(
+    val run: IntegrationRunDto, val findings: List<IntegrationFindingInput>,
+    val attachments: List<IntegrationRunAttachmentDto>, val inventory: WebInventoryInput? = null
+)
 @Serdeable data class IntegrationFindingDto(
     val id: Long, val scannerId: Long, val scannerName: String, val source: String, val subjectId: Long,
     val subjectName: String, val assetId: Long, val githubRepositoryId: Long?, val owner: String,
@@ -51,4 +68,25 @@ data class IntegrationFindingFilter(
     val scannerId: Long? = null, val subjectId: Long? = null, val githubRepositoryId: Long? = null,
     val source: String? = null, val owner: String? = null, val severity: String? = null,
     val state: String? = null, val search: String? = null
+)
+@Serdeable data class WebExposureSummaryDto(
+    val configuredAssets: Long, val scannedAssets: Long, val reachableAssets: Long,
+    val unreachableAssets: Long, val unknownAssets: Long, val activeComponents: Long,
+    val javascriptLibraries: Long, val cssLibraries: Long, val webServers: Long,
+    val lastObservedAt: Instant?
+)
+@Serdeable data class WebExposureDto(
+    val id: Long, val subjectId: Long, val assetId: Long, val assetName: String, val owner: String,
+    val configuredUrl: String, val effectiveUrl: String?, val reachability: String,
+    val httpStatus: Int?, val redirectCount: Int, val vantagePoint: String, val observedAt: Instant
+)
+@Serdeable data class WebComponentDto(
+    val id: Long, val subjectId: Long, val assetId: Long, val assetName: String, val owner: String,
+    val componentKey: String, val category: String, val name: String, val version: String?,
+    val confidence: Double, val evidenceType: String, val evidence: String, val sourceUrl: String?,
+    val state: String, val firstSeenAt: Instant, val lastSeenAt: Instant, val resolvedAt: Instant?
+)
+data class WebExposureFilter(val reachability: String? = null)
+data class WebComponentFilter(
+    val category: String? = null, val state: String? = "OPEN", val search: String? = null
 )

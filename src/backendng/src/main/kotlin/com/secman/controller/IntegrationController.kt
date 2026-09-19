@@ -50,6 +50,31 @@ open class IntegrationController(
     @Get("/summary")
     open fun summary(authentication: Authentication) = reads.summary(authentication)
 
+    @Get("/web-exposure/summary")
+    @Secured("ADMIN", "VULN", "SECCHAMPION")
+    open fun webExposureSummary(authentication: Authentication) =
+        reads.webExposureSummary(authentication)
+
+    @Get("/web-exposures")
+    @Secured("ADMIN", "VULN", "SECCHAMPION")
+    open fun webExposures(
+        @QueryValue(defaultValue = "0") page: Int,
+        @QueryValue(defaultValue = "100") size: Int,
+        @Nullable @QueryValue reachability: String?,
+        authentication: Authentication
+    ) = reads.webExposures(page, size, WebExposureFilter(reachability), authentication)
+
+    @Get("/web-components")
+    @Secured("ADMIN", "VULN", "SECCHAMPION")
+    open fun webComponents(
+        @QueryValue(defaultValue = "0") page: Int,
+        @QueryValue(defaultValue = "100") size: Int,
+        @Nullable @QueryValue category: String?,
+        @Nullable @QueryValue(defaultValue = "OPEN") state: String?,
+        @Nullable @QueryValue search: String?,
+        authentication: Authentication
+    ) = reads.webComponents(page, size, WebComponentFilter(category, state, search), authentication)
+
     @Get("/runs/{id}")
     open fun run(@PathVariable id: Long, authentication: Authentication) = reads.run(id, authentication)
 
