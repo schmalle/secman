@@ -9,7 +9,6 @@ in this repository compiles or exercises them.
 | Folder | Repository | What it is |
 |---|---|---|
 | `secman_ai_github/` | https://github.com/schmalle/secman_ai_github | GitHub security scanner. Pushes findings into secman. |
-| `secman_visual_check/` | https://github.com/schmalle/secman_visual_check | External attack-surface scanner. Pushes findings into secman. |
 | `secman_app_ios/` | https://github.com/schmalle/secman_app_ios | iOS/iPadOS status app. Talks **only** to the relay, never to secman. |
 | `secman_web_check/` | https://github.com/schmalle/secman_web_check | web security checker for secman. |
 
@@ -17,7 +16,7 @@ in this repository compiles or exercises them.
 
 The distinction matters for security review, so it is worth stating plainly.
 
-**Backend clients** (`secman_ai_github`, `secman_visual_check`) authenticate to
+**Backend clients** (`secman_ai_github`, `secman_web_check`) authenticate to
 secman itself and **write** data — vulnerabilities, assets, findings. They hold
 secman credentials and reach `/api/…` and `/mcp` directly. Changing a backend
 endpoint can break them silently, which is why `CLAUDE.md` §Extension Clients
