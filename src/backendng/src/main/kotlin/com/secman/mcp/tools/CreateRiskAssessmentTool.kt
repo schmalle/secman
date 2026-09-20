@@ -11,7 +11,7 @@ import java.time.format.DateTimeParseException
 class CreateRiskAssessmentTool(private val service: RiskAssessmentMcpService) : McpTool {
     override val name = "create_risk_assessment"
     override val description =
-        "Create an AWS-account-based risk assessment for selected use cases and an assigned respondent; no asset is created"
+        "Create an asset- or AWS-account-based risk assessment for selected use cases and an assigned respondent"
     override val operation = McpOperation.WRITE
     override val inputSchema = mapOf(
         "type" to "object",
@@ -19,6 +19,10 @@ class CreateRiskAssessmentTool(private val service: RiskAssessmentMcpService) : 
             "awsAccountId" to mapOf(
                 "type" to "string", "pattern" to "^[0-9]{12}$",
                 "description" to "The 12-digit AWS account number to assess directly"
+            ),
+            "assetId" to mapOf(
+                "type" to "number", "minimum" to 1,
+                "description" to "Accessible asset to assess; use an asset with type SUPPLIER for supplier assessments"
             ),
             "useCaseIds" to mapOf(
                 "type" to "array",
@@ -37,17 +41,20 @@ class CreateRiskAssessmentTool(private val service: RiskAssessmentMcpService) : 
             "endDate" to mapOf("type" to "string", "description" to "ISO date (YYYY-MM-DD)"),
             "notes" to mapOf("type" to "string")
         ),
-        "required" to listOf("awsAccountId", "assessorEmail", "respondentEmail", "endDate")
+        "required" to listOf("assessorEmail", "respondentEmail", "endDate")
     )
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
         requireAnyUserRole(
             context, "ADMIN", "SECCHAMPION",
-            message = "ADMIN or SECCHAMPION role required to create AWS account risk assessments"
+            message = "ADMIN or SECCHAMPION role required to create risk assessments"
         )?.let { return it }
-        val awsAccountId = (arguments["awsAccountId"] as? String)?.trim()
-            ?: return McpToolResult.error("VALIDATION_ERROR", "awsAccountId is required")
+        val awsAccountId = (arguments["awsAccountId"] as? String)?.trim()?.takeIf { it.isNotBlank() }
+        val assetId = (arguments["assetId"] as? Number)?.toLong()
+        if ((awsAccountId == null) == (assetId == null)) {
+            return McpToolResult.error("VALIDATION_ERROR", "Provide exactly one of awsAccountId or assetId")
+        }
         val useCaseIds = parseUseCaseIds(arguments)
             ?: return McpToolResult.error(
                 "VALIDATION_ERROR",
@@ -68,7 +75,7 @@ class CreateRiskAssessmentTool(private val service: RiskAssessmentMcpService) : 
         }
         return riskAssessmentTool {
             service.create(
-                context, awsAccountId, useCaseIds, assessorEmail, respondentEmail, endDate,
+                context, awsAccountId, assetId, useCaseIds, assessorEmail, respondentEmail, endDate,
                 arguments["notes"] as? String
             )
         }

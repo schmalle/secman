@@ -2,6 +2,7 @@ package com.secman.service
 
 import com.secman.domain.AnswerType
 import com.secman.domain.AssessmentBasisType
+import com.secman.domain.Asset
 import com.secman.domain.AwsAccount
 import com.secman.domain.McpPermission
 import com.secman.domain.Release
@@ -12,6 +13,7 @@ import com.secman.domain.UseCase
 import com.secman.domain.User
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.AwsAccountRepository
+import com.secman.repository.AssetRepository
 import com.secman.repository.RequirementRepository
 import com.secman.repository.ResponseRepository
 import com.secman.repository.RiskAssessmentRepository
@@ -35,10 +37,11 @@ class RiskAssessmentMcpServiceTest {
     private val requirements = mockk<RequirementRepository>(relaxed = true)
     private val useCases = mockk<UseCaseRepository>(relaxed = true)
     private val awsAccounts = mockk<AwsAccountRepository>(relaxed = true)
+    private val assets = mockk<AssetRepository>(relaxed = true)
     private val users = mockk<UserRepository>(relaxed = true)
     private val releaseScope = mockk<ReleaseRequirementScopeService>(relaxed = true)
     private val service = RiskAssessmentMcpService(
-        assessments, responses, requirements, useCases, awsAccounts, users, releaseScope
+        assessments, responses, requirements, useCases, awsAccounts, assets, users, releaseScope
     )
 
     private val assessor = user(1, "champ", "champ@example.test", User.Role.SECCHAMPION)
@@ -135,7 +138,7 @@ class RiskAssessmentMcpServiceTest {
         every { assessments.save(any()) } answers { firstArg<RiskAssessment>().apply { id = 41 } }
 
         val result = service.create(
-            context(assessor, isAdmin = true), awsAccount.awsAccountId, listOf(useCase.id!!),
+            context(assessor, isAdmin = true), awsAccount.awsAccountId, null, listOf(useCase.id!!),
             assessor.email, respondent.email, LocalDate.now().plusDays(7), null
         )
 
@@ -151,6 +154,27 @@ class RiskAssessmentMcpServiceTest {
     }
 
     @Test
+    fun `create uses an accessible supplier asset as basis`() {
+        val supplier = Asset(id = 31, name = "Example SaaS", type = "SUPPLIER", owner = assessor.username,
+            uri = "https://supplier.example.test")
+        every { assets.findById(supplier.id!!) } returns Optional.of(supplier)
+        every { useCases.findById(useCase.id!!) } returns Optional.of(useCase)
+        every { users.findByEmailIgnoreCase(assessor.email) } returns Optional.of(assessor)
+        every { users.findByEmailIgnoreCase(respondent.email) } returns Optional.of(respondent)
+        every { users.findById(assessor.id!!) } returns Optional.of(assessor)
+        every { assessments.save(any()) } answers { firstArg<RiskAssessment>().apply { id = 43 } }
+
+        val result = service.create(
+            context(assessor, isAdmin = true), null, supplier.id, listOf(useCase.id!!),
+            assessor.email, respondent.email, LocalDate.now().plusDays(7), null
+        )
+
+        assertThat(result["basisType"]).isEqualTo("ASSET")
+        assertThat((result["asset"] as Map<*, *>)["type"]).isEqualTo("SUPPLIER")
+        verify { assessments.save(match { it.asset == supplier && it.awsAccount == null }) }
+    }
+
+    @Test
     fun `create rejects assessments without an active requirements release`() {
         every { awsAccounts.findByAwsAccountId(awsAccount.awsAccountId) } returns Optional.of(awsAccount)
         every { useCases.findById(useCase.id!!) } returns Optional.of(useCase)
@@ -158,7 +182,7 @@ class RiskAssessmentMcpServiceTest {
 
         assertThatThrownBy {
             service.create(
-                context(assessor, isAdmin = true), awsAccount.awsAccountId, listOf(useCase.id!!),
+                context(assessor, isAdmin = true), awsAccount.awsAccountId, null, listOf(useCase.id!!),
                 assessor.email, respondent.email, LocalDate.now().plusDays(7), null
             )
         }.isInstanceOf(IllegalStateException::class.java)
@@ -181,7 +205,7 @@ class RiskAssessmentMcpServiceTest {
         every { assessments.save(any()) } answers { firstArg<RiskAssessment>().apply { id = 42 } }
 
         service.create(
-            context(assessor, isAdmin = true), awsAccount.awsAccountId,
+            context(assessor, isAdmin = true), awsAccount.awsAccountId, null,
             listOf(useCase.id!!, secondUseCase.id!!), assessor.email, respondent.email,
             LocalDate.now().plusDays(7), null
         )

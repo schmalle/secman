@@ -16,18 +16,18 @@ class CreateRiskAssessmentToolTest {
     @Test
     fun `passes all selected use cases to service`() = runBlocking<Unit> {
         val context = context()
-        every { service.create(context, any(), listOf(10, 11), any(), any(), any(), any()) } returns emptyMap()
+        every { service.create(context, any(), null, listOf(10, 11), any(), any(), any(), any()) } returns emptyMap()
 
         val result = tool.execute(arguments(useCaseIds = listOf(10, 11)), context)
 
         assertThat(result).isInstanceOf(McpToolResult.Success::class.java)
-        verify { service.create(context, any(), listOf(10, 11), any(), any(), any(), any()) }
+        verify { service.create(context, any(), null, listOf(10, 11), any(), any(), any(), any()) }
     }
 
     @Test
     fun `keeps deprecated singular use case compatible`() = runBlocking<Unit> {
         val context = context()
-        every { service.create(context, any(), listOf(10), any(), any(), any(), any()) } returns emptyMap()
+        every { service.create(context, any(), null, listOf(10), any(), any(), any(), any()) } returns emptyMap()
 
         val result = tool.execute(arguments(useCaseId = 10), context)
 
@@ -39,7 +39,7 @@ class CreateRiskAssessmentToolTest {
         val result = tool.execute(arguments(useCaseIds = listOf(10), useCaseId = 10), context())
 
         assertThat((result as McpToolResult.Error).code).isEqualTo("VALIDATION_ERROR")
-        verify(exactly = 0) { service.create(any(), any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { service.create(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     private fun arguments(useCaseIds: List<Int>? = null, useCaseId: Int? = null): Map<String, Any> =

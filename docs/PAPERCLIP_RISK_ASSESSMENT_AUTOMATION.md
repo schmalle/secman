@@ -15,7 +15,7 @@ as. Never put the key, passwords, or assessment tokens in an issue or prompt.
 
 | Agent | Delegated SecMan identity | MCP permissions | Responsibility |
 |---|---|---|---|
-| Assessment coordinator | ADMIN or SECCHAMPION | `ASSESSMENTS_READ`, `ASSESSMENTS_WRITE`, `REQUIREMENTS_READ`, `NOTIFICATIONS_SEND` | Select use cases, create assessments, monitor progress, notify respondents |
+| Assessment coordinator | ADMIN or SECCHAMPION | `ASSESSMENTS_READ`, `ASSESSMENTS_WRITE`, `REQUIREMENTS_READ`, `NOTIFICATIONS_SEND` | Select use cases, create assessments, run approved AI research, monitor progress, notify respondents |
 | Respondent agent | Assigned respondent | `ASSESSMENTS_READ`, `ASSESSMENTS_EXECUTE` | Read the questionnaire, save supported answers, submit when complete |
 | Assessor agent | Assigned assessor | `ASSESSMENTS_READ` | Read completed answers and evaluate the result |
 
@@ -42,6 +42,21 @@ IDs. Requirements from all selected use cases form the questionnaire union:
 Persist the returned SecMan assessment ID in the Paperclip issue. Do not infer
 success from HTTP 200 alone: a JSON-RPC `error` or `result.isError:true` is a
 failed tool call.
+
+For a SaaS or general supplier, first call `create_asset` with
+`type:"SUPPLIER"` and its public HTTPS `uri`, then replace `awsAccountId` in
+the request above with the returned `assetId`. See
+[Supplier and SaaS risk assessments](SUPPLIER_RISK_ASSESSMENT.md).
+
+## Optional OpenRouter research
+
+Where the organization has enabled and approved AI processing, the coordinator
+may call `start_ai_risk_assessment` with the assessment ID. Poll
+`get_ai_risk_assessment_job` with both assessment and job IDs until it reaches a
+terminal state. The online model's answers remain drafts: Paperclip must route
+them to the respondent for review and submission, then to the assessor for the
+existing deterministic evaluation. Never treat job completion as security
+acceptance.
 
 ## Coordinator heartbeat
 

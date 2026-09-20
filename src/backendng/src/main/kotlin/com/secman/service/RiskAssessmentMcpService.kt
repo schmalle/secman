@@ -8,6 +8,7 @@ import com.secman.domain.ResponseSource
 import com.secman.domain.RiskAssessment
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.AwsAccountRepository
+import com.secman.repository.AssetRepository
 import com.secman.repository.RequirementRepository
 import com.secman.repository.ResponseRepository
 import com.secman.repository.RiskAssessmentRepository
@@ -33,6 +34,7 @@ open class RiskAssessmentMcpService(
     private val requirementRepository: RequirementRepository,
     private val useCaseRepository: UseCaseRepository,
     private val awsAccountRepository: AwsAccountRepository,
+    private val assetRepository: AssetRepository,
     private val userRepository: UserRepository,
     private val releaseRequirementScopeService: ReleaseRequirementScopeService
 ) {
@@ -137,19 +139,29 @@ open class RiskAssessmentMcpService(
     @Transactional
     open fun create(
         context: McpExecutionContext,
-        awsAccountId: String,
+        awsAccountId: String?,
+        assetId: Long?,
         useCaseIds: List<Long>,
         assessorEmail: String,
         respondentEmail: String,
         endDate: LocalDate,
         notes: String?
     ): Map<String, Any?> {
-        require(AWS_ACCOUNT_ID.matches(awsAccountId)) { "awsAccountId must contain exactly 12 digits" }
+        require((awsAccountId == null) != (assetId == null)) {
+            "Provide exactly one assessment basis: awsAccountId or assetId"
+        }
+        if (awsAccountId != null) {
+            require(AWS_ACCOUNT_ID.matches(awsAccountId)) { "awsAccountId must contain exactly 12 digits" }
+        }
         require(!endDate.isBefore(LocalDate.now())) { "endDate must be today or later" }
         require(useCaseIds.isNotEmpty()) { "useCaseIds must not be empty" }
         require(useCaseIds.size <= MAX_USE_CASES) { "at most $MAX_USE_CASES use cases may be selected" }
         require(useCaseIds.distinct().size == useCaseIds.size) { "useCaseIds must not contain duplicates" }
-        val awsAccount = findOrCreateAwsAccount(awsAccountId, context.delegatedUserEmail)
+        val awsAccount = awsAccountId?.let { findOrCreateAwsAccount(it, context.delegatedUserEmail) }
+        val asset = assetId?.let { id ->
+            require(context.canAccessAsset(id)) { "Asset not found" }
+            assetRepository.findById(id).orElseThrow { NoSuchElementException("Asset not found") }
+        }
         val useCases = useCaseIds.map { useCaseId ->
             useCaseRepository.findById(useCaseId).orElseThrow {
                 NoSuchElementException("Use case $useCaseId not found")
@@ -175,12 +187,13 @@ open class RiskAssessmentMcpService(
             RiskAssessment(
                 startDate = LocalDate.now(),
                 endDate = endDate,
-                assessmentBasisType = AssessmentBasisType.AWS_ACCOUNT,
-                assessmentBasisId = awsAccount.id!!,
+                assessmentBasisType = if (asset != null) AssessmentBasisType.ASSET else AssessmentBasisType.AWS_ACCOUNT,
+                assessmentBasisId = asset?.id ?: awsAccount!!.id!!,
                 assessor = assessor,
                 requestor = requestor,
                 respondent = respondent,
                 awsAccount = awsAccount,
+                asset = asset,
                 notes = notes?.trim()?.takeIf { it.isNotBlank() },
                 useCases = useCases.toMutableSet(),
                 lockedRelease = activeRelease,
@@ -189,8 +202,8 @@ open class RiskAssessmentMcpService(
             )
         )
         log.info(
-            "MCP actor {} created risk assessment {} for AWS account {} and respondent {}",
-            context.delegatedUserId, assessment.id, awsAccountId, respondent.id
+            "MCP actor {} created risk assessment {} for basis {} and respondent {}",
+            context.delegatedUserId, assessment.id, awsAccountId ?: "asset:$assetId", respondent.id
         )
         return assessmentSummary(assessment)
     }
@@ -373,6 +386,9 @@ open class RiskAssessmentMcpService(
         "basisType" to assessment.assessmentBasisType.name,
         "basisId" to assessment.assessmentBasisId,
         "awsAccountId" to assessment.awsAccount?.awsAccountId,
+        "asset" to assessment.getAssetBasis()?.let {
+            mapOf("id" to it.id, "name" to it.name, "type" to it.type, "uri" to it.uri)
+        },
         "startDate" to assessment.startDate.toString(),
         "endDate" to assessment.endDate.toString(),
         "useCases" to assessment.useCases.map { mapOf("id" to it.id, "name" to it.name) },
