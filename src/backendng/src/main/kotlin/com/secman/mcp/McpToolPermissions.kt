@@ -60,11 +60,11 @@ object McpToolPermissions {
         setOf(ASSESSMENTS_READ) to listOf(
             "list_aws_account_risk_assessments", // ADMIN role checked in execute()
             "list_risk_assessments", "get_risk_assessment_questionnaire", "get_risk_assessment_answers",
-            "evaluate_risk_assessment", "get_risk_assessment_statistics",
+            "evaluate_risk_assessment", "get_risk_assessment_statistics", "get_ai_risk_assessment_job",
             // Read-only views of the onboarding rule set. ADMIN/SECCHAMPION checked in execute().
             "list_account_onboarding_rules", "preview_account_onboarding_rules",
         ),
-        setOf(ASSESSMENTS_WRITE) to listOf("create_risk_assessment"),
+        setOf(ASSESSMENTS_WRITE) to listOf("create_risk_assessment", "start_ai_risk_assessment"),
         setOf(ASSESSMENTS_EXECUTE) to listOf("save_risk_assessment_answers", "submit_risk_assessment"),
         setOf(USER_ACTIVITY) to listOf(
             // ADMIN role checked in execute() for all of these
@@ -235,10 +235,10 @@ object McpToolPermissions {
             setOf(ASSESSMENTS_READ) to listOf(
                 "list_aws_account_risk_assessments",
                 "list_risk_assessments", "get_risk_assessment_questionnaire", "get_risk_assessment_answers",
-                "evaluate_risk_assessment", "get_risk_assessment_statistics",
+                "evaluate_risk_assessment", "get_risk_assessment_statistics", "get_ai_risk_assessment_job",
                 "list_account_onboarding_rules", "preview_account_onboarding_rules",
             ),
-            setOf(ASSESSMENTS_WRITE) to listOf("create_risk_assessment"),
+            setOf(ASSESSMENTS_WRITE) to listOf("create_risk_assessment", "start_ai_risk_assessment"),
             setOf(ASSESSMENTS_EXECUTE) to listOf("save_risk_assessment_answers", "submit_risk_assessment"),
             setOf(WORKGROUPS_WRITE) to listOf(
                 "create_workgroup", "delete_workgroup",
