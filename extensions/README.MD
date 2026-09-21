@@ -17,8 +17,9 @@ in this repository compiles or exercises them.
 
 The distinction matters for security review, so it is worth stating plainly.
 
-**Backend clients** (`secman_ai_github`, `secman_web_check`) authenticate to
-secman itself and **write** data — vulnerabilities, assets, findings. They hold
+**Backend clients** (`secman_ai_github`, `secman_web_check`, `secman_intra_mon`)
+authenticate to secman itself and **write** data — vulnerabilities, assets,
+findings and scan results. They hold
 secman credentials and reach `/api/…` and `/mcp` directly. Changing a backend
 endpoint can break them silently, which is why `CLAUDE.md` §Extension Clients
 requires re-verifying their five contract dimensions (path, method, request
