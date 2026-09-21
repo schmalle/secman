@@ -18,6 +18,7 @@ interface ApiKey {
   notes: string | null;
   delegationEnabled: boolean;
   allowedDelegationDomains: string | null;
+  allowedDelegateUserIds?: number[];
   delegationDomainCount: number;
 }
 
@@ -43,6 +44,7 @@ const McpApiKeyManagement: React.FC = () => {
     delegationEnabled: false,
     allowedDelegationDomains: ''
   });
+  const [delegateIds, setDelegateIds] = useState('');
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [showInactive, setShowInactive] = useState(false);
 
@@ -131,6 +133,12 @@ const McpApiKeyManagement: React.FC = () => {
       }
     }
 
+    const allowedDelegateUserIds = delegateIds.split(',').map(value => value.trim()).filter(Boolean).map(Number);
+    if (allowedDelegateUserIds.length > 100 || allowedDelegateUserIds.some(value => !Number.isSafeInteger(value) || value <= 0)) {
+      setError('Enter at most 100 positive user IDs, separated by commas.');
+      return;
+    }
+
     try {
       const requestBody = {
         name: createForm.name.trim(),
@@ -138,6 +146,7 @@ const McpApiKeyManagement: React.FC = () => {
         expiresAt: createForm.expiresAt || undefined,
         notes: createForm.notes || undefined,
         delegationEnabled: createForm.delegationEnabled || false,
+        allowedDelegateUserIds: createForm.delegationEnabled ? allowedDelegateUserIds : [],
         allowedDelegationDomains: createForm.delegationEnabled ? createForm.allowedDelegationDomains?.trim() : undefined
       };
 
@@ -160,6 +169,7 @@ const McpApiKeyManagement: React.FC = () => {
         console.log('API key created:', data);
         setNewApiKey(data.apiKey);
         setShowCreateForm(false);
+        setDelegateIds('');
         setCreateForm({ name: '', permissions: [], expiresAt: '', notes: '', delegationEnabled: false, allowedDelegationDomains: '' });
         fetchApiKeys();
         setError(null);
@@ -439,8 +449,12 @@ const McpApiKeyManagement: React.FC = () => {
                           />
                           <div className="form-text">
                             Comma-separated list of allowed email domains (must start with @).
-                            Only users with emails matching these domains can be delegated.
+                            Delegated users must match a domain and be the key owner or explicitly listed below.
                           </div>
+                          <label htmlFor="delegateUserIds" className="form-label mt-3">Additional delegated user IDs</label>
+                          <input id="delegateUserIds" className="form-control" value={delegateIds}
+                            onChange={event => setDelegateIds(event.target.value)} placeholder="12, 34" />
+                          <div className="form-text">Comma-separated user IDs. Leave empty to permit only the key owner.</div>
                         </div>
                       )}
                     </div>

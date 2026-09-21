@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory
 /**
  * MCP tool for listing AWS account sharing rules with pagination.
  *
- * ADMIN role is required via User Delegation.
+ * ADMIN or SECCHAMPION is required via User Delegation.
  *
  * Input parameters:
  * - page (optional): Page number (0-indexed). Defaults to 0.
@@ -28,7 +28,7 @@ class ListAwsAccountSharingTool(
     private val log = LoggerFactory.getLogger(ListAwsAccountSharingTool::class.java)
 
     override val name = "list_aws_account_sharing"
-    override val description = "List AWS account sharing rules (ADMIN only, requires User Delegation)"
+    override val description = "List AWS account sharing rules (ADMIN/SECCHAMPION, requires User Delegation)"
     override val operation = McpOperation.READ
 
     override val inputSchema = mapOf(
@@ -53,10 +53,10 @@ class ListAwsAccountSharingTool(
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
 
-        if (!context.isAdmin) {
+        if (!context.canManageGrants) {
             return McpToolResult.error(
                 "ADMIN_REQUIRED",
-                "ADMIN role required to list AWS account sharing rules"
+                "ADMIN or SECCHAMPION role required to list AWS account sharing rules"
             )
         }
 

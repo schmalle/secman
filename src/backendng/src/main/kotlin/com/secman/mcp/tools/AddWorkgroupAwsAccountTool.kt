@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory
 /**
  * MCP tool for adding an AWS account ID to a workgroup.
  *
- * ADMIN role is required via User Delegation.
+ * ADMIN or SECCHAMPION is required via User Delegation.
  *
  * Input parameters:
  * - workgroupId (required): ID of the workgroup
@@ -29,7 +29,7 @@ class AddWorkgroupAwsAccountTool(
     private val log = LoggerFactory.getLogger(AddWorkgroupAwsAccountTool::class.java)
 
     override val name = "add_workgroup_aws_account"
-    override val description = "Add an AWS account ID to a workgroup (ADMIN only, requires User Delegation)"
+    override val description = "Add an AWS account ID to a workgroup (ADMIN/SECCHAMPION, requires User Delegation)"
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(
@@ -50,10 +50,10 @@ class AddWorkgroupAwsAccountTool(
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
 
-        if (!context.isAdmin) {
+        if (!context.canManageGrants) {
             return McpToolResult.error(
                 "ADMIN_REQUIRED",
-                "ADMIN role required to add AWS accounts to a workgroup"
+                "ADMIN or SECCHAMPION role required to add AWS accounts to a workgroup"
             )
         }
 

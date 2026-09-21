@@ -18,7 +18,7 @@ class DeleteAssetNotSeenTool(
 ) : McpTool {
 
     override val name = "delete_asset_not_seen"
-    override val description = "Delete CrowdStrike-imported assets not seen in CrowdStrike for more than N days (ADMIN only, requires User Delegation)"
+    override val description = "Delete CrowdStrike-imported assets not seen in CrowdStrike for more than N days (ADMIN or SECCHAMPION, requires User Delegation)"
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(
@@ -43,8 +43,8 @@ class DeleteAssetNotSeenTool(
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
-        if (!context.isAdmin) {
-            return McpToolResult.error("ADMIN_REQUIRED", "ADMIN role required to delete stale assets")
+        if (!context.canManageGrants) {
+            return McpToolResult.error("ADMIN_REQUIRED", "ADMIN or SECCHAMPION role required to delete stale assets")
         }
 
         val days = (arguments["days"] as? Number)?.toInt()

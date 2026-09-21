@@ -293,6 +293,11 @@ const Sidebar = () => {
                     </li>
                 )}
 
+                {!hasRisk && userRoles.length > 0 && (
+                    <li><a href="/riskassessment" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                        <i className="bi bi-clipboard-data me-2"></i> My assessments
+                    </a></li>
+                )}
                 {/* RISK MANAGEMENT Section - ADMIN, RISK, or SECCHAMPION only */}
                 {hasRisk && (
                     <li>

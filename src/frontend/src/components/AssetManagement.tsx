@@ -96,15 +96,16 @@ const AssetManagement: React.FC = () => {
   // utils/useClientAuth). The mount effect below keeps calling getUser() directly —
   // effects only ever run on the client, where it is already correct.
   const roles = useClientRoles();
-  const canAssignOwner = isAdmin(roles) || isSecChampion(roles);
+  const canManageGrants = isAdmin(roles) || isSecChampion(roles);
+  const canAssignOwner = canManageGrants;
 
   // Domain validation state (Feature 043 - User Story 2)
   const [domainError, setDomainError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAssets();
+    fetchWorkgroups();
     if (isAdmin(getUser()?.roles) || isSecChampion(getUser()?.roles)) {
-      fetchWorkgroups();
       fetchOwnerCandidates();
     }
   }, []);
@@ -219,11 +220,20 @@ const AssetManagement: React.FC = () => {
       return; // Validation error is already set in state
     }
 
+    if (!editingAsset && !canManageGrants && !formData.workgroupIds?.length) {
+      setError('Select an enabled workgroup for the new asset.');
+      return;
+    }
+    const payload = { ...formData };
+    if (!canManageGrants) {
+      delete payload.adDomain;
+      if (editingAsset) delete payload.workgroupIds;
+    }
     try {
       if (editingAsset) {
-        await authenticatedPut(`/api/assets/${editingAsset.id}`, formData);
+        await authenticatedPut(`/api/assets/${editingAsset.id}`, payload);
       } else {
-        await authenticatedPost('/api/assets', formData);
+        await authenticatedPost('/api/assets', payload);
       }
 
       await fetchAssets();
@@ -569,7 +579,7 @@ const AssetManagement: React.FC = () => {
                 </>
               )}
               {/* Feature 029: Bulk Delete Button (ADMIN only, hidden when no assets) */}
-              {isAdmin(roles) && filteredAssets.length > 0 && (
+              {canManageGrants && filteredAssets.length > 0 && (
                 <button
                   type="button"
                   className="btn btn-danger"
@@ -728,6 +738,7 @@ const AssetManagement: React.FC = () => {
                       type="text"
                       className={`form-control ${domainError ? 'is-invalid' : ''}`}
                       id="adDomain"
+                      disabled={!canManageGrants}
                       name="adDomain"
                       value={formData.adDomain || ''}
                       onChange={(e) => {
@@ -786,6 +797,7 @@ const AssetManagement: React.FC = () => {
                               className="form-check-input"
                               type="checkbox"
                               id={`workgroup-${workgroup.id}`}
+                              disabled={!!editingAsset && !canManageGrants}
                               value={workgroup.id}
                               checked={(formData.workgroupIds || []).includes(workgroup.id)}
                               onChange={handleWorkgroupChange}
@@ -1012,7 +1024,7 @@ const AssetManagement: React.FC = () => {
                                 <i className="bi bi-shield-exclamation"></i> Vulns
                               </a>
                               {/* Delete button only visible to ADMIN users (Feature 033) */}
-                              {isAdmin(roles) && (
+                              {canManageGrants && (
                                 <button
                                   type="button"
                                   onClick={() => handleDelete(asset.id!)}

@@ -42,14 +42,13 @@ open class AwsWorkgroupReconciliationService(
             dryRun -> "WOULD_ADD"
             else -> "ADDED"
         }
-        val assets = workgroupId?.let { workgroupRepository.countAssetsByWorkgroupId(it) } ?: 0L
+        val assets = 0L // Explicit asset assignments are never owned by this reconciliation.
         val wasEnabled = workgroup?.enabled ?: false
         if (!dryRun && workgroup != null && workgroupId != null) {
             if (member != null && !alreadyMember) {
                 workgroupService.assignUsersToWorkgroup(workgroupId, listOf(member.id!!))
             }
             workgroup.awsAccountManaged = true
-            workgroupRepository.removeDirectAssetLinks(workgroupId)
         }
         // Writes use persisted relationships; previews include only changes this import would make.
         val userCount = (workgroupId?.let { workgroupRepository.countUsersByWorkgroupId(it) } ?: 0L) +
@@ -58,12 +57,10 @@ open class AwsWorkgroupReconciliationService(
             ?.takeIf { it.isNotBlank() } ?: ownerEmail?.takeIf { dryRun }).isNullOrBlank()
         val accountIds = workgroupId?.let { accounts.findByWorkgroupId(it).map { account -> account.awsAccountId } }.orEmpty()
         val resolvedAccounts = if (dryRun && expectedAccountId !in accountIds) accountIds + expectedAccountId else accountIds
-        val remainingAssets = if (dryRun) 0L else workgroupRepository.countAssetsByWorkgroupId(workgroupId!!)
         val reason = when {
             !ownerPresent -> "MISSING_OWNER"
             userCount == 0L -> "NO_MEMBERS"
             resolvedAccounts != listOf(expectedAccountId) -> "ACCOUNT_MISMATCH"
-            remainingAssets != 0L -> "DIRECT_ASSETS_REMAIN"
             safety.exceedsMembershipLimit(userCount) -> "MEMBERSHIP_LIMIT"
             else -> "READY"
         }

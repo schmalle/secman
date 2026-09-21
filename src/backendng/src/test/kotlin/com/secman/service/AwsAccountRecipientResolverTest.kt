@@ -25,7 +25,7 @@ class AwsAccountRecipientResolverTest {
         every { userMappingRepository.findByAwsAccountId("123456789012") } returns listOf(
             UserMapping(email = "Owner@example.com", awsAccountId = "123456789012", domain = null)
         )
-        every { assetRepository.findDistinctWorkgroupMemberEmailsByCloudAccountId("123456789012") } returns
+        every { assetRepository.findDistinctAccountGrantedMemberEmails("123456789012") } returns
             listOf("wg-member@example.com", "OWNER@example.com")
         every { awsAccountSharingService.getTargetUserEmailsForAwsAccount("123456789012") } returns
             listOf("Shared-User@example.com")
@@ -40,7 +40,7 @@ class AwsAccountRecipientResolverTest {
     @Test
     fun `returns workgroup members even without an owner mapping`() {
         every { userMappingRepository.findByAwsAccountId("444444444444") } returns emptyList()
-        every { assetRepository.findDistinctWorkgroupMemberEmailsByCloudAccountId("444444444444") } returns
+        every { assetRepository.findDistinctAccountGrantedMemberEmails("444444444444") } returns
             listOf("wg-only@example.com")
         every { awsAccountSharingService.getTargetUserEmailsForAwsAccount("444444444444") } returns emptyList()
 
@@ -55,7 +55,7 @@ class AwsAccountRecipientResolverTest {
 
         assertThat(recipients).isEmpty()
         verify(exactly = 0) { userMappingRepository.findByAwsAccountId(any()) }
-        verify(exactly = 0) { assetRepository.findDistinctWorkgroupMemberEmailsByCloudAccountId(any()) }
+        verify(exactly = 0) { assetRepository.findDistinctAccountGrantedMemberEmails(any()) }
         verify(exactly = 0) { awsAccountSharingService.getTargetUserEmailsForAwsAccount(any()) }
     }
 }

@@ -34,7 +34,7 @@ class StartAiRiskAssessmentTool(
             jobService.startJob(
                 assessment,
                 StartAiJobRequest(scope = "WHOLE_ASSESSMENT", force = arguments["force"] as? Boolean ?: false),
-                authentication
+                authentication, context.apiKeyId
             )
         }
     }
@@ -47,7 +47,7 @@ private fun aiJobStartSchema(): Map<String, Any> = mapOf(
         "assessmentId" to mapOf("type" to "number", "minimum" to 1),
         "force" to mapOf(
             "type" to "boolean",
-            "description" to "Replace AI-edited answers; manually entered answers are never overwritten"
+            "description" to "Refresh AI-generated answers; human contributions are never overwritten"
         )
     )
 )

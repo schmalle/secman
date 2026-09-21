@@ -64,16 +64,10 @@ open class WorkgroupController(
         authentication.roles.contains("ADMIN")
 
     private fun isAdminOrSecChampion(authentication: Authentication): Boolean =
-        isAdmin(authentication) || authentication.roles.contains("SECCHAMPION")
+        com.secman.security.GrantAuthority.canManage(authentication.roles)
 
     private fun canManageWorkgroup(authentication: Authentication): Boolean =
         isAdminOrSecChampion(authentication)
-
-    private fun canDeleteWorkgroup(workgroup: Workgroup, authentication: Authentication): Boolean {
-        if (isAdminOrSecChampion(authentication)) return true
-        val user = currentUser(authentication)
-        return workgroup.createdBy?.id == user.id
-    }
 
     /**
      * Resolve the calling User from the Authentication principal.
@@ -84,28 +78,11 @@ open class WorkgroupController(
             IllegalStateException("Authenticated user not found: ${authentication.name}")
         }
 
-    /**
-     * Member-or-admin authorization for workgroup-scoped actions.
-     *
-     * Effective membership cascades downward (Feature 040): a direct member of
-     * an ancestor workgroup is treated as a member of every descendant. So an
-     * L2 member can view/edit L3 children, matching the management semantics
-     * of the hierarchy. Direct-membership is still checked first via the
-     * already-loaded `workgroup.users` collection to avoid the DB round-trip in
-     * the common case.
-     *
-     * Caller must already be inside a transaction so the LAZY users collection
-     * can be read.
-     */
+    /** Only direct membership in an enabled group grants ordinary access. */
     private fun isMemberOrAdmin(workgroup: Workgroup, authentication: Authentication): Boolean {
-        if (isAdmin(authentication)) return true
+        if (isAdminOrSecChampion(authentication)) return true
         val user = currentUser(authentication)
-        if (workgroup.users.any { it.id == user.id }) return true
-        // Fall back to recursive-CTE lookup: covers the L2-member-of-L3 case.
-        val effectiveIds = workgroupRepository.findEffectiveWorkgroupsByUserEmail(user.email)
-            .mapNotNull { it.id }
-            .toSet()
-        return workgroup.id in effectiveIds
+        return workgroup.enabled && workgroup.users.any { it.id == user.id }
     }
 
     /**
@@ -118,15 +95,11 @@ open class WorkgroupController(
      * common admin path and lets callers branch on `== null` for "no filter".
      */
     private fun accessibleWorkgroupIdsOrNull(authentication: Authentication): Set<Long>? {
-        if (isAdmin(authentication) || authentication.roles.contains("SECCHAMPION")) {
+        if (com.secman.security.GrantAuthority.canManage(authentication.roles)) {
             return null
         }
         val user = currentUser(authentication)
-        // Effective membership cascades downward in the hierarchy: a member of
-        // an L2 workgroup is treated as a member of every L3+ descendant. The
-        // tree-view, list view, and member-or-admin gating all share this set,
-        // so they agree on visibility (Feature 040).
-        return workgroupRepository.findEffectiveWorkgroupsByUserEmail(user.email)
+        return workgroupRepository.findWorkgroupsByUserEmail(user.email)
             .mapNotNull { it.id }
             .toSet()
     }
@@ -140,12 +113,15 @@ open class WorkgroupController(
      * Returns: 201 Created with workgroup object
      */
     @Post
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN", "SECCHAMPION")
     open fun createWorkgroup(
         @Body @Valid request: CreateWorkgroupRequest,
         authentication: Authentication
     ): HttpResponse<*> {
         return try {
+            if (!canManageWorkgroup(authentication)) {
+                return HttpResponse.status<Any>(io.micronaut.http.HttpStatus.FORBIDDEN)
+            }
             if (request.ownerEmail != null && !isAdmin(authentication)) {
                 return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
                     .body(mapOf("error" to "Only administrators can set a workgroup owner"))
@@ -192,12 +168,12 @@ open class WorkgroupController(
     open fun listWorkgroups(authentication: Authentication): HttpResponse<List<WorkgroupListResponse>> {
         // ADMIN and SECCHAMPION see every workgroup; regular users see only the
         // workgroups they are members of (privacy default — see /workgroups UX).
-        val workgroups = if (isAdmin(authentication) || authentication.roles.contains("SECCHAMPION")) {
+        val workgroups = if (com.secman.security.GrantAuthority.canManage(authentication.roles)) {
             workgroupService.listAllWorkgroups()
         } else {
             val user = currentUser(authentication)
-            // Include descendant workgroups so L2 members see their L3 sub-teams.
-            workgroupRepository.findEffectiveWorkgroupsByUserEmail(user.email)
+            // Only enabled, directly joined workgroups grant membership visibility.
+            workgroupRepository.findWorkgroupsByUserEmail(user.email)
         }
 
         // Performance: build all per-workgroup data with a constant number of
@@ -215,6 +191,8 @@ open class WorkgroupController(
                 (row[0] as Number).toLong() to Pair((row[1] as Number?)?.toLong(), row[2] as String)
             }
 
+        val visibleIds = workgroups.mapNotNull { it.id }.toSet()
+        val visibleLinks = if (canManageWorkgroup(authentication)) links else links.filterKeys { it in visibleIds }
         val response = workgroups.map { wg ->
             val id = wg.id!!
             WorkgroupListResponse(
@@ -231,10 +209,10 @@ open class WorkgroupController(
                 adDomainsCount = adCounts[id] ?: 0L,
                 createdAt = wg.createdAt!!,
                 updatedAt = wg.updatedAt!!,
-                parentId = wg.parent?.id,  // FK id on a lazy proxy — no query
-                parentName = wg.parent?.id?.let { links[it]?.second },
-                depth = depthFromLinks(id, links),
-                ancestors = ancestorsFromLinks(id, links)
+                parentId = wg.parent?.id?.takeIf { it in visibleLinks },
+                parentName = wg.parent?.id?.let { visibleLinks[it]?.second },
+                depth = depthFromLinks(id, visibleLinks),
+                ancestors = ancestorsFromLinks(id, visibleLinks)
             )
         }
         return HttpResponse.ok(response)
@@ -380,7 +358,7 @@ open class WorkgroupController(
     ): HttpResponse<Void> {
         return try {
             val workgroup = workgroupService.getWorkgroupById(id)
-            if (!canDeleteWorkgroup(workgroup, authentication)) {
+            if (!canManageWorkgroup(authentication)) {
                 return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
             }
             // Privileged users retain the legacy "promote children to grandparent" semantics
@@ -425,41 +403,11 @@ open class WorkgroupController(
                     .body(mapOf("error" to "Missing rights"))
             }
 
-            // Domain restriction: non-admin callers can only lazy-create new pending users
-            // from their own email domain. Existing users (by id, or by email already in
-            // the DB) are vetted identities and pass through. Enforced here — BEFORE
-            // resolveAll runs — because lazy-create is irreversible.
-            if (!isAdmin(authentication) && !request.userRefs.isNullOrEmpty()) {
-                val callerEmail = currentUser(authentication).email
-                val callerDomain = callerEmail.substringAfter('@', "").lowercase()
-                if (callerDomain.isBlank()) {
-                    logger.warn(
-                        "AUDIT: operation=ASSIGN_USERS_DENIED, reason=NO_CALLER_DOMAIN, actor={}, workgroup={}",
-                        authentication.name, workgroup.name
-                    )
-                    return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.BAD_REQUEST)
-                        .body(mapOf("error" to "Your account has no email domain; cannot invite new users."))
-                }
-                val forbiddenEmails = request.userRefs
-                    .filter { it.id == null && !it.email.isNullOrBlank() }
-                    .map { it.email!!.trim() }
-                    .filter { email ->
-                        // Only restrict NEW emails. If a User row already exists with this
-                        // email, the assignment is a regular existing-user pick.
-                        userRepository.findByEmailIgnoreCase(email).isEmpty &&
-                            !email.substringAfter('@', "").equals(callerDomain, ignoreCase = true)
-                    }
-                if (forbiddenEmails.isNotEmpty()) {
-                    logger.warn(
-                        "AUDIT: operation=ASSIGN_USERS_DENIED, reason=CROSS_DOMAIN_INVITE, actor={}, workgroup={}, emails={}",
-                        authentication.name, workgroup.name, forbiddenEmails.size
-                    )
-                    return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.BAD_REQUEST)
-                        .body(mapOf(
-                            "error" to "New users must share your email domain (@$callerDomain). " +
-                                "Rejected: ${forbiddenEmails.joinToString(", ")}"
-                        ))
-                }
+            if (!isAdmin(authentication) && request.userRefs.orEmpty().any {
+                it.id == null && !it.email.isNullOrBlank() && userRepository.findByEmailIgnoreCase(it.email!!.trim()).isEmpty
+            }) {
+                return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
+                    .body(mapOf("error" to "Only ADMIN may create user accounts"))
             }
 
             // userRefs wins when both shapes are present.
@@ -605,14 +553,8 @@ open class WorkgroupController(
         return try {
             val workgroup = workgroupRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound()
-            if (!isAdminOrSecChampion(authentication)) {
-                if (!isMemberOrAdmin(workgroup, authentication)) {
-                    return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
-                }
-                val accessibleAssetIds = assetFilterService.getAccessibleAssetIds(authentication)
-                if (request.assetIds.any { it !in accessibleAssetIds }) {
-                    return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
-                }
+            if (!canManageWorkgroup(authentication)) {
+                return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
             }
             workgroupService.assignAssetsToWorkgroup(id, request.assetIds)
             HttpResponse.ok()
@@ -746,7 +688,7 @@ open class WorkgroupController(
      * Returns: 201 Created with child workgroup, 400 if validation fails, 404 if parent not found
      */
     @Post("/{id}/children")
-    @Secured("ADMIN")
+    @Secured("ADMIN", "SECCHAMPION")
     @Transactional
     open fun createChildWorkgroup(
         @PathVariable id: Long,
@@ -799,7 +741,7 @@ open class WorkgroupController(
             } else {
                 children.filter { it.id in accessibleIds }
             }
-            HttpResponse.ok(filtered.map { toWorkgroupResponse(it) })
+            HttpResponse.ok(filtered.map { toWorkgroupResponse(it, accessibleWorkgroupIdsOrNull(authentication)) })
         } catch (e: IllegalArgumentException) {
             HttpResponse.notFound()
         }
@@ -831,7 +773,7 @@ open class WorkgroupController(
                     (it.parent == null || it.parent?.id !in accessibleIds)
             }
         }
-        return HttpResponse.ok(roots.map { toWorkgroupResponse(it) })
+        return HttpResponse.ok(roots.map { toWorkgroupResponse(it, accessibleWorkgroupIdsOrNull(authentication)) })
     }
 
     /**
@@ -853,7 +795,7 @@ open class WorkgroupController(
         val accessibleIds = accessibleWorkgroupIdsOrNull(authentication)
         val all = workgroupService.listAllWorkgroups()
         val visible = if (accessibleIds == null) all else all.filter { it.id in accessibleIds }
-        return HttpResponse.ok(visible.map { toWorkgroupResponse(it) })
+        return HttpResponse.ok(visible.map { toWorkgroupResponse(it, accessibleWorkgroupIdsOrNull(authentication)) })
     }
 
     /**
@@ -879,7 +821,8 @@ open class WorkgroupController(
                 return HttpResponse.notFound()
             }
             val ancestors = workgroupService.getAncestors(id)
-            val response = ancestors.map { BreadcrumbItem(id = it.id!!, name = it.name) }
+            val response = ancestors.filter { accessibleIds == null || it.id in accessibleIds }
+                .map { BreadcrumbItem(id = it.id!!, name = it.name) }
             HttpResponse.ok(response)
         } catch (e: IllegalArgumentException) {
             HttpResponse.notFound()
@@ -909,7 +852,7 @@ open class WorkgroupController(
         }
         val descendants = workgroupService.getDescendants(id)
         val filtered = if (accessibleIds == null) descendants else descendants.filter { it.id in accessibleIds }
-        val response = filtered.map { toWorkgroupResponse(it) }
+        val response = filtered.map { toWorkgroupResponse(it, accessibleWorkgroupIdsOrNull(authentication)) }
         return HttpResponse.ok(response)
     }
 
@@ -937,14 +880,14 @@ open class WorkgroupController(
     ): HttpResponse<*> {
         return try {
             val workgroup = workgroupService.getWorkgroupById(id)
-            if (!isMemberOrAdmin(workgroup, authentication)) {
+            if (!canManageWorkgroup(authentication)) {
                 return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
                     .body(mapOf("error" to "You must be a member of '${workgroup.name}' to move it"))
             }
             val newParentId = request.newParentId
             if (newParentId != null) {
                 val newParent = workgroupService.getWorkgroupById(newParentId)
-                if (!isMemberOrAdmin(newParent, authentication)) {
+                if (!canManageWorkgroup(authentication)) {
                     return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
                         .body(mapOf("error" to "You must be a member of the target parent '${newParent.name}' to move a workgroup under it"))
                 }
@@ -996,7 +939,7 @@ open class WorkgroupController(
      * Used by CLI for pattern-based asset operations.
      */
     @Get("/cli/search-assets")
-    @Secured("ADMIN")
+    @Secured("ADMIN", "SECCHAMPION")
     @Transactional
     open fun searchAssets(
         @QueryValue(defaultValue = "") pattern: String,
@@ -1034,7 +977,7 @@ open class WorkgroupController(
      * List assets in a workgroup. Used by CLI for listing workgroup contents.
      */
     @Get("/{id}/cli/assets")
-    @Secured("ADMIN")
+    @Secured("ADMIN", "SECCHAMPION")
     @Transactional
     open fun listWorkgroupAssets(@PathVariable id: Long): HttpResponse<List<CliAssetDto>> {
         return try {
@@ -1061,7 +1004,7 @@ open class WorkgroupController(
      * Assign assets to a workgroup by IDs or pattern. Used by CLI.
      */
     @Post("/{id}/cli/assign-assets")
-    @Secured("ADMIN")
+    @Secured("ADMIN", "SECCHAMPION")
     @Transactional
     open fun cliAssignAssets(
         @PathVariable id: Long,
@@ -1072,7 +1015,6 @@ open class WorkgroupController(
 
         return try {
             val workgroup = workgroupService.getWorkgroupById(id)
-            workgroup.requireDirectAssetAssignmentAllowed()
 
             // Resolve asset IDs from pattern or direct IDs
             val assetIds = resolveAssetIds(request)
@@ -1137,7 +1079,7 @@ open class WorkgroupController(
      * Remove assets from a workgroup by IDs, pattern, or all.
      */
     @Post("/{id}/cli/remove-assets")
-    @Secured("ADMIN")
+    @Secured("ADMIN", "SECCHAMPION")
     @Transactional
     open fun cliRemoveAssets(
         @PathVariable id: Long,
@@ -1259,8 +1201,8 @@ open class WorkgroupController(
      * Helper method to convert Workgroup entity to WorkgroupResponse DTO
      * Feature 040: Nested Workgroups
      */
-    private fun toWorkgroupResponse(workgroup: Workgroup): WorkgroupResponse {
-        val ancestors = workgroup.getAncestors().map { ancestor ->
+    private fun toWorkgroupResponse(workgroup: Workgroup, visibleIds: Set<Long>? = null): WorkgroupResponse {
+        val ancestors = workgroup.getAncestors().filter { visibleIds == null || it.id in visibleIds }.map { ancestor ->
             BreadcrumbItem(id = ancestor.id!!, name = ancestor.name)
         }
 
@@ -1270,10 +1212,10 @@ open class WorkgroupController(
             description = workgroup.description,
             ownerEmail = workgroup.ownerEmail,
             enabled = workgroup.enabled,
-            parentId = workgroup.parent?.id,
-            depth = workgroup.calculateDepth(),
-            childCount = workgroup.children.size,
-            hasChildren = workgroup.children.isNotEmpty(),
+            parentId = workgroup.parent?.id?.takeIf { visibleIds == null || it in visibleIds },
+            depth = ancestors.size,
+            childCount = workgroup.children.count { visibleIds == null || it.id in visibleIds },
+            hasChildren = workgroup.children.any { visibleIds == null || it.id in visibleIds },
             ancestors = ancestors,
             createdAt = workgroup.createdAt!!,
             updatedAt = workgroup.updatedAt!!,

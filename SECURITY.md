@@ -24,7 +24,7 @@ Include: description, repro steps, impact assessment, suggested fix (optional). 
 ## In-tree controls
 
 - AuthN: BCrypt, JWT, OAuth2/OIDC, Passkeys/WebAuthn, optional MFA.
-- AuthZ: 9-role RBAC + row-level filtering on assets (workgroup, ownership, AWS account, AD domain, sharing).
+- AuthZ: 9-role RBAC + row-level filtering on assets (enabled direct workgroup grants, personal AWS/AD mappings, directional sharing; ownership is metadata).
 - Storage: parameterized queries (no string-built SQL); sensitive config encrypted at rest (`SECMAN_ENCRYPTION_PASSWORD`/`SALT`).
 - Web: HttpOnly + Secure cookies, CSP, SameSite for CSRF.
 - Imports: file-size cap, MIME and header validation.

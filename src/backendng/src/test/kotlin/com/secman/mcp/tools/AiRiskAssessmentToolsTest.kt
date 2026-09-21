@@ -21,12 +21,12 @@ class AiRiskAssessmentToolsTest {
     @Test
     fun `start tool launches whole assessment job through ownership guard`() = runBlocking<Unit> {
         every { guard.check(42, any()) } returns assessment
-        every { jobs.startJob(assessment, any(), any()) } returns StartAiJobResponse(7, 3, BigDecimal.ONE)
+        every { jobs.startJob(assessment, any(), any(), 1L) } returns StartAiJobResponse(7, 3, BigDecimal.ONE)
 
         val result = StartAiRiskAssessmentTool(jobs, guard).execute(mapOf("assessmentId" to 42), context())
 
         assertThat(result).isInstanceOf(McpToolResult.Success::class.java)
-        verify { jobs.startJob(assessment, match { it.scope == "WHOLE_ASSESSMENT" && !it.force }, any()) }
+        verify { jobs.startJob(assessment, match { it.scope == "WHOLE_ASSESSMENT" && !it.force }, any(), 1L) }
     }
 
     @Test

@@ -57,6 +57,15 @@ interface ScanRepository : JpaRepository<Scan, Long> {
 
     // Access-controlled variants (OWASP A01)
     //
+    @Query("""
+        SELECT s FROM Scan s
+        WHERE EXISTS (SELECT r.id FROM ScanResult r WHERE r.scan = s AND r.asset.id IN (:accessibleAssetIds))
+          AND NOT EXISTS (SELECT r.id FROM ScanResult r WHERE r.scan = s
+                          AND (r.asset IS NULL OR r.asset.id NOT IN (:accessibleAssetIds)))
+        ORDER BY s.scanDate DESC
+    """)
+    fun findFullyAccessibleScans(accessibleAssetIds: Collection<Long>): List<Scan>
+
     // A scan is visible to a caller when it discovered at least one asset that caller can
     // access. DISTINCT is required, not cosmetic: a scan normally produces many ScanResult
     // rows and the join would otherwise repeat the scan once per accessible host, which
@@ -68,12 +77,16 @@ interface ScanRepository : JpaRepository<Scan, Long> {
             SELECT DISTINCT s FROM Scan s
             JOIN s.results r
             WHERE r.asset.id IN :accessibleAssetIds
+            AND NOT EXISTS (SELECT hidden.id FROM ScanResult hidden WHERE hidden.scan = s
+                            AND (hidden.asset IS NULL OR hidden.asset.id NOT IN (:accessibleAssetIds)))
             ORDER BY s.scanDate DESC
         """,
         countQuery = """
             SELECT COUNT(DISTINCT s.id) FROM Scan s
             JOIN s.results r
             WHERE r.asset.id IN :accessibleAssetIds
+            AND NOT EXISTS (SELECT hidden.id FROM ScanResult hidden WHERE hidden.scan = s
+                            AND (hidden.asset IS NULL OR hidden.asset.id NOT IN (:accessibleAssetIds)))
         """
     )
     fun findAccessibleScans(accessibleAssetIds: Collection<Long>, pageable: Pageable): Page<Scan>
@@ -83,6 +96,8 @@ interface ScanRepository : JpaRepository<Scan, Long> {
             SELECT DISTINCT s FROM Scan s
             JOIN s.results r
             WHERE r.asset.id IN :accessibleAssetIds
+            AND NOT EXISTS (SELECT hidden.id FROM ScanResult hidden WHERE hidden.scan = s
+                            AND (hidden.asset IS NULL OR hidden.asset.id NOT IN (:accessibleAssetIds)))
             AND s.scanType = :scanType
             ORDER BY s.scanDate DESC
         """,
@@ -90,6 +105,8 @@ interface ScanRepository : JpaRepository<Scan, Long> {
             SELECT COUNT(DISTINCT s.id) FROM Scan s
             JOIN s.results r
             WHERE r.asset.id IN :accessibleAssetIds
+            AND NOT EXISTS (SELECT hidden.id FROM ScanResult hidden WHERE hidden.scan = s
+                            AND (hidden.asset IS NULL OR hidden.asset.id NOT IN (:accessibleAssetIds)))
             AND s.scanType = :scanType
         """
     )
@@ -104,6 +121,8 @@ interface ScanRepository : JpaRepository<Scan, Long> {
             SELECT DISTINCT s FROM Scan s
             JOIN s.results r
             WHERE r.asset.id IN :accessibleAssetIds
+            AND NOT EXISTS (SELECT hidden.id FROM ScanResult hidden WHERE hidden.scan = s
+                            AND (hidden.asset IS NULL OR hidden.asset.id NOT IN (:accessibleAssetIds)))
             AND s.uploadedBy = :uploadedBy
             ORDER BY s.scanDate DESC
         """,
@@ -111,6 +130,8 @@ interface ScanRepository : JpaRepository<Scan, Long> {
             SELECT COUNT(DISTINCT s.id) FROM Scan s
             JOIN s.results r
             WHERE r.asset.id IN :accessibleAssetIds
+            AND NOT EXISTS (SELECT hidden.id FROM ScanResult hidden WHERE hidden.scan = s
+                            AND (hidden.asset IS NULL OR hidden.asset.id NOT IN (:accessibleAssetIds)))
             AND s.uploadedBy = :uploadedBy
         """
     )
@@ -125,6 +146,8 @@ interface ScanRepository : JpaRepository<Scan, Long> {
             SELECT DISTINCT s FROM Scan s
             JOIN s.results r
             WHERE r.asset.id IN :accessibleAssetIds
+            AND NOT EXISTS (SELECT hidden.id FROM ScanResult hidden WHERE hidden.scan = s
+                            AND (hidden.asset IS NULL OR hidden.asset.id NOT IN (:accessibleAssetIds)))
             AND s.scanDate BETWEEN :start AND :end
             ORDER BY s.scanDate DESC
         """,
@@ -132,6 +155,8 @@ interface ScanRepository : JpaRepository<Scan, Long> {
             SELECT COUNT(DISTINCT s.id) FROM Scan s
             JOIN s.results r
             WHERE r.asset.id IN :accessibleAssetIds
+            AND NOT EXISTS (SELECT hidden.id FROM ScanResult hidden WHERE hidden.scan = s
+                            AND (hidden.asset IS NULL OR hidden.asset.id NOT IN (:accessibleAssetIds)))
             AND s.scanDate BETWEEN :start AND :end
         """
     )

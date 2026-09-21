@@ -141,6 +141,23 @@ class WorkgroupHierarchyAccessControlIntegrationTest : BaseIntegrationTest() {
         assertThat(descendants.status).isEqualTo(HttpStatus.OK)
     }
 
+    @Test
+    fun `child membership does not reveal inaccessible ancestor identities`() {
+        val suffix = System.nanoTime()
+        val parent = workgroupRepository.save(Workgroup(name = "Hidden parent $suffix"))
+        val child = workgroupRepository.save(Workgroup(name = "Visible child $suffix", parent = parent))
+        val member = userRepository.save(TestDataFactory.createRegularUser("child-$suffix", "child-$suffix@test.com"))
+        assignUserToWorkgroup(member.id!!, child.id!!)
+        val cookie = login(member.username)
+        val hidden = client.toBlocking().retrieve(
+            HttpRequest.GET<Any>("/api/workgroups/${child.id}/ancestors").cookie(cookie), Argument.listOf(Map::class.java))
+        assertThat(hidden).isEmpty()
+        assignUserToWorkgroup(member.id!!, parent.id!!)
+        val visible = client.toBlocking().retrieve(
+            HttpRequest.GET<Any>("/api/workgroups/${child.id}/ancestors").cookie(cookie), Argument.listOf(Map::class.java))
+        assertThat(visible.map { (it["id"] as Number).toLong() }).containsExactly(parent.id!!)
+    }
+
     private fun login(username: String) =
         client.toBlocking().exchange(
             HttpRequest.POST("/api/auth/login", LoginRequest(username, TestDataFactory.DEFAULT_PASSWORD)),

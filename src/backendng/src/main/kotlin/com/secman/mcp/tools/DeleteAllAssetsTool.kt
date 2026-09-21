@@ -27,7 +27,7 @@ class DeleteAllAssetsTool(
 ) : McpTool {
 
     override val name = "delete_all_assets"
-    override val description = "Delete all assets from the system with cascade deletion of vulnerabilities, scan results, and ports (ADMIN only, requires User Delegation)"
+    override val description = "Delete all assets from the system with cascade deletion of vulnerabilities, scan results, and ports (ADMIN/SECCHAMPION, requires User Delegation)"
     override val operation = McpOperation.DELETE
 
     override val inputSchema = mapOf(
@@ -45,11 +45,11 @@ class DeleteAllAssetsTool(
         // Require User Delegation for audit trail
         requireDelegation(context)?.let { return it }
 
-        // Require ADMIN role - this is a critical destructive operation
-        if (!context.isAdmin) {
+        // Require grant-management authority - this is a critical destructive operation
+        if (!context.canManageGrants) {
             return McpToolResult.error(
                 "ADMIN_REQUIRED",
-                "ADMIN role required to delete all assets"
+                "ADMIN or SECCHAMPION role required to delete all assets"
             )
         }
 

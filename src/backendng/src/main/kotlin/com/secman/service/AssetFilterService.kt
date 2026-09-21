@@ -3,7 +3,6 @@ package com.secman.service
 import com.secman.config.MemoryOptimizationConfig
 import com.secman.domain.Asset
 import com.secman.domain.Scan
-import com.secman.domain.User
 import com.secman.domain.Vulnerability
 import com.secman.repository.AssetRepository
 import com.secman.repository.ScanRepository
@@ -15,21 +14,8 @@ import com.secman.repository.WorkgroupAwsAccountRepository
 import com.secman.security.hasRole
 import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
-import org.hibernate.Hibernate
 
-/**
- * Centralized service for unified access control filtering
- *
- * Implements filtering logic for assets, vulnerabilities, and scans based on:
- * - ADMIN role: Full access to all resources
- * - SECCHAMPION role: Full access to all resources (same as ADMIN for visibility)
- * - VULN role: Respects workgroup restrictions like regular users
- * - USER role: Access to resources from their workgroups + personally created/uploaded items + AWS account mappings
- *
- * Related Requirements:
- * - FR-017-019: Workgroup-based filtering for regular users and VULN role
- * - AWS Account Mapping: Users can access assets based on UserMapping.awsAccountId
- */
+/** Shared asset visibility policy for REST, MCP and derived resources. */
 @Singleton
 open class AssetFilterService(
     private val assetRepository: AssetRepository,
@@ -43,28 +29,7 @@ open class AssetFilterService(
     private val workgroupAdDomainRepository: WorkgroupAdDomainRepository
 ) {
 
-    /**
-     * Get assets accessible to the authenticated user
-     * FR-013, FR-016, FR-017: Filter by workgroup + ownership + AWS account mapping + AD domain mapping, ADMIN has full access
-     *
-     * Users can access assets if ANY of the following is true:
-     * 1. User is ADMIN or SECCHAMPION (universal access)
-     * 2. Asset belongs to a workgroup the user is a member of
-     * 3. Asset was manually created by the user
-     * 4. Asset was discovered via a scan uploaded by the user
-     * 5. Asset's cloudAccountId matches any of the user's AWS account mappings
-     * 6. Asset's adDomain matches any of the user's domain mappings (case-insensitive)
-     * 7. Asset's owner matches the user's username
-     * 8. Asset's cloudAccountId matches an AWS account shared with the user via AwsAccountSharing (directional, non-transitive)
-     * 9. Asset's cloudAccountId matches an AWS account assigned to a workgroup the user belongs to (WorkgroupAwsAccount, direct membership only)
-     * 10. Asset's adDomain matches an AD domain assigned to a workgroup the user belongs to (WorkgroupAdDomain, direct membership only)
-     *
-     * Feature 073: When lazyLoadingEnabled=true, uses unified query for single DB round trip.
-     * Otherwise, falls back to original multi-query approach for stability.
-     *
-     * @param authentication Current user authentication
-     * @return List of accessible assets (deduplicated and sorted by name)
-     */
+    /** Global roles see all assets; other users need an explicit current grant. */
     fun getAccessibleAssets(authentication: Authentication): List<Asset> {
         // ADMIN and SECCHAMPION have universal access
         if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
@@ -84,15 +49,14 @@ open class AssetFilterService(
     private fun getAccessibleAssetsForScopedUser(authentication: Authentication): List<Asset> {
         val userId = getUserId(authentication)
         val userEmail = getUserEmail(authentication)
-        val username = authentication.name
 
         // Feature 073: Use unified query when memory optimization is enabled
         if (memoryConfig.lazyLoadingEnabled && userEmail != null) {
-            return getAccessibleAssetsUnified(userId, userEmail, username)
+            return getAccessibleAssetsUnified(userId, userEmail)
         }
 
         // Fallback: Original multi-query approach
-        return getAccessibleAssetsMultiQuery(userId, userEmail, username)
+        return getAccessibleAssetsMultiQuery(userId, userEmail)
     }
 
     /**
@@ -105,7 +69,12 @@ open class AssetFilterService(
         if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
             return assetRepository.findAllIds().toSet()
         }
-        return getAccessibleAssets(authentication).mapNotNull { it.id }.toSet()
+        val email = getUserEmail(authentication)
+        return if (email != null) {
+            assetRepository.findAccessibleAssetIds(getUserId(authentication), email).toSet()
+        } else {
+            getAccessibleAssetsForScopedUser(authentication).mapNotNull { it.id }.toSet()
+        }
     }
 
     /**
@@ -116,8 +85,8 @@ open class AssetFilterService(
      * @param userEmail The user's email
      * @return List of accessible assets (already distinct and sorted)
      */
-    private fun getAccessibleAssetsUnified(userId: Long, userEmail: String, username: String): List<Asset> {
-        return assetRepository.findAccessibleAssets(userId, userEmail, username)
+    private fun getAccessibleAssetsUnified(userId: Long, userEmail: String): List<Asset> {
+        return assetRepository.findAccessibleAssets(userId, userEmail)
     }
 
     /**
@@ -128,80 +97,18 @@ open class AssetFilterService(
      * @param userEmail The user's email (nullable)
      * @return List of accessible assets (deduplicated and sorted)
      */
-    private fun getAccessibleAssetsMultiQuery(userId: Long, userEmail: String?, username: String): List<Asset> {
-        // Regular users and VULN: filter by workgroup membership + ownership
-        val workgroupAssets = assetRepository.findAccessibleByWorkgroupMembershipOrCreatorOrUploader(
-            userId = userId,
-            manualCreatorId = userId,
-            scanUploaderId = userId
-        )
-
-        // Get assets accessible via AWS account mapping
-        val awsAccountAssets = if (userEmail != null) {
-            val awsAccountIds = userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail)
-            if (awsAccountIds.isNotEmpty()) {
-                assetRepository.findByCloudAccountIdIn(awsAccountIds)
-            } else {
-                emptyList()
-            }
-        } else {
-            emptyList()
-        }
-
-        // Get assets accessible via AD domain mapping (case-insensitive)
-        // OPTIMIZATION: Use database query instead of loading all assets into memory
-        val domainAssets = if (userEmail != null) {
-            val userDomains = userMappingRepository.findDistinctDomainByEmail(userEmail)
-            if (userDomains.isNotEmpty()) {
-                // Convert to lowercase for case-insensitive matching (domains already normalized in DB)
-                val userDomainsLowercase = userDomains.map { it.lowercase() }
-
-                // Use optimized query that filters at database level
-                assetRepository.findByAdDomainInIgnoreCase(userDomainsLowercase)
-            } else {
-                emptyList()
-            }
-        } else {
-            emptyList()
-        }
-
-        // Get assets accessible via AWS account sharing (shared accounts from other users)
-        val sharedAwsAccountAssets = if (userEmail != null) {
-            val sharedIds = awsAccountSharingService.getSharedAwsAccountIdsByEmail(userEmail)
-            if (sharedIds.isNotEmpty()) {
-                assetRepository.findByCloudAccountIdIn(sharedIds)
-            } else {
-                emptyList()
-            }
-        } else {
-            emptyList()
-        }
-
-        // Get assets where user is the owner
-        val ownerAssets = assetRepository.findByOwner(username)
-
-        // Access rule #9: assets whose cloudAccountId matches an AWS account
-        // assigned to a workgroup the user belongs to (direct membership only).
-        val workgroupAccountIds = workgroupAwsAccountRepository.findDistinctAwsAccountIdsByUserId(userId)
-        val workgroupAccountAssets = if (workgroupAccountIds.isNotEmpty()) {
-            assetRepository.findByCloudAccountIdIn(workgroupAccountIds)
-        } else {
-            emptyList()
-        }
-
-        val workgroupDomains = workgroupAdDomainRepository.findDistinctAdDomainsByUserId(userId)
-            .map { it.lowercase() }
-        val workgroupDomainAssets = if (workgroupDomains.isNotEmpty()) {
-            assetRepository.findByAdDomainInIgnoreCase(workgroupDomains)
-        } else {
-            emptyList()
-        }
-
-        // Combine and deduplicate by asset ID, then sort by name
-        return (workgroupAssets + awsAccountAssets + domainAssets + sharedAwsAccountAssets +
-                workgroupAccountAssets + workgroupDomainAssets + ownerAssets)
-            .distinctBy { it.id }
-            .sortedBy { it.name }
+    private fun getAccessibleAssetsMultiQuery(userId: Long, userEmail: String?): List<Asset> {
+        val directAssets = assetRepository.findAccessibleByWorkgroupMembership(userId)
+        val personalAccounts = userEmail?.let(userMappingRepository::findDistinctAwsAccountIdByEmail).orEmpty()
+        val personalDomains = userEmail?.let(userMappingRepository::findDistinctDomainByEmail).orEmpty()
+        val accountIds = (personalAccounts +
+            workgroupAwsAccountRepository.findDistinctAwsAccountIdsByUserId(userId) +
+            awsAccountSharingService.getSharedAwsAccountIds(userId)).distinct()
+        val domains = (personalDomains + workgroupAdDomainRepository.findDistinctAdDomainsByUserId(userId))
+            .map { it.lowercase() }.distinct()
+        val accountAssets = if (accountIds.isEmpty()) emptyList() else assetRepository.findByCloudAccountIdIn(accountIds)
+        val domainAssets = if (domains.isEmpty()) emptyList() else assetRepository.findByAdDomainInIgnoreCase(domains)
+        return (directAssets + accountAssets + domainAssets).distinctBy { it.id }.sortedBy { it.name }
     }
 
     // getAccessibleVulnerabilities was deleted here: it had no callers, and both of its
@@ -210,48 +117,30 @@ open class AssetFilterService(
     // needs a Pageable or an aggregate — `countLatestVulnerabilitiesBySeverityForAssetIds`
     // is the counting equivalent.
 
-    /**
-     * Get scans accessible to the authenticated user
-     * FR-015, FR-016, FR-019: Filter by uploader workgroup, ADMIN has full access
-     *
-     * Note: Scan.uploadedBy is a username String, not a User FK.
-     * We filter by finding users in the same workgroups and matching their usernames.
-     *
-     * @param authentication Current user authentication
-     * @return List of accessible scans
-     */
+    /** A scan is visible only when all its linked assets are visible. */
     fun getAccessibleScans(authentication: Authentication): List<Scan> {
-        // ADMIN and SECCHAMPION have universal access
         if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
             return scanRepository.findAll()
         }
+        val assetIds = getAccessibleAssetIds(authentication)
+        if (assetIds.isEmpty()) return emptyList()
+        return scanRepository.findFullyAccessibleScans(assetIds)
+    }
 
-        // Regular users and VULN: Get all scans uploaded by users in same workgroups
+    /** Whole-account authority must never be inferred from access to one asset. */
+    fun canAccessAwsAccount(accountId: String, authentication: Authentication): Boolean {
+        if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) return true
+        return accountId in getAccessibleAwsAccountIds(authentication)
+    }
+
+    /** Whole-account authority is independent of access to individual assets. */
+    fun getAccessibleAwsAccountIds(authentication: Authentication): Set<String> {
         val userId = getUserId(authentication)
-
-        // Feature 073: Use findByIdWithWorkgroups() to load workgroups with LAZY loading
-        val currentUser = userRepository.findByIdWithWorkgroups(userId).orElseThrow {
-            IllegalStateException("Current user not found: $userId")
-        }
-
-        // Get all workgroups the user belongs to
-        val userWorkgroupIds = currentUser.workgroups.filter { it.enabled }.mapNotNull { it.id }
-
-        if (userWorkgroupIds.isEmpty()) {
-            // User not in any workgroups - can only see their own scans
-            return scanRepository.findByUploadedByOrderByScanDateDesc(
-                authentication.name,
-                io.micronaut.data.model.Pageable.UNPAGED
-            ).content
-        }
-
-        // Find all users in the same workgroups (single batch query)
-        val accessibleUsernames = userRepository.findByWorkgroupsIdInOrderByUsernameAsc(userWorkgroupIds)
-            .map { it.username }
-            .toSet()
-
-        // Fetch only those users' scans instead of filtering the full table in memory
-        return scanRepository.findByUploadedByInOrderByScanDateDesc(accessibleUsernames)
+        val personal = getUserEmail(authentication)?.let {
+            userMappingRepository.findDistinctAwsAccountIdByEmail(it)
+        }.orEmpty()
+        return personal.toSet() + workgroupAwsAccountRepository.findDistinctAwsAccountIdsByUserId(userId) +
+            awsAccountSharingService.getSharedAwsAccountIds(userId)
     }
 
     /**

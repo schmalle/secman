@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory
 /**
  * MCP tool for listing AWS account assignments for a workgroup.
  *
- * ADMIN role is required via User Delegation.
+ * ADMIN or SECCHAMPION is required via User Delegation.
  *
  * Input parameters:
  * - workgroupId (required): ID of the workgroup
@@ -27,7 +27,7 @@ class ListWorkgroupAwsAccountsTool(
     private val log = LoggerFactory.getLogger(ListWorkgroupAwsAccountsTool::class.java)
 
     override val name = "list_workgroup_aws_accounts"
-    override val description = "List all AWS account assignments for a workgroup (ADMIN only, requires User Delegation)"
+    override val description = "List all AWS account assignments for a workgroup (ADMIN/SECCHAMPION, requires User Delegation)"
     override val operation = McpOperation.READ
 
     override val inputSchema = mapOf(
@@ -44,10 +44,10 @@ class ListWorkgroupAwsAccountsTool(
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
 
-        if (!context.isAdmin) {
+        if (!context.canManageGrants) {
             return McpToolResult.error(
                 "ADMIN_REQUIRED",
-                "ADMIN role required to list workgroup AWS accounts"
+                "ADMIN or SECCHAMPION role required to list workgroup AWS accounts"
             )
         }
 

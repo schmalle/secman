@@ -40,8 +40,15 @@ class RiskAssessmentMcpServiceTest {
     private val assets = mockk<AssetRepository>(relaxed = true)
     private val users = mockk<UserRepository>(relaxed = true)
     private val releaseScope = mockk<ReleaseRequirementScopeService>(relaxed = true)
+    private val assignments = mockk<com.secman.repository.AssessmentAssignmentRepository>(relaxed = true)
+    private val filter = mockk<AssetFilterService>(relaxed = true)
+    private val access = RiskAssessmentAccessService(assignments, filter)
+    private val entityManager = mockk<jakarta.persistence.EntityManager>(relaxed = true)
+    private val keys = mockk<com.secman.repository.McpApiKeyRepository>(relaxed = true)
+    private val workflow = AssessmentWorkflowService(entityManager, assessments, assignments, mockk(relaxed = true), mockk(relaxed = true),
+        responses, users, keys, requirements, releaseScope, access)
     private val service = RiskAssessmentMcpService(
-        assessments, responses, requirements, useCases, awsAccounts, assets, users, releaseScope
+        assessments, responses, requirements, useCases, awsAccounts, assets, users, filter, workflow, access, releaseScope
     )
 
     private val assessor = user(1, "champ", "champ@example.test", User.Role.SECCHAMPION)
@@ -87,7 +94,17 @@ class RiskAssessmentMcpServiceTest {
 
     @BeforeEach
     fun setUp() {
+        every { assignments.save(any()) } answers { firstArg() }
+        every { assignments.update(any()) } answers { firstArg() }
+        every { keys.findById(1) } returns Optional.of(com.secman.domain.McpApiKey(id = 1, keyId = "test",
+            keyHash = "hash", name = "test", userId = 1, permissions = "ASSESSMENTS_EXECUTE", delegationEnabled = true,
+            allowedDelegateUserIds = "1,2,3", allowedDelegationDomains = "@example.test"))
         assessment.status = "STARTED"
+        every { users.findById(any()) } answers { Optional.ofNullable(listOf(assessor, respondent, outsider).find { it.id == firstArg<Long>() }) }
+        every { entityManager.find(RiskAssessment::class.java, assessment.id!!, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE) } returns assessment
+        every { assignments.findByAssessmentId(assessment.id!!) } returns listOf(
+            com.secman.domain.AssessmentAssignment(id = 4, assessmentId = assessment.id!!, userId = assessor.id, email = assessor.email, role = "ASSESSOR"),
+            com.secman.domain.AssessmentAssignment(id = 5, assessmentId = assessment.id!!, userId = respondent.id, email = respondent.email, role = "RESPONDENT"))
         every { assessments.findById(assessment.id!!) } returns Optional.of(assessment)
         every { assessments.update(assessment) } returns assessment
         every { requirements.findByUsecaseId(useCase.id!!) } returns listOf(requirement)
@@ -239,13 +256,13 @@ class RiskAssessmentMcpServiceTest {
     @Test
     fun `respondent cannot prepare their own reminder`() {
         assertThatThrownBy { service.prepareOutstandingReminder(context(respondent), assessment.id!!) }
-            .isInstanceOf(SecurityException::class.java)
+            .isInstanceOf(io.micronaut.http.exceptions.HttpStatusException::class.java)
     }
 
     @Test
     fun `list forwards open status and use case filter and returns account identity`() {
         every {
-            assessments.findForMcp("STARTED", useCase.name, respondent.id!!, false, Pageable.from(0, 20))
+            assessments.findForMcp("STARTED", useCase.name, respondent.id!!, false, any(), any(), Pageable.from(0, 20))
         } returns Page.of(listOf(assessment), Pageable.from(0, 20), 1L)
 
         val result = service.list(context(respondent), "started", useCase.name, 0, 20)
@@ -264,7 +281,7 @@ class RiskAssessmentMcpServiceTest {
                 context(outsider), assessment.id!!,
                 listOf(RiskAssessmentMcpService.AnswerInput(requirement.id!!, AnswerType.YES, null))
             )
-        }.isInstanceOf(NoSuchElementException::class.java)
+        }.isInstanceOf(io.micronaut.http.exceptions.HttpStatusException::class.java)
 
         verify(exactly = 0) { responses.save(any()) }
     }
@@ -277,7 +294,7 @@ class RiskAssessmentMcpServiceTest {
                 listOf(RiskAssessmentMcpService.AnswerInput(999, AnswerType.YES, null))
             )
         }.isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("not part of this assessment")
+            .hasMessageContaining("assignment scope")
     }
 
     @Test

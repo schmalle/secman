@@ -46,6 +46,7 @@ class CrowdStrikeQueryServiceTest {
         apiClient = mockk()
         falconConfigRepository = mockk()
         assetRepository = mockk()
+        every { assetRepository.findByCrowdStrikeHostnameIgnoreCase(any()) } returns null
         vulnerabilityRepository = mockk()
         vulnerabilityExceptionRepository = mockk()
         service = CrowdStrikeQueryService(

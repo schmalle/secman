@@ -18,6 +18,7 @@ import java.time.temporal.ChronoUnit
 /** Bounded aggregate views intended for automation and operational reporting. */
 @Singleton
 open class McpStatisticsService(
+    private val assetFilter: AssetFilterService,
     private val assetRepository: AssetRepository,
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val userRepository: UserRepository,
@@ -80,9 +81,9 @@ open class McpStatisticsService(
         val useCase = useCaseName?.trim()?.takeIf(String::isNotBlank)
         require(useCase == null || useCase.length <= 255) { "useCaseName must not exceed 255 characters" }
         val privileged = context.isAdmin || context.delegatedUserRoles?.contains("SECCHAMPION") == true
-        val total = countAssessments(viewerId, privileged, useCase, null)
-        val started = countAssessments(viewerId, privileged, useCase, "STARTED")
-        val completed = countAssessments(viewerId, privileged, useCase, "COMPLETED")
+        val total = countAssessments(context, viewerId, privileged, useCase, null)
+        val started = countAssessments(context, viewerId, privileged, useCase, "STARTED")
+        val completed = countAssessments(context, viewerId, privileged, useCase, "COMPLETED")
         val result = mapOf(
             "generatedAt" to Instant.now().toString(),
             "useCaseName" to (useCase ?: "ALL"),
@@ -102,6 +103,7 @@ open class McpStatisticsService(
     }
 
     private fun countAssessments(
+        context: McpExecutionContext,
         viewerId: Long,
         privileged: Boolean,
         useCaseName: String?,
@@ -111,6 +113,10 @@ open class McpStatisticsService(
         useCaseName,
         viewerId,
         privileged,
+        context.accessibleAssetIds.orEmpty().ifEmpty { setOf(-1L) },
+        assetFilter.getAccessibleAwsAccountIds(io.micronaut.security.authentication.Authentication.build(
+            context.delegatedUsername.orEmpty(), context.delegatedUserRoles.orEmpty().toList(),
+            mapOf("userId" to viewerId, "email" to context.delegatedUserEmail.orEmpty()))).ifEmpty { setOf("") },
         Pageable.from(0, 1)
     ).totalSize
 

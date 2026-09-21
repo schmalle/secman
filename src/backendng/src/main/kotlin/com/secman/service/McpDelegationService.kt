@@ -81,6 +81,8 @@ class McpDelegationService {
      */
     private val roleToPermissions: Map<User.Role, Set<McpPermission>> = mapOf(
         User.Role.USER to setOf(
+            McpPermission.ASSESSMENTS_READ,
+            McpPermission.ASSESSMENTS_EXECUTE,
             McpPermission.INTEGRATIONS_WRITE,
             McpPermission.REQUIREMENTS_READ,
             McpPermission.ASSETS_READ,
@@ -115,6 +117,7 @@ class McpDelegationService {
             McpPermission.ASSESSMENTS_EXECUTE
         ),
         User.Role.SECCHAMPION to setOf(
+            McpPermission.WORKGROUPS_WRITE,
             McpPermission.INTEGRATIONS_WRITE,
             McpPermission.INTEGRATIONS_READ,
             McpPermission.REQUIREMENTS_READ,
@@ -216,6 +219,12 @@ class McpDelegationService {
                 DelegationErrorCodes.DELEGATION_USER_NOT_FOUND,
                 "User with $identifierType '$identifier' not found"
             )
+        }
+
+        if (!user.enabled || user.id == null || !apiKey.permitsDelegate(user.id!!) ||
+            userRepository.findById(apiKey.userId).orElse(null)?.enabled != true) {
+            recordFailure(apiKey.id, identifier, "DELEGATE_NOT_BOUND")
+            return DelegationValidationResult.failure("DELEGATE_NOT_BOUND", "This key is not bound to the requested user")
         }
 
         // Compute effective permissions (intersection of user roles and API key permissions)

@@ -104,18 +104,18 @@ class WorkgroupAdDomainControllerAuthorizationTest {
     }
 
     @Test
-    fun `member can bind an ad domain from their own user mapping`() {
+    fun `personal mappings do not permit ordinary members to grant access`() {
         val workgroup = workgroupOwnedByMember(41L)
         every { workgroupRepository.findById(41L) } returns Optional.of(workgroup)
         every { service.add(41L, ownedDomain, member.id!!) } returns persisted(workgroup, ownedDomain)
 
         val response = controller.add(41L, AddAdDomainRequest(ownedDomain), auth(member))
 
-        assertEquals(HttpStatus.CREATED, response.status)
+        assertEquals(HttpStatus.FORBIDDEN, response.status)
     }
 
     @Test
-    fun `ad domain ownership match is case-insensitive`() {
+    fun `existing access does not permit ordinary members to share it`() {
         val workgroup = workgroupOwnedByMember(42L)
         val upperCased = ownedDomain.uppercase()
         every { workgroupRepository.findById(42L) } returns Optional.of(workgroup)
@@ -123,7 +123,7 @@ class WorkgroupAdDomainControllerAuthorizationTest {
 
         val response = controller.add(42L, AddAdDomainRequest(upperCased), auth(member))
 
-        assertEquals(HttpStatus.CREATED, response.status)
+        assertEquals(HttpStatus.FORBIDDEN, response.status)
     }
 
     @Test

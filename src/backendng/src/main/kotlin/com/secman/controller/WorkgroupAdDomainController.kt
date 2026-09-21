@@ -41,27 +41,10 @@ open class WorkgroupAdDomainController(
      * `Workgroup.users` collection, which throws without an open session.
      */
     private fun isMemberOrAdmin(workgroupId: Long, authentication: Authentication): Boolean {
-        if (authentication.roles.contains("ADMIN")) return true
+        if (com.secman.security.GrantAuthority.canManage(authentication.roles)) return true
         val workgroup = workgroupRepository.findById(workgroupId).orElse(null) ?: return false
         val user = userRepository.findByUsername(authentication.name).orElse(null) ?: return false
-        return workgroup.users.any { it.id == user.id }
-    }
-
-    /**
-     * SECURITY: membership alone must not authorize *binding* an arbitrary AD domain.
-     *
-     * Any authenticated user can create a workgroup and is auto-enrolled as a member, so
-     * without this check they could bind any domain and AssetRepository.findAccessibleAssets
-     * would hand them every asset in it (unified asset access criterion 10) — a privilege
-     * escalation from USER to "reads an entire AD domain".
-     *
-     * A non-ADMIN actor may therefore only bind a domain they already reach through their own
-     * domain UserMapping (criterion 6). Matching is case-insensitive, mirroring
-     * AssetFilterService's domain comparison.
-     */
-    private fun canBindDomain(actorEmail: String, adDomain: String): Boolean {
-        val ownDomains = userMappingRepository.findDistinctDomainByEmail(actorEmail)
-        return ownDomains.any { it.equals(adDomain, ignoreCase = true) }
+        return workgroup.enabled && workgroup.users.any { it.id == user.id }
     }
 
     @Get(produces = [MediaType.APPLICATION_JSON])
@@ -88,16 +71,8 @@ open class WorkgroupAdDomainController(
         val actor = userRepository.findByUsername(authentication.name).orElseThrow {
             IllegalStateException("Authenticated user not found: ${authentication.name}")
         }
-        if (!isMemberOrAdmin(workgroupId, authentication)) {
+        if (!com.secman.security.GrantAuthority.canManage(authentication.roles)) {
             return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
-        }
-        if (!authentication.roles.contains("ADMIN") && !canBindDomain(actor.email, request.adDomain)) {
-            logger.warn(
-                "Rejected AD domain bind: user {} has no access to domain {} (workgroup {})",
-                actor.username, request.adDomain, workgroupId
-            )
-            return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
-                .body(mapOf("error" to "You do not have access to AD domain ${request.adDomain}"))
         }
         return try {
             val saved = service.add(workgroupId, request.adDomain, actor.id!!)
@@ -117,7 +92,7 @@ open class WorkgroupAdDomainController(
         @PathVariable adDomain: String,
         authentication: Authentication
     ): HttpResponse<Void> {
-        if (!isMemberOrAdmin(workgroupId, authentication)) {
+        if (!com.secman.security.GrantAuthority.canManage(authentication.roles)) {
             return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
         }
         val deleted = service.remove(workgroupId, adDomain)

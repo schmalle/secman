@@ -154,10 +154,6 @@ data class Workgroup(
     @Column(name = "updated_at")
     var updatedAt: Instant? = null
 ) {
-    fun requireDirectAssetAssignmentAllowed() {
-        require(!awsAccountManaged) { "AWS-managed workgroups use account access and cannot have direct assets" }
-    }
-
     @PrePersist
     fun onCreate() {
         val now = Instant.now()

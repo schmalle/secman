@@ -15,7 +15,7 @@ class ListWorkgroupAdDomainsTool(
     private val log = LoggerFactory.getLogger(ListWorkgroupAdDomainsTool::class.java)
 
     override val name = "list_workgroup_ad_domains"
-    override val description = "List all AD domain assignments for a workgroup (ADMIN only, requires User Delegation)"
+    override val description = "List all AD domain assignments for a workgroup (ADMIN/SECCHAMPION, requires User Delegation)"
     override val operation = McpOperation.READ
 
     override val inputSchema = mapOf(
@@ -28,8 +28,8 @@ class ListWorkgroupAdDomainsTool(
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
-        if (!context.isAdmin) {
-            return McpToolResult.error("ADMIN_REQUIRED", "ADMIN role required to list workgroup AD domains")
+        if (!context.canManageGrants) {
+            return McpToolResult.error("ADMIN_REQUIRED", "ADMIN or SECCHAMPION role required to list workgroup AD domains")
         }
         val workgroupId = (arguments["workgroupId"] as? Number)?.toLong()
             ?: return McpToolResult.error("VALIDATION_ERROR", "workgroupId is required and must be a valid number")

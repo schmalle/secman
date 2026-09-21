@@ -187,11 +187,12 @@ Within a map, a tool is authorized when the caller holds **any** of the permissi
 | `get_asset_profile` | `assetId`*, `includeVulnerabilities`, `includeScanHistory`, `vulnerabilityLimit` (max 100), `scanHistoryLimit` (max 50) | any | — |
 | `get_asset_complete_profile` | `assetId`*, `includeVulnerabilities`, `includeScanResults` | any | — |
 | `get_asset_most_vulnerabilities` | `topN` (default 1, max 10) | any | — |
-| `create_asset` | `name`*, `type`*, `owner`*, `ip`, `uri`, `description`, `criticality` (`CRITICAL\|HIGH\|MEDIUM\|LOW\|NA`), `adDomain`, `cloudAccountId` | any | ✓ |
+| `create_asset` | `name`*, `type`*, `owner`*, `ip`, `uri`, `description`, `criticality` (`CRITICAL\|HIGH\|MEDIUM\|LOW\|NA`), `adDomain`, `cloudAccountId`, `workgroupIds` | any, subject to placement rules | ✓ |
 | `update_asset` | `assetId`* + any of `name`, `resetNameToCrowdStrike`, `type`, `owner`, `ip`, `uri`, `description`, `criticality`, `adDomain` | any | ✓ |
-| `delete_asset` | `assetId`*, `forceTimeout` | ADMIN | ✓ |
-| `delete_all_assets` | `confirm`* (boolean `true`) | ADMIN | ✓ |
+| `delete_asset` | `assetId`*, `forceTimeout` | ADMIN / SECCHAMPION | ✓ |
+| `delete_all_assets` | `confirm`* (boolean `true`) | ADMIN / SECCHAMPION | ✓ |
 
+- Ordinary creation requires an enabled directly joined workgroup in `workgroupIds`. Account/domain associations and workgroup grant mutations require ADMIN/SECCHAMPION. Owner/creator/uploader are metadata only.
 - All read tools scope results through [unified asset access](../CLAUDE.md#unified-asset-access-any-of).
 - `create_asset` rejects duplicate names case-insensitively and records the delegated user as `manualCreator`. `uri` accepts `http`, `https` or `urn` for endpoint-style assets.
 - `update_asset` is a partial update with row-level access control — an inaccessible ID returns `NOT_FOUND`, not `FORBIDDEN`. Setting `name` creates a user-owned display-name override that later CrowdStrike imports preserve. Set `resetNameToCrowdStrike=true` (without `name`) to restore the latest source hostname and resume automatic hostname updates. The response includes `crowdStrikeHostname` and `nameOverridden`. Workgroup membership is changed with `assign_assets_to_workgroup`, not here.
@@ -364,12 +365,13 @@ progress and cost. Neither tool submits or accepts answers. See
 | Tool | Required arguments | Permission |
 |---|---|---|
 | `create_risk_assessment` | `awsAccountId` (12 digits), `useCaseIds` (one or more), `assessorEmail`, `respondentEmail`, `endDate` | `ASSESSMENTS_WRITE` |
-| `notify_risk_assessment_respondent` | `assessmentId`; optional `dryRun` | `NOTIFICATIONS_SEND` |
+| `notify_risk_assessment_respondent` | `assessmentId`; optional `dryRun`, `respondentEmail` | `NOTIFICATIONS_SEND` |
 | `list_risk_assessments` | none; optional `status`, `useCaseName`, `page`, `pageSize` | `ASSESSMENTS_READ` |
 | `get_risk_assessment_questionnaire` | `assessmentId` | `ASSESSMENTS_READ` |
 | `get_risk_assessment_answers` | `assessmentId` | `ASSESSMENTS_READ` |
 | `save_risk_assessment_answers` | `assessmentId`, `answers[]` | `ASSESSMENTS_EXECUTE` |
 | `submit_risk_assessment` | `assessmentId` | `ASSESSMENTS_EXECUTE` |
+| `manage_assessment_assignment` | `assessmentId`, `action` (LIST/ASSIGN/REVOKE/REOPEN); action-specific assignment fields | `ASSESSMENTS_WRITE`, ADMIN/SECCHAMPION |
 | `evaluate_risk_assessment` | `assessmentId` | `ASSESSMENTS_READ` |
 | `get_risk_assessment_statistics` | optional exact `useCaseName` | `ASSESSMENTS_READ` |
 
@@ -381,13 +383,13 @@ compatibility. Creation is limited to
 delegated ADMIN and SECCHAMPION users. Read results include `awsAccountId` so
 Paperclip does not need to interpret the internal numeric `basisId`.
 
-`notify_risk_assessment_respondent` recomputes outstanding answers at call
-time. It sends only for a `STARTED` assessment with unanswered requirements and
-only when delegated as its assessor/requestor, an ADMIN, or a SECCHAMPION.
-`dryRun:true` returns counts without sending. The mail uses the authenticated
-assessment link and never creates or exposes a capability token. Live sends
-are atomically limited to one per assessment in 24 hours, survive restarts,
-and return `COOLDOWN_ACTIVE` without sending when called again too soon.
+`notify_risk_assessment_respondent` checks the selected active respondent
+assignment and its unanswered requirements. Assigned assessors, ADMIN and
+SECCHAMPION may notify; requestor status grants nothing. Supply `respondentEmail`
+when multiple sections are open. Registered users receive an authenticated link;
+accountless users receive an assignment/version-bound capability. `dryRun:true`
+returns counts without sending. Live sends have an atomic per-assignment
+24-hour cooldown and recheck current authority at delivery and retries.
 
 `create_use_case`, the `add_requirement.useCaseIds` extension,
 `create_risk_assessment`, `list_risk_assessments`,
@@ -397,7 +399,7 @@ and return `COOLDOWN_ACTIVE` without sending when called again too soon.
 evaluation available to delegated MCP clients. `list_risk_assessments` supports
 the concrete open-by-use-case query with `status: "STARTED"` and `useCaseName`.
 The answer and submit operations require the assigned respondent; evaluation
-requires the assessor, requestor, ADMIN, or SECCHAMPION. See
+requires an assigned assessor, ADMIN, or SECCHAMPION. USER-only respondents can answer their assigned sections. Evaluation never creates final acceptance; that action requires an independent human through REST/UI. See
 [MCP risk-assessment lifecycle](MCP_RISK_ASSESSMENT_LIFECYCLE.md) for schemas,
 PaperclipAI envelopes, permission requirements, and the holistic E2E driver.
 

@@ -11,6 +11,26 @@ for the company and store its API key as a company secret. Every call must send
 the verified key plus `X-MCP-User-Email` for the SecMan user the agent is acting
 as. Never put the key, passwords, or assessment tokens in an issue or prompt.
 
+## Authorization setup
+
+Use a dedicated enabled SecMan service account for automation. ADMIN must bind
+its MCP key to each intended delegate's stable user ID; a matching email domain
+alone does not authorize impersonation. Ordinary respondents need USER plus an
+explicit assessment assignment, not general asset visibility. Use
+`manage_assessment_assignment` to assign scoped requirement IDs, revoke tasks,
+or reopen answers (ADMIN/SECCHAMPION only).
+
+Submission freezes a respondent's assigned answers. `evaluate_risk_assessment`
+is advisory. Final acceptance is a separate authenticated human action against
+the submitted revision, and is unavailable to MCP, AI, and service accounts.
+Anyone who contributed answers, evidence, or saved AI content is ineligible to
+accept, including both the automation initiator and its effective delegate.
+
+On authorization failure, stop and obtain a reviewed assignment or key binding;
+do not retry under a broader identity. Reopening invalidates prior acceptance
+and email links. See [the shared authorization model](AUTHORIZATION_REWORK.md)
+for migration, export revocation, and scheduler identity configuration.
+
 ## Recommended company
 
 | Agent | Delegated SecMan identity | MCP permissions | Responsibility |
@@ -85,13 +105,14 @@ Example notification call:
 {"assessmentId":9001,"dryRun":false}
 ```
 
-SecMan recomputes the outstanding count immediately before sending and refuses
-completed assessments. The action is object-authorized: only the assessor,
-requestor, ADMIN, or SECCHAMPION may notify. Email contains an authenticated
-SecMan deep link and no bearer or capability token. A durable atomic cooldown
-allows at most one live reminder per assessment in 24 hours; retries during the
-window return `reason:"COOLDOWN_ACTIVE"`. Failed deliveries release the claim
-so the next heartbeat may retry.
+SecMan recomputes outstanding answers for the selected active respondent
+assignment. Only an assigned assessor, ADMIN, or SECCHAMPION may notify;
+requestor metadata grants nothing. Supply `respondentEmail` when multiple
+sections are open. Registered respondents receive an authenticated deep link;
+accountless respondents receive a capability bound to their assignment and
+version. A durable atomic cooldown permits one reminder per assignment in
+24 hours. Failed deliveries release the claim, and access is rechecked inside
+asynchronous delivery and retries.
 
 Paperclip may keep its preferred reminder cadence in issue or routine state,
 while SecMan remains authoritative for outstanding answers and enforces the
@@ -99,7 +120,7 @@ while SecMan remains authoritative for outstanding answers and enforces the
 
 ## Respondent and assessor heartbeats
 
-The respondent agent changes `X-MCP-User-Email` to the assigned respondent,
+The respondent agent uses a key explicitly bound to the assigned respondent and sends that identity in `X-MCP-User-Email`,
 calls `get_risk_assessment_questionnaire`, and saves only evidence-backed
 answers with `save_risk_assessment_answers`. It calls
 `submit_risk_assessment` only when SecMan reports every requirement answered.
@@ -118,7 +139,7 @@ issue, but keep sensitive comments in SecMan and link to the assessment.
   retried according to the issue's reminder policy.
 - `NO_OUTSTANDING_ANSWERS` is a successful no-op.
 - Never close the Paperclip issue until SecMan reports `COMPLETED` and the
-  assessor action succeeds.
+  independent human acceptance succeeds. MCP evaluation does not create an acceptance decision.
 
 ## MCP JSON-RPC envelope
 

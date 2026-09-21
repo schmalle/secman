@@ -53,6 +53,7 @@ import java.util.*
 @Singleton
 open class ExportJobService(
     private val exportJobRepository: ExportJobRepository,
+    private val users: com.secman.repository.UserRepository,
     private val vulnerabilityService: VulnerabilityService,
     private val assetFilterService: AssetFilterService,
     @Named(TaskExecutors.IO) private val executorService: ExecutorService,
@@ -163,7 +164,7 @@ open class ExportJobService(
         // Start async processing using ExecutorService
         // We need to capture the authentication info since Authentication may not be available in background thread
         // Only ADMIN can bypass asset scoping in vulnerability exports.
-        val isAdmin = authentication.roles.contains("ADMIN")
+        val isAdmin = authentication.roles.any { it == "ADMIN" || it == "SECCHAMPION" }
         val accessibleAssetIds = if (isAdmin) {
             emptySet()
         } else {
@@ -175,11 +176,51 @@ open class ExportJobService(
         // The filters ride this closure into the background thread. They are deliberately not
         // persisted on the job row: nothing ever re-runs a job from the DB (autoResetStaleJobs
         // and resetStuckJobs only mark stale jobs FAILED), so the in-memory hand-off is complete.
+        selfProvider.get().bindScope(jobId, authentication, if (isAdmin) "GLOBAL" else accessibleAssetIds.sorted().joinToString(","))
         executorService.submit {
             processExportInBackground(jobId, username, isAdmin, accessibleAssetIds, filters)
         }
 
         return ExportJobDto.fromEntity(savedJob)
+    }
+
+    private fun scopeDigest(authentication: Authentication): String {
+        val scope = if (authentication.roles.any { it == "ADMIN" || it == "SECCHAMPION" }) "GLOBAL"
+            else assetFilterService.getAccessibleAssetIds(authentication).sorted().joinToString(",")
+        return java.security.MessageDigest.getInstance("SHA-256")
+            .digest(scope.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+    }
+
+    /** Bind the queued export to the exact scope captured by its initiating request. */
+    @Transactional(TxType.REQUIRES_NEW)
+    open fun bindScope(jobId: String, authentication: Authentication, capturedScope: String) {
+        val actorId = (authentication.attributes["userId"] as? Number)?.toLong()
+            ?: authentication.attributes["userId"]?.toString()?.toLongOrNull()
+            ?: throw SecurityException("Stable export actor required")
+        val job = exportJobRepository.findById(jobId).orElseThrow()
+        job.actorUserId = actorId
+        val capturedDigest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(capturedScope.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+        check(capturedDigest == scopeDigest(authentication)) { "Export scope changed before start" }
+        job.scopeDigest = capturedDigest
+        exportJobRepository.update(job)
+    }
+
+    /** Compare against current identity and grants before releasing export data. */
+    @Transactional(TxType.REQUIRES_NEW)
+    open fun scopeStillValid(job: ExportJob): Boolean {
+        val user = job.actorUserId?.let { users.findById(it).orElse(null) } ?: return false
+        if (!user.enabled || user.username != job.username || job.scopeDigest == null) return false
+        val current = Authentication.build(user.username, user.roles.map { it.name },
+            mapOf("userId" to user.id!!, "email" to user.email))
+        return job.scopeDigest == scopeDigest(current)
+    }
+
+    /** Stop background work as soon as its captured authorization no longer holds. */
+    @Transactional(TxType.REQUIRES_NEW)
+    open fun requireCurrentScope(jobId: String) {
+        val job = exportJobRepository.findById(jobId).orElseThrow()
+        if (!scopeStillValid(job)) throw SecurityException("Export access changed; generate a new export")
     }
 
     /**
@@ -290,6 +331,8 @@ open class ExportJobService(
             log.warn("Job not found: {}", jobId)
             return null
         }
+
+        if (!selfProvider.get().scopeStillValid(job)) return null
 
         if (!job.isDownloadable()) {
             log.warn("Job {} is not downloadable, status: {}", jobId, job.status)
@@ -422,6 +465,7 @@ open class ExportJobService(
             }
 
             // Update status to processing (separate transaction)
+            selfProvider.get().requireCurrentScope(jobId)
             markJobAsProcessing(jobId)
             updateJobStage(jobId, STAGE_STARTING)
 
@@ -516,6 +560,7 @@ open class ExportJobService(
      */
     @Transactional(TxType.REQUIRES_NEW)
     open fun markJobAsCompleted(jobId: String, filePath: String, fileName: String, fileSizeBytes: Long, totalItems: Long) {
+        requireCurrentScope(jobId)
         val job = exportJobRepository.findById(jobId).orElse(null) ?: return
         // Status guard: a job that was auto-reset to FAILED (stale heartbeat) or CANCELLED
         // while this worker was still writing the file must stay terminal - blindly setting
@@ -687,6 +732,7 @@ open class ExportJobService(
             var processedItems = 0L
 
             while (hasMore) {
+                selfProvider.get().requireCurrentScope(jobId)
                 // Check for cancellation (separate transaction)
                 if (isJobCancelled(jobId)) {
                     log.info("[export {}] cancelled during EXPORTING at row {}/{}",

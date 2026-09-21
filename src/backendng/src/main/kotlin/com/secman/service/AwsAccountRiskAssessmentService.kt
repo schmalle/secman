@@ -50,6 +50,7 @@ import java.time.temporal.ChronoUnit
 @Singleton
 open class AwsAccountRiskAssessmentService(
     private val userRepository: UserRepository,
+    private val workflow: AssessmentWorkflowService,
     private val useCaseRepository: UseCaseRepository,
     private val awsAccountRepository: AwsAccountRepository,
     private val riskAssessmentRepository: RiskAssessmentRepository,
@@ -63,7 +64,8 @@ open class AwsAccountRiskAssessmentService(
     // in its own short transaction, letting the caller send the owner email AFTER the connection
     // is returned — never holding a pooled connection across the blocking SMTP send. A Provider
     // (lazy) is used so the bean can depend on a provider of itself without a construction cycle.
-    private val selfProvider: Provider<AwsAccountRiskAssessmentService>
+    private val selfProvider: Provider<AwsAccountRiskAssessmentService>,
+    @io.micronaut.context.annotation.Value("\${secman.assessment.reminder-service-user-id:0}") private val reminderServiceUserId: Long = 0
 ) {
     private val log = LoggerFactory.getLogger(AwsAccountRiskAssessmentService::class.java)
 
@@ -370,6 +372,7 @@ open class AwsAccountRiskAssessmentService(
         )
 
         val saved = riskAssessmentRepository.save(assessment)
+        workflow.initialize(saved)
 
         trackingRepository.save(
             AwsAccountRiskAssessment(
@@ -496,12 +499,14 @@ open class AwsAccountRiskAssessmentService(
             renderConditionalBlock(templateRenderer.readText(REMINDER_TEMPLATE), "ifVersion", lockedVersion != null)
 
         return try {
+            workflow.authorizeReminder(tracking.riskAssessment.id!!, reminderServiceUserId, tracking.ownerEmail, scheduled = true)
             emailService.sendEmailWithInlineImages(
                 to = tracking.ownerEmail,
                 subject = subject,
                 textContent = render(textTemplate, values, escape = false),
                 htmlContent = render(htmlTemplate, values, escape = true),
                 inlineImages = loadLogoInlineImage(),
+                beforeSend = { workflow.authorizeReminder(tracking.riskAssessment.id!!, reminderServiceUserId, tracking.ownerEmail, scheduled = true) }
             ).get()
         } catch (e: Exception) {
             log.error("Reminder email to {} failed: {}", tracking.ownerEmail, e.message)

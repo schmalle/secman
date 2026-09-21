@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory
 /**
  * MCP tool for deleting an AWS account sharing rule.
  *
- * ADMIN role is required via User Delegation.
+ * ADMIN or SECCHAMPION is required via User Delegation.
  *
  * Input parameters:
  * - id (required): ID of the sharing rule to delete
@@ -26,7 +26,7 @@ class DeleteAwsAccountSharingTool(
     private val log = LoggerFactory.getLogger(DeleteAwsAccountSharingTool::class.java)
 
     override val name = "delete_aws_account_sharing"
-    override val description = "Delete an AWS account sharing rule (ADMIN only, requires User Delegation)"
+    override val description = "Delete an AWS account sharing rule (ADMIN/SECCHAMPION, requires User Delegation)"
     override val operation = McpOperation.DELETE
 
     override val inputSchema = mapOf(
@@ -43,10 +43,10 @@ class DeleteAwsAccountSharingTool(
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
 
-        if (!context.isAdmin) {
+        if (!context.canManageGrants) {
             return McpToolResult.error(
                 "ADMIN_REQUIRED",
-                "ADMIN role required to delete AWS account sharing rules"
+                "ADMIN or SECCHAMPION role required to delete AWS account sharing rules"
             )
         }
 

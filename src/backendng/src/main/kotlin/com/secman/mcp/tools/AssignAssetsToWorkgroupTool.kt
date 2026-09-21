@@ -9,7 +9,7 @@ import jakarta.inject.Singleton
 /**
  * MCP tool for assigning assets to a workgroup.
  *
- * ADMIN role is required via User Delegation.
+ * ADMIN or SECCHAMPION is required via User Delegation.
  *
  * Input parameters:
  * - workgroupId (required): ID of the target workgroup
@@ -21,7 +21,7 @@ class AssignAssetsToWorkgroupTool(
 ) : McpTool {
 
     override val name = "assign_assets_to_workgroup"
-    override val description = "Assign one or more assets to a workgroup (ADMIN only, requires User Delegation)"
+    override val description = "Assign one or more assets to a workgroup (ADMIN/SECCHAMPION, requires User Delegation)"
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(
@@ -44,11 +44,11 @@ class AssignAssetsToWorkgroupTool(
         // Require User Delegation
         requireDelegation(context)?.let { return it }
 
-        // Require ADMIN role
-        if (!context.isAdmin) {
+        // Require grant-management authority
+        if (!context.canManageGrants) {
             return McpToolResult.error(
                 "ADMIN_REQUIRED",
-                "ADMIN role required to assign assets to workgroups"
+                "ADMIN or SECCHAMPION role required to assign assets to workgroups"
             )
         }
 

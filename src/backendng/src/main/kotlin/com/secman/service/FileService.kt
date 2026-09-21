@@ -26,6 +26,7 @@ open class FileService(
     private val requirementFileRepository: RequirementFileRepository,
     private val riskAssessmentRequirementFileRepository: RiskAssessmentRequirementFileRepository,
     private val riskAssessmentRepository: RiskAssessmentRepository,
+    private val assessmentWorkflow: AssessmentWorkflowService,
     private val requirementRepository: RequirementRepository
 ) {
     
@@ -234,6 +235,8 @@ open class FileService(
                 return FileUploadResult(false, errorMessage = validation.errorMessage)
             }
 
+            assessmentWorkflow.recordEvidenceChange(riskAssessmentId, requirementId, uploadedBy)
+
             // Check that risk assessment and requirement exist
             val riskAssessment = riskAssessmentRepository.findById(riskAssessmentId)
             if (riskAssessment.isEmpty) {
@@ -368,12 +371,8 @@ open class FileService(
 
             val file = fileOptional.get()
             
-            // Check permissions - user can delete their own files, or admin can delete any
-            if (file.uploadedBy.id != deletedBy.id && !deletedBy.isAdmin()) {
-                logger.warn("User {} attempted to delete file {} owned by {}", 
-                    deletedBy.username, fileId, file.uploadedBy.username)
-                return false
-            }
+            val association = riskAssessmentRequirementFileRepository.findByFileId(fileId).orElse(null) ?: return false
+            assessmentWorkflow.recordEvidenceChange(association.riskAssessment.id!!, association.requirement.id!!, deletedBy)
 
             // Delete from disk
             val path = Paths.get(file.filePath)

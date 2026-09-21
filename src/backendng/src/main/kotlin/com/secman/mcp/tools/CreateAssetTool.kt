@@ -41,6 +41,7 @@ import java.net.URI
 @Singleton
 class CreateAssetTool(
     @Inject private val assetRepository: AssetRepository,
+    @Inject private val assetCreationService: com.secman.service.AssetCreationService,
     @Inject private val userRepository: UserRepository,
     @Inject private val mcpAccessCacheInvalidator: McpAccessibleAssetsCacheInvalidator
 ) : McpTool {
@@ -84,6 +85,7 @@ class CreateAssetTool(
                 "enum" to listOf("CRITICAL", "HIGH", "MEDIUM", "LOW", "NA"),
                 "description" to "Asset criticality level"
             ),
+            "workgroupIds" to mapOf("type" to "array", "items" to mapOf("type" to "integer"), "description" to "Initial workgroups; ordinary users must select enabled direct memberships"),
             "adDomain" to mapOf(
                 "type" to "string",
                 "description" to "Active Directory domain"
@@ -147,7 +149,7 @@ class CreateAssetTool(
         if (existing != null) {
             return McpToolResult.error(
                 "DUPLICATE_ASSET",
-                "Asset with name '${assetName}' already exists (id: ${existing.id})"
+                "Asset name is unavailable"
             )
         }
 
@@ -194,7 +196,12 @@ class CreateAssetTool(
             asset.adDomain = adDomain
             asset.cloudAccountId = cloudAccountId
 
-            val savedAsset = assetRepository.save(asset)
+            val rawGroups = arguments["workgroupIds"]
+            if (rawGroups != null && (rawGroups !is List<*> || rawGroups.any { it !is Number })) {
+                return McpToolResult.error("VALIDATION_ERROR", "workgroupIds must be an array of IDs")
+            }
+            val groupIds = (rawGroups as? List<*>)?.map { (it as Number).toLong() }.orEmpty()
+            val savedAsset = assetCreationService.create(asset, context.delegatedUserId!!, groupIds)
 
             // A new asset can be reached by anyone whose access criteria match
             // (cloudAccountId mapping, AD domain, owner string, etc.). Drop the

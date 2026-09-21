@@ -42,6 +42,12 @@ data class User(
     @NotBlank
     var passwordHash: String,
 
+    @Column(name = "enabled", nullable = false)
+    var enabled: Boolean = true,
+
+    @Column(name = "service_account", nullable = false)
+    var serviceAccount: Boolean = false,
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_roles", joinColumns = [JoinColumn(name = "user_id")])
     @JdbcTypeCode(SqlTypes.VARCHAR)

@@ -113,25 +113,25 @@ class WorkgroupAwsAccountControllerAuthorizationTest {
     }
 
     @Test
-    fun `member can bind an aws account from their own user mapping`() {
+    fun `personal mappings do not permit ordinary members to grant access`() {
         val workgroup = workgroupOwnedByMember(31L)
         every { workgroupRepository.findById(31L) } returns Optional.of(workgroup)
         every { service.add(31L, ownedAccount, member.id!!) } returns persisted(workgroup, ownedAccount)
 
         val response = controller.add(31L, AddAwsAccountRequest(ownedAccount), auth(member))
 
-        assertEquals(HttpStatus.CREATED, response.status)
+        assertEquals(HttpStatus.FORBIDDEN, response.status)
     }
 
     @Test
-    fun `member can bind an aws account shared with them`() {
+    fun `existing access does not permit ordinary members to share it`() {
         val workgroup = workgroupOwnedByMember(32L)
         every { workgroupRepository.findById(32L) } returns Optional.of(workgroup)
         every { service.add(32L, sharedAccount, member.id!!) } returns persisted(workgroup, sharedAccount)
 
         val response = controller.add(32L, AddAwsAccountRequest(sharedAccount), auth(member))
 
-        assertEquals(HttpStatus.CREATED, response.status)
+        assertEquals(HttpStatus.FORBIDDEN, response.status)
     }
 
     @Test

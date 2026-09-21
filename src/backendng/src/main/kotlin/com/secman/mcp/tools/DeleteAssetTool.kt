@@ -9,7 +9,7 @@ import jakarta.inject.Singleton
 /**
  * MCP tool for deleting a specific asset by ID.
  *
- * ADMIN role is required via User Delegation.
+ * ADMIN or SECCHAMPION is required via User Delegation.
  * Uses AssetCascadeDeleteService for cascade deletion of:
  * - Vulnerability exception requests
  * - ASSET-type vulnerability exceptions
@@ -26,7 +26,7 @@ class DeleteAssetTool(
 ) : McpTool {
 
     override val name = "delete_asset"
-    override val description = "Delete a specific asset by ID with cascade deletion (ADMIN only, requires User Delegation)"
+    override val description = "Delete a specific asset by ID with cascade deletion (ADMIN/SECCHAMPION, requires User Delegation)"
     override val operation = McpOperation.DELETE
 
     override val inputSchema = mapOf(
@@ -48,11 +48,11 @@ class DeleteAssetTool(
         // Require User Delegation
         requireDelegation(context)?.let { return it }
 
-        // Require ADMIN role
-        if (!context.isAdmin) {
+        // Require grant-management authority
+        if (!context.canManageGrants) {
             return McpToolResult.error(
                 "ADMIN_REQUIRED",
-                "ADMIN role required to delete assets"
+                "ADMIN or SECCHAMPION role required to delete assets"
             )
         }
 

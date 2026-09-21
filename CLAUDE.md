@@ -41,18 +41,19 @@ Security requirement, vulnerability and risk management platform.
 
 ## Unified Asset Access (any of)
 
-1. ADMIN **or SECCHAMPION** role (universal access)
-2. Asset in user's workgroup
-3. `manualCreator == user`
-4. `scanUploader == user`
-5. `cloudAccountId` matches user's AWS UserMapping
-6. `adDomain` matches user's domain UserMapping (case-insensitive)
-7. `cloudAccountId` matches a sharing rule (`AwsAccountSharing`, directional)
-8. `owner == username`
-9. `cloudAccountId` matches an account assigned to a workgroup the user belongs to (`WorkgroupAwsAccount`, direct membership only)
-10. `adDomain` matches a domain assigned to a workgroup the user belongs to (`WorkgroupAdDomain`, direct membership only)
+1. ADMIN or SECCHAMPION (global visibility).
+2. Explicit asset assignment to an enabled workgroup with direct user membership.
+3. AWS-account or AD-domain grant on such a workgroup, including future matching assets.
+4. Personal AWS-account or AD-domain mapping.
+5. Received AWS-account sharing, directional and non-transitive.
 
-Authoritative filter: `AssetFilterService.getAccessibleAssets()`. SQL pre-filters in materialized views are perf hints only — never the auth boundary. Same enforcement applies to MCP `get_overdue_assets`. Note the deliberate asymmetry: `getAccessibleAssets()`/`getAccessibleAssetIds()` short-circuit for ADMIN **or** SECCHAMPION, but `getScopedAccessibleAssetIds()` short-circuits for ADMIN only.
+Creator, uploader, and owner remain metadata. They grant no access. Workgroup hierarchy does not propagate membership.
+
+Authoritative filter: `AssetFilterService`. MCP and heatmap reuse it; SQL entity and ID queries share `AssetAccessSql`. `getScopedAccessibleAssetIds()` retains its ADMIN-only global shortcut for scoped notifications.
+
+ADMIN and SECCHAMPION manage grants and delete assets. Ordinary users edit visible asset details; creation requires atomic placement in an enabled directly joined group. Account/domain/workgroup changes require grant-management authority. Personal mappings, user administration, and canonical workgroup owner remain ADMIN-only.
+
+See `docs/AUTHORIZATION_REWORK.md` for assessment assignments, contribution history, scoped links, revocation and the migration/rollout gates.
 
 ## API Endpoints (concise)
 

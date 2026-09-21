@@ -36,6 +36,9 @@ open class RiskAssessmentMcpService(
     private val awsAccountRepository: AwsAccountRepository,
     private val assetRepository: AssetRepository,
     private val userRepository: UserRepository,
+    private val assetFilter: AssetFilterService,
+    private val workflow: AssessmentWorkflowService,
+    private val access: RiskAssessmentAccessService,
     private val releaseRequirementScopeService: ReleaseRequirementScopeService
 ) {
     private val log = LoggerFactory.getLogger(RiskAssessmentMcpService::class.java)
@@ -49,7 +52,10 @@ open class RiskAssessmentMcpService(
         val useCaseNames: List<String>,
         val endDate: LocalDate,
         val unansweredCount: Int,
-        val requirementCount: Int
+        val requirementCount: Int,
+        val assignmentId: Long = 0,
+        val assignmentVersion: Long = 1,
+        val accountless: Boolean = false
     )
 
     @Transactional(readOnly = true)
@@ -71,6 +77,8 @@ open class RiskAssessmentMcpService(
             useCaseName?.trim()?.takeIf { it.isNotBlank() },
             viewerId,
             privileged,
+            if (privileged) setOf(-1L) else context.accessibleAssetIds.orEmpty().ifEmpty { setOf(-1L) },
+            if (privileged) setOf("") else assetFilter.getAccessibleAwsAccountIds(authentication(context)).ifEmpty { setOf("") },
             Pageable.from(page, pageSize)
         )
         return mapOf(
@@ -87,7 +95,7 @@ open class RiskAssessmentMcpService(
     @Transactional(readOnly = true)
     open fun questionnaire(context: McpExecutionContext, assessmentId: Long): Map<String, Any> {
         val assessment = accessibleAssessment(context, assessmentId)
-        val requirements = requirementsFor(assessment)
+        val requirements = access.visibleRequirements(assessment, authentication(context), requirementsFor(assessment))
         val requirementIds = requirements.mapNotNull { it.id }.toSet()
         val responses = responseRepository.findByRiskAssessmentId(assessmentId).associateBy { it.requirement.id }
         return mapOf(
@@ -113,7 +121,7 @@ open class RiskAssessmentMcpService(
     @Transactional(readOnly = true)
     open fun answers(context: McpExecutionContext, assessmentId: Long): Map<String, Any> {
         val assessment = accessibleAssessment(context, assessmentId)
-        val requirementIds = requirementsFor(assessment).mapNotNull { it.id }.toSet()
+        val requirementIds = access.visibleRequirements(assessment, authentication(context), requirementsFor(assessment)).mapNotNull { it.id }.toSet()
         val answers = responseRepository.findByRiskAssessmentId(assessmentId)
             .filter { it.requirement.id in requirementIds }
             .map { response ->
@@ -147,6 +155,7 @@ open class RiskAssessmentMcpService(
         endDate: LocalDate,
         notes: String?
     ): Map<String, Any?> {
+        if (!access.isGlobal(authentication(context))) throw SecurityException("Assessment manager required")
         require((awsAccountId == null) != (assetId == null)) {
             "Provide exactly one assessment basis: awsAccountId or assetId"
         }
@@ -201,6 +210,7 @@ open class RiskAssessmentMcpService(
                 contentSnapshotTaken = true
             )
         )
+        workflow.initialize(assessment)
         log.info(
             "MCP actor {} created risk assessment {} for basis {} and respondent {}",
             context.delegatedUserId, assessment.id, awsAccountId ?: "asset:$assetId", respondent.id
@@ -209,37 +219,8 @@ open class RiskAssessmentMcpService(
     }
 
     @Transactional(readOnly = true)
-    open fun prepareOutstandingReminder(
-        context: McpExecutionContext,
-        assessmentId: Long
-    ): OutstandingReminder {
-        val assessment = accessibleAssessment(context, assessmentId)
-        val viewerId = context.delegatedUserId!!
-        val canNotify = context.isAdmin ||
-            context.delegatedUserRoles?.contains("SECCHAMPION") == true ||
-            assessment.assessor.id == viewerId || assessment.requestor.id == viewerId
-        if (!canNotify) {
-            throw SecurityException("Only the assessor, requestor, ADMIN or SECCHAMPION may notify the respondent")
-        }
-        check(assessment.status == "STARTED") { "Only an ongoing assessment can be notified" }
-        val recipient = assessment.respondent?.email?.trim()?.takeIf { it.isNotBlank() }
-            ?: throw IllegalStateException("Assessment has no respondent email")
-        val requirements = requirementsFor(assessment)
-        val answeredIds = responseRepository.findByRiskAssessmentId(assessmentId)
-            .filter { it.answerType != null }
-            .mapNotNull { it.requirement.id }
-            .toSet()
-        val unansweredCount = requirements.count { it.id !in answeredIds }
-        return OutstandingReminder(
-            assessmentId = assessmentId,
-            recipientEmail = recipient,
-            awsAccountId = assessment.awsAccount?.awsAccountId,
-            useCaseNames = assessment.useCases.map { it.name }.sorted(),
-            endDate = assessment.endDate,
-            unansweredCount = unansweredCount,
-            requirementCount = requirements.size
-        )
-    }
+    open fun prepareOutstandingReminder(context: McpExecutionContext, assessmentId: Long, email: String? = null): OutstandingReminder =
+        workflow.prepareReminder(assessmentId, authentication(context), email)
 
     @Transactional
     open fun saveAnswers(
@@ -247,64 +228,18 @@ open class RiskAssessmentMcpService(
         assessmentId: Long,
         answers: List<AnswerInput>
     ): Map<String, Any> {
-        require(answers.isNotEmpty()) { "answers must not be empty" }
-        require(answers.size <= MAX_ANSWERS) { "at most $MAX_ANSWERS answers may be saved at once" }
-        require(answers.map { it.requirementId }.distinct().size == answers.size) {
-            "answers must not contain duplicate requirement ids"
-        }
-        val assessment = respondentAssessment(context, assessmentId)
-        check(assessment.status == "STARTED") { "Assessment is not open for editing" }
-        val requirements = requirementsFor(assessment).associateBy { it.id }
-        val outside = answers.firstOrNull { it.requirementId !in requirements }
-        require(outside == null) { "Requirement ${outside?.requirementId} is not part of this assessment" }
-        val email = context.delegatedUserEmail ?: throw SecurityException("Delegated user email is required")
-
-        answers.forEach { input ->
-            require(input.comment == null || input.comment.length <= MAX_COMMENT_LENGTH) {
-                "comment must not exceed $MAX_COMMENT_LENGTH characters"
-            }
-            val existing = responseRepository.findByRiskAssessmentIdAndRequirementId(assessmentId, input.requirementId)
-            if (existing == null) {
-                responseRepository.save(
-                    Response(
-                        answerType = input.answerType,
-                        comment = input.comment?.trim()?.takeIf { it.isNotBlank() },
-                        respondentEmail = email,
-                        riskAssessment = assessment,
-                        requirement = requirements.getValue(input.requirementId)
-                    )
-                )
-            } else {
-                val comment = input.comment?.trim()?.takeIf { it.isNotBlank() }
-                if (existing.source == ResponseSource.AI_GENERATED &&
-                    (existing.answerType != input.answerType || existing.comment != comment)
-                ) {
-                    existing.source = ResponseSource.AI_EDITED
-                }
-                existing.answerType = input.answerType
-                existing.comment = comment
-                existing.respondentEmail = email
-                responseRepository.update(existing)
-            }
-        }
-        log.info("MCP actor {} saved {} answer(s) for risk assessment {}", context.delegatedUserId, answers.size, assessmentId)
-        return mapOf("assessmentId" to assessmentId, "savedCount" to answers.size)
+        val initiator = workflow.mcpInitiator(context.apiKeyId, context.delegatedUserId ?: throw SecurityException("Delegation required"))
+        val saved = workflow.save(assessmentId, authentication(context), answers.map {
+            AssessmentWorkflowService.Answer(it.requirementId, it.answerType, it.comment)
+        }, initiator, context.apiKeyId)
+        return mapOf("assessmentId" to assessmentId, "savedCount" to saved.size)
     }
 
     @Transactional
     open fun submit(context: McpExecutionContext, assessmentId: Long): Map<String, Any> {
-        val assessment = respondentAssessment(context, assessmentId)
-        check(assessment.status == "STARTED") { "Assessment is not open for submission" }
-        val requirements = requirementsFor(assessment)
-        val responses = responseRepository.findByRiskAssessmentId(assessmentId).associateBy { it.requirement.id }
-        val missing = requirements.mapNotNull { it.id }.filter { responses[it]?.answerType == null }
-        require(requirements.isNotEmpty() && missing.isEmpty()) {
-            "Assessment is incomplete; unanswered requirement ids: ${missing.joinToString(",")}" 
-        }
-        assessment.status = "COMPLETED"
-        riskAssessmentRepository.update(assessment)
-        log.info("MCP actor {} submitted risk assessment {}", context.delegatedUserId, assessmentId)
-        return mapOf("assessmentId" to assessmentId, "status" to assessment.status, "responsesCount" to responses.size)
+        workflow.mcpInitiator(context.apiKeyId, context.delegatedUserId ?: throw SecurityException("Delegation required"))
+        val assessment = workflow.submit(assessmentId, authentication(context))
+        return mapOf("assessmentId" to assessmentId, "status" to assessment.status)
     }
 
     @Transactional(readOnly = true)
@@ -313,7 +248,7 @@ open class RiskAssessmentMcpService(
         val viewerId = context.delegatedUserId!!
         val canEvaluate = context.isAdmin ||
             context.delegatedUserRoles?.contains("SECCHAMPION") == true ||
-            assessment.assessor.id == viewerId || assessment.requestor.id == viewerId
+            access.canReview(assessment, authentication(context))
         if (!canEvaluate) throw SecurityException("Only the assessor, requestor, ADMIN or SECCHAMPION may evaluate")
         check(assessment.status == "COMPLETED") { "Only a completed assessment can be evaluated" }
 
@@ -342,14 +277,6 @@ open class RiskAssessmentMcpService(
         )
     }
 
-    private fun respondentAssessment(context: McpExecutionContext, assessmentId: Long): RiskAssessment {
-        val assessment = accessibleAssessment(context, assessmentId)
-        if (assessment.respondent?.id != context.delegatedUserId) {
-            throw SecurityException("Only the assigned respondent may answer or submit this assessment")
-        }
-        return assessment
-    }
-
     private fun accessibleAssessment(context: McpExecutionContext, assessmentId: Long): RiskAssessment {
         val assessment = riskAssessmentRepository.findById(assessmentId)
             .orElseThrow { NoSuchElementException("Risk assessment not found") }
@@ -358,27 +285,18 @@ open class RiskAssessmentMcpService(
         return assessment
     }
 
-    private fun canAccess(context: McpExecutionContext, assessment: RiskAssessment): Boolean {
-        val viewerId = context.delegatedUserId ?: return false
-        val privileged = context.isAdmin || context.delegatedUserRoles?.contains("SECCHAMPION") == true
-        val participant = assessment.assessor.id == viewerId || assessment.requestor.id == viewerId ||
-            assessment.respondent?.id == viewerId
-        val assetAccess = assessment.assessmentBasisType == AssessmentBasisType.ASSET &&
-            context.canAccessAsset(assessment.assessmentBasisId)
-        return privileged || participant || assetAccess
+    private fun authentication(context: McpExecutionContext): io.micronaut.security.authentication.Authentication {
+        val user = context.delegatedUserId?.let { userRepository.findById(it).orElse(null) }
+            ?: throw SecurityException("Current delegate required")
+        if (!user.enabled) throw SecurityException("Delegate disabled")
+        return io.micronaut.security.authentication.Authentication.build(user.username, user.roles.map { it.name },
+            mapOf("userId" to user.id!!, "email" to user.email))
     }
 
-    private fun requirementsFor(assessment: RiskAssessment): List<com.secman.domain.Requirement> {
-        val useCaseIds = assessment.useCases.mapNotNull { it.id }
-        val releaseId = assessment.lockedRelease?.id
-        if (releaseId != null && useCaseIds.isNotEmpty()) {
-            return releaseRequirementScopeService.requirementsForRelease(releaseId, useCaseIds)
-        }
-        if (useCaseIds.isNotEmpty()) {
-            return useCaseIds.flatMap(requirementRepository::findByUsecaseId).distinctBy { it.id }
-        }
-        return emptyList()
-    }
+    private fun canAccess(context: McpExecutionContext, assessment: RiskAssessment) =
+        access.canView(assessment, authentication(context))
+
+    private fun requirementsFor(assessment: RiskAssessment) = workflow.requirementsFor(assessment)
 
     private fun assessmentSummary(assessment: RiskAssessment): Map<String, Any?> = mapOf(
         "id" to assessment.id,

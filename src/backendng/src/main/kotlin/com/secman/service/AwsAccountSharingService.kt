@@ -116,6 +116,12 @@ open class AwsAccountSharingService(
      */
     @Transactional
     open fun createSharingRule(request: CreateAwsAccountSharingRequest, adminUserId: Long): AwsAccountSharingResponse {
+        val actor = userRepository.findById(adminUserId).orElseThrow { IllegalArgumentException("Actor not found") }
+        if (!actor.roles.contains(User.Role.ADMIN)) {
+            listOf(request.sourceUserEmail, request.targetUserEmail).filterNotNull().forEach { email ->
+                require(userRepository.findByEmailIgnoreCase(email.trim()).isPresent) { "Only ADMIN may create user accounts" }
+            }
+        }
         val sourceUser = resolveUser(request.sourceUserId, request.sourceUserEmail, "source")
 
         // Capture before resolution: was the target email a new account

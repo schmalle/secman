@@ -87,26 +87,30 @@ interface RiskAssessmentRepository : JpaRepository<RiskAssessment, Long> {
         value = """
             SELECT DISTINCT ra FROM RiskAssessment ra
             LEFT JOIN ra.useCases uc
+            LEFT JOIN ra.awsAccount account
             WHERE (:status IS NULL OR ra.status = :status)
               AND (:useCaseName IS NULL OR LOWER(uc.name) = LOWER(:useCaseName))
               AND (
                     :privileged = true
-                    OR ra.assessor.id = :viewerId
-                    OR ra.requestor.id = :viewerId
-                    OR ra.respondent.id = :viewerId
+                    OR EXISTS (SELECT aa.id FROM AssessmentAssignment aa
+                        WHERE aa.assessmentId = ra.id AND aa.userId = :viewerId AND aa.revoked = false)
+                    OR (ra.assessmentBasisType = com.secman.domain.AssessmentBasisType.ASSET AND ra.assessmentBasisId IN (:assetIds))
+                    OR (ra.assessmentBasisType = com.secman.domain.AssessmentBasisType.AWS_ACCOUNT AND account.awsAccountId IN (:accountIds))
               )
             ORDER BY ra.createdAt DESC
         """,
         countQuery = """
             SELECT COUNT(DISTINCT ra.id) FROM RiskAssessment ra
             LEFT JOIN ra.useCases uc
+            LEFT JOIN ra.awsAccount account
             WHERE (:status IS NULL OR ra.status = :status)
               AND (:useCaseName IS NULL OR LOWER(uc.name) = LOWER(:useCaseName))
               AND (
                     :privileged = true
-                    OR ra.assessor.id = :viewerId
-                    OR ra.requestor.id = :viewerId
-                    OR ra.respondent.id = :viewerId
+                    OR EXISTS (SELECT aa.id FROM AssessmentAssignment aa
+                        WHERE aa.assessmentId = ra.id AND aa.userId = :viewerId AND aa.revoked = false)
+                    OR (ra.assessmentBasisType = com.secman.domain.AssessmentBasisType.ASSET AND ra.assessmentBasisId IN (:assetIds))
+                    OR (ra.assessmentBasisType = com.secman.domain.AssessmentBasisType.AWS_ACCOUNT AND account.awsAccountId IN (:accountIds))
               )
         """
     )
@@ -115,6 +119,8 @@ interface RiskAssessmentRepository : JpaRepository<RiskAssessment, Long> {
         useCaseName: String?,
         viewerId: Long,
         privileged: Boolean,
+        assetIds: Set<Long>,
+        accountIds: Set<String>,
         pageable: Pageable
     ): Page<RiskAssessment>
 

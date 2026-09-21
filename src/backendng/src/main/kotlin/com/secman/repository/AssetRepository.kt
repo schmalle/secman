@@ -57,135 +57,30 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     )
     fun findWorkgroupIdsByAssetIds(assetIds: List<Long>): List<Array<Any>>
 
-    /**
-     * Find the distinct emails of all users who are members of a workgroup that
-     * contains at least one asset belonging to the given cloud (AWS) account.
-     *
-     * Used by the vulnerability notification fan-out so that recipients always
-     * include the members of any workgroup that contains an EC2 asset in the
-     * affected account (access rule #2 — asset → workgroup → users).
-     *
-     * @param cloudAccountId The AWS account identifier
-     * @return Distinct lower/mixed-case member emails (normalize at the call site)
-     */
+    /** Whole-account notification recipients; a single asset grant is insufficient. */
     @io.micronaut.data.annotation.Query("""
         SELECT DISTINCT u.email
-        FROM Asset a
-        JOIN a.workgroups w
-        JOIN w.users u
-        WHERE a.cloudAccountId = :cloudAccountId AND w.enabled = true
+        FROM WorkgroupAwsAccount waa JOIN waa.workgroup w JOIN w.users u
+        WHERE waa.awsAccountId = :cloudAccountId AND w.enabled = true
     """)
-    fun findDistinctWorkgroupMemberEmailsByCloudAccountId(cloudAccountId: String): List<String>
+    fun findDistinctAccountGrantedMemberEmails(cloudAccountId: String): List<String>
 
-    /**
-     * Find the distinct AWS cloud account IDs of assets the given user owns directly —
-     * via workgroup membership, manual creation, scan upload, or the asset's `owner` field.
-     * Deliberately narrower than [findAccessibleAssets]: it excludes direct AWS/AD
-     * UserMapping and workgroup-assigned-account/domain access. It backs one part of
-     * the `--notall` restriction on the vulnerability-notification fan-out
-     * (`UserVulnerabilityNotificationService.getRestrictedAwsAccountIds`), which
-     * unions this ownership/workgroup-asset result with direct UserMapping,
-     * workgroup-assigned-account, and AWS account sharing at the call site to cover
-     * every AWS-account access path an ADMIN/SECCHAMPION `--notification-user` run
-     * can be restricted to.
-     *
-     * @param userId The user's ID (for workgroup, creator, uploader checks)
-     * @param username The user's username (for owner-based access)
-     * @return Distinct non-blank cloud account IDs
-     */
+    fun findAccessibleAssets(userId: Long, userEmail: String): List<Asset> =
+        findAccessibleAssetIds(userId, userEmail).chunked(1000).flatMap { findByIdIn(it) }.sortedBy { it.name }
+
     @io.micronaut.data.annotation.Query(
-        value = """
-            SELECT DISTINCT a.cloud_account_id FROM asset a
-            WHERE a.cloud_account_id IS NOT NULL AND a.cloud_account_id != ''
-              AND (
-                  a.id IN (
-                      SELECT aw.asset_id FROM asset_workgroups aw
-                      JOIN user_workgroups uw ON aw.workgroup_id = uw.workgroup_id
-                      JOIN workgroup w ON w.id = aw.workgroup_id
-                      WHERE uw.user_id = :userId AND w.enabled = TRUE
-                  )
-                  OR a.manual_creator_id = :userId
-                  OR a.scan_uploader_id = :userId
-                  OR a.owner = :username
-              )
-        """,
+        value = AssetAccessSql.IDS,
         nativeQuery = true
     )
-    fun findDistinctCloudAccountIdsByOwnershipOrWorkgroup(userId: Long, username: String): List<String>
+    fun findAccessibleAssetIds(userId: Long, userEmail: String): List<Long>
 
-    /**
-     * Find all assets accessible to a user using unified access control query
-     * Combines all access criteria in a single database round trip:
-     * 1. Assets in user's workgroups
-     * 2. Assets manually created by user
-     * 3. Assets discovered via user's scan upload
-     * 4. Assets with cloudAccountId matching user's AWS mappings
-     * 5. Assets with adDomain matching user's domain mappings
-     * 6. Assets where owner matches the user's username
-     * 7. Assets with cloudAccountId matching an AWS account assigned to a workgroup the user belongs to (WorkgroupAwsAccount)
-     * 8. Assets with adDomain matching an AD domain assigned to a workgroup the user belongs to (WorkgroupAdDomain)
-     *
-     * @param userId The user's ID (for workgroup, creator, uploader checks)
-     * @param userEmail The user's email (for AWS account and domain mapping lookups)
-     * @param username The user's username (for owner-based access)
-     * @return List of distinct accessible assets, ordered by name
-     */
-    @io.micronaut.data.annotation.Query(
-        value = """
-            SELECT DISTINCT a.* FROM asset a
-            WHERE
-                a.id IN (
-                    SELECT aw.asset_id FROM asset_workgroups aw
-                    JOIN user_workgroups uw ON aw.workgroup_id = uw.workgroup_id
-                    JOIN workgroup w ON w.id = aw.workgroup_id
-                    WHERE uw.user_id = :userId AND w.enabled = TRUE
-                )
-                OR a.manual_creator_id = :userId
-                OR a.scan_uploader_id = :userId
-                OR a.cloud_account_id IN (
-                    SELECT um.aws_account_id FROM user_mapping um
-                    WHERE um.email = :userEmail AND um.aws_account_id IS NOT NULL
-                )
-                OR LOWER(a.ad_domain) IN (
-                    SELECT LOWER(um.domain) FROM user_mapping um
-                    WHERE um.email = :userEmail AND um.domain IS NOT NULL
-                )
-                OR a.cloud_account_id IN (
-                    SELECT DISTINCT um2.aws_account_id
-                    FROM aws_account_sharing acs
-                    JOIN users u_source ON u_source.id = acs.source_user_id
-                    JOIN user_mapping um2 ON um2.email = u_source.email AND um2.aws_account_id IS NOT NULL
-                    WHERE acs.target_user_id = :userId
-                      AND (
-                        NOT EXISTS (
-                            SELECT 1 FROM aws_account_sharing_account asa
-                            WHERE asa.sharing_id = acs.id
-                        )
-                        OR EXISTS (
-                            SELECT 1 FROM aws_account_sharing_account asa
-                            WHERE asa.sharing_id = acs.id
-                              AND asa.aws_account_id = um2.aws_account_id
-                        )
-                      )
-                )
-                OR a.cloud_account_id IN (
-                    SELECT waa.aws_account_id FROM workgroup_aws_account waa
-                    JOIN user_workgroups uw ON uw.workgroup_id = waa.workgroup_id
-                    JOIN workgroup w ON w.id = waa.workgroup_id
-                    WHERE uw.user_id = :userId AND w.enabled = TRUE
-                )
-                OR LOWER(a.ad_domain) COLLATE utf8mb4_general_ci IN (
-                    SELECT wad.ad_domain COLLATE utf8mb4_general_ci FROM workgroup_ad_domain wad
-                    JOIN user_workgroups uw ON uw.workgroup_id = wad.workgroup_id
-                    JOIN workgroup w ON w.id = wad.workgroup_id
-                    WHERE uw.user_id = :userId AND w.enabled = TRUE
-                )
-                OR a.owner = :username
-            ORDER BY a.name ASC
-        """,
-        nativeQuery = true
-    )
-    fun findAccessibleAssets(userId: Long, userEmail: String, username: String): List<Asset>
+    /** Read-only migration preview, keyset paginated; these metadata fields no longer grant access. */
+    @io.micronaut.data.annotation.Query(value = """
+        SELECT a.id FROM asset a WHERE a.id > :afterId
+          AND (a.manual_creator_id = :userId OR a.scan_uploader_id = :userId OR a.owner = :username)
+        ORDER BY a.id LIMIT :limit
+    """, nativeQuery = true)
+    fun findLegacyMetadataGrantIds(userId: Long, username: String, afterId: Long, limit: Int): List<Long>
 
     fun findByNameContainingIgnoreCase(name: String): List<Asset>
 
@@ -546,33 +441,15 @@ interface AssetRepository : JpaRepository<Asset, Long> {
 
     // Workgroup-Based Access Control - Feature 008
 
-    /**
-     * Find assets accessible to a specific user based on workgroup membership
-     * Returns assets that are either:
-     * 1. In workgroups the user belongs to
-     * 2. Created manually by the user
-     * 3. Discovered via scans uploaded by the user
-     *
-     * @param userId The user ID to filter by
-     * @return List of assets accessible to the user
-     */
+    /** Explicit assets in enabled groups with direct membership. */
     @io.micronaut.data.annotation.Query(
         """
-        SELECT DISTINCT a
-        FROM Asset a
-        LEFT JOIN a.workgroups w
-        LEFT JOIN w.users u
-        WHERE (u.id = :userId AND w.enabled = true)
-           OR a.manualCreator.id = :manualCreatorId
-           OR a.scanUploader.id = :scanUploaderId
+        SELECT DISTINCT a FROM Asset a JOIN a.workgroups w JOIN w.users u
+        WHERE u.id = :userId AND w.enabled = true
         ORDER BY a.name ASC
         """
     )
-    fun findAccessibleByWorkgroupMembershipOrCreatorOrUploader(
-        userId: Long,
-        manualCreatorId: Long,
-        scanUploaderId: Long
-    ): List<Asset>
+    fun findAccessibleByWorkgroupMembership(userId: Long): List<Asset>
 
     /**
      * Find assets in specific workgroups

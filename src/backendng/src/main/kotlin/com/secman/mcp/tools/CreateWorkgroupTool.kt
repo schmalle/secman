@@ -9,7 +9,7 @@ import jakarta.inject.Singleton
 /**
  * MCP tool for creating a new workgroup.
  *
- * ADMIN role is required via User Delegation.
+ * ADMIN or SECCHAMPION is required via User Delegation.
  *
  * Input parameters:
  * - name (required): Unique name for the workgroup
@@ -21,7 +21,7 @@ class CreateWorkgroupTool(
 ) : McpTool {
 
     override val name = "create_workgroup"
-    override val description = "Create a new workgroup (ADMIN only, requires User Delegation)"
+    override val description = "Create a new workgroup (ADMIN/SECCHAMPION, requires User Delegation)"
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(
@@ -43,11 +43,11 @@ class CreateWorkgroupTool(
         // Require User Delegation
         requireDelegation(context)?.let { return it }
 
-        // Require ADMIN role
-        if (!context.isAdmin) {
+        // Require grant-management authority
+        if (!context.canManageGrants) {
             return McpToolResult.error(
                 "ADMIN_REQUIRED",
-                "ADMIN role required to create workgroups"
+                "ADMIN or SECCHAMPION role required to create workgroups"
             )
         }
 

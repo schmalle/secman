@@ -391,6 +391,7 @@ const AwsAccountSharingManager: React.FC = () => {
                     AWS Account Sharing
                 </h2>
                 <button
+                    disabled={!canManageAnyRule}
                     className="btn btn-primary"
                     onClick={() => {
                         if (showCreateForm) {
@@ -779,8 +780,7 @@ const AwsAccountSharingManager: React.FC = () => {
                                 {sharingRules.map((rule) => {
                                     // A user may edit/delete a rule if they can manage any rule,
                                     // or they are the source user on this specific rule.
-                                    const canManageThisRule = canManageAnyRule ||
-                                        rule.sourceUserId === currentUser?.id;
+                                    const canManageThisRule = canManageAnyRule;
                                     return (
                                     <tr key={rule.id}>
                                         <td>

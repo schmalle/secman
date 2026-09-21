@@ -35,7 +35,7 @@ class AuthenticationProviderUserPassword<B : Any>(
                 if (userOptional.isPresent) {
                     val user = userOptional.get()
                     
-                    if (passwordEncoder.matches(password, user.passwordHash)) {
+                    if (user.enabled && passwordEncoder.matches(password, user.passwordHash)) {
                         // Extract roles as strings
                         val roles = user.roles.map { it.name }
                         

@@ -21,6 +21,12 @@ class ExportJob(
     @Column(nullable = false, length = 50)
     var username: String,
 
+    @Column(name = "actor_user_id")
+    var actorUserId: Long? = null,
+
+    @Column(name = "scope_digest", length = 64)
+    var scopeDigest: String? = null,
+
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

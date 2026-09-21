@@ -9,19 +9,7 @@ import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 
-/**
- * Feature 088 — AI-Assisted Risk Assessment Answers.
- *
- * Authorisation helper shared by the AI-suggestion endpoints. Caller is
- * authorised iff one of:
- *   1) authentication.roles contains ADMIN
- *   2) the assessment's assessor == caller
- *   3) the assessment's requestor == caller
- *
- * SECCHAMPION role alone does NOT grant access to any random assessment —
- * the user must be the creator (assessor or requestor) for that specific
- * assessment.
- */
+/** AI research requires a current global assessment manager. */
 @Singleton
 class AssessmentOwnershipGuard(
     private val riskAssessmentRepository: RiskAssessmentRepository,
@@ -38,24 +26,12 @@ class AssessmentOwnershipGuard(
         val assessment = riskAssessmentRepository.findById(assessmentId).orElse(null)
             ?: throw HttpStatusException(HttpStatus.NOT_FOUND, "Assessment not found")
 
-        if (authentication.roles.contains("ADMIN")) {
-            return assessment
-        }
-
-        val username = authentication.name
-        val user = userRepository.findByUsername(username).orElse(null)
-        if (user == null) {
-            log.warn("AssessmentOwnershipGuard: user not found for principal {}", username)
-            throw HttpStatusException(HttpStatus.FORBIDDEN, "User not recognized")
-        }
-
-        val isOwner = assessment.assessor.id == user.id || assessment.requestor.id == user.id
-        if (!isOwner) {
-            log.info(
-                "AssessmentOwnershipGuard: forbidden — user {} (id={}) is neither assessor (id={}) nor requestor (id={}) of assessment {}",
-                username, user.id, assessment.assessor.id, assessment.requestor.id, assessmentId
-            )
-            throw HttpStatusException(HttpStatus.FORBIDDEN, "You do not have access to this assessment")
+        val id = (authentication.attributes["userId"] as? Number)?.toLong()
+            ?: authentication.attributes["userId"]?.toString()?.toLongOrNull()
+        val user = id?.let { userRepository.findById(it).orElse(null) }
+            ?: throw HttpStatusException(HttpStatus.FORBIDDEN, "Current user required")
+        if (!user.enabled || user.roles.none { it == com.secman.domain.User.Role.ADMIN || it == com.secman.domain.User.Role.SECCHAMPION }) {
+            throw HttpStatusException(HttpStatus.FORBIDDEN, "Global assessment manager required")
         }
         return assessment
     }

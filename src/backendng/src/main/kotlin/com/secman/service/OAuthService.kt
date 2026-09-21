@@ -595,7 +595,7 @@ open class OAuthService(
                         username = user.username,
                         email = user.email,
                         roles = user.roles.map { it.name },
-                        workgroupCount = workgroupRepository.countEffectiveWorkgroupsByUserEmail(user.email),
+                        workgroupCount = workgroupRepository.countDirectWorkgroupsByUserEmail(user.email),
                         awsAccountCount = directAwsCount + sharedAwsCount,
                         domainCount = userMappingRepository.countDistinctDomainsByEmail(user.email)
                     )
@@ -961,6 +961,7 @@ open class OAuthService(
         val existingUserOpt = userRepository.findByEmailIgnoreCase(email)
         if (existingUserOpt.isPresent) {
             val existingUser = existingUserOpt.get()
+            if (!existingUser.enabled) return null
             // FR-006: Existing users preserve their roles; no modification on re-authentication
             logger.info("Found existing user by email (case-insensitive): id={}, username={}, email={}, roles={}",
                 existingUser.id, existingUser.username, existingUser.email, existingUser.roles)

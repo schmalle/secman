@@ -3,7 +3,7 @@
 SecMan models a supplier as a normal asset with `type = SUPPLIER`. The asset's
 `name` is the legal or trading name, `uri` is its canonical public HTTPS site,
 `owner` is the internal supplier owner, and `description` can carry a short
-service and data-scope summary. This deliberately reuses asset ownership,
+service and data-scope summary. Ownership remains descriptive metadata; access uses workgroup grants. This reuses asset inventory,
 workgroups and risk-assessment access controls instead of introducing a second
 supplier authorization model.
 
@@ -27,7 +27,7 @@ supplier authorization model.
    access the asset.
 3. The assigned respondent supplies contractual and non-public facts. Use
    `notify_risk_assessment_respondent` for bounded, audited reminders.
-4. An ADMIN or the assessment's SECCHAMPION assessor/requestor may call
+4. An ADMIN or SECCHAMPION may call
    `start_ai_risk_assessment`. It starts the same cost-capped OpenRouter job as
    the Web UI. With an `:online` model, the model researches public evidence
    and stores citations and draft answers; it does **not** submit or approve the
@@ -71,3 +71,12 @@ implemented for the contracted service.
 
 See [AI-assisted answers](AI_RISK_ASSESSMENT.md), [MCP](MCP.md), and
 [Paperclip automation](PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md).
+
+## Assignment and acceptance boundary
+
+Supplier and SaaS assessments use the [shared authorization workflow](AUTHORIZATION_REWORK.md).
+A respondent assignment grants only its questionnaire section and minimal task
+context. It does not expose the supplier asset inventory. Final acceptance
+requires an independent authenticated human who never contributed to the
+assessment. Historical assessments with incomplete authorship require a new
+assessment before final acceptance.

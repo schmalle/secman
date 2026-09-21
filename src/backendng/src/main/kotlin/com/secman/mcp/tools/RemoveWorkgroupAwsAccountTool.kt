@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory
 /**
  * MCP tool for removing an AWS account assignment from a workgroup.
  *
- * ADMIN role is required via User Delegation.
+ * ADMIN or SECCHAMPION is required via User Delegation.
  *
  * Input parameters:
  * - workgroupId (required): ID of the workgroup
@@ -27,7 +27,7 @@ class RemoveWorkgroupAwsAccountTool(
     private val log = LoggerFactory.getLogger(RemoveWorkgroupAwsAccountTool::class.java)
 
     override val name = "remove_workgroup_aws_account"
-    override val description = "Remove an AWS account from a workgroup (ADMIN only, requires User Delegation)"
+    override val description = "Remove an AWS account from a workgroup (ADMIN/SECCHAMPION, requires User Delegation)"
     override val operation = McpOperation.DELETE
 
     override val inputSchema = mapOf(
@@ -48,10 +48,10 @@ class RemoveWorkgroupAwsAccountTool(
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
 
-        if (!context.isAdmin) {
+        if (!context.canManageGrants) {
             return McpToolResult.error(
                 "ADMIN_REQUIRED",
-                "ADMIN role required to remove AWS accounts from a workgroup"
+                "ADMIN or SECCHAMPION role required to remove AWS accounts from a workgroup"
             )
         }
 

@@ -64,13 +64,12 @@ object McpToolPermissions {
             // Read-only views of the onboarding rule set. ADMIN/SECCHAMPION checked in execute().
             "list_account_onboarding_rules", "preview_account_onboarding_rules",
         ),
-        setOf(ASSESSMENTS_WRITE) to listOf("create_risk_assessment", "start_ai_risk_assessment"),
+        setOf(ASSESSMENTS_WRITE) to listOf("create_risk_assessment", "start_ai_risk_assessment", "manage_assessment_assignment"),
         setOf(ASSESSMENTS_EXECUTE) to listOf("save_risk_assessment_answers", "submit_risk_assessment"),
         setOf(USER_ACTIVITY) to listOf(
             // ADMIN role checked in execute() for all of these
             "list_users", "add_user", "delete_user",
             "import_user_mappings", "list_user_mappings",
-            "list_aws_account_sharing", "create_aws_account_sharing", "delete_aws_account_sharing",
             // Same group as import_user_mappings because it has the same side effect: it
             // onboards an account owner, mail included. ADMIN/SECCHAMPION checked in execute().
             "simulate_account_onboarding",
@@ -110,6 +109,7 @@ object McpToolPermissions {
             "get_asset_most_vulnerabilities", "get_overdue_assets",
         ),
         setOf(WORKGROUPS_WRITE) to listOf(
+            "list_aws_account_sharing", "create_aws_account_sharing", "delete_aws_account_sharing",
             // ADMIN role checked in execute() for all of these
             "create_workgroup", "delete_workgroup",
             "assign_assets_to_workgroup", "assign_users_to_workgroup",
@@ -229,7 +229,6 @@ object McpToolPermissions {
             setOf(USER_ACTIVITY) to listOf(
                 "list_users", "add_user", "delete_user",
                 "import_user_mappings", "list_user_mappings",
-                "list_aws_account_sharing", "create_aws_account_sharing", "delete_aws_account_sharing",
                 "simulate_account_onboarding",
             ),
             setOf(ASSESSMENTS_READ) to listOf(
@@ -238,9 +237,10 @@ object McpToolPermissions {
                 "evaluate_risk_assessment", "get_risk_assessment_statistics", "get_ai_risk_assessment_job",
                 "list_account_onboarding_rules", "preview_account_onboarding_rules",
             ),
-            setOf(ASSESSMENTS_WRITE) to listOf("create_risk_assessment", "start_ai_risk_assessment"),
+            setOf(ASSESSMENTS_WRITE) to listOf("create_risk_assessment", "start_ai_risk_assessment", "manage_assessment_assignment"),
             setOf(ASSESSMENTS_EXECUTE) to listOf("save_risk_assessment_answers", "submit_risk_assessment"),
             setOf(WORKGROUPS_WRITE) to listOf(
+                "list_aws_account_sharing", "create_aws_account_sharing", "delete_aws_account_sharing",
                 "create_workgroup", "delete_workgroup",
                 "assign_assets_to_workgroup", "assign_users_to_workgroup",
                 // These six were in LISTING but absent here, so tools/call denied them

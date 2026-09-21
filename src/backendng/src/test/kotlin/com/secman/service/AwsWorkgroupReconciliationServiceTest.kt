@@ -52,15 +52,15 @@ class AwsWorkgroupReconciliationServiceTest {
     }
 
     @Test
-    fun `matched owner is added and group enabled after direct links are removed`() {
+    fun `matched owner is added and group enabled while explicit assets are retained`() {
         existingGroup()
         owner()
         val result = reconcile("owner@example.com")
-        assertThat(result).isEqualTo(AwsWorkgroupReconciliationService.Outcome("ADDED", 9, false, "ENABLED", "READY"))
+        assertThat(result).isEqualTo(AwsWorkgroupReconciliationService.Outcome("ADDED", 0, false, "ENABLED", "READY"))
         assertThat(group.enabled).isTrue()
         assertThat(group.awsAccountManaged).isTrue()
         verify { memberships.assignUsersToWorkgroup(42, listOf(7)) }
-        verify { groups.removeDirectAssetLinks(42) }
+        verify(exactly = 0) { groups.removeDirectAssetLinks(any()) }
         verify { publisher.publishEvent(match { it.workgroupIds == setOf(42L) }) }
     }
 
@@ -102,7 +102,7 @@ class AwsWorkgroupReconciliationServiceTest {
         assertThat(result.statusOutcome).isEqualTo("WOULD_ENABLE")
         assertThat(group.enabled).isFalse()
         assertThat(result.memberOutcome).isEqualTo("WOULD_ADD")
-        assertThat(result.assetsRemoved).isEqualTo(9)
+        assertThat(result.assetsRemoved).isZero()
         assertThat(group.awsAccountManaged).isFalse()
         verify(exactly = 0) { groups.update(any<Workgroup>()) }
         verify(exactly = 0) { groups.removeDirectAssetLinks(any()) }
@@ -117,13 +117,6 @@ class AwsWorkgroupReconciliationServiceTest {
         assertThat(result.memberOutcome).isEqualTo("WOULD_ADD")
         assertThat(result.statusOutcome).isEqualTo("WOULD_ENABLE")
         verify(exactly = 0) { groups.update(any<Workgroup>()) }
-    }
-
-    @Test
-    fun `managed workgroups reject direct assets but manual groups do not`() {
-        group.requireDirectAssetAssignmentAllowed()
-        group.awsAccountManaged = true
-        assertThatThrownBy { group.requireDirectAssetAssignmentAllowed() }.isInstanceOf(IllegalArgumentException::class.java)
     }
 
     @Test
@@ -171,7 +164,7 @@ class AwsWorkgroupReconciliationServiceTest {
     }
 
     @Test
-    fun `dry run predicts disable without writing and cannot ignore remaining direct links on apply`() {
+    fun `dry run predicts empty membership disable while direct assets remain valid`() {
         existingGroup()
         group.enabled = true
         val preview = reconcile(dryRun = true)
@@ -181,7 +174,7 @@ class AwsWorkgroupReconciliationServiceTest {
         verify(exactly = 0) { groups.update(any<Workgroup>()) }
         every { groups.countUsersByWorkgroupId(42) } returns 2
         every { groups.countAssetsByWorkgroupId(42) } returns 9
-        assertThat(reconcile().statusReason).isEqualTo("DIRECT_ASSETS_REMAIN")
-        assertThat(group.enabled).isFalse()
+        assertThat(reconcile().statusReason).isEqualTo("READY")
+        assertThat(group.enabled).isTrue()
     }
 }

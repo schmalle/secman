@@ -1,3 +1,4 @@
+import AssessmentAccessManager from './AssessmentAccessManager';
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import AssessmentPerformance from './AssessmentPerformance';
@@ -134,6 +135,7 @@ const RiskAssessmentManagement: React.FC = () => {
 
   // Check if user is authenticated
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const managesAssessments = currentUser?.roles?.some(role => role === 'ADMIN' || role === 'SECCHAMPION') ?? false;
 
   useEffect(() => {
     // Check authentication
@@ -265,7 +267,7 @@ const RiskAssessmentManagement: React.FC = () => {
       const assessorRef = decodeRef(assessorRefValue);
       const respondentRef = respondentRefValue ? decodeRef(respondentRefValue) : undefined;
 
-      if (!assessorRef) {
+      if (!editingAssessment && !assessorRef) {
         setError('Please select an assessor');
         return;
       }
@@ -296,7 +298,7 @@ const RiskAssessmentManagement: React.FC = () => {
       
       let response;
       if (editingAssessment) {
-        response = await authenticatedPut(`/api/risk-assessments/${editingAssessment.id}`, dataToSubmit);
+        response = await authenticatedPut(`/api/risk-assessments/${editingAssessment.id}`, { endDate: formData.endDate, notes: formData.notes });
       } else {
         response = await authenticatedPost('/api/risk-assessments', dataToSubmit);
       }
@@ -352,30 +354,22 @@ const RiskAssessmentManagement: React.FC = () => {
   };
 
   const handleSendNotification = async (assessment: RiskAssessment) => {
-    if (!assessment.respondent?.email) {
-      setError('No respondent email available for this assessment');
-      return;
-    }
-
-    if (!window.confirm(`Send assessment notification to ${assessment.respondent.email}?`)) {
-      return;
-    }
-
     try {
-      const response = await authenticatedPost(`/api/risk-assessments/${assessment.id}/notify`, {
-        respondentEmail: assessment.respondent.email
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to send notification: ${response.status}`);
-      }
-
-      setError(null);
-      // Show success message temporarily
-      const originalError = error;
-      setError('Notification sent successfully!');
-      setTimeout(() => setError(originalError), 3000);
+      const assignmentResponse = await authenticatedGet(`/api/risk-assessments/${assessment.id}/workflow/assignments`);
+      if (!assignmentResponse.ok) throw new Error('Could not load respondent assignments.');
+      const assignments: { email: string; role: string; revoked: boolean; submitted: boolean }[] = await assignmentResponse.json();
+      const recipients = assignments.filter(row => row.role === 'RESPONDENT' && !row.revoked && !row.submitted);
+      if (!recipients.length) throw new Error('There are no open respondent assignments.');
+      if (!window.confirm(`Send reminders to ${recipients.map(row => row.email).join(', ')}?`)) return;
+      const outcomes = await Promise.allSettled(recipients.map(async recipient => {
+        const response = await authenticatedPost(`/api/risk-assessments/${assessment.id}/notify`, { email: recipient.email });
+        if (!response.ok) throw new Error(`Notification failed for ${recipient.email}.`);
+        const outcome = await response.json();
+        return `${recipient.email}: ${outcome.sent ? 'sent' : outcome.reason}`;
+      }));
+      setError(outcomes.map(result => result.status === 'fulfilled' ? result.value : String(result.reason)).join('; '));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : 'Notification failed');
     }
   };
 
@@ -539,7 +533,7 @@ const RiskAssessmentManagement: React.FC = () => {
         <div className="col-12">
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h2>Risk Assessment Management</h2>
-            <button
+            {managesAssessments && <button
               className="btn btn-primary"
               onClick={() => {
                 if (showForm) {
@@ -557,7 +551,7 @@ const RiskAssessmentManagement: React.FC = () => {
               }}
             >
               {showForm ? 'Cancel' : 'Add New Risk Assessment'}
-            </button>
+            </button>}
           </div>
         </div>
       </div>
@@ -569,6 +563,7 @@ const RiskAssessmentManagement: React.FC = () => {
               <div className="card-body">
                 <h5 className="card-title">{editingAssessment ? 'Edit Risk Assessment' : 'Add New Risk Assessment'}</h5>
                 <form onSubmit={handleSubmit}>
+                  {!editingAssessment && <>
                   <div className="mb-3">
                     <label htmlFor="assessmentBasisType" className="form-label">Assessment Basis *</label>
                     <select
@@ -669,6 +664,7 @@ const RiskAssessmentManagement: React.FC = () => {
 
                   <div className="mb-3">
                     <label htmlFor="assessorRef" className="form-label">Assessor *</label>
+                    {users.length > 0 ? (
                     <select
                       className="form-control"
                       id="assessorRef"
@@ -687,10 +683,16 @@ const RiskAssessmentManagement: React.FC = () => {
                         </option>
                       ))}
                     </select>
+                    ) : (
+                      <input className="form-control" id="assessorRef" type="email"
+                        value={assessorRefValue.replace(/^email:/, '')} onChange={event => setAssessorRefValue(event.target.value ? `email:${event.target.value}` : '')}
+                        placeholder="Existing user's email" required />
+                    )}
                   </div>
 
                   <div className="mb-3">
                     <label htmlFor="respondentRef" className="form-label">Respondent (Addressed Person)</label>
+                    {users.length > 0 ? (
                     <select
                       className="form-control"
                       id="respondentRef"
@@ -708,8 +710,14 @@ const RiskAssessmentManagement: React.FC = () => {
                         </option>
                       ))}
                     </select>
+                    ) : (
+                      <input className="form-control" id="respondentRef" type="email"
+                        value={respondentRefValue.replace(/^email:/, '')} onChange={event => setRespondentRefValue(event.target.value ? `email:${event.target.value}` : '')}
+                        placeholder="Existing user's email"  />
+                    )}
                   </div>
 
+                  </>}
                   <div className="mb-3">
                     <label htmlFor="endDate" className="form-label">End Date *</label>
                     <input
@@ -723,6 +731,7 @@ const RiskAssessmentManagement: React.FC = () => {
                     />
                   </div>
 
+                  {!editingAssessment && <>
                   <div className="mb-3">
                     <label className="form-label">Scope (Use Cases)</label>
                     <div className="list-group" style={{ maxHeight: '200px', overflowY: 'auto' }}>
@@ -741,6 +750,7 @@ const RiskAssessmentManagement: React.FC = () => {
                     </div>
                   </div>
 
+                  </>}
                   <div className="mb-3">
                     <label htmlFor="notes" className="form-label">Notes</label>
                     <textarea
@@ -910,7 +920,7 @@ const RiskAssessmentManagement: React.FC = () => {
                           </td>
                           <td>
                             <div className="btn-group-vertical btn-group-sm" role="group">
-                              <button onClick={() => handleEdit(assessment)} className="btn btn-outline-primary mb-1">Edit</button>
+                              {managesAssessments && <button onClick={() => handleEdit(assessment)} className="btn btn-outline-primary mb-1">Edit dates and notes</button>}
                               {assessment.status === 'STARTED' && (
                                 <button
                                   onClick={() => handlePerformAssessment(assessment)}
@@ -928,14 +938,7 @@ const RiskAssessmentManagement: React.FC = () => {
                                 const roles = (currentUser?.roles ?? []) as string[];
                                 const isAdmin = roles.includes('ADMIN');
                                 const isSecChampion = roles.includes('SECCHAMPION');
-                                const myId = currentUser?.id;
-                                const isCreator = myId != null && (
-                                  assessment.assessor?.id === myId ||
-                                  assessment.assessorId === myId ||
-                                  assessment.requestor?.id === myId ||
-                                  assessment.requestorId === myId
-                                );
-                                if (!(isAdmin || (isSecChampion && isCreator))) return null;
+                                if (!isAdmin && !isSecChampion) return null;
                                 return (
                                   <button
                                     onClick={() => setAiPrefillAssessment(assessment)}
@@ -946,6 +949,7 @@ const RiskAssessmentManagement: React.FC = () => {
                                   </button>
                                 );
                               })()}
+                              {currentUser?.roles?.some(role => role === 'ADMIN' || role === 'SECCHAMPION') && <AssessmentAccessManager assessmentId={assessment.id} />}
                               <button 
                                 onClick={() => handleCheckAnswers(assessment)} 
                                 className="btn btn-outline-warning mb-1"
@@ -953,7 +957,7 @@ const RiskAssessmentManagement: React.FC = () => {
                               >
                                 Check Answers
                               </button>
-                              {assessment.respondent && (
+                              {managesAssessments && assessment.status === 'STARTED' && (
                                 <button 
                                   onClick={() => handleSendNotification(assessment)} 
                                   className="btn btn-outline-info mb-1"
@@ -962,7 +966,7 @@ const RiskAssessmentManagement: React.FC = () => {
                                   Notify
                                 </button>
                               )}
-                              <button onClick={() => assessment.id && handleDelete(assessment.id)} className="btn btn-outline-danger">Delete</button>
+                              {managesAssessments && <button onClick={() => assessment.id && handleDelete(assessment.id)} className="btn btn-outline-danger">Delete</button>}
                             </div>
                           </td>
                         </tr>

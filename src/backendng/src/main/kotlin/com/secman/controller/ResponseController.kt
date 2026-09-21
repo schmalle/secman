@@ -2,6 +2,7 @@ package com.secman.controller
 
 import com.secman.domain.*
 import com.secman.repository.*
+import com.secman.service.taskView
 import com.secman.service.ReleaseRequirementScopeService
 import com.secman.service.RiskAssessmentAccessService
 import io.micronaut.core.annotation.Nullable
@@ -33,6 +34,7 @@ open class ResponseController(
     private val riskRepository: RiskRepository,
     private val userRepository: UserRepository,
     private val releaseRequirementScopeService: ReleaseRequirementScopeService,
+    private val workflow: com.secman.service.AssessmentWorkflowService,
     private val riskAssessmentAccessService: RiskAssessmentAccessService
 ) {
     
@@ -64,13 +66,14 @@ open class ResponseController(
 
     @Serdeable
     data class AssessmentData(
-        val assessment: RiskAssessment,
+        val assessment: Map<String, Any?>,
         val requirements: List<Requirement>,
         val responses: List<Response>,
         val isComplete: Boolean,
         val completionPercentage: Int,
         val canEdit: Boolean = false,
-        val canReview: Boolean = false
+        val canReview: Boolean = false,
+        val acceptance: AssessmentAcceptance? = null
     )
 
     @Serdeable
@@ -110,30 +113,17 @@ open class ResponseController(
         }
     }
 
-    private fun canAccessAssessment(assessment: RiskAssessment, authentication: Authentication): Boolean {
-        if (assessment.assessmentBasisType == AssessmentBasisType.AWS_ACCOUNT) {
-            return riskAssessmentAccessService.canViewAwsAccountAssessment(assessment, authentication)
-        }
-        val roles = authentication.roles
-        if (roles.any { it == "ADMIN" || it == "RISK" || it == "SECCHAMPION" }) return true
-        return listOf(assessment.assessor, assessment.requestor, assessment.respondent)
-            .filterNotNull()
-            .any { authentication.name == it.username }
-    }
+    private fun canAccessAssessment(assessment: RiskAssessment, authentication: Authentication) =
+        riskAssessmentAccessService.canView(assessment, authentication)
 
-    private fun canAnswerAssessment(assessment: RiskAssessment, authentication: Authentication): Boolean =
-        if (assessment.assessmentBasisType == AssessmentBasisType.AWS_ACCOUNT) {
-            riskAssessmentAccessService.canAnswerAwsAccountAssessment(assessment, authentication)
-        } else {
-            canAccessAssessment(assessment, authentication)
-        }
+    private fun canAnswerAssessment(assessment: RiskAssessment, authentication: Authentication) =
+        riskAssessmentAccessService.canAnswer(assessment, authentication)
 
-    private fun canManageAssessment(assessment: RiskAssessment, authentication: Authentication): Boolean =
-        if (assessment.assessmentBasisType == AssessmentBasisType.AWS_ACCOUNT) {
-            riskAssessmentAccessService.canManageAwsAccountAssessment(assessment, authentication)
-        } else {
-            canAccessAssessment(assessment, authentication)
-        }
+    private fun canManageAssessment(assessment: RiskAssessment, authentication: Authentication) =
+        riskAssessmentAccessService.canReview(assessment, authentication)
+
+    private fun scopedRequirements(assessment: RiskAssessment, authentication: Authentication) =
+        riskAssessmentAccessService.visibleRequirements(assessment, authentication, workflow.requirementsFor(assessment))
 
     @Get("/assessment/{token:[a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9]}")
     // Capability URL: the recipient of the assessment-request email holds no SecMan account, so
@@ -156,7 +146,10 @@ open class ResponseController(
             val assessment = assessmentToken.riskAssessment
             
             // Get requirements for this assessment
-            val requirements = getRequirementsForAssessment(assessment)
+            val assignment = workflow.tokenAssignment(assessmentToken)
+            val requirements = workflow.requirementsFor(assessment).filter {
+                riskAssessmentAccessService.permitsRequirement(assignment, it.id!!)
+            }
             
             // Get existing responses
             val requirementIds = requirements.mapNotNull { it.id }.toSet()
@@ -171,7 +164,7 @@ open class ResponseController(
             }
             
             val assessmentData = AssessmentData(
-                assessment = assessment,
+                assessment = assessmentView(assessment),
                 requirements = requirements,
                 responses = responses,
                 isComplete = responses.size >= requirements.size,
@@ -192,56 +185,10 @@ open class ResponseController(
     @Secured(SecurityRule.IS_ANONYMOUS)
     @Transactional
     open fun saveResponse(token: String, @Valid @Body request: SaveResponseRequest): HttpResponse<*> {
-        return try {
-            log.debug("Saving response for token: {}", token.take(8) + "...")
-            
-            val assessmentToken = assessmentTokenRepository.findByToken(token).orElse(null)
-                ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment token not found"))
-            
-            if (!assessmentToken.isValid()) {
-                return HttpResponse.badRequest(ErrorResponse("TOKEN_EXPIRED", "Assessment token has expired or been used"))
-            }
-            
-            val assessment = assessmentToken.riskAssessment
-
-            val allowedRequirementIds = getRequirementsForAssessment(assessment).mapNotNull { it.id }.toSet()
-            if (request.requirementId !in allowedRequirementIds) {
-                return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Requirement is not part of this assessment"))
-            }
-            
-            // Validate requirement exists
-            val requirement = requirementRepository.findById(request.requirementId).orElse(null)
-                ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Requirement not found"))
-            
-            // Check if response already exists for this requirement and assessment
-            val existingResponse = responseRepository
-                .findByRiskAssessmentIdAndRequirementId(assessment.id!!, request.requirementId)
-            
-            val response = if (existingResponse != null) {
-                // Update existing response
-                existingResponse.answerType = request.answerType
-                existingResponse.comment = request.comment?.trim()?.takeIf { it.isNotBlank() }
-                existingResponse.respondentEmail = assessmentToken.email
-                responseRepository.update(existingResponse)
-            } else {
-                // Create new response
-                val newResponse = Response(
-                    answerType = request.answerType,
-                    comment = request.comment?.trim()?.takeIf { it.isNotBlank() },
-                    respondentEmail = assessmentToken.email,
-                    riskAssessment = assessment,
-                    requirement = requirement
-                )
-                responseRepository.save(newResponse)
-            }
-            
-            log.info("Saved response for requirement {} in assessment {}", 
-                request.requirementId, assessment.id)
-            HttpResponse.ok(response)
-        } catch (e: Exception) {
-            log.error("Error saving response for token", e)
-            HttpResponse.serverError<Any>()
-        }
+        val capability = assessmentTokenRepository.findByToken(token).orElse(null)
+            ?: return HttpResponse.notFound<Any>()
+        return HttpResponse.ok(workflow.saveToken(capability,
+            com.secman.service.AssessmentWorkflowService.Answer(request.requirementId, request.answerType, request.comment)))
     }
 
     @Post("/{token}/submit")
@@ -249,57 +196,13 @@ open class ResponseController(
     @Secured(SecurityRule.IS_ANONYMOUS)
     @Transactional
     open fun submitAssessment(token: String, @Valid @Body request: SubmitAssessmentRequest): HttpResponse<*> {
-        return try {
-            log.debug("Submitting assessment for token: {}", token.take(8) + "...")
-            
-            val assessmentToken = assessmentTokenRepository.findByToken(token).orElse(null)
-                ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment token not found"))
-            
-            if (!assessmentToken.isValid()) {
-                return HttpResponse.badRequest(ErrorResponse("TOKEN_EXPIRED", "Assessment token has expired or been used"))
-            }
-            
-            val assessment = assessmentToken.riskAssessment
-            if (!request.email.equals(assessmentToken.email, ignoreCase = true)) {
-                return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Email does not match the assessment recipient"))
-            }
-            val requirements = getRequirementsForAssessment(assessment)
-            val requirementIds = requirements.mapNotNull { it.id }.toSet()
-            val responses = responseRepository.findByRiskAssessmentId(assessment.id!!)
-                .filter { it.requirement.id in requirementIds }
-            val answeredIds = responses.filter { it.answerType != null }.mapNotNull { it.requirement.id }.toSet()
-            
-            // Validate all requirements have been answered
-            if (requirements.isEmpty() || !answeredIds.containsAll(requirementIds)) {
-                return HttpResponse.badRequest(ErrorResponse("INCOMPLETE_ASSESSMENT",
-                    "Assessment is incomplete. ${answeredIds.size} of ${requirements.size} requirements answered."))
-            }
-
-            // Atomically claim the one-time token before completing the assessment. The
-            // isValid() check above is only a fast pre-check - two concurrent submits can
-            // both pass it. The guarded UPDATE (WHERE isUsed = false) lets exactly one
-            // request win; the loser gets 0 rows and is rejected here.
-            val claimed = assessmentTokenRepository.claimToken(token, java.time.LocalDateTime.now())
-            if (claimed == 0) {
-                return HttpResponse.badRequest(ErrorResponse("TOKEN_EXPIRED", "Assessment token has expired or been used"))
-            }
-
-            // Mark assessment as completed
-            assessment.status = "COMPLETED"
-            riskAssessmentRepository.update(assessment)
-            
-            // TODO: Send completion notification email to requestor
-            
-            log.info("Assessment {} submitted by {}", assessment.id, request.email)
-            HttpResponse.ok(mapOf(
-                "message" to "Assessment submitted successfully",
-                "assessmentId" to assessment.id,
-                "responsesCount" to responses.size
-            ))
-        } catch (e: Exception) {
-            log.error("Error submitting assessment for token", e)
-            HttpResponse.serverError<Any>()
-        }
+        val capability = assessmentTokenRepository.findByToken(token).orElse(null)
+            ?: return HttpResponse.notFound<Any>()
+        if (!capability.email.equals(request.email, true)) return HttpResponse.badRequest<Any>()
+        val assessment = workflow.submitToken(capability)
+        capability.markAsUsed()
+        assessmentTokenRepository.update(capability)
+        return HttpResponse.ok(mapOf("assessmentId" to assessment.id, "status" to assessment.status))
     }
 
     @Get("/assessment/{id}")
@@ -315,7 +218,8 @@ open class ResponseController(
                 return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
             }
 
-            val responses = responseRepository.findByRiskAssessmentId(id)
+            val allowed = scopedRequirements(assessment, authentication).mapNotNull { it.id }.toSet()
+            val responses = responseRepository.findByRiskAssessmentId(id).filter { it.requirement.id in allowed }
             
             // Force loading of related entities
             responses.forEach { response ->
@@ -343,7 +247,8 @@ open class ResponseController(
                 return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
             }
 
-            val responses = responseRepository.findByRiskAssessmentIdAndEmail(id, email)
+            val allowed = scopedRequirements(assessment, authentication).mapNotNull { it.id }.toSet()
+            val responses = responseRepository.findByRiskAssessmentIdAndEmail(id, email).filter { it.requirement.id in allowed }
             
             // Force loading of related entities
             responses.forEach { response ->
@@ -372,7 +277,7 @@ open class ResponseController(
             }
 
             // Get requirements for this assessment
-            val requirements = getRequirementsForAssessment(assessment)
+            val requirements = scopedRequirements(assessment, authentication)
 
             // Get existing responses
             val requirementIds = requirements.mapNotNull { it.id }.toSet()
@@ -388,18 +293,17 @@ open class ResponseController(
 
             // Check permissions - can edit if assessor or respondent, can review if requestor or admin
             val canEdit = assessment.status == "STARTED" && canAnswerAssessment(assessment, authentication)
-            val canReview = authentication.roles.let {
-                it.contains("ADMIN") || it.contains("SECCHAMPION")
-            } || authentication.name == assessment.requestor.username
+            val canReview = riskAssessmentAccessService.canReview(assessment, authentication)
             
             val assessmentData = AssessmentData(
-                assessment = assessment,
+                assessment = assessmentView(assessment),
                 requirements = requirements,
                 responses = responses,
                 isComplete = responses.size >= requirements.size,
                 completionPercentage = completionPercentage,
                 canEdit = canEdit,
-                canReview = canReview
+                canReview = canReview,
+                acceptance = workflow.reviewDecision(assessment, authentication)
             )
             
             log.debug("Assessment data prepared: {} requirements, {} responses", 
@@ -415,162 +319,18 @@ open class ResponseController(
     @Secured(SecurityRule.IS_AUTHENTICATED)
     @Transactional
     open fun saveResponseAuthenticated(id: Long, @Valid @Body request: SaveResponseRequest, authentication: Authentication): HttpResponse<*> {
-        return try {
-            log.debug("Saving response for assessment: {}", id)
-            
-            // Get current user's email
-            val currentUserEmail = getCurrentUserEmail(authentication)
-            if (currentUserEmail.isNullOrBlank()) {
-                return HttpResponse.badRequest(ErrorResponse("AUTHENTICATION_ERROR", "Unable to determine current user's email. Please log in again."))
-            }
-            
-            val assessment = riskAssessmentRepository.findById(id).orElse(null)
-                ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
-            if (!canAnswerAssessment(assessment, authentication)) {
-                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
-            }
-
-            if (assessment.status != "STARTED") {
-                return HttpResponse.badRequest(ErrorResponse("ASSESSMENT_LOCKED", "Assessment is not open for editing"))
-            }
-
-            val requirement = getRequirementsForAssessment(assessment)
-                .firstOrNull { it.id == request.requirementId }
-                ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Requirement is not part of this assessment"))
-
-            // Check if response already exists for this requirement and assessment
-            val existingResponse = responseRepository
-                .findByRiskAssessmentIdAndRequirementId(assessment.id!!, request.requirementId)
-
-            val response = if (existingResponse != null) {
-                // Feature 088 provenance flip: see bulkSaveResponsesAuthenticated.
-                val incomingComment = request.comment?.trim()?.takeIf { it.isNotBlank() }
-                val changed = existingResponse.answerType != request.answerType ||
-                              existingResponse.comment != incomingComment
-                if (changed && existingResponse.source == ResponseSource.AI_GENERATED) {
-                    existingResponse.source = ResponseSource.AI_EDITED
-                }
-                existingResponse.answerType = request.answerType
-                existingResponse.comment = incomingComment
-                if (existingResponse.respondentEmail.isNullOrBlank()) {
-                    existingResponse.respondentEmail = currentUserEmail
-                }
-                responseRepository.update(existingResponse)
-            } else {
-                // Create new response
-                val newResponse = Response(
-                    answerType = request.answerType,
-                    comment = request.comment?.trim()?.takeIf { it.isNotBlank() },
-                    respondentEmail = currentUserEmail,
-                    riskAssessment = assessment,
-                    requirement = requirement
-                )
-                responseRepository.save(newResponse)
-            }
-
-            log.info("Saved response for requirement {} in assessment {} with email {}",
-                request.requirementId, assessment.id, currentUserEmail)
-            HttpResponse.ok(response)
-        } catch (e: Exception) {
-            log.error("Error saving response for authenticated user", e)
-            HttpResponse.serverError<Any>()
-        }
+        return HttpResponse.ok(workflow.save(id, authentication, listOf(
+            com.secman.service.AssessmentWorkflowService.Answer(request.requirementId, request.answerType, request.comment))).single())
     }
 
     @Post("/assessment/{id}/bulk-save")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     @Transactional
     open fun bulkSaveResponsesAuthenticated(id: Long, @Valid @Body request: BulkSaveResponseRequest, authentication: Authentication): HttpResponse<*> {
-        return try {
-            log.debug("Bulk saving {} responses for assessment: {}", request.responses.size, id)
-            
-            // Get current user's email
-            val currentUserEmail = getCurrentUserEmail(authentication)
-            if (currentUserEmail.isNullOrBlank()) {
-                return HttpResponse.badRequest(ErrorResponse("AUTHENTICATION_ERROR", "Unable to determine current user's email. Please log in again."))
-            }
-            
-            val assessment = riskAssessmentRepository.findById(id).orElse(null)
-                ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
-            if (!canAnswerAssessment(assessment, authentication)) {
-                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
-            }
-
-            if (assessment.status != "STARTED") {
-                return HttpResponse.badRequest(ErrorResponse("ASSESSMENT_LOCKED", "Assessment is not open for editing"))
-            }
-
-            val savedResponses = mutableListOf<Response>()
-            val errors = mutableListOf<String>()
-            val requirementsById = getRequirementsForAssessment(assessment).associateBy { it.id }
-            
-            for (responseRequest in request.responses) {
-                try {
-                    val requirement = requirementsById[responseRequest.requirementId]
-                    if (requirement == null) {
-                        log.warn("Skipping out-of-scope requirement ID: {}", responseRequest.requirementId)
-                        errors.add("Requirement is not part of this assessment: ${responseRequest.requirementId}")
-                        continue
-                    }
-                    
-                    // Check if response already exists for this requirement and assessment
-                    val existingResponse = responseRepository
-                        .findByRiskAssessmentIdAndRequirementId(assessment.id!!, responseRequest.requirementId)
-                    
-                    val response = if (existingResponse != null) {
-                        // Update existing response.
-                        // Feature 088: if the row was AI_GENERATED and the human
-                        // is changing the answer or comment, flip the source to
-                        // AI_EDITED so re-runs leave it alone. MANUAL stays
-                        // MANUAL; AI_EDITED stays AI_EDITED.
-                        val incomingComment = responseRequest.comment?.trim()?.takeIf { it.isNotBlank() }
-                        val changed = existingResponse.answerType != responseRequest.answerType ||
-                                      existingResponse.comment != incomingComment
-                        if (changed && existingResponse.source == ResponseSource.AI_GENERATED) {
-                            existingResponse.source = ResponseSource.AI_EDITED
-                        }
-                        existingResponse.answerType = responseRequest.answerType
-                        existingResponse.comment = incomingComment
-                        // Set email if it's not already set
-                        if (existingResponse.respondentEmail.isNullOrBlank()) {
-                            existingResponse.respondentEmail = currentUserEmail
-                        }
-                        responseRepository.update(existingResponse)
-                    } else {
-                        // Create new response
-                        val newResponse = Response(
-                            answerType = responseRequest.answerType,
-                            comment = responseRequest.comment?.trim()?.takeIf { it.isNotBlank() },
-                            respondentEmail = currentUserEmail,
-                            riskAssessment = assessment,
-                            requirement = requirement
-                        )
-                        responseRepository.save(newResponse)
-                    }
-                    savedResponses.add(response)
-                } catch (e: Exception) {
-                    log.error("Error saving individual response for requirement {}", responseRequest.requirementId, e)
-                    errors.add("Error saving requirement ${responseRequest.requirementId}: processing error")
-                }
-            }
-            
-            log.info("Bulk saved {} responses for assessment {} with email {}", savedResponses.size, assessment.id, currentUserEmail)
-            
-            val result = mutableMapOf<String, Any>(
-                "message" to "Responses saved successfully",
-                "savedCount" to savedResponses.size
-            )
-            
-            if (errors.isNotEmpty()) {
-                result["errors"] = errors
-                result["errorCount"] = errors.size
-            }
-            
-            HttpResponse.ok(result)
-        } catch (e: Exception) {
-            log.error("Error bulk saving responses for authenticated user", e)
-            HttpResponse.serverError<Any>()
-        }
+        val saved = workflow.save(id, authentication, request.responses.map {
+            com.secman.service.AssessmentWorkflowService.Answer(it.requirementId, it.answerType, it.comment)
+        })
+        return HttpResponse.ok(mapOf("savedCount" to saved.size, "message" to "Responses saved successfully"))
     }
 
     @Get("/assessment/{id}/requirements-with-responses")
@@ -586,8 +346,9 @@ open class ResponseController(
                 return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
             }
 
-            val requirements = getRequirementsForAssessment(assessment)
-            val responses = responseRepository.findByRiskAssessmentId(id)
+            val requirements = scopedRequirements(assessment, authentication)
+            val allowed = scopedRequirements(assessment, authentication).mapNotNull { it.id }.toSet()
+            val responses = responseRepository.findByRiskAssessmentId(id).filter { it.requirement.id in allowed }
             val responseMap = responses.associateBy { it.requirement.id }
             
             val requirementsWithResponses = requirements.map { requirement ->
@@ -620,7 +381,7 @@ open class ResponseController(
                 return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Assessment not found"))
             }
 
-            val requirement = getRequirementsForAssessment(assessment)
+            val requirement = scopedRequirements(assessment, authentication)
                 .firstOrNull { it.id == request.requirementId }
                 ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Requirement is not part of this assessment"))
             
@@ -659,7 +420,9 @@ open class ResponseController(
             log.info("Created risk {} from assessment {} for requirement {}", 
                 savedRisk.id, id, request.requirementId)
             
-            HttpResponse.status<Risk>(HttpStatus.CREATED).body(savedRisk)
+            // Task authority does not expose the linked asset or user entity graph.
+            HttpResponse.status<Map<String, Any>>(HttpStatus.CREATED).body(mapOf(
+                "id" to savedRisk.id!!, "name" to savedRisk.name, "status" to savedRisk.status))
         } catch (e: Exception) {
             log.error("Error creating risk from assessment", e)
             HttpResponse.serverError<Any>()
@@ -676,37 +439,5 @@ open class ResponseController(
      * 2. Unpinned assessments keep the previous behaviour: requirements tagged with
      *    the assessment's use cases, else every requirement.
      */
-    private fun getRequirementsForAssessment(assessment: RiskAssessment): List<Requirement> {
-        return try {
-            val useCaseIds = assessment.useCases.mapNotNull { it.id }
-            val pinnedReleaseId = assessment.lockedRelease?.id
-
-            if (pinnedReleaseId != null && useCaseIds.isNotEmpty()) {
-                val pinned = releaseRequirementScopeService.requirementsForRelease(pinnedReleaseId, useCaseIds)
-                log.debug(
-                    "Assessment {} is pinned to release {}: {} requirement(s) for use cases {}",
-                    assessment.id, assessment.lockedRelease?.version, pinned.size, useCaseIds
-                )
-                return pinned
-            }
-
-            if (useCaseIds.isNotEmpty()) {
-                val requirements = useCaseIds
-                    .flatMap { requirementRepository.findByUsecaseId(it) }
-                    .distinct()
-                if (requirements.isNotEmpty()) {
-                    log.debug("Found {} requirements from direct use case associations", requirements.size)
-                    return requirements
-                }
-            }
-
-            val allRequirements = requirementRepository.findAll()
-            log.debug("Using all {} requirements as fallback", allRequirements.size)
-            allRequirements
-        } catch (e: Exception) {
-            log.error("Error getting requirements for assessment", e)
-            // Return empty list if there's an error
-            emptyList()
-        }
-    }
+    private fun assessmentView(assessment: RiskAssessment) = assessment.taskView()
 }

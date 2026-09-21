@@ -9,7 +9,7 @@ import jakarta.inject.Singleton
 /**
  * MCP tool for assigning users to a workgroup.
  *
- * ADMIN role is required via User Delegation.
+ * ADMIN or SECCHAMPION is required via User Delegation.
  *
  * Input parameters:
  * - workgroupId (required): ID of the target workgroup
@@ -21,7 +21,7 @@ class AssignUsersToWorkgroupTool(
 ) : McpTool {
 
     override val name = "assign_users_to_workgroup"
-    override val description = "Assign one or more users to a workgroup (ADMIN only, requires User Delegation)"
+    override val description = "Assign one or more users to a workgroup (ADMIN/SECCHAMPION, requires User Delegation)"
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(
@@ -44,11 +44,11 @@ class AssignUsersToWorkgroupTool(
         // Require User Delegation
         requireDelegation(context)?.let { return it }
 
-        // Require ADMIN role
-        if (!context.isAdmin) {
+        // Require grant-management authority
+        if (!context.canManageGrants) {
             return McpToolResult.error(
                 "ADMIN_REQUIRED",
-                "ADMIN role required to assign users to workgroups"
+                "ADMIN or SECCHAMPION role required to assign users to workgroups"
             )
         }
 
