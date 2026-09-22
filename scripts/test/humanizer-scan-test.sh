@@ -83,6 +83,12 @@ says() {        # says <name> <lang> <file> <substring>
 
 echo "humanizer-scan-test: rule engine"
 
+printf '@Id @GeneratedValue var id: Long? = null\n' > "$WORK/jpa-id.kt"
+silent "JPA identity uses the conventional id field" kt "$WORK/jpa-id.kt" "NAME-VAGUE"
+printf 'val id: Long = 1\n' > "$WORK/unqualified-id.kt"
+fires "unqualified top-level id remains vague" kt "$WORK/unqualified-id.kt" "NAME-VAGUE"
+
+
 # --- Length measurement ------------------------------------------------------
 #
 # The exact line count is asserted, not just "it fired". Every desync bug this

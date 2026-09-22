@@ -18,7 +18,7 @@ class ProfilePictureServiceTest {
     // The real SecurityService is used so its MIME/extension rules are genuinely exercised; the
     // two methods called here (isAllowedMimeType, validateFileExtensionMatchesMimeType) are pure
     // and never touch the injected repositories.
-    private val securityService = SecurityService(mockk(), mockk(), mockk())
+    private val securityService = SecurityService(mockk(), mockk(), mockk(), mockk(), mockk())
 
     private fun service(
         maxUploadBytes: Long = 2 * 1024 * 1024,

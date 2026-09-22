@@ -37,8 +37,17 @@ class AwsAccountSharingControllerInviteValidatorTest {
 
     private fun authStub(): Authentication = mockk {
         every { attributes } returns mapOf("userId" to callerId)
-        every { roles } returns setOf("USER", "VULN")
+        every { roles } returns setOf("ADMIN")
         every { name } returns caller.username
+    }
+
+    @Test
+    fun `ordinary members cannot create sharing grants`() {
+        val auth = authStub()
+        every { auth.roles } returns setOf("USER")
+        val request = CreateAwsAccountSharingRequest(sourceUserId = callerId, targetUserEmail = "bob@example.com", inviteByEmail = true)
+        assertEquals(HttpStatus.FORBIDDEN, controller.createSharingRule(request, auth).status)
+        verify(exactly = 0) { service.createSharingRule(any(), any()) }
     }
 
     @Test

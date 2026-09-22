@@ -71,4 +71,36 @@ class IntegrationRunValidatorTest {
             attachments = listOf(IntegrationAttachmentInput("note.txt", "text/plain", "ZXZpZGVuY2U=")))))
         assertThat(String(validator.validate(run, time).attachments.single().single().bytes)).isEqualTo("evidence")
     }
+
+    @Test
+    fun `validates bounded web inventory without URL query data`() {
+        val inventory = WebInventoryInput(
+            completeCoverage = true,
+            exposure = WebExposureInput(
+                "https://example.test/", "https://example.test/login", "REACHABLE",
+                200, 1, "secman-web-check"
+            ),
+            components = listOf(WebComponentInput(
+                "javascript_library:abc", "JAVASCRIPT_LIBRARY", "jQuery", "3.7.1",
+                0.95, "RESOURCE_URL", "Matched jQuery resource URL",
+                "https://cdn.example.test/jquery-3.7.1.min.js"
+            ))
+        )
+
+        val validated = validator.validate(request().copy(inventory = inventory), time)
+
+        assertThat(validated.inventoryJson).contains("JAVASCRIPT_LIBRARY", "REACHABLE")
+        val invalid = listOf(
+            inventory.copy(exposure = inventory.exposure!!.copy(configuredUrl = "https://example.test/?token=secret")),
+            inventory.copy(exposure = null),
+            inventory.copy(exposure = inventory.exposure.copy(reachability = "UNKNOWN")),
+            inventory.copy(components = listOf(inventory.components.single().copy(category = "RUNTIME"))),
+            inventory.copy(components = listOf(inventory.components.single(), inventory.components.single())),
+            inventory.copy(components = listOf(inventory.components.single().copy(confidence = Double.NaN)))
+        )
+        invalid.forEach { value ->
+            assertThatThrownBy { validator.validate(request().copy(inventory = value), time) }
+                .isInstanceOf(io.micronaut.http.exceptions.HttpStatusException::class.java)
+        }
+    }
 }

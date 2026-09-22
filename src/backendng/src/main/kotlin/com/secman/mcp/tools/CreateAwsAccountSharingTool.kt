@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory
 /**
  * MCP tool for creating an AWS account sharing rule.
  *
- * ADMIN role is required via User Delegation.
+ * ADMIN or SECCHAMPION is required via User Delegation.
  *
  * Input parameters:
  * - sourceUserId (required): ID of the user whose AWS accounts will be shared
@@ -32,7 +32,7 @@ class CreateAwsAccountSharingTool(
     private val log = LoggerFactory.getLogger(CreateAwsAccountSharingTool::class.java)
 
     override val name = "create_aws_account_sharing"
-    override val description = "Create an AWS account sharing rule to share one user's AWS account visibility with another user (ADMIN only, requires User Delegation)"
+    override val description = "Create an AWS account sharing rule to share one user's AWS account visibility with another user (ADMIN/SECCHAMPION, requires User Delegation)"
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(
@@ -58,10 +58,10 @@ class CreateAwsAccountSharingTool(
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
 
-        if (!context.isAdmin) {
+        if (!context.canManageGrants) {
             return McpToolResult.error(
                 "ADMIN_REQUIRED",
-                "ADMIN role required to create AWS account sharing rules"
+                "ADMIN or SECCHAMPION role required to create AWS account sharing rules"
             )
         }
 

@@ -5,7 +5,7 @@
 
 ## What it does
 
-ADMIN and SECCHAMPION users who created a risk assessment (assessor or requestor) can trigger an LLM (OpenRouter, with web search enabled via the `:online` model suffix) to pre-fill the compliance answers. Each generated answer is written as a draft `Response` row with `source = AI_GENERATED`, plus an `AiAnswerSuggestion` audit row carrying:
+Current enabled ADMIN and SECCHAMPION users can trigger an LLM (OpenRouter, with web search enabled via the `:online` model suffix) to pre-fill the compliance answers. Each generated answer is written as a draft `Response` row with `source = AI_GENERATED`, plus an `AiAnswerSuggestion` audit row carrying:
 
 - the suggested answer (`YES | NO | N_A | UNKNOWN`),
 - a numeric confidence `0..1`,
@@ -15,12 +15,12 @@ ADMIN and SECCHAMPION users who created a risk assessment (assessor or requestor
 - the model id and prompt version,
 - token usage and computed USD cost.
 
-The human reviews, edits where needed, and submits via the existing `POST /api/responses/assessment/{id}/submit` finalization endpoint. The AI never finalizes anything.
+Assigned respondents review and submit their sections. Submission freezes answers; independent human acceptance is a separate revision-bound action. AI and MCP cannot accept. See [the shared authorization model](AUTHORIZATION_REWORK.md).
 
 ## Roles & authorization
 
 - **ADMIN** — full access. Can trigger AI on any assessment.
-- **SECCHAMPION** — can trigger AI *only* on assessments they created (assessor or requestor).
+- **SECCHAMPION** — can trigger AI on any open assessment, subject to submitted-section freezes.
 - **RISK / USER / others** — `403`. Cannot start jobs; the AI button is hidden in the UI.
 
 All endpoints (`/api/risk-assessments/{id}/ai-suggestions/...`) are gated by `@Secured("ADMIN","SECCHAMPION")` *and* `AssessmentOwnershipGuard.check(assessmentId, auth)`.
@@ -49,7 +49,7 @@ Token-cost estimates per model live under `secman.ai.risk-assessment.pricing-per
    │
    ▼
 POST /api/risk-assessments/{id}/ai-suggestions/jobs
-   │  (concurrency + cost-cap check, ownership check)
+   │  (concurrency + cost-cap check, current role, key and assignment-version check)
    ▼
 AiSuggestionJob row inserted, IO-executor dispatch
    │

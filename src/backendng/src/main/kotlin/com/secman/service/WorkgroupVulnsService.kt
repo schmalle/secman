@@ -39,6 +39,7 @@ class WorkgroupVulnsService(
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val assetVulnCountsQuery: AssetVulnCountsQuery,
     private val importHistoryRepository: CrowdStrikeImportHistoryRepository,
+    private val workgroupAdDomainRepository: com.secman.repository.WorkgroupAdDomainRepository,
     private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository
 ) {
 
@@ -66,12 +67,8 @@ class WorkgroupVulnsService(
             throw IllegalStateException("Admin users should use System Vulns view instead")
         }
 
-        // Get user's *effective* workgroups: direct memberships UNION all
-        // descendants (Feature 040). Membership cascades downward so a member
-        // of an L2 workgroup sees the L3 sub-teams and their vulnerable assets
-        // here. AWS-account-driven access (rule #9) likewise picks up the
-        // descendants' linked accounts because they are included in this set.
-        val userWorkgroups = workgroupRepository.findEffectiveWorkgroupsByUserEmail(userEmail)
+        // Only enabled direct memberships participate in this grouped view.
+        val userWorkgroups = workgroupRepository.findWorkgroupsByUserEmail(userEmail)
 
         // Check if user has any workgroup memberships
         if (userWorkgroups.isEmpty()) {
@@ -110,7 +107,11 @@ class WorkgroupVulnsService(
         // distinctBy keeps the first occurrence — directAssets first ensures the
         // version with the eagerly-fetched workgroups collection wins, avoiding
         // a lazy read on cloud-only assets later.
-        val assets = (directAssets + cloudAssets).distinctBy { it.id }
+        val domainsByGroup = workgroupAdDomainRepository.findByWorkgroupIdIn(workgroupIds)
+            .groupBy({ it.workgroup.id!! }, { it.adDomain.lowercase() })
+        val domains = domainsByGroup.values.flatten().distinct()
+        val domainAssets = if (domains.isEmpty()) emptyList() else assetRepository.findByAdDomainInIgnoreCase(domains)
+        val assets = (directAssets + cloudAssets + domainAssets).distinctBy { it.id }
 
         logger.debug(
             "Found {} assets for user {} ({} direct, {} via workgroup AWS accounts) across {} workgroups",
@@ -144,7 +145,10 @@ class WorkgroupVulnsService(
                     .keys
                     .mapNotNull { workgroupById[it] }
             } ?: emptyList()
-            id to (directWgs + cloudWgs).distinctBy { it.id }
+            val domainWgs = asset.adDomain?.lowercase()?.let { domain ->
+                domainsByGroup.filterValues { domain in it }.keys.mapNotNull { workgroupById[it] }
+            }.orEmpty()
+            id to (directWgs + cloudWgs + domainWgs).distinctBy { it.id }
         }.toMap()
 
         val assetsByWorkgroup: Map<Workgroup, List<Asset>> = userWorkgroups.associateWith { wg ->

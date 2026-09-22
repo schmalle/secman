@@ -41,6 +41,7 @@ import java.net.URI
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class AssetController(
     private val assetRepository: AssetRepository,
+    private val assetCreationService: com.secman.service.AssetCreationService,
     private val demandRepository: DemandRepository,
     private val riskAssessmentRepository: RiskAssessmentRepository,
     private val riskRepository: RiskRepository,
@@ -71,7 +72,8 @@ open class AssetController(
         @Nullable val description: String? = null,
         @Nullable val criticality: Criticality? = null,
         @Nullable val adDomain: String? = null,
-        @Nullable val networkZone: NetworkZone? = null
+        @Nullable val networkZone: NetworkZone? = null,
+        val workgroupIds: List<Long> = emptyList()
     )
 
     @Serdeable
@@ -277,8 +279,11 @@ open class AssetController(
      */
     @Get("/count")
     @Transactional(readOnly = true)
-    open fun countAll(): HttpResponse<AssetCountResponse> {
-        return HttpResponse.ok(AssetCountResponse(assetRepository.count()))
+    open fun countAll(authentication: Authentication): HttpResponse<AssetCountResponse> {
+        val count = if (com.secman.security.GrantAuthority.canManage(authentication.roles)) {
+            assetRepository.count()
+        } else assetFilterService.getAccessibleAssetIds(authentication).size.toLong()
+        return HttpResponse.ok(AssetCountResponse(count))
     }
 
     /**
@@ -481,7 +486,9 @@ open class AssetController(
             )
             asset.adDomain = request.adDomain?.trim()?.takeIf { it.isNotBlank() }
 
-            val savedAsset = assetRepository.save(asset)
+            val savedAsset = assetCreationService.create(
+                asset, userId ?: return HttpResponse.unauthorized<Any>(), request.workgroupIds
+            )
 
             log.info("Created asset: {} with id: {} by user: {}", savedAsset.name, savedAsset.id, authentication.name)
             HttpResponse.status<AssetResponse>(HttpStatus.CREATED).body(AssetResponse.from(savedAsset))
@@ -505,6 +512,16 @@ open class AssetController(
 
             val asset = assetRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("Asset not found"))
+
+            if ((request.adDomain != null || request.workgroupIds != null) &&
+                !com.secman.security.GrantAuthority.canManage(authentication.roles)) {
+                return HttpResponse.status<ErrorResponse>(HttpStatus.FORBIDDEN)
+                    .body(ErrorResponse("Access associations require ADMIN or SECCHAMPION"))
+            }
+            val replacementGroups = request.workgroupIds?.distinct()?.map { groupId ->
+                workgroupRepository.findById(groupId).orElse(null)
+                    ?: return HttpResponse.badRequest(ErrorResponse("Workgroup unavailable"))
+            }
 
             if (request.name != null && request.resetNameToCrowdStrike) {
                 return HttpResponse.badRequest(ErrorResponse("Name and resetNameToCrowdStrike cannot be used together"))
@@ -572,26 +589,9 @@ open class AssetController(
                 asset.networkZone = newNetworkZone
             }
 
-            request.workgroupIds?.let { workgroupIds ->
-                // Workgroup reassignment requires ADMIN role
-                val roles = authentication.roles
-                if (!roles.contains("ADMIN")) {
-                    return HttpResponse.status<ErrorResponse>(HttpStatus.FORBIDDEN)
-                        .body(ErrorResponse("Workgroup reassignment requires ADMIN role"))
-                }
-
-                val workgroups = workgroupIds.mapNotNull { id ->
-                    workgroupRepository.findById(id).orElse(null)
-                }
-
-                if (workgroups.size != workgroupIds.size) {
-                    return HttpResponse.badRequest(ErrorResponse("One or more workgroup IDs not found"))
-                }
-
-                // Update workgroup assignments
-                workgroups.forEach { it.requireDirectAssetAssignmentAllowed() }
+            replacementGroups?.let { groups ->
                 asset.workgroups.clear()
-                asset.workgroups.addAll(workgroups)
+                asset.workgroups.addAll(groups)
             }
 
             val updatedAsset = assetRepository.update(asset)
@@ -641,7 +641,7 @@ open class AssetController(
      * - 500: Internal server error
      */
     @Get("/{id}/cascade-summary")
-    @Secured("ADMIN")
+    @Secured("ADMIN", "SECCHAMPION")
     @Transactional(readOnly = true)
     open fun getCascadeSummary(id: Long): HttpResponse<*> {
         return try {
@@ -683,7 +683,7 @@ open class AssetController(
      * - 500: Internal server error or transaction timeout
      */
     @Delete("/{id}")
-    @Secured("ADMIN")
+    @Secured("ADMIN", "SECCHAMPION")
     open fun delete(
         id: Long,
         @QueryValue(defaultValue = "false") forceTimeout: Boolean,
@@ -919,7 +919,7 @@ open class AssetController(
     }
 
     @Post("/delete-not-seen-by-crowdstrike")
-    @Secured("ADMIN")
+    @Secured("ADMIN", "SECCHAMPION")
     open fun deleteNotSeenByCrowdStrike(
         @Body request: CrowdStrikeAssetCleanupRequest,
         authentication: Authentication
@@ -994,7 +994,7 @@ open class AssetController(
      * - 500: Transaction failed and was rolled back
      */
     @Delete("/bulk")
-    @Secured("ADMIN")
+    @Secured("ADMIN", "SECCHAMPION")
     open fun bulkDeleteAssets(authentication: Authentication): HttpResponse<*> {
         return try {
             log.info("Bulk delete request received from user: {}", authentication.name)

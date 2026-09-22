@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { authenticatedGet, authenticatedPost, authenticatedPut } from '../utils/auth';
+import { authenticatedGet, authenticatedPost } from '../utils/auth';
 import { clearLowConfidence, listAppliedSuggestions, type AppliedSuggestion, type ConfidenceBand } from '../services/aiSuggestions';
 import AiSuggestionPanel from './AiSuggestionPanel';
 
@@ -40,6 +40,8 @@ interface RiskAssessment {
   awsAccount?: { awsAccountId: string; name?: string };
   endDate: string;
   status: string;
+  answerRevision: number;
+  authorshipComplete: boolean;
   assessor?: { id: number; username: string; email: string };
   requestor?: { id: number; username: string; email: string };
   respondent?: { id: number; username: string; email: string };
@@ -64,6 +66,7 @@ interface AssessmentData {
   completionPercentage: number;
   canEdit: boolean;
   canReview: boolean;
+  acceptance?: { answerRevision: number; rationale: string; createdAt: string };
 }
 
 interface RequirementWithResponse {
@@ -103,6 +106,7 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [acceptanceRationale, setAcceptanceRationale] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
   const [currentTab, setCurrentTab] = useState<'assessment' | 'risk-raising'>('assessment');
   const [filterStatus, setFilterStatus] = useState<'all' | 'compliant' | 'non-compliant' | 'not-applicable'>('all');
@@ -271,6 +275,28 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
     }
   };
 
+  // Bind the human decision to the revision the reviewer actually saw.
+  const acceptAssessment = async () => {
+    if (!assessmentData || !acceptanceRationale.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await authenticatedPost(`/api/risk-assessments/${assessmentId}/workflow/accept`, {
+        answerRevision: assessmentData.assessment.answerRevision,
+        rationale: acceptanceRationale.trim()
+      });
+      if (!result.ok) {
+        throw new Error('Acceptance requires an independent reviewer, complete authorship, and the current submitted revision.');
+      }
+      setSaveMessage('Submitted revision accepted.');
+      await fetchAssessmentData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Acceptance failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const submitAssessment = async () => {
     if (!assessmentData) return;
     
@@ -292,9 +318,7 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
       await saveProgress();
       
       // Update assessment status
-      const statusResponse = await authenticatedPut(`/api/risk-assessments/${assessmentId}`, {
-        status: 'COMPLETED'
-      });
+      const statusResponse = await authenticatedPost(`/api/risk-assessments/${assessmentId}/workflow/submit`, {});
       
       if (!statusResponse.ok) {
         throw new Error('Failed to complete assessment');
@@ -819,6 +843,19 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
             )}
           </div>
 
+          {assessmentData?.canReview && !assessmentData.acceptance && assessmentData.assessment.status === 'COMPLETED' && (
+            <div className="px-3 pb-3">
+              <label className="form-label" htmlFor="acceptance-rationale">Independent review rationale</label>
+              <textarea id="acceptance-rationale" className="form-control" maxLength={4000}
+                value={acceptanceRationale} onChange={event => setAcceptanceRationale(event.target.value)} />
+              {!assessmentData.assessment.authorshipComplete && <p className="text-warning">Historical authorship is incomplete. Create a new assessment with independently collected answers before acceptance.</p>}
+              <button className="btn btn-success mt-2" onClick={acceptAssessment}
+                disabled={submitting || !acceptanceRationale.trim() || !assessmentData.assessment.authorshipComplete}>
+                Accept submitted revision
+              </button>
+            </div>
+          )}
+          {assessmentData?.acceptance && <p className="px-3 text-success">Revision {assessmentData.acceptance.answerRevision} accepted: {assessmentData.acceptance.rationale}</p>}
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               Close

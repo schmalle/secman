@@ -90,7 +90,8 @@ open class EmailService(
         textContent: String,
         htmlContent: String,
         inlineImages: Map<String, Pair<ByteArray, String>>,
-        cc: List<String> = emptyList()
+        cc: List<String> = emptyList(),
+        beforeSend: (() -> Unit)? = null
     ): CompletableFuture<Boolean> {
         return CompletableFuture.supplyAsync {
             runBlocking {
@@ -101,6 +102,7 @@ open class EmailService(
                         return@runBlocking false
                     }
 
+                    beforeSend?.invoke()
                     sendEmailWithConfigAndImages(activeConfig, to, subject, textContent, htmlContent, inlineImages, cc)
                 } catch (e: Exception) {
                     log.error("Failed to send email with inline images to {}: {}", to, e.message, e)
@@ -367,7 +369,8 @@ open class EmailService(
         subject: String,
         textContent: String,
         htmlContent: String,
-        emailConfigId: Long? = null
+        emailConfigId: Long? = null,
+        beforeSend: (() -> Unit)? = null
     ): CompletableFuture<Boolean> {
         return CompletableFuture.supplyAsync {
             runBlocking {
@@ -387,7 +390,7 @@ open class EmailService(
                     }
 
                     // Send email with retry logic
-                    val success = sendEmailWithRetry(config, to, subject, textContent, htmlContent)
+                    val success = sendEmailWithRetry(config, to, subject, textContent, htmlContent, beforeSend = beforeSend)
 
                     // Update notification log
                     logEntry?.let { entry ->
@@ -412,7 +415,8 @@ open class EmailService(
         subject: String,
         textContent: String,
         htmlContent: String,
-        maxAttempts: Int = MAX_RETRY_ATTEMPTS
+        maxAttempts: Int = MAX_RETRY_ATTEMPTS,
+        beforeSend: (() -> Unit)? = null
     ): Boolean = withContext(Dispatchers.IO) {
         var lastException: Exception? = null
 
@@ -422,6 +426,7 @@ open class EmailService(
 
                 // Add timeout to email sending
                 val result = withTimeout(EMAIL_TIMEOUT_SECONDS.seconds) {
+                    beforeSend?.invoke()
                     sendEmailWithConfig(config, to, subject, textContent, htmlContent)
                 }
 

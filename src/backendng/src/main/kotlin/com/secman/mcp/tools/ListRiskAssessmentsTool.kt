@@ -25,7 +25,7 @@ class ListRiskAssessmentsTool(private val service: RiskAssessmentMcpService) : M
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
         requireAnyUserRole(
-            context, "ADMIN", "RISK", "SECCHAMPION",
+            context, "USER", "ADMIN", "RISK", "SECCHAMPION",
             message = "ADMIN, RISK or SECCHAMPION role required to list risk assessments"
         )?.let { return it }
         val page = (arguments["page"] as? Number)?.toInt() ?: 0

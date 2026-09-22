@@ -76,6 +76,10 @@ open class AwsAccountSharingController(
         @Valid @Body request: CreateAwsAccountSharingRequest,
         authentication: Authentication
     ): HttpResponse<*> {
+        if (!hasFullManagementAccess(authentication)) {
+            return HttpResponse.status<Any>(io.micronaut.http.HttpStatus.FORBIDDEN)
+        }
+
         logger.info(
             "Creating AWS account sharing rule: sourceId={}, sourceEmail={}, targetId={}, targetEmail={}",
             request.sourceUserId, request.sourceUserEmail, request.targetUserId, request.targetUserEmail
@@ -196,6 +200,10 @@ open class AwsAccountSharingController(
         @Valid @Body request: UpdateAwsAccountSharingRequest,
         authentication: Authentication
     ): HttpResponse<*> {
+        if (!hasFullManagementAccess(authentication)) {
+            return HttpResponse.status<Any>(io.micronaut.http.HttpStatus.FORBIDDEN)
+        }
+
         logger.info(
             "Updating AWS account sharing rule: id={}, accountIds={}",
             id, request.awsAccountIds?.size ?: 0
@@ -287,6 +295,10 @@ open class AwsAccountSharingController(
         @PathVariable id: Long,
         authentication: Authentication
     ): HttpResponse<*> {
+        if (!hasFullManagementAccess(authentication)) {
+            return HttpResponse.status<Any>(io.micronaut.http.HttpStatus.FORBIDDEN)
+        }
+
         logger.info("Deleting AWS account sharing rule: id=$id")
 
         return try {

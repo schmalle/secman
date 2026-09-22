@@ -6,6 +6,7 @@ import com.secman.repository.AssetRepository
 import com.secman.repository.RiskAssessmentRepository
 import com.secman.repository.UserRepository
 import com.secman.service.AuthCookieService
+import com.secman.service.AssessmentWorkflowService
 import com.secman.testutil.BaseIntegrationTest
 import com.secman.testutil.TestDataFactory
 import io.micronaut.http.HttpRequest
@@ -27,7 +28,7 @@ import java.time.LocalDate
  * authenticated user could read and mutate another user's risk-assessment
  * responses by guessing/incrementing the assessment id, since the endpoints
  * only checked @Secured(IS_AUTHENTICATED) and never verified the caller was
- * the assessment's assessor/requestor/respondent or held a privileged role.
+ * an explicitly assigned participant or held a privileged role.
  */
 @MicronautTest(environments = ["test"], transactional = false)
 @DisplayName("ResponseController Access Control Tests")
@@ -45,6 +46,9 @@ class ResponseControllerAccessControlTest : BaseIntegrationTest() {
 
     @Inject
     lateinit var riskAssessmentRepository: RiskAssessmentRepository
+
+    @Inject
+    lateinit var workflow: AssessmentWorkflowService
 
     @Serdeable
     data class LoginRequest(val username: String, val password: String)
@@ -81,6 +85,7 @@ class ResponseControllerAccessControlTest : BaseIntegrationTest() {
                 requestor = assessor
             )
         )
+        workflow.initialize(assessment)
         return Triple(assessment, assessor.username, outsider.username)
     }
 
@@ -112,7 +117,7 @@ class ResponseControllerAccessControlTest : BaseIntegrationTest() {
                 ).cookie(cookie)
             )
         }
-        assertThat(ex.status).isEqualTo(HttpStatus.NOT_FOUND)
+        assertThat(ex.status).isEqualTo(HttpStatus.FORBIDDEN)
     }
 
     @Test
@@ -139,4 +144,36 @@ class ResponseControllerAccessControlTest : BaseIntegrationTest() {
         )
         assertThat(response.status).isEqualTo(HttpStatus.OK)
     }
+    @Test
+    fun `suspended user cannot obtain a new password session`() {
+        val suffix = System.nanoTime()
+        val user = userRepository.save(TestDataFactory.createRegularUser("suspended-$suffix", "suspended-$suffix@test.com").apply { enabled = false })
+        val denied = org.junit.jupiter.api.assertThrows<HttpClientResponseException> { login(user.username) }
+        assertThat(denied.status).isEqualTo(HttpStatus.UNAUTHORIZED)
+    }
+
+    @Inject lateinit var requirements: com.secman.repository.RequirementRepository
+    @Inject lateinit var responses: com.secman.repository.ResponseRepository
+
+    @Test
+    fun `task assessor risk creation returns no linked asset or user graph`() {
+        val suffix = System.nanoTime()
+        val (assessment, assessorUsername, _) = setUp(suffix)
+        assessment.authorshipComplete = false
+        riskAssessmentRepository.update(assessment)
+        val requirement = requirements.save(com.secman.domain.Requirement(internalId = "R-$suffix", shortreq = "Noncompliance"))
+        responses.save(com.secman.domain.Response(riskAssessment = assessment, requirement = requirement,
+            answerType = com.secman.domain.AnswerType.NO, answer = "NO"))
+        val cookie = login(assessorUsername)
+        val hiddenAsset = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {
+            client.toBlocking().exchange(HttpRequest.GET<Any>("/api/assets/${assessment.asset!!.id}").cookie(cookie), Map::class.java)
+        }
+        assertThat(hiddenAsset.status).isEqualTo(HttpStatus.NOT_FOUND)
+        val result = client.toBlocking().exchange(
+            HttpRequest.POST("/api/responses/assessment/${assessment.id}/create-risk",
+                ResponseController.CreateRiskFromResponseRequest(requirement.id!!, "Track assessment risk")).cookie(cookie), Map::class.java)
+        assertThat(result.status).isEqualTo(HttpStatus.CREATED)
+        assertThat(result.body()!!.keys).containsExactlyInAnyOrder("id", "name", "status")
+    }
+
 }

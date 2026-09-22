@@ -175,7 +175,8 @@ BEGIN { FS = "\n" }
     else if (lang == "sh") { if (code ~ /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=/) { nm = code; sub(/^[[:space:]]*/, "", nm); sub(/=.*$/, "", nm) } }
     if (nm != "" && vagueVar(nm))
         emit("NAME-VAGUE", NR, "variable `" nm "` does not say what it holds")
-    else if (nm != "" && shortName(nm)) {
+    # JPA identity fields conventionally use id; the annotation supplies its meaning.
+    else if (nm != "" && shortName(nm) && !(lang == "kt" && nm == "id" && code ~ /@Id([^A-Za-z0-9_]|$)/)) {
         if (tracking) { shortBufN++; shortBufName[shortBufN] = nm; shortBufLine[shortBufN] = NR }
         else emit("NAME-VAGUE", NR, "top-level `" nm "` is too short to read at its distance from use")
     }

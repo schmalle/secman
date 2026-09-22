@@ -175,7 +175,7 @@ open class AuthController(
 
         val user = userOptional.get()
         
-        if (!passwordEncoder.matches(loginRequest.password, user.passwordHash)) {
+        if (!user.enabled || !passwordEncoder.matches(loginRequest.password, user.passwordHash)) {
             recordFailedLogin(rateLimitKey)
             return HttpResponse.unauthorized<Any>().body(mapOf("error" to "Invalid credentials"))
         }
@@ -219,7 +219,7 @@ open class AuthController(
             username = user.username,
             email = user.email,
             roles = user.roles.map { it.name },
-            workgroupCount = workgroupRepository.countEffectiveWorkgroupsByUserEmail(user.email),
+            workgroupCount = workgroupRepository.countDirectWorkgroupsByUserEmail(user.email),
             awsAccountCount = directAwsCount + sharedAwsCount,
             domainCount = userMappingRepository.countDistinctDomainsByEmail(user.email)
         )
@@ -272,7 +272,7 @@ open class AuthController(
             username = user.username,
             email = user.email,
             roles = user.roles.map { it.name },
-            workgroupCount = workgroupRepository.countEffectiveWorkgroupsByUserEmail(user.email),
+            workgroupCount = workgroupRepository.countDirectWorkgroupsByUserEmail(user.email),
             awsAccountCount = directAwsCount + sharedAwsCount,
             domainCount = userMappingRepository.countDistinctDomainsByEmail(user.email),
             hasProfilePicture = pictureUpdatedAt != null,

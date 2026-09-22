@@ -60,7 +60,7 @@ class WorkgroupVisibilityIntegrationTest : BaseIntegrationTest() {
     )
 
     @Test
-    fun `regular user sees effective workgroups and auth count matches`() {
+    fun `regular user sees only direct workgroups and auth count matches`() {
         val suffix = System.nanoTime()
         val parent = workgroupRepository.save(
             Workgroup(
@@ -83,7 +83,7 @@ class WorkgroupVisibilityIntegrationTest : BaseIntegrationTest() {
         )
         assignUserToWorkgroup(savedUser.id!!, parent.id!!)
 
-        assertThat(workgroupRepository.countEffectiveWorkgroupsByUserEmail(savedUser.email)).isEqualTo(2)
+        assertThat(workgroupRepository.countDirectWorkgroupsByUserEmail(savedUser.email)).isEqualTo(1)
 
         val loginResponse = client.toBlocking().exchange(
             HttpRequest.POST("/api/auth/login", LoginRequest(savedUser.username, TestDataFactory.DEFAULT_PASSWORD)),
@@ -106,13 +106,12 @@ class WorkgroupVisibilityIntegrationTest : BaseIntegrationTest() {
         )
 
         assertThat(loginResponse.status).isEqualTo(HttpStatus.OK)
-        assertThat(loginResponse.body()!!.workgroupCount).isEqualTo(2)
+        assertThat(loginResponse.body()!!.workgroupCount).isEqualTo(1)
         assertThat(workgroups.map { it.name }).containsExactlyInAnyOrder(
-            "Visibility Parent $suffix",
-            "Visibility Child $suffix"
+            "Visibility Parent $suffix"
         )
         assertThat(roots.map { it.name }).containsExactly("Visibility Parent $suffix")
-        assertThat(status.body()!!.workgroupCount).isEqualTo(2)
+        assertThat(status.body()!!.workgroupCount).isEqualTo(1)
     }
 
     @Test
@@ -140,8 +139,8 @@ class WorkgroupVisibilityIntegrationTest : BaseIntegrationTest() {
         )
         assignUserToWorkgroup(savedUser.id!!, disabledParent.id!!)
 
-        assertThat(workgroupRepository.findEffectiveWorkgroupsByUserEmail(savedUser.email)).isEmpty()
-        assertThat(workgroupRepository.countEffectiveWorkgroupsByUserEmail(savedUser.email)).isZero()
+        assertThat(workgroupRepository.findWorkgroupsByUserEmail(savedUser.email)).isEmpty()
+        assertThat(workgroupRepository.countDirectWorkgroupsByUserEmail(savedUser.email)).isZero()
     }
 
     private fun assignUserToWorkgroup(userId: Long, workgroupId: Long) {

@@ -55,6 +55,12 @@ data class WorkgroupAwsAccount(
     @JoinColumn(name = "created_by_id", nullable = true)
     var createdBy: User?,
 
+    @Column(name = "manual_grant", nullable = false)
+    var manualGrant: Boolean = true,
+
+    @Column(name = "owner_sync_grant", nullable = false)
+    var ownerSyncGrant: Boolean = false,
+
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
 

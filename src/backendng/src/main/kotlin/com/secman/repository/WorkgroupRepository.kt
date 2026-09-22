@@ -13,6 +13,11 @@ import java.util.Optional
 @Repository
 interface WorkgroupRepository : JpaRepository<Workgroup, Long> {
 
+    /** Bounded placement lookup with membership loaded for authorization. */
+    @io.micronaut.data.annotation.Query("SELECT DISTINCT w FROM Workgroup w LEFT JOIN FETCH w.users WHERE w.id IN (:ids)")
+    fun findForPlacement(ids: Collection<Long>): List<Workgroup>
+
+
     @jakarta.transaction.Transactional
     @io.micronaut.data.annotation.Query("UPDATE Workgroup w SET w.ownerEmail = :email WHERE w.id = :id AND (w.ownerEmail IS NULL OR TRIM(w.ownerEmail) = '')")
     fun fillMissingOwner(id: Long, email: String): Int
@@ -62,60 +67,8 @@ interface WorkgroupRepository : JpaRepository<Workgroup, Long> {
     """)
     fun findWorkgroupsByUserEmail(email: String): List<Workgroup>
 
-    /**
-     * Find the user's *effective* workgroup memberships — direct memberships
-     * UNION all descendants reachable through the parent→child hierarchy
-     * (Feature 040). Membership cascades downward: a user assigned to an L2
-     * workgroup is treated as a member of every L3/L4/... beneath it for the
-     * purposes of listing workgroups and viewing their content.
-     *
-     * Implemented as a recursive CTE seeded from direct memberships and walking
-     * children via `parent_id`. Depth-capped at 10 (matches the safety limit in
-     * `Workgroup.calculateDepth` and `findAllDescendants`).
-     *
-     * @param email User email address
-     * @return Distinct list of workgroups the user has effective access to,
-     *         ordered by name.
-     */
-    @io.micronaut.data.annotation.Query(value = """
-        WITH RECURSIVE effective AS (
-            SELECT w.id, w.parent_id, 1 AS depth
-            FROM workgroup w
-            INNER JOIN user_workgroups uw ON uw.workgroup_id = w.id
-            INNER JOIN users u ON u.id = uw.user_id
-            WHERE u.email = :email AND w.enabled = TRUE
-
-            UNION ALL
-
-            SELECT w.id, w.parent_id, e.depth + 1
-            FROM workgroup w
-            INNER JOIN effective e ON w.parent_id = e.id
-            WHERE e.depth < 10 AND w.enabled = TRUE
-        )
-        SELECT w.* FROM workgroup w
-        WHERE w.id IN (SELECT DISTINCT id FROM effective)
-        ORDER BY w.name ASC
-    """, nativeQuery = true)
-    fun findEffectiveWorkgroupsByUserEmail(email: String): List<Workgroup>
-
-    @io.micronaut.data.annotation.Query(value = """
-        WITH RECURSIVE effective AS (
-            SELECT w.id, w.parent_id, 1 AS depth
-            FROM workgroup w
-            INNER JOIN user_workgroups uw ON uw.workgroup_id = w.id
-            INNER JOIN users u ON u.id = uw.user_id
-            WHERE u.email = :email AND w.enabled = TRUE
-
-            UNION ALL
-
-            SELECT w.id, w.parent_id, e.depth + 1
-            FROM workgroup w
-            INNER JOIN effective e ON w.parent_id = e.id
-            WHERE e.depth < 10 AND w.enabled = TRUE
-        )
-        SELECT COUNT(DISTINCT id) FROM effective
-    """, nativeQuery = true)
-    fun countEffectiveWorkgroupsByUserEmail(email: String): Long
+    @io.micronaut.data.annotation.Query("SELECT COUNT(DISTINCT w.id) FROM Workgroup w JOIN w.users u WHERE u.email = :email AND w.enabled = true")
+    fun countDirectWorkgroupsByUserEmail(email: String): Long
 
     /**
      * Bulk member counts to replace the per-workgroup `wg.users.size` /

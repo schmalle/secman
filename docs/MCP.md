@@ -99,7 +99,7 @@ This is the **API-key** permission each tool is gated on. It is only half the ch
 | `REQUIREMENTS_DELETE` | `delete_requirement`, `delete_use_case` |
 | `ASSETS_READ` | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile`, `delete_asset`, `delete_all_assets`, `delete_asset_not_seen`, `asset_match_clear` |
 | `ASSETS_WRITE` | `create_asset`, `update_asset` |
-| `INTEGRATIONS_READ` | `list_integration_subjects`, `get_integration_summary`, `list_integration_findings`, `get_integration_finding`, `list_integration_runs`, `get_integration_run` |
+| `INTEGRATIONS_READ` | `list_integration_subjects`, `get_integration_summary`, `list_integration_findings`, `get_integration_finding`, `list_integration_runs`, `get_integration_run`, `get_web_exposure_summary`, `list_web_exposures`, `list_web_components` |
 | `INTEGRATIONS_WRITE` | `list_integration_subjects`, `submit_integration_run` |
 | `SCANS_READ` | `get_scans`, `get_asset_scan_results`, `search_products` |
 | `VULNERABILITIES_READ` | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_all_accessible_vulnerabilities`, `get_asset_most_vulnerabilities`, `get_overdue_assets`, `add_vulnerability`, `deduplicate_vulnerabilities`, `list_products`, all `*_exception_request*` tools, `list_vulnerability_exceptions`, `delete_all_vulnerability_exceptions`, `get_vulnerability_heatmap`, `refresh_vulnerability_heatmap`, `get_top_accounts_by_finding_age`, `get_crowdstrike_last_import`, `import_github_repos`, `*_github_owner_email_mapping*` |
@@ -187,11 +187,12 @@ Within a map, a tool is authorized when the caller holds **any** of the permissi
 | `get_asset_profile` | `assetId`*, `includeVulnerabilities`, `includeScanHistory`, `vulnerabilityLimit` (max 100), `scanHistoryLimit` (max 50) | any | — |
 | `get_asset_complete_profile` | `assetId`*, `includeVulnerabilities`, `includeScanResults` | any | — |
 | `get_asset_most_vulnerabilities` | `topN` (default 1, max 10) | any | — |
-| `create_asset` | `name`*, `type`*, `owner`*, `ip`, `uri`, `description`, `criticality` (`CRITICAL\|HIGH\|MEDIUM\|LOW\|NA`), `adDomain`, `cloudAccountId` | any | ✓ |
+| `create_asset` | `name`*, `type`*, `owner`*, `ip`, `uri`, `description`, `criticality` (`CRITICAL\|HIGH\|MEDIUM\|LOW\|NA`), `adDomain`, `cloudAccountId`, `workgroupIds` | any, subject to placement rules | ✓ |
 | `update_asset` | `assetId`* + any of `name`, `resetNameToCrowdStrike`, `type`, `owner`, `ip`, `uri`, `description`, `criticality`, `adDomain` | any | ✓ |
-| `delete_asset` | `assetId`*, `forceTimeout` | ADMIN | ✓ |
-| `delete_all_assets` | `confirm`* (boolean `true`) | ADMIN | ✓ |
+| `delete_asset` | `assetId`*, `forceTimeout` | ADMIN / SECCHAMPION | ✓ |
+| `delete_all_assets` | `confirm`* (boolean `true`) | ADMIN / SECCHAMPION | ✓ |
 
+- Ordinary creation requires an enabled directly joined workgroup in `workgroupIds`. Account/domain associations and workgroup grant mutations require ADMIN/SECCHAMPION. Owner/creator/uploader are metadata only.
 - All read tools scope results through [unified asset access](../CLAUDE.md#unified-asset-access-any-of).
 - `create_asset` rejects duplicate names case-insensitively and records the delegated user as `manualCreator`. `uri` accepts `http`, `https` or `urn` for endpoint-style assets.
 - `update_asset` is a partial update with row-level access control — an inaccessible ID returns `NOT_FOUND`, not `FORBIDDEN`. Setting `name` creates a user-owned display-name override that later CrowdStrike imports preserve. Set `resetNameToCrowdStrike=true` (without `name`) to restore the latest source hostname and resume automatic hostname updates. The response includes `crowdStrikeHostname` and `nameOverridden`. Workgroup membership is changed with `assign_assets_to_workgroup`, not here.
@@ -345,6 +346,14 @@ Delegation required throughout. Most are ADMIN-only; the three onboarding tools 
 
 - **`import_user_mappings`** — `mappings` holds up to 1000 entries, each with `email`* plus at least one of `awsAccountId` (12 digits) or `domain`. Optionally starts a risk assessment for the owner of every brand-new AWS account the import introduces: `startRiskAssessment` (bool), `riskAssessmentUseCase` (required when it is true), `riskAssessmentDeadlineDays` (1..3650, default `7`). Returns counts `created`, `createdPending` (user does not exist yet), `skipped`, `errors[]`, plus `newAccounts[]` (`awsAccountId`, `emails`) and `riskAssessments[]` (`awsAccountId`, `ownerEmail`, `riskAssessmentId`, `assessor`, `endDate`, `useCase`, `releaseVersion`, `requirementCount`, `skipped`, `skipReason`, `error`). A `riskAssessments[]` entry carries **either** `error` (the assessment failed) **or** `skipped`/`skipReason` (the pair already had an open assessment — an idempotent no-op; do not report it as a failure). Runs the same code path as REST `POST /api/user-mappings/bulk` and CLI `manage-user-mappings import`, so brand-new-account detection is identical. Assessments are pinned to the ACTIVE requirements release; the call is rejected with `VALIDATION_ERROR` when none exists or it carries no requirements for the use case. `onboardingMode` (`WELCOME_ONLY` | `DIRECT` | `GUIDED`) selects what happens for the owner instead; omitting it falls back to `startRiskAssessment`, which on its own means `DIRECT` with no welcome mail — byte-identical to the behaviour before onboarding modes existed. `sendWelcomeEmail` overrides that, and `questionnaireExpiryDays` (1..90, default 14) sets how long a `GUIDED` link lives. The result gains `onboarding[]` with the same three shapes as `riskAssessments[]`. Combining `startRiskAssessment` with a non-`DIRECT` mode is a `VALIDATION_ERROR`. See `docs/AWS_ACCOUNT_RISK_ASSESSMENT.md` and `docs/ACCOUNT_ONBOARDING.md`.
 
+Risk-assessment automation also supports asset bases: `create_risk_assessment`
+accepts exactly one of `awsAccountId` or an accessible `assetId`. Suppliers are
+assets with `type = SUPPLIER`. `start_ai_risk_assessment` (ADMIN/SECCHAMPION,
+`ASSESSMENTS_WRITE`) starts the audited OpenRouter online-research draft job;
+`get_ai_risk_assessment_job` (`ASSESSMENTS_READ`) provides polling-friendly
+progress and cost. Neither tool submits or accepts answers. See
+`docs/SUPPLIER_RISK_ASSESSMENT.md`.
+
 - **`display_name` → workgroup linking.** Each `import_user_mappings` entry may carry `displayName`. It is stored on the mapping and links `awsAccountId` to the workgroup named **`aws-<displayName>`** (matched case-insensitively, **created** when missing), which grants that workgroup access to the account's assets — unified asset access rule #9. The result then carries `workgroupLinks` (`processed`, `workgroupsCreated`, `linked`, `alreadyLinked`, `failed`, `dryRun`, `truncated`, `links[]`); it is absent entirely when no entry carried a display name. An `alreadyLinked` row is an idempotent no-op, never a failure. A display name that cannot be a workgroup name (`Workgroup.name` allows letters, digits, spaces and hyphens, max 100 chars including the `aws-` prefix) is an error row and no workgroup is created for it.
 
 - **`link_workgroup_aws_accounts`** — the correction path for the above: re-links every account whose stored display name has no workgroup assignment yet, with no file involved. Use it for mappings imported before display names were captured, or when the matching workgroup did not exist at import time. `dryRun` reports without creating or assigning. Returns the same `workgroupLinks` shape (as the top-level result). Idempotent; existing assignments are never removed, so an account renamed between imports keeps its old workgroup alongside the new one. Same code path as REST `POST /api/user-mappings/link-workgroup-accounts` and CLI `manage-user-mappings link-workgroups`. See `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`.
@@ -356,12 +365,13 @@ Delegation required throughout. Most are ADMIN-only; the three onboarding tools 
 | Tool | Required arguments | Permission |
 |---|---|---|
 | `create_risk_assessment` | `awsAccountId` (12 digits), `useCaseIds` (one or more), `assessorEmail`, `respondentEmail`, `endDate` | `ASSESSMENTS_WRITE` |
-| `notify_risk_assessment_respondent` | `assessmentId`; optional `dryRun` | `NOTIFICATIONS_SEND` |
+| `notify_risk_assessment_respondent` | `assessmentId`; optional `dryRun`, `respondentEmail` | `NOTIFICATIONS_SEND` |
 | `list_risk_assessments` | none; optional `status`, `useCaseName`, `page`, `pageSize` | `ASSESSMENTS_READ` |
 | `get_risk_assessment_questionnaire` | `assessmentId` | `ASSESSMENTS_READ` |
 | `get_risk_assessment_answers` | `assessmentId` | `ASSESSMENTS_READ` |
 | `save_risk_assessment_answers` | `assessmentId`, `answers[]` | `ASSESSMENTS_EXECUTE` |
 | `submit_risk_assessment` | `assessmentId` | `ASSESSMENTS_EXECUTE` |
+| `manage_assessment_assignment` | `assessmentId`, `action` (LIST/ASSIGN/REVOKE/REOPEN); action-specific assignment fields | `ASSESSMENTS_WRITE`, ADMIN/SECCHAMPION |
 | `evaluate_risk_assessment` | `assessmentId` | `ASSESSMENTS_READ` |
 | `get_risk_assessment_statistics` | optional exact `useCaseName` | `ASSESSMENTS_READ` |
 
@@ -373,13 +383,13 @@ compatibility. Creation is limited to
 delegated ADMIN and SECCHAMPION users. Read results include `awsAccountId` so
 Paperclip does not need to interpret the internal numeric `basisId`.
 
-`notify_risk_assessment_respondent` recomputes outstanding answers at call
-time. It sends only for a `STARTED` assessment with unanswered requirements and
-only when delegated as its assessor/requestor, an ADMIN, or a SECCHAMPION.
-`dryRun:true` returns counts without sending. The mail uses the authenticated
-assessment link and never creates or exposes a capability token. Live sends
-are atomically limited to one per assessment in 24 hours, survive restarts,
-and return `COOLDOWN_ACTIVE` without sending when called again too soon.
+`notify_risk_assessment_respondent` checks the selected active respondent
+assignment and its unanswered requirements. Assigned assessors, ADMIN and
+SECCHAMPION may notify; requestor status grants nothing. Supply `respondentEmail`
+when multiple sections are open. Registered users receive an authenticated link;
+accountless users receive an assignment/version-bound capability. `dryRun:true`
+returns counts without sending. Live sends have an atomic per-assignment
+24-hour cooldown and recheck current authority at delivery and retries.
 
 `create_use_case`, the `add_requirement.useCaseIds` extension,
 `create_risk_assessment`, `list_risk_assessments`,
@@ -389,7 +399,7 @@ and return `COOLDOWN_ACTIVE` without sending when called again too soon.
 evaluation available to delegated MCP clients. `list_risk_assessments` supports
 the concrete open-by-use-case query with `status: "STARTED"` and `useCaseName`.
 The answer and submit operations require the assigned respondent; evaluation
-requires the assessor, requestor, ADMIN, or SECCHAMPION. See
+requires an assigned assessor, ADMIN, or SECCHAMPION. USER-only respondents can answer their assigned sections. Evaluation never creates final acceptance; that action requires an independent human through REST/UI. See
 [MCP risk-assessment lifecycle](MCP_RISK_ASSESSMENT_LIFECYCLE.md) for schemas,
 PaperclipAI envelopes, permission requirements, and the holistic E2E driver.
 
@@ -458,6 +468,9 @@ access to the bound asset.
 | `get_integration_finding` | `id`* | `INTEGRATIONS_READ` |
 | `list_integration_runs` | `page`, `size` (max 100), `scannerId`, `subjectId` | `INTEGRATIONS_READ` |
 | `get_integration_run` | `id`* | `INTEGRATIONS_READ` |
+| `get_web_exposure_summary` | *(none)* | `INTEGRATIONS_READ`; ADMIN / VULN / SECCHAMPION |
+| `list_web_exposures` | `page`, `size` (max 100), `reachability` | `INTEGRATIONS_READ`; ADMIN / VULN / SECCHAMPION |
+| `list_web_components` | `page`, `size` (max 100), `category`, `state`, `search` | `INTEGRATIONS_READ`; ADMIN / VULN / SECCHAMPION |
 | `submit_integration_run` | version-1 run payload; see `docs/INTEGRATION_RESULTS.md` | `INTEGRATIONS_WRITE` |
 
 ### Notifications and reports

@@ -37,10 +37,8 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
   // toggle reveals them in both the tree and table views.
   const [showAwsWorkgroups, setShowAwsWorkgroups] = useState(false);
 
-  // Backend POST /api/workgroups/{id}/children is @Secured("ADMIN") (deliberate per
-  // commit 265a6c9: "child-create/move remain admin-only"). Mirror that gate in the UI
-  // so non-admins don't see a "+" button that 403s on submit.
-  const canCreateChild = useClientHasRole('ADMIN');
+  // Keep hierarchy mutations on the same grant-manager boundary as the backend.
+  const canCreateChild = useClientHasRole(['ADMIN', 'SECCHAMPION']);
 
   useEffect(() => {
     const rawId = new URLSearchParams(window.location.search).get('workgroupId');
@@ -211,6 +209,7 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
                       )}
                       <button
                         className="btn btn-outline-secondary"
+                        disabled={!canCreateChild}
                         onClick={() => handleMoveWorkgroup(selectedWorkgroup)}
                       >
                         <i className="bi bi-arrows-move me-1"></i>
@@ -218,6 +217,7 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
                       </button>
                       <button
                         className="btn btn-outline-danger"
+                        disabled={!canCreateChild}
                         onClick={() => handleDeleteWorkgroup(selectedWorkgroup)}
                       >
                         <i className="bi bi-trash me-1"></i>

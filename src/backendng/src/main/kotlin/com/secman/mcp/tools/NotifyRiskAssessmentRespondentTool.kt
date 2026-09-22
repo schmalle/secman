@@ -19,6 +19,7 @@ class NotifyRiskAssessmentRespondentTool(
         "type" to "object",
         "properties" to mapOf(
             "assessmentId" to mapOf("type" to "number", "minimum" to 1),
+            "respondentEmail" to mapOf("type" to "string", "description" to "Required when several respondent sections are open"),
             "dryRun" to mapOf(
                 "type" to "boolean",
                 "description" to "Return outstanding counts without sending email; default false"
@@ -37,8 +38,8 @@ class NotifyRiskAssessmentRespondentTool(
             ?: return McpToolResult.error("VALIDATION_ERROR", "assessmentId is required")
         val dryRun = arguments["dryRun"] as? Boolean ?: false
         return riskAssessmentTool {
-            val reminder = service.prepareOutstandingReminder(context, assessmentId)
-            val outcome = notificationService.send(reminder, context.delegatedUserId!!, dryRun)
+            val reminder = service.prepareOutstandingReminder(context, assessmentId, arguments["respondentEmail"] as? String)
+            val outcome = notificationService.send(reminder, context.delegatedUserId!!, dryRun, context.apiKeyId)
             mapOf(
                 "assessmentId" to reminder.assessmentId,
                 "respondent" to reminder.recipientEmail,

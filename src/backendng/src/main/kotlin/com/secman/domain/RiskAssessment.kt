@@ -41,6 +41,15 @@ data class RiskAssessment(
     @Column(name = "status", length = 50)
     var status: String = "STARTED",
 
+    @Column(name = "answer_revision", nullable = false)
+    var answerRevision: Long = 0,
+
+    @Column(name = "assignment_version", nullable = false)
+    var assignmentVersion: Long = 0,
+
+    @Column(name = "authorship_complete", nullable = false)
+    var authorshipComplete: Boolean = true,
+
     @Column(name = "notes", length = 1024)
     var notes: String? = null,
 

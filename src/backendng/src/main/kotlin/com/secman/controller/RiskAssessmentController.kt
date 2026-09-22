@@ -1,6 +1,7 @@
 package com.secman.controller
 
 import com.secman.domain.*
+import com.secman.service.taskView
 import com.secman.event.RiskAssessmentCreatedEvent
 import com.secman.repository.*
 import com.secman.service.RiskAssessmentAccessService
@@ -40,7 +41,7 @@ import java.time.LocalDateTime
  * - Other roles: Access denied (403 Forbidden)
  */
 @Controller("/api/risk-assessments")
-@Secured("ADMIN", "RISK", "SECCHAMPION")
+@Secured(SecurityRule.IS_AUTHENTICATED)
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class RiskAssessmentController(
     private val riskAssessmentRepository: RiskAssessmentRepository,
@@ -56,6 +57,8 @@ open class RiskAssessmentController(
     private val eventPublisher: ApplicationEventPublisher<RiskAssessmentCreatedEvent>,
     private val userResolutionService: UserResolutionService,
     private val assetFilterService: AssetFilterService,
+    private val workflow: com.secman.service.AssessmentWorkflowService,
+    private val reminders: com.secman.service.RiskAssessmentReminderNotificationService,
     private val riskAssessmentAccessService: RiskAssessmentAccessService
 ) {
 
@@ -73,20 +76,11 @@ open class RiskAssessmentController(
         AssessmentBasisType.AWS_ACCOUNT -> null
     }
 
-    private fun canAccessAssessment(assessment: RiskAssessment, authentication: Authentication): Boolean {
-        if (assessment.assessmentBasisType == AssessmentBasisType.AWS_ACCOUNT) {
-            return riskAssessmentAccessService.canViewAwsAccountAssessment(assessment, authentication)
-        }
-        val assetId = linkedAssetId(assessment)
-        return assetId == null || assetFilterService.canAccessAsset(assetId, authentication)
-    }
+    private fun canAccessAssessment(assessment: RiskAssessment, authentication: Authentication) =
+        riskAssessmentAccessService.canView(assessment, authentication)
 
-    private fun canManageAssessment(assessment: RiskAssessment, authentication: Authentication): Boolean =
-        if (assessment.assessmentBasisType == AssessmentBasisType.AWS_ACCOUNT) {
-            riskAssessmentAccessService.canManageAwsAccountAssessment(assessment, authentication)
-        } else {
-            canAccessAssessment(assessment, authentication)
-        }
+    private fun canManageAssessment(assessment: RiskAssessment, authentication: Authentication) =
+        riskAssessmentAccessService.isGlobal(authentication)
 
     @Serdeable
     data class CreateRiskAssessmentRequest(
@@ -180,9 +174,10 @@ open class RiskAssessmentController(
         val assessmentUrl: String
     )
 
+    /** Return only authorized task summaries without serializing user or asset graphs. */
     @Get
     @Transactional(readOnly = true)
-    open fun listRiskAssessments(authentication: Authentication): HttpResponse<List<RiskAssessment>> {
+    open fun listRiskAssessments(authentication: Authentication): HttpResponse<*> {
         return try {
             log.debug("Fetching all risk assessments for user: {}", authentication.name)
 
@@ -207,7 +202,7 @@ open class RiskAssessmentController(
             val visibleAssessments = assessments.filter { canAccessAssessment(it, authentication) }
 
             log.debug("Found {} risk assessments ({} visible) for user {}", assessments.size, visibleAssessments.size, authentication.name)
-            HttpResponse.ok(visibleAssessments)
+            HttpResponse.ok(visibleAssessments.filter { canAccessAssessment(it, authentication) }.map { it.taskView() })
         } catch (e: Exception) {
             log.error("Error fetching risk assessments", e)
             HttpResponse.serverError<List<RiskAssessment>>()
@@ -250,7 +245,7 @@ open class RiskAssessmentController(
             }
 
             log.debug("Found risk assessment: {}", assessment.id)
-            HttpResponse.ok(assessment)
+            HttpResponse.ok(assessment.taskView())
         } catch (e: Exception) {
             log.error("Error fetching risk assessment with id: {}", id, e)
             HttpResponse.serverError<Any>()
@@ -280,7 +275,7 @@ open class RiskAssessmentController(
             }
 
             log.debug("Found {} risk assessments for demand {}", assessments.size, demandId)
-            HttpResponse.ok(assessments)
+            HttpResponse.ok(assessments.filter { canAccessAssessment(it, authentication) }.map { it.taskView() })
         } catch (e: Exception) {
             log.error("Error fetching risk assessments for demand: {}", demandId, e)
             HttpResponse.serverError<Any>()
@@ -327,7 +322,7 @@ open class RiskAssessmentController(
             }
             
             log.debug("Found {} risk assessments for asset {}", allAssessments.size, assetId)
-            HttpResponse.ok(allAssessments)
+            HttpResponse.ok(allAssessments.filter { canAccessAssessment(it, authentication) }.map { it.taskView() })
         } catch (e: Exception) {
             log.error("Error fetching risk assessments for asset: {}", assetId, e)
             HttpResponse.serverError<Any>()
@@ -366,7 +361,7 @@ open class RiskAssessmentController(
             }
             
             log.debug("Found {} risk assessments for basis type {} with ID {}", assessments.size, basisType, basisId)
-            HttpResponse.ok(assessments)
+            HttpResponse.ok(assessments.filter { canAccessAssessment(it, authentication) }.map { it.taskView() })
         } catch (e: Exception) {
             log.error("Error fetching risk assessments for basis type: {} and ID: {}", basisType, basisId, e)
             HttpResponse.serverError<Any>()
@@ -387,12 +382,16 @@ open class RiskAssessmentController(
         val assessments = riskAssessmentRepository
             .findByAssessmentBasisTypeAndAssessmentBasisId(AssessmentBasisType.AWS_ACCOUNT, account.id!!)
             .filter { canAccessAssessment(it, authentication) }
-        return HttpResponse.ok(assessments)
+        return HttpResponse.ok(assessments.filter { canAccessAssessment(it, authentication) }.map { it.taskView() })
     }
 
     @Post
     @Transactional
     open fun createRiskAssessment(@Valid @Body request: CreateRiskAssessmentRequest, authentication: Authentication): HttpResponse<*> {
+        if (!riskAssessmentAccessService.isGlobal(authentication)) return HttpResponse.status<Any>(HttpStatus.FORBIDDEN)
+        if (!authentication.roles.contains("ADMIN") && listOfNotNull(request.assessorRef, request.respondentRef).any {
+            it.id == null && !it.email.isNullOrBlank() && userRepository.findByEmailIgnoreCase(it.email!!.trim()).isEmpty
+        }) return HttpResponse.status<Any>(HttpStatus.FORBIDDEN)
         return try {
             // Validate request
             val validationError = request.validate()
@@ -547,6 +546,7 @@ open class RiskAssessmentController(
             }
             
             val savedAssessment = riskAssessmentRepository.save(riskAssessment)
+            workflow.initialize(savedAssessment)
 
             // Flush to ensure the entity is persisted with an ID
             entityManager.flush()
@@ -613,37 +613,12 @@ open class RiskAssessmentController(
                 return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
             }
 
+            if (request.status != null || request.respondentRef != null || request.respondentId != null || request.useCaseIds != null) {
+                return HttpResponse.badRequest(ErrorResponse("WORKFLOW_REQUIRED", "Use assignment, submit or reopen actions; the questionnaire scope is immutable"))
+            }
             // Update fields if provided
             request.endDate?.let { assessment.endDate = it }
             request.notes?.let { assessment.notes = it.trim().takeIf { it.isNotBlank() } }
-            request.status?.let { assessment.status = it }
-            
-            // Update respondent if provided (assessment already pre-validated above)
-            if (request.respondentRef != null || request.respondentId != null) {
-                val respondent = try {
-                    userResolutionService.resolveByIdOrEmail(
-                        userId = request.respondentRef?.id ?: request.respondentId,
-                        email = request.respondentRef?.email,
-                        context = "risk assessment respondent"
-                    )
-                } catch (e: NoSuchElementException) {
-                    return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Respondent not found"))
-                } catch (e: IllegalArgumentException) {
-                    return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", e.message ?: "Invalid respondent"))
-                }
-                assessment.respondent = respondent
-            }
-            
-            // Update use case associations if provided
-            request.useCaseIds?.let { ids ->
-                val useCases = ids.mapNotNull { useCaseId ->
-                    useCaseRepository.findById(useCaseId).orElse(null)
-                }.toMutableSet()
-                assessment.useCases.clear()
-                assessment.useCases.addAll(useCases)
-                log.debug("Updated use case associations: {} use cases", useCases.size)
-            }
-            
             val updatedAssessment = riskAssessmentRepository.update(assessment)
             entityManager.flush()
             
@@ -661,7 +636,7 @@ open class RiskAssessmentController(
             updatedAssessment.useCases.size
             
             log.info("Updated risk assessment with id: {}", id)
-            HttpResponse.ok(updatedAssessment)
+            HttpResponse.ok(updatedAssessment.taskView())
         } catch (e: Exception) {
             // Rethrow so the @Transactional interceptor rolls back. Without this,
             // a swallow + normal return would commit any User row already lazy-created
@@ -717,29 +692,15 @@ open class RiskAssessmentController(
                 return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
             }
 
-            // Check if valid token already exists for this email and assessment
-            val existingToken = assessmentTokenRepository
-                .findValidTokensByRiskAssessmentId(id, LocalDateTime.now())
-                .find { it.email == request.email }
-            
-            if (existingToken != null) {
-                log.debug("Returning existing valid token for email: {}", request.email)
-                return HttpResponse.ok(TokenResponse(
-                    token = existingToken.token,
-                    expiresAt = existingToken.expiresAt,
-                    assessmentUrl = "/assessment/${existingToken.token}"
-                ))
-            }
-            
             // Create new token
-            val token = AssessmentToken.create(request.email, assessment)
+            val token = workflow.issueToken(id, request.email, authentication)
             val savedToken = assessmentTokenRepository.save(token)
             
             log.info("Generated assessment token for email: {} and assessment: {}", request.email, id)
             HttpResponse.status<TokenResponse>(HttpStatus.CREATED).body(TokenResponse(
                 token = savedToken.token,
                 expiresAt = savedToken.expiresAt,
-                assessmentUrl = "/assessment/${savedToken.token}"
+                assessmentUrl = "/respond/${savedToken.token}"
             ))
         } catch (e: Exception) {
             log.error("Error generating assessment token for id: {}", id, e)
@@ -747,71 +708,19 @@ open class RiskAssessmentController(
         }
     }
 
+    /** Report the real delivery outcome; the sender rechecks assignment authority at delivery. */
     @Post("/{id}/notify")
-    @Transactional
     open fun notifyRespondent(id: Long, @Valid @Body request: NotificationRequest, authentication: Authentication): HttpResponse<*> {
-        return try {
-            log.debug("Sending notification for risk assessment: {}", id)
-
-            val assessment = riskAssessmentRepository.findById(id).orElse(null)
-                ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
-
-            // SECURITY (A01): see canAccessAssessment().
-            if (!canManageAssessment(assessment, authentication)) {
-                log.warn("User {} denied notification for risk assessment {} (linked asset {} not accessible)",
-                    authentication.name, id, linkedAssetId(assessment))
-                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
-            }
-
-            // Generate or get existing token
-            val tokenResponse = generateAssessmentToken(id, request, authentication)
-            if (tokenResponse.status.code != 200 && tokenResponse.status.code != 201) {
-                return tokenResponse
-            }
-            
-            // TODO: Implement email sending logic here
-            // This would send an email to request.email with the assessment URL
-            
-            log.info("Notification sent for risk assessment: {} to email: {}", id, request.email)
-            HttpResponse.ok(mapOf(
-                "message" to "Notification sent successfully",
-                "email" to request.email
-            ))
-        } catch (e: Exception) {
-            log.error("Error sending notification for assessment: {}", id, e)
-            HttpResponse.serverError<Any>()
-        }
+        val reminder = workflow.prepareReminder(id, authentication, request.email)
+        val actorId = riskAssessmentAccessService.actorId(authentication) ?: return HttpResponse.unauthorized<Any>()
+        val outcome = reminders.send(reminder, actorId, false)
+        return HttpResponse.ok(mapOf("email" to reminder.recipientEmail, "sent" to (outcome == com.secman.service.RiskAssessmentReminderNotificationService.SendOutcome.SENT),
+            "reason" to outcome.name))
     }
 
     @Post("/{id}/remind")
-    @Transactional
-    open fun sendReminder(id: Long, @Valid @Body request: NotificationRequest, authentication: Authentication): HttpResponse<*> {
-        return try {
-            log.debug("Sending reminder for risk assessment: {}", id)
-
-            val assessment = riskAssessmentRepository.findById(id).orElse(null)
-                ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
-
-            // SECURITY (A01): see canAccessAssessment().
-            if (!canManageAssessment(assessment, authentication)) {
-                log.warn("User {} denied reminder for risk assessment {} (linked asset {} not accessible)",
-                    authentication.name, id, linkedAssetId(assessment))
-                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
-            }
-
-            // TODO: Implement reminder email logic here
-            // This would send a reminder email about the pending assessment
-            
-            log.info("Reminder sent for risk assessment: {} to email: {}", id, request.email)
-            HttpResponse.ok(mapOf(
-                "message" to "Reminder sent successfully",
-                "email" to request.email
-            ))
-        } catch (e: Exception) {
-            log.error("Error sending reminder for assessment: {}", id, e)
-            HttpResponse.serverError<Any>()
-        }
-    }
+    open fun sendReminder(id: Long, @Valid @Body request: NotificationRequest, authentication: Authentication): HttpResponse<*> =
+        notifyRespondent(id, request, authentication)
 
     // Legacy endpoints for backward compatibility
     @Post("/demand-based")

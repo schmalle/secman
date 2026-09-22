@@ -44,7 +44,7 @@ class AwsAccountSharingServiceTest {
     fun `publishes AwsAccountSharingCreatedEvent after successful save`() {
         val source = user(1L, "alice@example.com")
         val target = user(2L, "bob@example.com", "bob")
-        val admin  = user(3L, "admin@example.com")
+        val admin  = user(3L, "admin@example.com").apply { roles.add(User.Role.ADMIN) }
 
         every { resolver.resolveByIdOrEmail(any(), any(), "source") } returns source
         every { resolver.resolveByIdOrEmail(any(), any(), "target") } returns target
@@ -83,7 +83,8 @@ class AwsAccountSharingServiceTest {
 
     @Test
     fun `does not publish when source equals target`() {
-        val same = user(1L, "alice@example.com")
+        val same = user(1L, "alice@example.com").apply { roles.add(User.Role.ADMIN) }
+        every { userRepo.findById(1L) } returns Optional.of(same)
         every { resolver.resolveByIdOrEmail(any(), any(), "source") } returns same
         every { resolver.resolveByIdOrEmail(any(), any(), "target") } returns same
 
@@ -102,7 +103,7 @@ class AwsAccountSharingServiceTest {
     fun `does not publish when duplicate sharing exists`() {
         val source = user(1L, "alice@example.com")
         val target = user(2L, "bob@example.com")
-        val admin  = user(3L, "admin@example.com")
+        val admin  = user(3L, "admin@example.com").apply { roles.add(User.Role.ADMIN) }
 
         every { resolver.resolveByIdOrEmail(any(), any(), "source") } returns source
         every { resolver.resolveByIdOrEmail(any(), any(), "target") } returns target
@@ -124,7 +125,7 @@ class AwsAccountSharingServiceTest {
     fun `does not publish when source has no AWS mappings`() {
         val source = user(1L, "alice@example.com")
         val target = user(2L, "bob@example.com")
-        val admin  = user(3L, "admin@example.com")
+        val admin  = user(3L, "admin@example.com").apply { roles.add(User.Role.ADMIN) }
 
         every { resolver.resolveByIdOrEmail(any(), any(), "source") } returns source
         every { resolver.resolveByIdOrEmail(any(), any(), "target") } returns target
@@ -147,7 +148,7 @@ class AwsAccountSharingServiceTest {
     fun `create with awsAccountIds subset persists only intersection`() {
         val source = user(1L, "alice@example.com")
         val target = user(2L, "bob@example.com")
-        val admin  = user(3L, "admin@example.com")
+        val admin  = user(3L, "admin@example.com").apply { roles.add(User.Role.ADMIN) }
 
         every { resolver.resolveByIdOrEmail(any(), any(), "source") } returns source
         every { resolver.resolveByIdOrEmail(any(), any(), "target") } returns target
@@ -188,7 +189,7 @@ class AwsAccountSharingServiceTest {
     fun `create with awsAccountIds where none match source mappings throws`() {
         val source = user(1L, "alice@example.com")
         val target = user(2L, "bob@example.com")
-        val admin  = user(3L, "admin@example.com")
+        val admin  = user(3L, "admin@example.com").apply { roles.add(User.Role.ADMIN) }
 
         every { resolver.resolveByIdOrEmail(any(), any(), "source") } returns source
         every { resolver.resolveByIdOrEmail(any(), any(), "target") } returns target
@@ -213,7 +214,7 @@ class AwsAccountSharingServiceTest {
     fun `create with empty awsAccountIds shares all (legacy default)`() {
         val source = user(1L, "alice@example.com")
         val target = user(2L, "bob@example.com")
-        val admin  = user(3L, "admin@example.com")
+        val admin  = user(3L, "admin@example.com").apply { roles.add(User.Role.ADMIN) }
 
         every { resolver.resolveByIdOrEmail(any(), any(), "source") } returns source
         every { resolver.resolveByIdOrEmail(any(), any(), "target") } returns target
@@ -247,7 +248,7 @@ class AwsAccountSharingServiceTest {
     fun `update replaces selection in place`() {
         val source = user(1L, "alice@example.com")
         val target = user(2L, "bob@example.com")
-        val admin  = user(3L, "admin@example.com")
+        val admin  = user(3L, "admin@example.com").apply { roles.add(User.Role.ADMIN) }
 
         val existing = AwsAccountSharing(
             id = 50L, sourceUser = source, targetUser = target, createdBy = admin,
@@ -274,7 +275,7 @@ class AwsAccountSharingServiceTest {
     fun `update with empty awsAccountIds resets to share-all`() {
         val source = user(1L, "alice@example.com")
         val target = user(2L, "bob@example.com")
-        val admin  = user(3L, "admin@example.com")
+        val admin  = user(3L, "admin@example.com").apply { roles.add(User.Role.ADMIN) }
 
         val existing = AwsAccountSharing(
             id = 50L, sourceUser = source, targetUser = target, createdBy = admin,
@@ -300,7 +301,7 @@ class AwsAccountSharingServiceTest {
     fun `invite branch sets targetUserWasJustCreated true when email is new`() {
         val source = user(1L, "alice@example.com")
         val newTarget = user(2L, "newbie@example.com", "newbie")
-        val admin = user(1L, "alice@example.com")  // self-as-admin for simple repo lookup
+        val admin = user(1L, "alice@example.com").apply { roles.add(User.Role.ADMIN) }  // self-as-admin for simple repo lookup
 
         every { userRepo.findByEmailIgnoreCase("newbie@example.com") } returns Optional.empty()
         every { resolver.resolveByIdOrEmail(any(), any(), "source") } returns source
@@ -348,7 +349,7 @@ class AwsAccountSharingServiceTest {
     fun `invite branch sets targetUserWasJustCreated false when email already exists`() {
         val source = user(1L, "alice@example.com")
         val existingTarget = user(2L, "bob@example.com", "bob")
-        val admin = user(1L, "alice@example.com")
+        val admin = user(1L, "alice@example.com").apply { roles.add(User.Role.ADMIN) }
 
         every { userRepo.findByEmailIgnoreCase("bob@example.com") } returns Optional.of(existingTarget)
         every { resolver.resolveByIdOrEmail(any(), any(), "source") } returns source
@@ -385,4 +386,14 @@ class AwsAccountSharingServiceTest {
 
         assertFalse(captured.captured.targetUserWasJustCreated)
     }
+    @Test
+    fun `SECCHAMPION cannot create an unknown recipient through sharing`() {
+        val champion = user(3L, "champion@example.com").apply { roles.add(User.Role.SECCHAMPION) }
+        every { userRepo.findById(3L) } returns Optional.of(champion)
+        every { userRepo.findByEmailIgnoreCase("new@example.com") } returns Optional.empty()
+        val request = CreateAwsAccountSharingRequest(sourceUserId = 1L, targetUserEmail = "new@example.com", inviteByEmail = true)
+        assertThrows(IllegalArgumentException::class.java) { service.createSharingRule(request, 3L) }
+        verify(exactly = 0) { resolver.resolveByIdOrEmail(any(), any(), any()); repo.save(any()) }
+    }
+
 }

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import CurrentVulnerabilitiesTable from './CurrentVulnerabilitiesTable';
+import ExternalExposureAnalytics from './ExternalExposureAnalytics';
 import VulnerabilityStatisticsPage from './statistics/VulnerabilityStatisticsPage';
 import VulnerabilityHeatmap from './VulnerabilityHeatmap';
 
@@ -12,18 +13,18 @@ import VulnerabilityHeatmap from './VulnerabilityHeatmap';
  * any link already in circulation keep resolving. This page is an additional
  * entry point, not a replacement, which is why nothing was deleted to build it.
  *
- * Only the selected view is mounted. Each of the three fetches its own data on
- * mount, so rendering all three would fire three independent request storms to
+ * Only the selected view is mounted. Each view fetches its own data on mount,
+ * so rendering all four would fire independent request storms to
  * show one of them.
  */
 
-type TabId = 'overview' | 'lense' | 'heatmap';
+type TabId = 'overview' | 'exposure' | 'lense' | 'heatmap';
 
 interface Tab {
   id: TabId;
   label: string;
   /** Where this view lived before, kept as the deep link for anyone who needs just it. */
-  standalone: string;
+  standalone?: string;
   /**
    * Roles that may see the tab, or undefined when everyone in Vulnerability
    * Management may. These mirror the gates the rail applied before these views
@@ -38,6 +39,11 @@ const TABS: Tab[] = [
     id: 'overview',
     label: 'Overview',
     standalone: '/vulnerabilities/current',
+    roles: ['ADMIN', 'SECCHAMPION', 'VULN'],
+  },
+  {
+    id: 'exposure',
+    label: 'External exposure',
     roles: ['ADMIN', 'SECCHAMPION', 'VULN'],
   },
   { id: 'lense', label: 'Lense', standalone: '/vulnerability-statistics' },
@@ -141,7 +147,7 @@ const AnalyticsTabs: React.FC = () => {
               );
             })}
           </div>
-          {visibleTabs.some((tab) => tab.id === active) && (
+          {TABS.find((tab) => tab.id === active)?.standalone && (
             <a className="small" href={TABS.find((tab) => tab.id === active)!.standalone}>
               Open this view on its own page
             </a>
@@ -154,6 +160,7 @@ const AnalyticsTabs: React.FC = () => {
         style={{ minHeight: 0 }}
       >
         {active === 'overview' && <CurrentVulnerabilitiesTable embedded />}
+        {active === 'exposure' && <ExternalExposureAnalytics />}
         {active === 'lense' && <VulnerabilityStatisticsPage />}
         {active === 'heatmap' && <VulnerabilityHeatmap />}
       </div>

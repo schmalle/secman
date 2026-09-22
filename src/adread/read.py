@@ -264,6 +264,17 @@ class SecmanClient:
       raise requests.HTTPError(f"SECMAN GET {path} failed: HTTP {resp.status_code}", response=resp)
     return resp.json()
 
+  def reconcile_owner_accounts(self, workgroup_id, expected_accounts):
+    """Apply the reviewed account set without rewriting explicit asset links."""
+    if self.dry_run:
+      raise RuntimeError("Grant writes are forbidden during dry-run")
+    resp = self._session.post(
+      f"{self.base}/api/workgroups/{workgroup_id}/aws-accounts/owner-sync",
+      json={"expectedAccounts": expected_accounts}, timeout=HTTP_TIMEOUT, allow_redirects=False,
+    )
+    if resp.status_code != 200:
+      raise requests.HTTPError(f"Owner grant reconciliation failed: HTTP {resp.status_code}", response=resp)
+
   def assign_assets(self, workgroup_id, asset_ids):
     if self.dry_run:
       raise RuntimeError("Asset writes are forbidden during dry-run")

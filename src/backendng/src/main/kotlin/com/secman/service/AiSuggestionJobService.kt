@@ -61,6 +61,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 @Singleton
 open class AiSuggestionJobService(
     private val config: AiRiskAssessmentConfig,
+    private val workflow: AssessmentWorkflowService,
+    private val apiKeys: com.secman.repository.McpApiKeyRepository,
     private val complianceAssistantService: ComplianceAssistantService,
     private val contextBuilder: AssessmentContextBuilder,
     private val aiJobRepository: AiSuggestionJobRepository,
@@ -105,7 +107,8 @@ open class AiSuggestionJobService(
     open fun startJob(
         assessment: RiskAssessment,
         request: StartAiJobRequest,
-        authentication: Authentication
+        authentication: Authentication,
+        apiKeyId: Long? = null
     ): StartAiJobResponse {
         if (!complianceAssistantService.isEnabled()) {
             throw HttpStatusException(HttpStatus.FORBIDDEN, "AI risk assessment is disabled")
@@ -150,6 +153,9 @@ open class AiSuggestionJobService(
         val job = AiSuggestionJob(
             riskAssessmentId = assessment.id!!,
             triggeredByUserId = triggeredBy.id!!,
+            assignmentVersion = assessment.assignmentVersion,
+            apiKeyId = apiKeyId,
+            initiatingUserId = apiKeyId?.let { apiKeys.findById(it).orElseThrow().userId },
             model = complianceAssistantService.currentModel,
             scope = scope,
             status = AiSuggestionJobStatus.QUEUED,
@@ -157,6 +163,7 @@ open class AiSuggestionJobService(
             estimatedCostUsd = estimated,
             createdAt = LocalDateTime.now()
         )
+        workflow.authorizeAi(job)
         val saved = aiJobRepository.save(job)
         entityManager.flush()
         log.info("AI job {} created: assessment={}, requirements={}, est=\${}", saved.id, assessment.id, targets.size, estimated)
@@ -193,6 +200,7 @@ open class AiSuggestionJobService(
                 markFailed(jobId, "Rejected at start: $lostReason")
                 return
             }
+            workflow.authorizeAi(aiJobRepository.findById(jobId).orElseThrow())
             markRunning(jobId)
             val ctx = buildContext(assessmentId)
             val flag = cancelFlags[jobId] ?: AtomicBoolean(false)
@@ -207,6 +215,7 @@ open class AiSuggestionJobService(
                     markFailed(jobId, "cost-cap exceeded ($${config.maxCostPerJobUsd})")
                     return
                 }
+                workflow.authorizeAi(aiJobRepository.findById(jobId).orElseThrow())
                 processOneRequirement(jobId, reqId, assessmentId, userId, ctx)
             }
             finalize(jobId)
@@ -358,6 +367,8 @@ open class AiSuggestionJobService(
             return
         }
 
+        workflow.authorizeAi(jobAtStart)
+
         // 1) supersede any prior APPLIED row for this (assessment, requirement)
         aiSuggestionRepository.markAppliedAsSuperseded(assessmentId, requirementId)
 
@@ -398,33 +409,7 @@ open class AiSuggestionJobService(
         // 4) upsert the draft Response. UNKNOWN answer → no Response row
         //    (the human must answer manually).
         val answerType = result.answer.toAnswerType() ?: return
-        val existing = responseRepository.findByRiskAssessmentIdAndRequirementId(assessmentId, requirementId)
-        if (existing == null) {
-            val assessment = entityManager.getReference(RiskAssessment::class.java, assessmentId)
-            val requirement = entityManager.getReference(Requirement::class.java, requirementId)
-            val response = Response(
-                answerType = answerType,
-                comment = result.rationale,
-                respondentEmail = userRepository.findById(userId).orElse(null)?.email,
-                source = ResponseSource.AI_GENERATED,
-                aiSuggestionId = savedSuggestion.id,
-                riskAssessment = assessment,
-                requirement = requirement
-            )
-            responseRepository.save(response)
-        } else {
-            // Existing row is human (MANUAL) or already AI-touched. If MANUAL,
-            // leave it alone — we never overwrite human work. If AI_GENERATED
-            // (re-run), refresh in place. AI_EDITED rows are excluded upstream
-            // by the re-run guard.
-            if (existing.source == ResponseSource.AI_GENERATED || existing.source == ResponseSource.AI_EDITED) {
-                existing.answerType = answerType
-                existing.comment = result.rationale
-                existing.source = ResponseSource.AI_GENERATED
-                existing.aiSuggestionId = savedSuggestion.id
-                responseRepository.update(existing)
-            }
-        }
+        workflow.saveAi(jobAtStart, requirementId, answerType, result.rationale.orEmpty(), savedSuggestion.id)
     }
 
     /**
@@ -537,11 +522,6 @@ open class AiSuggestionJobService(
         return sink.asFlux()
     }
 
-    @Transactional
-    open fun clearLowConfidence(assessmentId: Long): Long {
-        return responseRepository.deleteLowConfidenceAiResponses(assessmentId)
-    }
-
     // --- Scheduled cleanup --------------------------------------------------
 
     /**
@@ -578,27 +558,7 @@ open class AiSuggestionJobService(
         try { AiSuggestionScope.valueOf(raw) }
         catch (_: Exception) { throw HttpStatusException(HttpStatus.BAD_REQUEST, "Unknown scope: $raw") }
 
-    private fun requirementsForAssessment(assessment: RiskAssessment): List<Requirement> {
-        // Same fallback ladder as ResponseController.getRequirementsForAssessment.
-        if (assessment.useCases.isNotEmpty()) {
-            val direct = assessment.useCases.flatMap {
-                requirementRepository.findByUsecaseId(it.id!!)
-            }.distinct()
-            if (direct.isNotEmpty()) return direct
-            val standardLinked = entityManager.createQuery(
-                """
-                SELECT DISTINCT r FROM Requirement r
-                JOIN r.useCases u
-                JOIN u.standards s
-                JOIN s.useCases uc
-                WHERE uc.id IN :ids
-                """,
-                Requirement::class.java
-            ).setParameter("ids", assessment.useCases.map { it.id }).resultList
-            if (standardLinked.isNotEmpty()) return standardLinked
-        }
-        return requirementRepository.findAll()
-    }
+    private fun requirementsForAssessment(assessment: RiskAssessment): List<Requirement> = workflow.requirementsFor(assessment)
 
     private fun filterTargets(
         assessment: RiskAssessment,

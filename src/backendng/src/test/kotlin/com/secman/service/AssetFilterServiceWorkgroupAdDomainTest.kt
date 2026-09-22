@@ -44,12 +44,11 @@ class AssetFilterServiceWorkgroupAdDomainTest {
         val domainAsset = Asset(id = 501L, name = "host1", type = "SERVER", owner = "CrowdStrike Import", adDomain = "corp.example.com")
         every { memoryConfig.lazyLoadingEnabled } returns false
         every {
-            assetRepository.findAccessibleByWorkgroupMembershipOrCreatorOrUploader(10L, 10L, 10L)
+            assetRepository.findAccessibleByWorkgroupMembership(10L)
         } returns emptyList()
         every { userMappingRepository.findDistinctAwsAccountIdByEmail("user@example.com") } returns emptyList()
         every { userMappingRepository.findDistinctDomainByEmail("user@example.com") } returns emptyList()
-        every { awsAccountSharingService.getSharedAwsAccountIdsByEmail("user@example.com") } returns emptyList()
-        every { assetRepository.findByOwner("regular") } returns emptyList()
+        every { awsAccountSharingService.getSharedAwsAccountIds(10L) } returns emptyList()
         every { workgroupAwsAccountRepository.findDistinctAwsAccountIdsByUserId(10L) } returns emptyList()
         every { workgroupAdDomainRepository.findDistinctAdDomainsByUserId(10L) } returns listOf("CORP.EXAMPLE.COM")
         every { assetRepository.findByAdDomainInIgnoreCase(listOf("corp.example.com")) } returns listOf(domainAsset)
@@ -63,12 +62,11 @@ class AssetFilterServiceWorkgroupAdDomainTest {
     fun `REST fallback excludes assets granted only by disabled workgroup membership`() {
         every { memoryConfig.lazyLoadingEnabled } returns false
         every {
-            assetRepository.findAccessibleByWorkgroupMembershipOrCreatorOrUploader(10L, 10L, 10L)
+            assetRepository.findAccessibleByWorkgroupMembership(10L)
         } returns emptyList()
         every { userMappingRepository.findDistinctAwsAccountIdByEmail("user@example.com") } returns emptyList()
         every { userMappingRepository.findDistinctDomainByEmail("user@example.com") } returns emptyList()
-        every { awsAccountSharingService.getSharedAwsAccountIdsByEmail("user@example.com") } returns emptyList()
-        every { assetRepository.findByOwner("regular") } returns emptyList()
+        every { awsAccountSharingService.getSharedAwsAccountIds(10L) } returns emptyList()
         every { workgroupAwsAccountRepository.findDistinctAwsAccountIdsByUserId(10L) } returns emptyList()
         every { workgroupAdDomainRepository.findDistinctAdDomainsByUserId(10L) } returns emptyList()
 

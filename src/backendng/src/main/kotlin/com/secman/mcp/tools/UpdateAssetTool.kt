@@ -129,6 +129,10 @@ class UpdateAssetTool(
             return McpToolResult.error("NOT_FOUND", "Asset with ID $assetId not found or access denied")
         }
 
+        if ("adDomain" in arguments && !context.canManageGrants) {
+            return McpToolResult.error("FORBIDDEN", "Domain associations require ADMIN or SECCHAMPION")
+        }
+
         try {
             val asset = assetRepository.findById(assetId).orElse(null)
                 ?: return McpToolResult.error("NOT_FOUND", "Asset with ID $assetId not found")

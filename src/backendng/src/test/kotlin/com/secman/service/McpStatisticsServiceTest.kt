@@ -26,7 +26,7 @@ class McpStatisticsServiceTest {
     private val requirements = mockk<RequirementRepository>(relaxed = true)
     private val useCases = mockk<UseCaseRepository>(relaxed = true)
     private val assessments = mockk<RiskAssessmentRepository>(relaxed = true)
-    private val service = McpStatisticsService(assets, vulnerabilities, users, requirements, useCases, assessments)
+    private val service = McpStatisticsService(mockk(relaxed = true), assets, vulnerabilities, users, requirements, useCases, assessments)
 
     @Test
     fun `global statistics include requested counts and seven day login activity`() {
@@ -85,11 +85,11 @@ class McpStatisticsServiceTest {
 
     @Test
     fun `risk statistics are scoped by delegated actor and exact use case`() {
-        every { assessments.findForMcp(null, "Cloud", 7, false, Pageable.from(0, 1)) } returns
+        every { assessments.findForMcp(null, "Cloud", 7, false, any(), any(), Pageable.from(0, 1)) } returns
             Page.of(emptyList(), Pageable.from(0, 1), 6)
-        every { assessments.findForMcp("STARTED", "Cloud", 7, false, Pageable.from(0, 1)) } returns
+        every { assessments.findForMcp("STARTED", "Cloud", 7, false, any(), any(), Pageable.from(0, 1)) } returns
             Page.of(emptyList(), Pageable.from(0, 1), 4)
-        every { assessments.findForMcp("COMPLETED", "Cloud", 7, false, Pageable.from(0, 1)) } returns
+        every { assessments.findForMcp("COMPLETED", "Cloud", 7, false, any(), any(), Pageable.from(0, 1)) } returns
             Page.of(emptyList(), Pageable.from(0, 1), 1)
 
         val result = service.riskAssessments(context(setOf("RISK")), " Cloud ")

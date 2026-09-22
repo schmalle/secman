@@ -35,7 +35,7 @@ class SaveRiskAssessmentAnswersTool(private val service: RiskAssessmentMcpServic
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
         requireAnyUserRole(
-            context, "ADMIN", "RISK", "SECCHAMPION",
+            context, "USER", "ADMIN", "RISK", "SECCHAMPION",
             message = "ADMIN, RISK or SECCHAMPION role required to answer risk assessments"
         )?.let { return it }
         val id = (arguments["assessmentId"] as? Number)?.toLong()

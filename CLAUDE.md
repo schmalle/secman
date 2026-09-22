@@ -41,18 +41,19 @@ Security requirement, vulnerability and risk management platform.
 
 ## Unified Asset Access (any of)
 
-1. ADMIN **or SECCHAMPION** role (universal access)
-2. Asset in user's workgroup
-3. `manualCreator == user`
-4. `scanUploader == user`
-5. `cloudAccountId` matches user's AWS UserMapping
-6. `adDomain` matches user's domain UserMapping (case-insensitive)
-7. `cloudAccountId` matches a sharing rule (`AwsAccountSharing`, directional)
-8. `owner == username`
-9. `cloudAccountId` matches an account assigned to a workgroup the user belongs to (`WorkgroupAwsAccount`, direct membership only)
-10. `adDomain` matches a domain assigned to a workgroup the user belongs to (`WorkgroupAdDomain`, direct membership only)
+1. ADMIN or SECCHAMPION (global visibility).
+2. Explicit asset assignment to an enabled workgroup with direct user membership.
+3. AWS-account or AD-domain grant on such a workgroup, including future matching assets.
+4. Personal AWS-account or AD-domain mapping.
+5. Received AWS-account sharing, directional and non-transitive.
 
-Authoritative filter: `AssetFilterService.getAccessibleAssets()`. SQL pre-filters in materialized views are perf hints only — never the auth boundary. Same enforcement applies to MCP `get_overdue_assets`. Note the deliberate asymmetry: `getAccessibleAssets()`/`getAccessibleAssetIds()` short-circuit for ADMIN **or** SECCHAMPION, but `getScopedAccessibleAssetIds()` short-circuits for ADMIN only.
+Creator, uploader, and owner remain metadata. They grant no access. Workgroup hierarchy does not propagate membership.
+
+Authoritative filter: `AssetFilterService`. MCP and heatmap reuse it; SQL entity and ID queries share `AssetAccessSql`. `getScopedAccessibleAssetIds()` retains its ADMIN-only global shortcut for scoped notifications.
+
+ADMIN and SECCHAMPION manage grants and delete assets. Ordinary users edit visible asset details; creation requires atomic placement in an enabled directly joined group. Account/domain/workgroup changes require grant-management authority. Personal mappings, user administration, and canonical workgroup owner remain ADMIN-only.
+
+See `docs/AUTHORIZATION_REWORK.md` for assessment assignments, contribution history, scoped links, revocation and the migration/rollout gates.
 
 ## API Endpoints (concise)
 
@@ -80,7 +81,7 @@ Authoritative filter: `AssetFilterService.getAccessibleAssets()`. SQL pre-filter
 | Notifications | `GET/PUT /api/notification-preferences`; `GET /api/notification-logs`; `.../export` (ADMIN) | mixed |
 | Chat Notifications | `GET /api/notification-events` (event catalogue); `GET/PUT /api/slack/settings`, `POST .../test`; `GET/PUT /api/telegram/settings`, `POST .../test` (self-scoped); `GET/PUT /api/slack/config`, `POST .../test`, `GET/PUT /api/telegram/config` (ADMIN) | mixed |
 | CLI | `POST /api/vulnerabilities/cli-add` (ADMIN/VULN; auto-creates asset) | ADMIN/VULN |
-| Integrations | `/api/integrations/v1`: `GET /summary`, `/findings[/{id}[/attachments/{attachmentId}]]`, `/runs[/{id}]` (asset-scoped); `POST /runs` (assigned service user + asset access); `/scanners` configuration and target binding (ADMIN). MCP `list_integration_subjects`, `submit_integration_run`, and asset-scoped summary/finding/run reads; `docs/INTEGRATION_RESULTS.md` | mixed |
+| Integrations | `/api/integrations/v1`: `GET /summary`, `/findings[/{id}[/attachments/{attachmentId}]]`, `/runs[/{id}]` (asset-scoped); web inventory `GET /web-exposure/summary`, `/web-exposures`, `/web-components` (ADMIN/VULN/SECCHAMPION, asset-scoped); `POST /runs` (assigned service user + asset access); `/scanners` configuration and target binding (ADMIN). MCP mirrors subject/run, findings, exposure, and component reads; `docs/INTEGRATION_RESULTS.md` | mixed |
 | Account Onboarding | `GET/POST/PUT/DELETE /api/account-onboarding/questions[/{id}[/choices[/{cid}]]]`, `.../rules[/{id}]`, `GET .../rules/{coverage,matrix}`, `POST .../rules/preview`, `POST .../simulate` (ADMIN/SECCHAMPION); public single-use token `GET/POST /api/public/account-onboarding/{token}` | ADMIN/SECCHAMPION + public |
 | Product Classification | `GET/POST /api/product-classification/rules`, `PUT/DELETE .../rules/{id}`, `POST .../test`, `POST .../reclassify`, `GET .../stats` (ADMIN). Marks installer/setup payloads so vuln + EOL reads can hide them — `docs/CROWDSTRIKE_IMPORT.md` | ADMIN |
 | Mobile Relay | `GET /api/relay/{status,sections,devices,identities}`, `POST /api/relay/{publish,enrollments,revocations,identities,principals/publish}`, `DELETE /api/relay/identities/{id}` | ADMIN |
@@ -279,7 +280,7 @@ GRANT ALL PRIVILEGES ON secman_test.* TO 'secman_test'@'localhost';
 
 ## Extension Clients (`extensions/`)
 
-`secman_ai_github`, `secman_visual_check`, and `secman_web_check` are independent Python repositories with their own remotes, **gitignored here** — root `git status` never shows them. Normal builds do not cover them; `/integration-contract-test`, `scripts/check-integration-contract.sh --run`, and the manual integration-contract workflow provide opt-in contract checks.
+`secman_ai_github`, `secman_visual_check`, `secman_web_check`, and `secman_intra_mon` are independent Python repositories with their own remotes, **gitignored here** — root `git status` never shows them. Normal builds do not cover them. The first three share the version-1 result contract covered by `/integration-contract-test` and `scripts/check-integration-contract.sh --run`; `secman_intra_mon` uses the legacy REST surface and needs the same manual five-dimension contract check described below.
 
 `secman_app_ios` (iOS/iPadOS status app, Swift) is a **relay client, not a backend client**: it never calls `/api/…` and holds no secman credential. A change to a secman endpoint cannot break it. What *can* is the relay contract — `com.secman.relay.RelayDtos`, the section names and `SECTION_POLICIES` in `RelaySnapshotBuilder`, or `src/relay/internal/api`. Both envelopes carry a `schemaVersion` for that reason; bump it on a breaking change and update `relaySupportedSnapshotSchemaVersion` in the app. Sweep its surface with `grep -rnE '/api/v1/|/ingest/v1/' extensions/secman_app_ios --include='*.swift'`.
 
@@ -287,7 +288,7 @@ Always rediscover the surface; a written list means a newly added call gets chec
 ```bash
 grep -rnE '/api/|"/mcp"|X-MCP-User-Email' extensions --include='*.py' --exclude-dir=.venv
 ```
-As of 2026-09-11: legacy calls remain `POST /api/auth/login`, `POST /api/vulnerabilities/cli-add`, `GET /api/vulnerabilities/current`, `PUT /api/assets/import`, MCP `/mcp` (`X-MCP-API-Key` + `X-MCP-User-Email`; `get_vulnerabilities`, `add_vulnerability`, `create_asset`). Version 1 uses `GET /api/integrations/v1/scanners/{id}/subjects`, `POST /api/integrations/v1/runs`, MCP subject/run writes, and asset-scoped integration reads; see `docs/INTEGRATION_RESULTS.md`.
+As of 2026-09-21: legacy calls remain `POST /api/auth/login`, `POST /api/vulnerabilities/cli-add`, `GET /api/vulnerabilities/current`, `PUT /api/assets/import`, `POST /api/scan/upload-nmap`, and MCP `/mcp` (`X-MCP-API-Key` + `X-MCP-User-Email`; `get_vulnerabilities`, `add_vulnerability`, `create_asset`). Version 1 uses `GET /api/integrations/v1/scanners/{id}/subjects`, `POST /api/integrations/v1/runs`, MCP subject/run writes, and asset-scoped integration reads; see `docs/INTEGRATION_RESULTS.md`.
 
 When you change any of those endpoints, verify all five dimensions against the client: **path, HTTP method, request field names, response fields the client reads, and `@Secured` roles / required headers**. Field names matter most — Jackson drops unknown keys without error, so a rename makes the client "succeed" while sending nothing. Update the client's `tests/` too; a test asserting the old shape is drift.
 
@@ -307,14 +308,14 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-09-18*
+*Last updated: 2026-09-22*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **External web exposure and software-component inventory (2026-09-19)** — `secman_web_check` passively inventories JavaScript/CSS libraries, web servers, and scanner-vantage reachability from its own targets or SecMan-bound subjects, then prints, stores, or uploads atomic snapshots. SecMan provides asset-scoped REST/MCP reads and **Analytics → External exposure**; inventory stays separate from vulnerabilities and installed products. See `docs/INTEGRATION_RESULTS.md` and `docs/CHANGELOG.md`.
+
 - **Catch-all workgroup safety and direct workgroup links (2026-09-17)** — a configurable direct-user threshold now disables oversized catch-all workgroups without auto-re-enabling them; automatic disables invalidate access caches and are audited. User workgroup badges deep-link to the existing detail panel, and the workgroup table has Safari-safe sticky headers. See `docs/CHANGELOG.md`.
 
 - **CrowdStrike imports include domain controllers (2026-09-17)** — shared CrowdStrike scopes now include `DOMAIN_CONTROLLER` and composite `SERVER_FAMILY`; production vulnerability and product scripts use the composite scope and store discovered domain controllers as SecMan `SERVER` assets. See `docs/CROWDSTRIKE_IMPORT.md` and `docs/CHANGELOG.md`.
-
-- **Web findings identify as findings and group under Webserver (2026-09-17)** — the current-vulnerabilities table labels its identifier column `CVE/Finding`; `WEB_SECURITY` integration projections use `Webserver` as Product, including a V266 backfill. Other scanner sources and stable finding identities are unchanged. See `docs/CHANGELOG.md`.

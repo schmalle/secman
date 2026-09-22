@@ -33,6 +33,15 @@ class AiSuggestionJob(
     @Column(name = "triggered_by_user_id", nullable = false)
     var triggeredByUserId: Long,
 
+    @Column(name = "assignment_version", nullable = false)
+    var assignmentVersion: Long = -1,
+
+    @Column(name = "api_key_id")
+    var apiKeyId: Long? = null,
+
+    @Column(name = "initiating_user_id")
+    var initiatingUserId: Long? = null,
+
     @Column(name = "model", nullable = false, length = 128)
     var model: String,
 

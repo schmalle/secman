@@ -77,15 +77,15 @@ class WorkgroupAuthorizationTest {
     }
 
     @Test
-    fun `creator can delete their workgroup`() {
+    fun `creator cannot delete their workgroup without a grant management role`() {
         val workgroup = workgroup(id = 102L, createdBy = creator, users = mutableSetOf(creator))
         every { workgroupService.getWorkgroupById(102L) } returns workgroup
         every { workgroupService.deleteWorkgroupWithPromotion(102L) } just Runs
 
         val response = controller.deleteWorkgroup(102L, auth(creator))
 
-        assertEquals(HttpStatus.NO_CONTENT, response.status)
-        verify { workgroupService.deleteWorkgroupWithPromotion(102L) }
+        assertEquals(HttpStatus.FORBIDDEN, response.status)
+        verify(exactly = 0) { workgroupService.deleteWorkgroupWithPromotion(any()) }
     }
 
     @Test
@@ -166,7 +166,7 @@ class WorkgroupAuthorizationTest {
     }
 
     @Test
-    fun `regular member can add accessible assets to accessible workgroup`() {
+    fun `regular member cannot grant accessible assets to other group members`() {
         val workgroup = workgroup(id = 104L, createdBy = member, users = mutableSetOf(member))
         every { workgroupRepository.findById(104L) } returns Optional.of(workgroup)
         every { assetFilterService.getAccessibleAssetIds(any()) } returns setOf(201L, 202L)
@@ -178,8 +178,8 @@ class WorkgroupAuthorizationTest {
             auth(member)
         )
 
-        assertEquals(HttpStatus.OK, response.status)
-        verify { workgroupService.assignAssetsToWorkgroup(104L, listOf(201L, 202L)) }
+        assertEquals(HttpStatus.FORBIDDEN, response.status)
+        verify(exactly = 0) { workgroupService.assignAssetsToWorkgroup(any(), any()) }
     }
 
     @Test

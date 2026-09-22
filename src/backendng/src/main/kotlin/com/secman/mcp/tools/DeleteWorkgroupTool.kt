@@ -9,7 +9,7 @@ import jakarta.inject.Singleton
 /**
  * MCP tool for deleting a workgroup.
  *
- * ADMIN role is required via User Delegation.
+ * ADMIN or SECCHAMPION is required via User Delegation.
  * Cascade deletion of user and asset associations is handled by JPA.
  *
  * Input parameters:
@@ -21,7 +21,7 @@ class DeleteWorkgroupTool(
 ) : McpTool {
 
     override val name = "delete_workgroup"
-    override val description = "Delete a workgroup by ID (ADMIN only, requires User Delegation)"
+    override val description = "Delete a workgroup by ID (ADMIN/SECCHAMPION, requires User Delegation)"
     override val operation = McpOperation.DELETE
 
     override val inputSchema = mapOf(
@@ -39,11 +39,11 @@ class DeleteWorkgroupTool(
         // Require User Delegation
         requireDelegation(context)?.let { return it }
 
-        // Require ADMIN role
-        if (!context.isAdmin) {
+        // Require grant-management authority
+        if (!context.canManageGrants) {
             return McpToolResult.error(
                 "ADMIN_REQUIRED",
-                "ADMIN role required to delete workgroups"
+                "ADMIN or SECCHAMPION role required to delete workgroups"
             )
         }
 

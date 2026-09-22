@@ -222,7 +222,7 @@ class RiskAccessControlIntegrationTest : BaseIntegrationTest() {
                 String::class.java
             )
         }
-        assertThat(exception.status).isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(exception.status).isEqualTo(HttpStatus.FORBIDDEN)
         assertThat(riskAssessmentRepository.findByAssetId(inaccessibleAsset.id!!)).isEmpty()
     }
 }

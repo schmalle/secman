@@ -222,6 +222,27 @@ EOF
 expect_silent A02-weak-hash  "BCryptPasswordEncoder"
 expect_silent A02-secret-lit "secret read from the environment"
 
+setup_repo
+plant src/backendng/src/main/kotlin/com/secman/service/ScopeDigest.kt <<'EOF'
+package com.secman.service
+class ScopeDigest {
+    fun fingerprint(assetIds: List<Long>) = MessageDigest.getInstance("SHA-256")
+        .digest(assetIds.sorted().joinToString(",").toByteArray())
+}
+EOF
+expect_silent A02-weak-hash "SHA-256 asset scope fingerprint is not password storage"
+
+setup_repo
+plant src/backendng/src/main/kotlin/com/secman/service/SplitCredentialHash.kt <<'EOF'
+class SplitCredentialHash {
+    fun hash(password: String): ByteArray {
+        val digest = MessageDigest.getInstance("SHA-256")
+        return digest.digest(password.toByteArray())
+    }
+}
+EOF
+expect_fires A02-weak-hash "split-line SHA-256 password hashing remains blocked"
+
 # ============================================================================
 # A03 — Injection
 # ============================================================================

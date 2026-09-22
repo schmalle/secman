@@ -60,6 +60,11 @@ open class McpAdminController(
                 )
             }
 
+            if (request.allowedDelegateUserIds.size > 100 || request.allowedDelegateUserIds.any { it <= 0 }) {
+                return HttpResponse.badRequest(McpApiKeyCreateResponse(
+                    error = McpErrorResponse("INVALID_REQUEST", "Specify at most 100 positive delegate user IDs")))
+            }
+
             // Validate delegation configuration
             val delegationValidationError = validateDelegationConfig(request.delegationEnabled, request.allowedDelegationDomains)
             if (delegationValidationError != null) {
@@ -92,7 +97,8 @@ open class McpAdminController(
                 expiresAt = expiresAt,
                 notes = request.notes,
                 delegationEnabled = request.delegationEnabled,
-                allowedDelegationDomains = request.allowedDelegationDomains
+                allowedDelegationDomains = request.allowedDelegationDomains,
+                allowedDelegateUserIds = request.allowedDelegateUserIds.sorted().joinToString(",")
             )
 
             // Save API key
@@ -106,7 +112,8 @@ open class McpAdminController(
                 expiresAt = request.expiresAt,
                 createdAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
                 delegationEnabled = savedApiKey.delegationEnabled,
-                allowedDelegationDomains = savedApiKey.allowedDelegationDomains
+                allowedDelegationDomains = savedApiKey.allowedDelegationDomains,
+                allowedDelegateUserIds = request.allowedDelegateUserIds
             )
 
             logger.info("API key created: keyId={}, userId={}, name={}, delegationEnabled={}",
@@ -160,6 +167,7 @@ open class McpAdminController(
                     notes = key.notes,
                     delegationEnabled = key.delegationEnabled,
                     allowedDelegationDomains = key.allowedDelegationDomains,
+                    allowedDelegateUserIds = key.allowedDelegateUserIds.split(',').mapNotNull { it.toLongOrNull() }.toSet(),
                     delegationDomainCount = key.getDelegationDomainsList().size
                 )
             }

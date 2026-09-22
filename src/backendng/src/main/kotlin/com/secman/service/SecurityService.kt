@@ -18,6 +18,8 @@ import java.util.regex.Pattern
 open class SecurityService(
     private val riskAssessmentRepository: RiskAssessmentRepository,
     private val requirementFileRepository: RequirementFileRepository,
+    private val assessmentAccess: RiskAssessmentAccessService,
+    private val workflow: AssessmentWorkflowService,
     private val riskAssessmentRequirementFileRepository: RiskAssessmentRequirementFileRepository
 ) {
     
@@ -78,89 +80,33 @@ open class SecurityService(
     /**
      * Check if user has access to a specific risk assessment
      */
+    private fun authentication(user: User) = io.micronaut.security.authentication.Authentication.build(
+        user.username, user.roles.map { it.name }, mapOf("userId" to user.id!!, "email" to user.email))
+
+    /** File access follows the same assessment policy as questionnaire access. */
     fun userHasAccessToRiskAssessment(user: User, riskAssessmentId: Long): Boolean {
-        // Admins have access to everything
-        if (user.isAdmin()) {
-            return true
-        }
-
-        val riskAssessmentOpt = riskAssessmentRepository.findById(riskAssessmentId)
-        if (riskAssessmentOpt.isEmpty) {
-            return false
-        }
-
-        val riskAssessment = riskAssessmentOpt.get()
-
-        // Check if user is the assessor (person performing the assessment)
-        if (riskAssessment.assessor.id == user.id) {
-            return true
-        }
-
-        // Check if user is the requestor (person who requested the assessment)
-        if (riskAssessment.requestor.id == user.id) {
-            return true
-        }
-
-        // Check if user is the respondent
-        if (riskAssessment.respondent?.id == user.id) {
-            return true
-        }
-
-        logger.debug("User {} denied access to risk assessment {}", user.username, riskAssessmentId)
-        return false
+        val assessment = riskAssessmentRepository.findById(riskAssessmentId).orElse(null) ?: return false
+        return assessmentAccess.canView(assessment, authentication(user))
     }
-    
-    /**
-     * Check if user has access to a specific file
-     */
+
+    /** Evidence access is limited to the visible assigned requirement. */
+    fun userHasAccessToAssessmentRequirement(user: User, assessmentId: Long, requirementId: Long, write: Boolean = false): Boolean {
+        val assessment = riskAssessmentRepository.findById(assessmentId).orElse(null) ?: return false
+        val auth = authentication(user)
+        if (write && !assessmentAccess.canAnswer(assessment, auth)) return false
+        return assessmentAccess.visibleRequirements(assessment, auth, workflow.requirementsFor(assessment)).any { it.id == requirementId }
+    }
+
     fun userHasAccessToFile(user: User, fileId: Long): Boolean {
-        // Admins have access to everything
-        if (user.isAdmin()) {
-            return true
-        }
-        
-        val fileOpt = requirementFileRepository.findById(fileId)
-        if (fileOpt.isEmpty) {
-            return false
-        }
-        
-        val file = fileOpt.get()
-        
-        // Check if user uploaded the file
-        if (file.uploadedBy.id == user.id) {
-            return true
-        }
-        
-        // Check if file is associated with a risk assessment the user has access to
-        val associationOpt = riskAssessmentRequirementFileRepository.findByFileId(fileId)
-        if (associationOpt.isPresent) {
-            val association = associationOpt.get()
-            return userHasAccessToRiskAssessment(user, association.riskAssessment.id!!)
-        }
-        
-        return false
+        val association = riskAssessmentRequirementFileRepository.findByFileId(fileId).orElse(null) ?: return false
+        return userHasAccessToAssessmentRequirement(user, association.riskAssessment.id!!, association.requirement.id!!)
     }
-    
-    /**
-     * Check if user can delete a specific file
-     */
+
     fun userCanDeleteFile(user: User, fileId: Long): Boolean {
-        // Admins can delete any file
-        if (user.isAdmin()) {
-            return true
-        }
-        
-        val fileOpt = requirementFileRepository.findById(fileId)
-        if (fileOpt.isEmpty) {
-            return false
-        }
-        
-        val file = fileOpt.get()
-        
-        // Users can only delete their own files
-        return file.uploadedBy.id == user.id
+        val association = riskAssessmentRequirementFileRepository.findByFileId(fileId).orElse(null) ?: return false
+        return userHasAccessToAssessmentRequirement(user, association.riskAssessment.id!!, association.requirement.id!!, true)
     }
-    
+
     /**
      * Validate email format
      */

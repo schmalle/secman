@@ -17,14 +17,6 @@ import io.micronaut.serde.annotation.Serdeable
  * The controller layer enforces this before tools are called. The defense-in-depth
  * checks here protect against future refactoring mistakes.
  *
- * Access Control Rules (from CLAUDE.md - Unified Access Control):
- * Users can access assets if ANY of these is true:
- * 1. User has ADMIN role (universal access)
- * 2. Asset in user's workgroup
- * 3. Asset manually created by user
- * 4. Asset discovered via user's scan upload
- * 5. Asset's cloudAccountId matches user's AWS mappings (UserMapping)
- * 6. Asset's adDomain matches user's domain mappings (UserMapping, case-insensitive)
  */
 @Serdeable
 data class McpExecutionContext(
@@ -47,6 +39,9 @@ data class McpExecutionContext(
     val accessibleAssetIds: Set<Long>?,
     val accessibleWorkgroupIds: Set<Long>?
 ) {
+    val canManageGrants: Boolean
+        get() = hasDelegation() && com.secman.security.GrantAuthority.canManage(delegatedUserRoles.orEmpty())
+
     /**
      * Check if this context has user delegation enabled.
      */

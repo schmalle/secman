@@ -133,6 +133,9 @@ START_TIME=$(date +%s)
 # Captured IDs (populated during run)
 USER1_ID=""
 USER2_ID=""
+TEST_DELEGATE_KEY_ID=""
+USER1_WORKGROUP_ID=""
+USER2_WORKGROUP_ID=""
 ASSET1_ID=""
 ASSET2_ID=""
 VULN1_ID=""
@@ -420,6 +423,7 @@ matrix_create_asset_and_vulnerability() {
     fi
 
     local res asset_id vuln_id
+    asset_args=$(printf '%s' "$asset_args" | jq --argjson wg "$USER1_WORKGROUP_ID" '. + {workgroupIds:[$wg]}')
     res=$(mcp_call "create_asset" "$asset_args" "$ADMIN_USER_EMAIL")
     asset_id=$(echo "$res" | jq -r '.id')
     [[ -z "$asset_id" || "$asset_id" == "null" ]] && fail "Matrix $case_key: failed to create asset: $res"
@@ -1025,6 +1029,15 @@ cleanup() {
     local phase="${1:-post-run}"
     log "Cleanup ($phase): removing test users, assets, exception requests, AWS sharing artefacts..."
 
+    # Revoke only the temporary key created by this run; never broaden the supplied key.
+    if [[ -n "$TEST_DELEGATE_KEY_ID" ]]; then
+        local revoke_token
+        revoke_token=$(ensure_admin_jwt)
+        curl -sS -o /dev/null -X DELETE "${BASE_URL}/api/mcp/admin/api-keys/${TEST_DELEGATE_KEY_ID}" \
+            -H "Authorization: Bearer $revoke_token"
+        TEST_DELEGATE_KEY_ID=""
+    fi
+
     # 0) Drop cached admin JWT — a fresh run logs in again so token rotation
     # / password changes do not bite us silently.
     ADMIN_JWT_CACHE=""
@@ -1091,9 +1104,15 @@ cleanup() {
               WHERE vulnerability_id IN (SELECT id FROM vulnerability WHERE asset_id IN ($asset_ids_csv))
                  OR asset_id IN ($asset_ids_csv);
             DELETE FROM vulnerability WHERE asset_id IN ($asset_ids_csv);
+            DELETE FROM asset_workgroups WHERE asset_id IN ($asset_ids_csv);
             DELETE FROM asset WHERE id IN ($asset_ids_csv);
         "
     fi
+
+    # Remove explicit fixture grants before deleting their subjects.
+    db_exec "DELETE FROM user_workgroups WHERE workgroup_id IN
+        (SELECT id FROM workgroup WHERE name IN ('E2E explicit user1','E2E explicit user2'));
+        DELETE FROM workgroup WHERE name IN ('E2E explicit user1','E2E explicit user2');"
 
     # 5) Delete test users
     if [[ -n "$user_ids_csv" && "$user_ids_csv" != "NULL" ]]; then
@@ -1148,6 +1167,32 @@ USER2_ID=$(echo "$res" | jq -r '.user.id')
 [[ -z "$USER2_ID" || "$USER2_ID" == "null" ]] && fail "Failed to create $USER2_USERNAME: $res"
 ok "Created user $USER2_USERNAME (id=$USER2_ID)"
 
+# Bind this run's key to its two fixture identities. The bootstrap key remains unchanged.
+admin_token=$(ensure_admin_jwt)
+permissions=$(sed -nE 's/^[[:space:]]*([A-Z][A-Z_]+)[,;][[:space:]]*$/\1/p' \
+    "$REPO_ROOT/src/backendng/src/main/kotlin/com/secman/domain/McpPermission.kt" | jq -Rsc 'split("\n") | map(select(length > 0))')
+key_body=$(jq -nc --argjson permissions "$permissions" --argjson first "$USER1_ID" --argjson second "$USER2_ID" \
+    --arg domains "@${ADMIN_USER_EMAIL##*@},@e2e.test" \
+    '{name:"E2E explicit delegates",expiresAt:(now + 86400 | strftime("%Y-%m-%dT%H:%M:%S")),permissions:$permissions,delegationEnabled:true,allowedDelegationDomains:$domains,allowedDelegateUserIds:[$first,$second]}')
+key_response=$(curl -fsS -X POST "${BASE_URL}/api/mcp/admin/api-keys" \
+    -H "Authorization: Bearer $admin_token" -H "Content-Type: application/json" -d "$key_body")
+TEST_DELEGATE_KEY_ID=$(printf '%s' "$key_response" | jq -er '.keyId')
+SECMAN_MCP_KEY=$(printf '%s' "$key_response" | jq -er '.apiKey')
+unset key_response key_body admin_token
+
+# Owner labels are metadata; fixture visibility uses explicit workgroup grants.
+for fixture_number in 1 2; do
+    res=$(mcp_call "create_workgroup" "$(jq -nc --arg name "E2E explicit user$fixture_number" '{name:$name}')" "$ADMIN_USER_EMAIL")
+    fixture_group=$(echo "$res" | jq -er '.id')
+    if [[ "$fixture_number" == 1 ]]; then
+        USER1_WORKGROUP_ID="$fixture_group"; fixture_user="$USER1_ID"
+    else
+        USER2_WORKGROUP_ID="$fixture_group"; fixture_user="$USER2_ID"
+    fi
+    mcp_call "assign_users_to_workgroup" "$(jq -nc --argjson group "$fixture_group" --argjson user "$fixture_user" \
+        '{workgroupId:$group,userIds:[$user]}')" "$ADMIN_USER_EMAIL" >/dev/null
+done
+
 # Activate accounts by logging in once. The backend blocks never-logged-in
 # (lastLogin == null) accounts from creating exception requests; a real user
 # always authenticates before using the UI/MCP, so we mirror that here.
@@ -1157,15 +1202,15 @@ ok "Activated test users via login (lastLogin set)"
 
 # Create assets — owner is a plain string username
 res=$(mcp_call "create_asset" "$(jq -nc \
-    --arg n "$ASSET1_NAME" --arg t "SERVER" --arg o "$USER1_USERNAME" --arg ip "$ASSET1_IP" \
-    '{name:$n,type:$t,owner:$o,ip:$ip,description:"E2E test asset 1"}')" "$ADMIN_USER_EMAIL")
+    --arg n "$ASSET1_NAME" --arg t "SERVER" --arg o "$USER1_USERNAME" --arg ip "$ASSET1_IP" --argjson wg "$USER1_WORKGROUP_ID" \
+    '{name:$n,type:$t,owner:$o,ip:$ip,workgroupIds:[$wg],description:"E2E test asset 1"}')" "$ADMIN_USER_EMAIL")
 ASSET1_ID=$(echo "$res" | jq -r '.id')
 [[ -z "$ASSET1_ID" || "$ASSET1_ID" == "null" ]] && fail "Failed to create $ASSET1_NAME: $res"
 ok "Created asset $ASSET1_NAME (id=$ASSET1_ID, owner=$USER1_USERNAME)"
 
 res=$(mcp_call "create_asset" "$(jq -nc \
-    --arg n "$ASSET2_NAME" --arg t "SERVER" --arg o "$USER2_USERNAME" --arg ip "$ASSET2_IP" \
-    '{name:$n,type:$t,owner:$o,ip:$ip,description:"E2E test asset 2"}')" "$ADMIN_USER_EMAIL")
+    --arg n "$ASSET2_NAME" --arg t "SERVER" --arg o "$USER2_USERNAME" --arg ip "$ASSET2_IP" --argjson wg "$USER2_WORKGROUP_ID" \
+    '{name:$n,type:$t,owner:$o,ip:$ip,workgroupIds:[$wg],description:"E2E test asset 2"}')" "$ADMIN_USER_EMAIL")
 ASSET2_ID=$(echo "$res" | jq -r '.id')
 [[ -z "$ASSET2_ID" || "$ASSET2_ID" == "null" ]] && fail "Failed to create $ASSET2_NAME: $res"
 ok "Created asset $ASSET2_NAME (id=$ASSET2_ID, owner=$USER2_USERNAME)"
@@ -1641,8 +1686,8 @@ else
     noedr_cve="CVE-E2E-NOEDR-1"
 
     res=$(mcp_call "create_asset" "$(jq -nc \
-        --arg n "$noedr_asset_name" --arg o "$USER1_USERNAME" \
-        '{name:$n,type:"SERVER",owner:$o,description:"E2E NO_EDR test asset"}')" "$ADMIN_USER_EMAIL")
+        --arg n "$noedr_asset_name" --arg o "$USER1_USERNAME" --argjson wg "$USER1_WORKGROUP_ID" \
+        '{name:$n,type:"SERVER",owner:$o,workgroupIds:[$wg],description:"E2E NO_EDR test asset"}')" "$ADMIN_USER_EMAIL")
     NOEDR_ASSET_ID=$(echo "$res" | jq -r '.id')
     [[ -z "$NOEDR_ASSET_ID" || "$NOEDR_ASSET_ID" == "null" ]] && fail "Failed to create $noedr_asset_name: $res"
     ok "Created NO_EDR test asset $noedr_asset_name (id=$NOEDR_ASSET_ID)"

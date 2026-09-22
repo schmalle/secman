@@ -30,7 +30,8 @@ import java.time.format.DateTimeFormatter
 open class AssetImportService(
     private val assetRepository: AssetRepository,
     private val workgroupRepository: WorkgroupRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val assetCreation: AssetCreationService
 ) {
 
     private val log = LoggerFactory.getLogger(AssetImportService::class.java)
@@ -63,7 +64,8 @@ open class AssetImportService(
         val headers = validateAndMapHeaders(headerRow)
 
         // Get importing user for creator tracking
-        val importingUser = userRepository.findByUsername(authentication.name).orElse(null)
+        val importingUser = userRepository.findByUsername(authentication.name).orElseThrow { IllegalArgumentException("Unknown actor") }
+        require(importingUser.enabled) { "Actor is disabled" }
 
         // Parse all rows
         val validAssets = mutableListOf<Asset>()
@@ -107,12 +109,14 @@ open class AssetImportService(
                 val workgroups = resolveWorkgroups(dto.workgroupNames)
 
                 // Convert DTO to entity
-                val asset = dto.toAsset(workgroups)
+                val asset = dto.toAsset(workgroups).apply {
+                    cloudAccountId = cloudAccountId?.takeIf { it.isNotBlank() }
+                    adDomain = adDomain?.takeIf { it.isNotBlank() }
+                }
+                assetCreation.validatePlacement(asset, importingUser, workgroups)
 
                 // Set creator
-                if (importingUser != null) {
-                    asset.manualCreator = importingUser
-                }
+                asset.manualCreator = importingUser
 
                 validAssets.add(asset)
 
@@ -258,7 +262,6 @@ open class AssetImportService(
         for (name in names) {
             val workgroup = workgroupRepository.findByNameIgnoreCase(name).orElse(null)
             if (workgroup != null) {
-                workgroup.requireDirectAssetAssignmentAllowed()
                 workgroups.add(workgroup)
             } else {
                 log.warn("Workgroup not found: '{}', skipping", name)

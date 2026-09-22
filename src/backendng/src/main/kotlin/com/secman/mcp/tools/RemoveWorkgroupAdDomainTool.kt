@@ -14,7 +14,7 @@ class RemoveWorkgroupAdDomainTool(
     private val log = LoggerFactory.getLogger(RemoveWorkgroupAdDomainTool::class.java)
 
     override val name = "remove_workgroup_ad_domain"
-    override val description = "Remove an AD domain from a workgroup (ADMIN only, requires User Delegation)"
+    override val description = "Remove an AD domain from a workgroup (ADMIN/SECCHAMPION, requires User Delegation)"
     override val operation = McpOperation.DELETE
 
     override val inputSchema = mapOf(
@@ -28,8 +28,8 @@ class RemoveWorkgroupAdDomainTool(
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
-        if (!context.isAdmin) {
-            return McpToolResult.error("ADMIN_REQUIRED", "ADMIN role required to remove AD domains from a workgroup")
+        if (!context.canManageGrants) {
+            return McpToolResult.error("ADMIN_REQUIRED", "ADMIN or SECCHAMPION role required to remove AD domains from a workgroup")
         }
         val workgroupId = (arguments["workgroupId"] as? Number)?.toLong()
             ?: return McpToolResult.error("VALIDATION_ERROR", "workgroupId is required and must be a valid number")

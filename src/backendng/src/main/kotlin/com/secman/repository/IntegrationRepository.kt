@@ -5,6 +5,7 @@ import com.secman.dto.IntegrationPage
 import jakarta.inject.Singleton
 import jakarta.persistence.EntityManager
 import jakarta.persistence.LockModeType
+import java.time.Instant
 
 /** Persistence operations used inside the integration services' transactions. */
 @Singleton
@@ -56,8 +57,20 @@ class IntegrationRepository(private val em: EntityManager) {
         em.createQuery("FROM IntegrationFinding f WHERE f.subjectId = :subject AND f.externalId = :external", IntegrationFinding::class.java)
             .setParameter("subject", subjectId).setParameter("external", externalId).resultList.singleOrNull()
 
+    fun webExposure(subjectId: Long): WebExposure? =
+        em.createQuery("FROM WebExposure x WHERE x.subjectId = :subject", WebExposure::class.java)
+            .setParameter("subject", subjectId).resultList.singleOrNull()
+
+    fun webComponent(subjectId: Long, componentKey: String): WebComponent? =
+        em.createQuery("FROM WebComponent x WHERE x.subjectId = :subject AND x.componentKey = :key", WebComponent::class.java)
+            .setParameter("subject", subjectId).setParameter("key", componentKey).resultList.singleOrNull()
+
     fun openFindingPage(subjectId: Long, afterId: Long): List<IntegrationFinding> =
         em.createQuery("FROM IntegrationFinding f WHERE f.subjectId = :subject AND f.state = 'OPEN' AND f.id > :after ORDER BY f.id", IntegrationFinding::class.java)
+            .setParameter("subject", subjectId).setParameter("after", afterId).setMaxResults(500).resultList
+
+    fun openWebComponentPage(subjectId: Long, afterId: Long): List<WebComponent> =
+        em.createQuery("FROM WebComponent x WHERE x.subjectId = :subject AND x.state = 'OPEN' AND x.id > :after ORDER BY x.id", WebComponent::class.java)
             .setParameter("subject", subjectId).setParameter("after", afterId).setMaxResults(500).resultList
 
     fun legacyCandidates(assetId: Long, legacyIds: List<String>): List<Vulnerability> =
@@ -94,6 +107,14 @@ class IntegrationRepository(private val em: EntityManager) {
             .setParameter("unscoped", assetIds == null).setParameter("assets", assetIds?.ifEmpty { setOf(-1L) } ?: setOf(-1L))
         if (template in setOf(IntegrationCountQuery.HEALTHY, IntegrationCountQuery.STALE)) query.setParameter("now", java.time.Instant.now())
         return query.singleResult
+    }
+
+    fun latestWebExposure(assetIds: Set<Long>): Instant? {
+        if (assetIds.isEmpty()) return null
+        return em.createQuery(
+            "SELECT MAX(x.observedAt) FROM WebExposure x, IntegrationSubject s WHERE x.subjectId = s.id AND s.assetId IN :assets",
+            Instant::class.java
+        ).setParameter("assets", assetIds).singleResult
     }
 
     fun boundSubject(scannerId: Long, assetId: Long): IntegrationSubject? = em.createQuery(

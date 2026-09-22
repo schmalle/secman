@@ -128,7 +128,7 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
     <div className="container-fluid mt-4 d-flex flex-column flex-grow-1" style={{ minHeight: 0 }}>
       <div className="d-flex justify-content-between align-items-center mb-4 flex-shrink-0">
         <h2>Workgroup Management</h2>
-        <button className="btn btn-primary" onClick={() => setShowForm(true)}>
+        <button disabled={!canChangeStatus} className="btn btn-primary" onClick={() => setShowForm(true)}>
           Create Workgroup
         </button>
       </div>
@@ -278,7 +278,7 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
                     </td>
                     <td>{formatServerDate(workgroup.createdAt)}</td>
                   <td>
-                    <div className="btn-group btn-group-sm">
+                    <fieldset disabled={!canChangeStatus} className="btn-group btn-group-sm">
                       <button
                         className="btn btn-outline-primary"
                         onClick={() => {
@@ -347,7 +347,7 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
                       >
                         Delete
                       </button>
-                    </div>
+                    </fieldset>
                   </td>
                 </tr>
                 );

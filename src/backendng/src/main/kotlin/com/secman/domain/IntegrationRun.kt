@@ -21,5 +21,6 @@ class IntegrationRun(
     @Column(nullable = false) var resolved: Int = 0,
     @Column(name = "metadata_json", nullable = false, columnDefinition = "TEXT") var metadataJson: String = "{}",
     // Immutable text evidence per run, without attachment base64 (stored separately).
-    @Column(name = "findings_json", nullable = false, columnDefinition = "LONGTEXT") var findingsJson: String = "[]"
+    @Column(name = "findings_json", nullable = false, columnDefinition = "LONGTEXT") var findingsJson: String = "[]",
+    @Column(name = "inventory_json", nullable = false, columnDefinition = "LONGTEXT") var inventoryJson: String = "null"
 )

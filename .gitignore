@@ -131,3 +131,4 @@ extensions/secman_web_check/
 /.firecrawl
 gradle/wrapper/gradle-wrapper.jar
 gradle/wrapper/gradle-wrapper.jar
+/extensions/secman_intra_mon

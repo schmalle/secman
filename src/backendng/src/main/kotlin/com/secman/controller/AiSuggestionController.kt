@@ -39,6 +39,7 @@ import org.slf4j.LoggerFactory
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class AiSuggestionController(
     private val jobService: AiSuggestionJobService,
+    private val workflow: com.secman.service.AssessmentWorkflowService,
     private val ownershipGuard: AssessmentOwnershipGuard
 ) {
     private val log = LoggerFactory.getLogger(AiSuggestionController::class.java)
@@ -99,7 +100,9 @@ open class AiSuggestionController(
         authentication: Authentication
     ): Publisher<Event<JobProgressEvent>> {
         ownershipGuard.check(id, authentication)
-        return jobService.getProgressStream(jobId, id).map { ev ->
+        return jobService.getProgressStream(jobId, id)
+            .publishOn(reactor.core.scheduler.Schedulers.boundedElastic()).map { ev ->
+            ownershipGuard.check(id, authentication)
             Event.of(ev).id(ev.jobId.toString()).name(ev.type.lowercase())
         }
     }
@@ -119,7 +122,7 @@ open class AiSuggestionController(
         authentication: Authentication
     ): HttpResponse<ClearLowConfidenceResponse> {
         ownershipGuard.check(id, authentication)
-        val deleted = jobService.clearLowConfidence(id)
+        val deleted = workflow.clearAiDrafts(id, authentication)
         log.info("Cleared {} low-confidence AI responses for assessment {} (user={})", deleted, id, authentication.name)
         return HttpResponse.ok(ClearLowConfidenceResponse(deleted))
     }

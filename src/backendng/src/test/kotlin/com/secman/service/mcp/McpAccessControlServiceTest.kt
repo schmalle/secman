@@ -7,10 +7,8 @@ import com.secman.domain.McpPermission
 import com.secman.domain.User
 import com.secman.domain.Workgroup
 import com.secman.repository.AssetRepository
-import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
-import com.secman.repository.WorkgroupAdDomainRepository
-import com.secman.service.AwsAccountSharingService
+import com.secman.service.AssetFilterService
 import com.secman.testutil.TestDataFactory
 import io.mockk.every
 import io.mockk.mockk
@@ -22,17 +20,9 @@ import java.util.Optional
 class McpAccessControlServiceTest {
 
     private val assetRepository = mockk<AssetRepository>()
-    private val userMappingRepository = mockk<UserMappingRepository>()
     private val userRepository = mockk<UserRepository>()
-    private val awsAccountSharingService = mockk<AwsAccountSharingService>()
-    private val workgroupAdDomainRepository = mockk<WorkgroupAdDomainRepository>()
-    private val service = McpAccessControlService(
-        assetRepository,
-        userMappingRepository,
-        userRepository,
-        awsAccountSharingService,
-        workgroupAdDomainRepository
-    )
+    private val assetFilterService = mockk<AssetFilterService>()
+    private val service = McpAccessControlService(assetRepository, userRepository, assetFilterService)
 
     @Test
     fun `disabled-only workgroup asset is absent from delegated context`() {
@@ -53,7 +43,7 @@ class McpAccessControlServiceTest {
         assertThat(context.accessibleWorkgroupIds).isEmpty()
         assertThat(context.canAccessAsset(700L)).isFalse()
         verify(exactly = 1) {
-            assetRepository.findAccessibleByWorkgroupMembershipOrCreatorOrUploader(42L, 42L, 42L)
+            assetFilterService.getAccessibleAssetIds(any())
         }
     }
 
@@ -86,14 +76,15 @@ class McpAccessControlServiceTest {
     }
 
     private fun stubNoAccessibleAssets() {
-        every {
-            assetRepository.findAccessibleByWorkgroupMembershipOrCreatorOrUploader(42L, 42L, 42L)
-        } returns emptyList()
-        every { userMappingRepository.findDistinctAwsAccountIdByEmail("user@example.test") } returns emptyList()
-        every { userMappingRepository.findDistinctDomainByEmail("user@example.test") } returns emptyList()
-        every { awsAccountSharingService.getSharedAwsAccountIds(42L) } returns emptyList()
-        every { assetRepository.findByOwner("user") } returns emptyList()
-        every { workgroupAdDomainRepository.findDistinctAdDomainsByUserId(42L) } returns emptyList()
+        every { assetFilterService.getAccessibleAssetIds(any()) } returns emptySet()
+    }
+
+    @Test
+    fun `each MCP request recomputes visibility after revocation`() {
+        every { userRepository.findByIdWithWorkgroups(42L) } returns Optional.of(user(mutableSetOf(User.Role.USER)))
+        every { assetFilterService.getAccessibleAssetIds(any()) } returnsMany listOf(setOf(700L), emptySet())
+        assertThat(service.buildExecutionContext(apiKey(), delegation()).canAccessAsset(700L)).isTrue()
+        assertThat(service.buildExecutionContext(apiKey(), delegation()).canAccessAsset(700L)).isFalse()
     }
 
     private fun user(

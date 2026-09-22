@@ -119,8 +119,14 @@ data class McpApiKey(
      */
     @Column(name = "allowed_delegation_domains", length = 500)
     @Size(max = 500)
-    val allowedDelegationDomains: String? = null
+    val allowedDelegationDomains: String? = null,
+    /** Explicit stable user IDs; an empty list permits only the key owner. */
+    @Column(name = "allowed_delegate_user_ids", length = 4000)
+    val allowedDelegateUserIds: String = ""
 ) {
+    fun permitsDelegate(userId: Long): Boolean = this.userId == userId ||
+        allowedDelegateUserIds.split(',').mapNotNull { it.trim().toLongOrNull() }.contains(userId)
+
     /**
      * Parse the permissions string into a set of McpPermission enums.
      */

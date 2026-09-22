@@ -319,9 +319,19 @@ added_rule A02-token-storage BLOCK A02 "$WEB_RE" \
     '(localStorage|sessionStorage)\.(get|set)Item\([^)]*([Tt]oken|[Jj]wt|auth)' '-' \
     'JWT must stay in the HttpOnly secman_auth cookie — never JS-readable storage'
 
-added_rule A02-weak-hash BLOCK A02 "$KT_RE" \
-    'MessageDigest\.getInstance\("(MD5|SHA-1|SHA-256)"' 'McpAuthenticationService' \
-    'Secrets hash with BCryptPasswordEncoder — the SHA-256 API-key path is legacy migration only'
+# SHA-256 is suitable for content fingerprints but not for password storage.
+# Ambiguous content hashes remain REVIEW findings; credential-bearing files and
+# obsolete algorithms stay blocking. Inspect the whole file for split-line calls.
+awk -F'\t' -v PR="$(awk_re "$KT_RE")" -v SK="$(awk_re "$COMMENT_RE")" \
+    '$1 ~ PR && $3 !~ SK && $3 ~ /MessageDigest\.getInstance\("(MD5|SHA-1|SHA-256)"/ { print }' "$TMP/added.lines" \
+| while IFS=$'\t' read -r p l t; do
+    if [[ "$t" == *'"MD5"'* || "$t" == *'"SHA-1"'* ]] || \
+       grep -Eq '(password|Password|passwd|secret|Secret|credential|Credential|apiKey|api_key|(^|[^[:alnum:]_])pw([^[:alnum:]_]|$))' "$p"; then
+        emit BLOCK A02 A02-weak-hash "$p" "$l" 'Secrets hash with BCryptPasswordEncoder; obsolete digest algorithms are forbidden' "$t"
+    else
+        emit REVIEW A02 A02-content-hash "$p" "$l" 'Confirm SHA-256 fingerprints non-secret content and is not a credential verifier' "$t"
+    fi
+done
 
 # awk regexes are case-sensitive and the one-true-awk shipped on macOS has no
 # interval expressions, so the cases are spelled out and "8 or more characters"

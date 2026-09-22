@@ -242,52 +242,30 @@ def hydrate_asset_workgroups(client, workgroups: list, assets: list) -> None:
 
 
 def synchronize(client, dry_run: bool) -> SyncPlan:
+  """Reconcile source-labelled account grants; never replace explicit asset links."""
   workgroups = client.get_json("/api/workgroups")
-  mappings = load_mappings(client)
-  assets = client.get_json("/api/assets")
-  if not all(isinstance(rows, list) for rows in (workgroups, assets)):
-    raise RuntimeError("Invalid collection response; synchronization aborted before writes")
-  hydrate_asset_workgroups(client, [group for group in workgroups if workgroup_is_enabled(group)], assets)
-  plan = build_plan(workgroups, mappings, assets)
-  touched_ids = sorted(set(plan.removals) | set(plan.additions))
-  for gid in touched_ids:
-    remove_ids = plan.removals.get(gid, [])
-    add_ids = plan.additions.get(gid, [])
-    log.info(
-      "workgroup_id=%d relationships_to_remove=%d relationships_to_add=%d dry_run=%s",
-      gid, len(remove_ids), len(add_ids), dry_run,
-    )
-    if dry_run:
-      continue
-    removal_failed = False
-    for offset in range(0, len(remove_ids), BATCH_SIZE):
-      batch = remove_ids[offset:offset + BATCH_SIZE]
-      try:
-        client.remove_assets(gid, batch)
-      except (requests.RequestException, RuntimeError) as exc:
-        plan.errors += 1
-        removal_failed = True
-        log.error(
-          "workgroup_id=%d asset_ids=%s operation=remove outcome=unconfirmed "
-          "error_type=%s http_status=%s; additions skipped; rerun to reconcile",
-          gid, batch, type(exc).__name__, http_status(exc),
-        )
-        break
-      plan.relationships_removed += len(batch)
-      log.info("workgroup_id=%d asset_ids=%s outcome=removed", gid, batch)
-    if removal_failed:
-      continue
-    for offset in range(0, len(add_ids), BATCH_SIZE):
-      batch = add_ids[offset:offset + BATCH_SIZE]
-      try:
-        client.assign_assets(gid, batch)
-      except (requests.RequestException, RuntimeError) as exc:
-        plan.errors += 1
-        log.error("workgroup_id=%d asset_ids=%s outcome=unconfirmed error_type=%s http_status=%s; rerun to reconcile",
-                  gid, batch, type(exc).__name__, http_status(exc))
-        break  # Keep completed batches; other workgroups can still be processed.
-      plan.relationships_added += len(batch)
-      log.info("workgroup_id=%d asset_ids=%s outcome=assigned", gid, batch)
+  if not isinstance(workgroups, list) or any(record_id(group) is None for group in workgroups):
+    raise RuntimeError("Invalid workgroup collection; no grants changed")
+  plan = SyncPlan()
+  previews = []
+  for group in workgroups:
+    gid = record_id(group)
+    preview = client.get_json(f"/api/workgroups/{gid}/aws-accounts/owner-sync")
+    if (not isinstance(preview, dict) or preview.get("workgroupId") != gid
+        or any(not isinstance(preview.get(key), list) for key in ("desiredAccounts", "additions", "removals"))
+        or any(account_id(value) is None for key in ("desiredAccounts", "additions", "removals") for value in preview[key])):
+      raise RuntimeError("Invalid owner-sync preview; no grants changed")
+    previews.append((gid, preview))
+    plan.workgroups_evaluated += 1
+    plan.relationships_to_add += len(preview["additions"])
+    plan.relationships_to_remove += len(preview["removals"])
+    log.info("workgroup_id=%d account_grants_add=%s account_grants_remove=%s dry_run=%s",
+             gid, preview["additions"], preview["removals"], dry_run)
+  if not dry_run:
+    for gid, preview in previews:
+      client.reconcile_owner_accounts(gid, preview["desiredAccounts"])
+      plan.relationships_added += len(preview["additions"])
+      plan.relationships_removed += len(preview["removals"])
   return plan
 
 

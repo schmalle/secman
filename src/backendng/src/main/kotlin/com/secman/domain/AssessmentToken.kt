@@ -44,6 +44,12 @@ data class AssessmentToken(
     @NotNull
     var riskAssessment: RiskAssessment,
 
+    @Column(name = "assignment_id")
+    var assignmentId: Long? = null,
+
+    @Column(name = "assignment_version", nullable = false)
+    var assignmentVersion: Long = -1,
+
     @Column(name = "created_at", nullable = false, updatable = false)
     var createdAt: LocalDateTime? = null,
 

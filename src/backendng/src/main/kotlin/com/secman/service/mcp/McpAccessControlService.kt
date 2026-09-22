@@ -2,44 +2,21 @@ package com.secman.service.mcp
 
 import com.secman.controller.DelegationContext
 import com.secman.domain.McpApiKey
-import com.secman.domain.McpPermission
 import com.secman.domain.User
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.AssetRepository
-import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
-import com.secman.repository.WorkgroupAdDomainRepository
-import com.secman.service.AwsAccountSharingService
-import io.micronaut.cache.annotation.Cacheable
+import com.secman.service.AssetFilterService
+import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 
-/**
- * Service for building MCP execution context with pre-computed access control data.
- *
- * Implements row-level access control for MCP tools based on User Delegation.
- * When delegation is enabled, computes accessible asset IDs using the Unified Access Control
- * policy defined in CLAUDE.md.
- *
- * Access Control Rules (from CLAUDE.md - Unified Access Control):
- * Users can access assets if ANY of these is true:
- * 1. User has ADMIN role (universal access)
- * 2. Asset in user's workgroup
- * 3. Asset manually created by user
- * 4. Asset discovered via user's scan upload
- * 5. Asset's cloudAccountId matches user's AWS mappings (UserMapping)
- * 6. Asset's adDomain matches user's domain mappings (UserMapping, case-insensitive)
- * 7. Asset's cloudAccountId matches shared AWS accounts (AwsAccountSharing)
- * 8. Asset's owner matches user's username
- * 9. Asset's adDomain matches an AD domain assigned to a workgroup the user belongs to (WorkgroupAdDomain, direct membership only)
- */
+/** Builds MCP scope from the same live policy used by REST. */
 @Singleton
 open class McpAccessControlService(
     private val assetRepository: AssetRepository,
-    private val userMappingRepository: UserMappingRepository,
     private val userRepository: UserRepository,
-    private val awsAccountSharingService: AwsAccountSharingService,
-    private val workgroupAdDomainRepository: WorkgroupAdDomainRepository
+    private val assetFilterService: AssetFilterService
 ) {
     private val logger = LoggerFactory.getLogger(McpAccessControlService::class.java)
 
@@ -91,7 +68,9 @@ open class McpAccessControlService(
         val accessibleAssetIds = when {
             isAdmin -> null
             hasUniversalAssetAccess -> assetRepository.findAllIds().toSet()
-            else -> getAccessibleAssetIds(delegation.delegatedUserId, delegation.delegatedUserEmail, user.username)
+            else -> assetFilterService.getAccessibleAssetIds(Authentication.build(
+                user.username, userRoles, mapOf("userId" to user.id!!, "email" to user.email)
+            ))
         }
 
         // Compute accessible workgroup IDs for potential workgroup-specific queries
@@ -115,84 +94,4 @@ open class McpAccessControlService(
         )
     }
 
-    /**
-     * Compute accessible asset IDs for a user using Unified Access Control rules.
-     *
-     * Implements caching with 5-minute TTL for performance.
-     * Cache key: userId + userEmail (email used for UserMapping lookups)
-     *
-     * Access is granted if ANY of these criteria is met:
-     * 1. Asset in user's workgroup
-     * 2. Asset manually created by user
-     * 3. Asset discovered via user's scan upload
-     * 4. Asset's cloudAccountId matches user's AWS mappings
-     * 5. Asset's adDomain matches user's domain mappings (case-insensitive)
-     * 6. Asset's cloudAccountId matches shared AWS accounts (AwsAccountSharing)
-     * 7. Asset's owner matches user's username
-     *
-     * Note: ADMIN check happens before this method is called.
-     *
-     * @param userId The user's ID
-     * @param userEmail The user's email (for UserMapping lookups)
-     * @param username The user's username (for owner matching)
-     * @return Set of accessible asset IDs
-     */
-    @Cacheable(value = ["mcp_accessible_assets"], parameters = ["userId", "userEmail"])
-    open fun getAccessibleAssetIds(userId: Long, userEmail: String, username: String): Set<Long> {
-        logger.debug("Computing accessible asset IDs (cache miss): userId={}, email={}", userId, userEmail)
-
-        // Criteria 1-3: Workgroup membership + manual creator + scan uploader
-        val workgroupAssets = assetRepository
-            .findAccessibleByWorkgroupMembershipOrCreatorOrUploader(
-                userId = userId,
-                manualCreatorId = userId,
-                scanUploaderId = userId
-            )
-            .mapNotNull { it.id }
-
-        // Criteria 4: AWS account mapping
-        val awsAccountIds = userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail)
-        val awsAssets = if (awsAccountIds.isNotEmpty()) {
-            assetRepository.findByCloudAccountIdIn(awsAccountIds).mapNotNull { it.id }
-        } else {
-            emptyList()
-        }
-
-        // Criteria 5: AD domain mapping (case-insensitive)
-        val userDomains = userMappingRepository.findDistinctDomainByEmail(userEmail)
-        val domainAssets = if (userDomains.isNotEmpty()) {
-            val userDomainsLowercase = userDomains.map { it.lowercase() }
-            assetRepository.findByAdDomainInIgnoreCase(userDomainsLowercase).mapNotNull { it.id }
-        } else {
-            emptyList()
-        }
-
-        // Criteria 6: AWS account sharing (shared accounts from other users)
-        val sharedAwsAccountIds = awsAccountSharingService.getSharedAwsAccountIds(userId)
-        val sharedAssets = if (sharedAwsAccountIds.isNotEmpty()) {
-            assetRepository.findByCloudAccountIdIn(sharedAwsAccountIds).mapNotNull { it.id }
-        } else {
-            emptyList()
-        }
-
-        // Criteria 7: Asset owner matches user's username
-        val ownerAssets = assetRepository.findByOwner(username).mapNotNull { it.id }
-
-        // Criteria 8: Workgroup AD-domain assignments (direct membership only)
-        val workgroupDomains = workgroupAdDomainRepository.findDistinctAdDomainsByUserId(userId).map { it.lowercase() }
-        val workgroupDomainAssets = if (workgroupDomains.isNotEmpty()) {
-            assetRepository.findByAdDomainInIgnoreCase(workgroupDomains).mapNotNull { it.id }
-        } else {
-            emptyList()
-        }
-
-        val allAccessibleIds = (workgroupAssets + awsAssets + domainAssets + sharedAssets + ownerAssets + workgroupDomainAssets).toSet()
-
-        logger.info(
-            "Computed accessible assets: userId={}, email={}, workgroup={}, aws={}, domain={}, shared={}, owner={}, workgroupDomain={}, total={}",
-            userId, userEmail, workgroupAssets.size, awsAssets.size, domainAssets.size, sharedAssets.size, ownerAssets.size, workgroupDomainAssets.size, allAccessibleIds.size
-        )
-
-        return allAccessibleIds
-    }
 }

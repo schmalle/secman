@@ -78,7 +78,7 @@ open class RequirementFileController(
             val user = userOptional.get()
             
             // Check if user has access to this risk assessment
-            if (!securityService.userHasAccessToRiskAssessment(user, riskAssessmentId)) {
+            if (!securityService.userHasAccessToAssessmentRequirement(user, riskAssessmentId, requirementId, true)) {
                 logger.warn("User {} attempted to upload file to risk assessment {} without access", username, riskAssessmentId)
                 return HttpResponse.status<ErrorResponse>(io.micronaut.http.HttpStatus.FORBIDDEN).body(ErrorResponse("Access denied to this risk assessment"))
             }
@@ -144,7 +144,7 @@ open class RequirementFileController(
             val user = userOptional.get()
             
             // Check if user has access to this risk assessment
-            if (!securityService.userHasAccessToRiskAssessment(user, riskAssessmentId)) {
+            if (!securityService.userHasAccessToAssessmentRequirement(user, riskAssessmentId, requirementId)) {
                 logger.warn("User {} attempted to list files for risk assessment {} without access", username, riskAssessmentId)
                 return HttpResponse.status<ErrorResponse>(io.micronaut.http.HttpStatus.FORBIDDEN).body(ErrorResponse("Access denied to this risk assessment"))
             }

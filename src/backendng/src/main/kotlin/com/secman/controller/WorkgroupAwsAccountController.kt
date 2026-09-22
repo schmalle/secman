@@ -40,43 +40,14 @@ open class WorkgroupAwsAccountController(
     private val logger = LoggerFactory.getLogger(WorkgroupAwsAccountController::class.java)
 
     /**
-     * Allow ADMINs and direct members to mutate AWS-account assignments on the
-     * workgroup. Mirrors WorkgroupController's member-driven authorization model
-     * so a non-admin owner of the workgroup can manage their own AWS bindings.
-     * Caller must be inside a transaction so the LAZY users collection is readable.
-     */
-    /**
      * Caller must already be inside a transaction: the direct-membership check reads the LAZY
      * `Workgroup.users` collection, which throws without an open session.
      */
     private fun isMemberOrAdmin(workgroupId: Long, authentication: Authentication): Boolean {
-        if (authentication.roles.contains("ADMIN")) return true
+        if (com.secman.security.GrantAuthority.canManage(authentication.roles)) return true
         val workgroup = workgroupRepository.findById(workgroupId).orElse(null) ?: return false
         val user = userRepository.findByUsername(authentication.name).orElse(null) ?: return false
-        return workgroup.users.any { it.id == user.id }
-    }
-
-    /**
-     * SECURITY: membership alone must not authorize *binding* an arbitrary AWS account.
-     *
-     * Any authenticated user can create a workgroup and is auto-enrolled as a member
-     * (WorkgroupController.createWorkgroup / WorkgroupService.createWorkgroupWithCreator).
-     * Without this check that member could bind any 12-digit account — which are trivially
-     * enumerable — and AssetRepository.findAccessibleAssets would then hand them every asset,
-     * scan result and vulnerability in it (unified asset access criterion 9). That is a
-     * privilege escalation from USER to "reads an entire AWS account".
-     *
-     * So a non-ADMIN actor may only bind an account they can *already* reach, via either:
-     *   - their own AWS UserMapping (criterion 5), or
-     *   - an AwsAccountSharing rule targeting them (criterion 7).
-     *
-     * Binding then only widens access for *other* workgroup members, never for the actor,
-     * so it cannot be used to escalate.
-     */
-    private fun canBindAccount(actorEmail: String, awsAccountId: String): Boolean {
-        val ownAccounts = userMappingRepository.findDistinctAwsAccountIdByEmail(actorEmail)
-        if (awsAccountId in ownAccounts) return true
-        return awsAccountId in awsAccountSharingService.getSharedAwsAccountIdsByEmail(actorEmail)
+        return workgroup.enabled && workgroup.users.any { it.id == user.id }
     }
 
     @Get(produces = [MediaType.APPLICATION_JSON])
@@ -105,16 +76,8 @@ open class WorkgroupAwsAccountController(
         val actor = userRepository.findByUsername(authentication.name).orElseThrow {
             IllegalStateException("Authenticated user not found: ${authentication.name}")
         }
-        if (!isMemberOrAdmin(workgroupId, authentication)) {
+        if (!com.secman.security.GrantAuthority.canManage(authentication.roles)) {
             return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
-        }
-        if (!authentication.roles.contains("ADMIN") && !canBindAccount(actor.email, request.awsAccountId)) {
-            logger.warn(
-                "Rejected AWS account bind: user {} has no access to account {} (workgroup {})",
-                actor.username, request.awsAccountId, workgroupId
-            )
-            return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
-                .body(mapOf("error" to "You do not have access to AWS account ${request.awsAccountId}"))
         }
         return try {
             val saved = service.add(workgroupId, request.awsAccountId, actor.id!!)
@@ -127,6 +90,22 @@ open class WorkgroupAwsAccountController(
         }
     }
 
+    @Get("/owner-sync")
+    @Secured("ADMIN")
+    @jakarta.transaction.Transactional
+    open fun previewOwnerSync(workgroupId: Long, authentication: Authentication): Map<String, Any> =
+        service.reconcileOwner(workgroupId, userRepository.findByUsername(authentication.name).orElseThrow().id!!, true, null)
+
+    @Post("/owner-sync")
+    @Secured("ADMIN")
+    @jakarta.transaction.Transactional
+    open fun applyOwnerSync(workgroupId: Long, @Body request: OwnerSyncRequest, authentication: Authentication): Map<String, Any> =
+        service.reconcileOwner(workgroupId, userRepository.findByUsername(authentication.name).orElseThrow().id!!, false, request.expectedAccounts)
+
+    /** Require the reviewed mapping set so a stale preview cannot silently grant new accounts. */
+    @Serdeable
+    data class OwnerSyncRequest(val expectedAccounts: Set<String>)
+
     @Delete("/{awsAccountId}")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     @jakarta.transaction.Transactional
@@ -135,7 +114,7 @@ open class WorkgroupAwsAccountController(
         @PathVariable awsAccountId: String,
         authentication: Authentication
     ): HttpResponse<Void> {
-        if (!isMemberOrAdmin(workgroupId, authentication)) {
+        if (!com.secman.security.GrantAuthority.canManage(authentication.roles)) {
             return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
         }
         val deleted = service.remove(workgroupId, awsAccountId)

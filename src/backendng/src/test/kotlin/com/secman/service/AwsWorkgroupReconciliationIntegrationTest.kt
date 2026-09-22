@@ -26,7 +26,7 @@ class AwsWorkgroupReconciliationIntegrationTest : BaseIntegrationTest() {
     @Inject lateinit var access: AssetFilterService
 
     @Test
-    fun `reconciliation preserves assets and other groups while account access replaces direct links`() {
+    fun `reconciliation preserves explicit asset grants while adding whole-account access`() {
         val suffix = System.nanoTime()
         val owner = users.save(TestDataFactory.createRegularUser(username = "aws-owner-$suffix", email = "aws-owner-$suffix@example.test"))
         val group = groups.save(Workgroup(name = "aws-Test-$suffix", enabled = false))
@@ -39,7 +39,7 @@ class AwsWorkgroupReconciliationIntegrationTest : BaseIntegrationTest() {
             val pairs = listOf(WorkgroupAccountLinkService.AccountDisplayName("000000000019", "Test-$suffix", owner.email.uppercase()))
             val preview = linking.link(pairs, null, true)
             assertThat(preview.membersAdded).isEqualTo(1)
-            assertThat(preview.assetsRemoved).isEqualTo(1)
+            assertThat(preview.assetsRemoved).isZero()
             assertThat(preview.links.single().statusOutcome).isEqualTo("WOULD_ENABLE")
             assertThat(groups.findById(group.id!!).get().enabled).isFalse()
             assertThat(groups.countAssetsByWorkgroupId(group.id!!)).isEqualTo(1)
@@ -49,7 +49,7 @@ class AwsWorkgroupReconciliationIntegrationTest : BaseIntegrationTest() {
             assertThat(result.failed).isZero()
             assertThat(result.membersAdded).isEqualTo(1)
             assertThat(result.links.single().statusOutcome).isEqualTo("ENABLED")
-            assertThat(groups.countAssetsByWorkgroupId(group.id!!)).isZero()
+            assertThat(groups.countAssetsByWorkgroupId(group.id!!)).isEqualTo(1)
             assertThat(groups.countAssetsByWorkgroupId(other.id!!)).isEqualTo(1)
             assertThat(assets.existsById(asset.id!!)).isTrue()
             assertThat(accounts.countByWorkgroupId(group.id!!)).isEqualTo(1)
@@ -68,8 +68,8 @@ class AwsWorkgroupReconciliationIntegrationTest : BaseIntegrationTest() {
             assertThat(access.getAccessibleAssetIds(auth)).contains(asset.id!!)
             val unchanged = linking.link(pairs, null, false)
             assertThat(unchanged.links.single().statusOutcome).isEqualTo("UNCHANGED_ENABLED")
-            assertThatThrownBy { workgroupService.assignAssetsToWorkgroup(group.id!!, listOf(asset.id!!)) }
-                .isInstanceOf(IllegalArgumentException::class.java)
+            workgroupService.assignAssetsToWorkgroup(group.id!!, listOf(asset.id!!))
+            assertThat(groups.countAssetsByWorkgroupId(group.id!!)).isEqualTo(1)
             assertThatThrownBy { accountService.add(group.id!!, "000000000020", null) }
                 .isInstanceOf(IllegalArgumentException::class.java)
         } finally {

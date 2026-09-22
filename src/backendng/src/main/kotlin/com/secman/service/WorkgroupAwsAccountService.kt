@@ -24,6 +24,7 @@ open class WorkgroupAwsAccountService(
     private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository,
     private val workgroupRepository: WorkgroupRepository,
     private val userRepository: UserRepository,
+    private val mappings: com.secman.repository.UserMappingRepository,
     private val entityManager: EntityManager
 ) {
     private val logger = LoggerFactory.getLogger(WorkgroupAwsAccountService::class.java)
@@ -77,10 +78,11 @@ open class WorkgroupAwsAccountService(
             }
         }
 
-        if (workgroupAwsAccountRepository.existsByWorkgroupIdAndAwsAccountId(workgroupId, awsAccountId)) {
-            throw DuplicateAccountException(
-                "AWS account $awsAccountId is already assigned to workgroup $workgroupId"
-            )
+        val existing = workgroupAwsAccountRepository.findByWorkgroupIdAndAwsAccountId(workgroupId, awsAccountId).orElse(null)
+        if (existing != null) {
+            if (existing.manualGrant) throw DuplicateAccountException("Account already assigned")
+            existing.manualGrant = true
+            return workgroupAwsAccountRepository.update(existing)
         }
 
         require(!workgroup.awsAccountManaged || workgroupAwsAccountRepository.countByWorkgroupId(workgroupId) == 0L) {
@@ -98,6 +100,38 @@ open class WorkgroupAwsAccountService(
             awsAccountId, workgroupId, actor?.username ?: "system", saved.id
         )
         return saved
+    }
+
+    /** Replace only owner-sync grants, preserving explicit account and asset assignments. */
+    @Transactional
+    open fun reconcileOwner(workgroupId: Long, actorId: Long, dryRun: Boolean, expectedAccounts: Set<String>?): Map<String, Any> {
+        val actor = userRepository.findById(actorId).orElseThrow()
+        require(actor.roles.contains(User.Role.ADMIN)) { "ADMIN is required for canonical owner synchronization" }
+        val group = entityManager.find(Workgroup::class.java, workgroupId, LockModeType.PESSIMISTIC_WRITE)
+            ?: throw IllegalArgumentException("Workgroup not found")
+        val owner = group.ownerEmail?.trim()?.lowercase()
+        val desired = if (group.enabled && !group.awsAccountManaged && !owner.isNullOrBlank())
+            mappings.findDistinctAwsAccountIdByEmail(owner).filter { accountIdPattern.matches(it) }.toSet()
+            else emptySet()
+        val existing = workgroupAwsAccountRepository.findByWorkgroupId(workgroupId)
+        val additions = desired - existing.filter { it.ownerSyncGrant }.map { it.awsAccountId }.toSet()
+        val removals = existing.filter { it.ownerSyncGrant && it.awsAccountId !in desired }
+        if (!dryRun) {
+            require(expectedAccounts == desired) { "Owner mappings changed; review a fresh plan" }
+            removals.forEach {
+                if (it.manualGrant) { it.ownerSyncGrant = false; workgroupAwsAccountRepository.update(it) }
+                else workgroupAwsAccountRepository.delete(it)
+            }
+            additions.forEach { account ->
+                val row = existing.firstOrNull { it.awsAccountId == account }
+                if (row != null) { row.ownerSyncGrant = true; workgroupAwsAccountRepository.update(row) }
+                else workgroupAwsAccountRepository.save(WorkgroupAwsAccount(workgroup = group, awsAccountId = account,
+                    createdBy = actor, manualGrant = false, ownerSyncGrant = true))
+            }
+            logger.info("Owner account grant sync actor={} workgroup={} added={} removed={}", actorId, workgroupId, additions.size, removals.size)
+        }
+        return mapOf("workgroupId" to workgroupId, "desiredAccounts" to desired.sorted(),
+            "additions" to additions.sorted(), "removals" to removals.map { it.awsAccountId }.sorted(), "dryRun" to dryRun)
     }
 
     /**

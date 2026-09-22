@@ -29,7 +29,7 @@ class NotifyRiskAssessmentRespondentToolTest {
     fun `dry run returns outstanding count without sending`() = runBlocking<Unit> {
         val context = context()
         every { assessments.prepareOutstandingReminder(context, 40) } returns reminder
-        every { notifications.send(reminder, 7, true) } returns RiskAssessmentReminderNotificationService.SendOutcome.DRY_RUN
+        every { notifications.send(reminder, 7, true, 5) } returns RiskAssessmentReminderNotificationService.SendOutcome.DRY_RUN
 
         val result = tool.execute(mapOf("assessmentId" to 40, "dryRun" to true), context)
 
@@ -52,5 +52,6 @@ class NotifyRiskAssessmentRespondentToolTest {
         every { hasDelegation() } returns hasDelegation
         every { delegatedUserRoles } returns setOf("SECCHAMPION")
         every { delegatedUserId } returns 7
+        every { apiKeyId } returns 5
     }
 }

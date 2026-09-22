@@ -15,6 +15,8 @@ interface WorkgroupAdDomainRepository : JpaRepository<WorkgroupAdDomain, Long> {
     @Query("SELECT wad FROM WorkgroupAdDomain wad LEFT JOIN FETCH wad.createdBy JOIN FETCH wad.workgroup WHERE wad.workgroup.id = :workgroupId")
     fun findByWorkgroupId(workgroupId: Long): List<WorkgroupAdDomain>
 
+    fun findByWorkgroupIdIn(workgroupIds: List<Long>): List<WorkgroupAdDomain>
+
     fun findByWorkgroupIdAndAdDomain(workgroupId: Long, adDomain: String): Optional<WorkgroupAdDomain>
 
     fun existsByWorkgroupIdAndAdDomain(workgroupId: Long, adDomain: String): Boolean

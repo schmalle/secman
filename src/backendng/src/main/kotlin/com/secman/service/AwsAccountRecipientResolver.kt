@@ -15,8 +15,7 @@ import jakarta.inject.Singleton
  *
  * Recipients are the deduplicated, case-insensitive union of:
  *  1. The AWS account owner(s) — direct UserMapping rows for the account.
- *  2. Members of any workgroup that contains an asset in the account
- *     (asset → workgroup → users).
+ *  2. Members of enabled workgroups explicitly granted the whole account.
  *  3. Users granted access to the account via the AWS sharing feature
  *     (directional, honoring per-rule account selection).
  */
@@ -40,8 +39,8 @@ open class AwsAccountRecipientResolver(
             recipients.add(mapping.email.lowercase())
         }
 
-        // 2. Members of workgroups that contain an asset in this account
-        assetRepository.findDistinctWorkgroupMemberEmailsByCloudAccountId(awsAccountId).forEach { email ->
+        // 2. Members with a whole-account workgroup grant
+        assetRepository.findDistinctAccountGrantedMemberEmails(awsAccountId).forEach { email ->
             recipients.add(email.lowercase())
         }
 

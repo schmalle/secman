@@ -5,6 +5,8 @@ creation, discovery, questionnaire retrieval, answering, submission, and evaluat
 The lifecycle is designed for agent clients such as PaperclipAI and always uses
 verified user delegation.
 
+See [the shared authorization model](AUTHORIZATION_REWORK.md) for section freezing, independent human acceptance, contributor history, revocation, and legacy migration rules.
+
 ## Transport and identity
 
 Send JSON-RPC 2.0 requests to `POST /mcp` with both headers:
@@ -26,11 +28,11 @@ The key needs the following permissions for the holistic workflow:
 | Create user / import account mapping | `USER_ACTIVITY` | `ADMIN` |
 | Create use case / linked requirement | `REQUIREMENTS_WRITE` | `ADMIN` or `REQ` |
 | Start assessment for an AWS account | `ASSESSMENTS_WRITE` | `ADMIN` or `SECCHAMPION` |
-| Notify about outstanding answers | `NOTIFICATIONS_SEND` | Assessor, requestor, `ADMIN`, or `SECCHAMPION` |
-| List / view / evaluate | `ASSESSMENTS_READ` | `ADMIN`, `RISK`, or `SECCHAMPION` |
-| Save / submit answers | `ASSESSMENTS_EXECUTE` | `ADMIN` or `RISK`; the delegated user must also be the assigned respondent |
+| Notify about outstanding answers | `NOTIFICATIONS_SEND` | Assigned assessor, `ADMIN`, or `SECCHAMPION` |
+| List / view / evaluate | `ASSESSMENTS_READ` | Current resource/task authority; evaluation requires review authority |
+| Save / submit answers | `ASSESSMENTS_EXECUTE` | Assigned active respondent, including USER-only identities |
 
-The manually created respondent should therefore have roles `USER` and `RISK`.
+A respondent needs USER plus an explicit task assignment, not promotion to RISK. Keys must bind the respondent ID explicitly in addition to their domain allowlist.
 Its email domain must also be included in the MCP API key's delegation-domain
 allowlist; otherwise calls delegated as that user fail before tool execution.
 
@@ -60,7 +62,7 @@ Content-Type: application/json
 Exactly one of `demandId`, `assetId`, or `awsAccountId` is accepted. AWS-account
 creation requires ADMIN or SECCHAMPION. Retrieve assessments for one account
 with `GET /api/risk-assessments/aws-account/123456789012`; RISK users see an
-account assessment only when they are its assessor, requestor, or respondent.
+account assessment only through an explicit assignment or whole-account authority. Requestor metadata grants nothing.
 ADMIN and SECCHAMPION retain universal assessment visibility.
 
 ## Tool contract
@@ -123,7 +125,7 @@ delegated creator becomes the requestor.
 
 ### Notify the respondent about outstanding answers
 
-Delegate as the assessor, requestor, an ADMIN, or a SECCHAMPION and preview:
+Delegate as an assigned assessor, ADMIN, or SECCHAMPION and preview:
 
 ```json
 {"assessmentId":9001,"dryRun":true}
@@ -134,7 +136,7 @@ machine-readable `reason`. Repeat with `dryRun:false` only when answers remain.
 Successful delivery returns `sent:true` and `reason:"SENT"`; a questionnaire
 with no missing answers returns `sent:false` and
 `reason:"NO_OUTSTANDING_ANSWERS"`. Completed assessments are rejected. The
-email links to the authenticated SecMan UI and contains no capability token.
+email links to the authenticated SecMan UI for registered users; accountless recipients receive an assignment/version-bound capability. Select `respondentEmail` when multiple sections are open. Cooldowns apply per assignment.
 
 ## Operator provisioning script
 
@@ -225,7 +227,7 @@ To list completed assessments for later evaluation:
 
 The result contains `assessments`, `page`, `pageSize`, `totalPages`, and
 `totalElements`. ADMIN and SECCHAMPION can list all matching assessments. Other
-callers see only assessments where they are assessor, requestor, or respondent.
+callers see assessments allowed by explicit task assignments or current resource authority. Requestor status is not a grant.
 
 ### Read and answer the questionnaire
 
@@ -286,7 +288,7 @@ to `COMPLETED`; later answer changes are rejected.
 
 ### Evaluate a completed questionnaire
 
-Delegate as the assigned assessor or requestor, an ADMIN, or a SECCHAMPION and
+Delegate as an assigned assessor, ADMIN, or SECCHAMPION and
 call `evaluate_risk_assessment`:
 
 ```json

@@ -65,18 +65,12 @@ open class AssetRepositoryEnabledWorkgroupAccessTest : BaseIntegrationTest() {
             assetRepository.update(it)
         }
 
-        val accessible = assetRepository.findAccessibleByWorkgroupMembershipOrCreatorOrUploader(
-            userId = user!!.id!!,
-            manualCreatorId = user!!.id!!,
-            scanUploaderId = user!!.id!!
-        )
+        val accessible = assetRepository.findAccessibleByWorkgroupMembership(user!!.id!!)
 
         assertThat(accessible.map { it.id }).containsExactly(
-            enabledMembership.id,
-            manualCreator.id,
-            scanUploader.id
+            enabledMembership.id
         )
-        assertThat(accessible.map { it.id }).doesNotContain(disabledOnly.id)
+        assertThat(accessible.map { it.id }).doesNotContain(disabledOnly.id, manualCreator.id, scanUploader.id)
     }
 
     private fun saveAsset(name: String, workgroup: Workgroup): Asset {
