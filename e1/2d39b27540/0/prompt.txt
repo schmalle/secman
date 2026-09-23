@@ -1,0 +1,5 @@
+please help me first to create an optimal prompt, then propose a design. The secman_web_check shall be extended to also generate a list of used products within the web application scanned. Detection of JS, CSS libraries and web servers used. This details must be able to be printed, stored in a local database and in secman itself. In secman, i want to have an analytic view under vulnerabilities, which lists me the external exposure, scanned assets, software components. The secman_web_check in extension directory shall be able to use the asset list from secman but also a complete own target list. Meaning secman needs to have a list of the external reachable assets. Also assume this functionality where meaningful needs be accessible via MCP and via soap/rest api from the secman_web_check component.
+
+---
+
+implement according to you recommendation
