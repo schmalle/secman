@@ -30,25 +30,25 @@ writes.
 | Improve code clarity and report risky renames | `/humanizer` | No |
 | Find hot paths and repeated code | `/optimizer` | No |
 | Prove no page throws JS errors | `/e2ejs` | No |
-| Exercise the full exception lifecycle (MCP + UI) | `/e2evulnexception` | **Wipes the DB** |
-| Quick MCP-only exception smoke test | `/e2eexception` | **Deletes all assets** |
-| Test the end-of-life feature end to end | `/e2eeol` | Adds + removes a testbed; rebuilds derived findings |
-| Test the admin add-system → user-visibility flow | `/admin-asset-e2e` | Adds one asset |
-| Run and debug the CrowdStrike import | `/importtest` | **Imports live data** |
+| Exercise the full exception lifecycle (MCP + UI) | `/e2evulnexception` | Disposable test DB only |
+| Quick MCP-only exception smoke test | `/e2eexception` | Disposable test DB only |
+| Test the end-of-life feature end to end | `/e2eeol` | Disposable test DB only |
+| Test the admin add-system → user-visibility flow | `/admin-asset-e2e` | Disposable test DB only |
+| Run and debug the CrowdStrike import | `/importtest` | Imports into disposable test DB only |
 | Compare SecMan against Falcon without changing anything | `/crowdstrike-vuln-match` | No |
-| Check a new AWS account starts a correctly scoped assessment | `/aws-account-risk-assessment` | Adds + removes a testbed |
-| Check the AWS account owner actually gets the email | `/aws-account-owner-email` | Adds + removes a testbed, **sends real mail** |
-| Import AWS display names and link matching workgroups | `/aws-account-workgroup-import` | Adds + removes a testbed |
-| Test welcome mail + the guided questionnaire that scopes an assessment | `/account-onboarding` | Adds + removes a testbed |
-| Test the full MCP assessment lifecycle with a manually supplied respondent email | `/mcp-risk-assessment-lifecycle` | Adds + removes a testbed |
-| Remove retained/interrupted MCP assessment lifecycle data | `/cleanup-mcp-risk-assessment-lifecycle` | Removes exact fixture rows only |
-| Test requirement/use-case create, list, assign, delete, and list-again through MCP | `/mcp-requirement-use-case-lifecycle` | Adds + removes two exact fixtures |
-| Test requirement export templates end to end | `/requirement-export-template` | Adds + removes a testbed |
-| Get a fixture to click around in | `/createtestdata` | Adds a fixture |
+| Check a new AWS account starts a correctly scoped assessment | `/aws-account-risk-assessment` | Disposable test DB only |
+| Check AWS owner notification reaches the test SMTP sink | `/aws-account-owner-email` | Disposable testbed, loopback mail sink; real inbox delivery requires a separate opt-in check |
+| Import AWS display names and link matching workgroups | `/aws-account-workgroup-import` | Disposable test DB only |
+| Test welcome mail + the guided questionnaire that scopes an assessment | `/account-onboarding` | Disposable test DB only |
+| Test the full MCP assessment lifecycle with a manually supplied respondent email | `/mcp-risk-assessment-lifecycle` | Disposable test DB only |
+| Audit retained/interrupted MCP assessment lifecycle data | `/cleanup-mcp-risk-assessment-lifecycle` | Removes verified runner-owned databases only |
+| Test requirement/use-case create, list, assign, delete, and list-again through MCP | `/mcp-requirement-use-case-lifecycle` | Disposable test DB only |
+| Test requirement export templates end to end | `/requirement-export-template` | Disposable test DB only |
+| Get a fixture to click around in | `/createtestdata` | Manual fixture with explicit manifest cleanup |
 
-**The three destructive ones are not safe against a shared instance.** Check what
-`SECMAN_HOST` / `BASE_URL` resolves to before running `/e2evulnexception`,
-`/e2eexception`, or `/importtest`.
+**Database-mutating skills use the isolated runner.** It creates a test-only
+schema and stack; direct test-driver calls are refused. Unverified old fixtures
+in the current database are reported, never deleted by prefix alone.
 
 ---
 
@@ -141,21 +141,20 @@ They assert on opposite halves of it, and neither covers the other's half.
 
 | | `/aws-account-risk-assessment` | `/aws-account-owner-email` |
 |---|---|---|
-| Question | Is the assessment created and scoped right? | Did the owner actually get told? |
+| Question | Is the assessment created and scoped right? | Did the application send the owner notice to the local sink? |
 | Asserts | Release pinning, questionnaire contents, no drift on later imports, idempotency, validation negatives | The `EmailService` INFO send line, per-import log window, recipient and account on the same line |
-| Asserts about mail | **Nothing** | Everything |
+| Asserts about mail | **Nothing** | Local SMTP acceptance, not inbox delivery |
 | Asserts about the questionnaire | Everything | **Nothing** |
-| Sends real mail | To a synthetic `@e2e.local` address that goes nowhere | **Yes, to an address you supply and can read** |
-| Needs SMTP configured | No | Yes — aborts in preflight without it |
-| Needs a human | No | Yes, to confirm the inbox at the end |
-| Touches the ACTIVE release | **Activates its own, archiving yours irreversibly** | Reuses yours; seeds one only when none is ACTIVE |
+| Sends real mail | No; the runner uses a loopback sink | No; the runner uses a loopback sink |
+| Needs SMTP configured | No | The runner seeds local SMTP configuration |
+| Needs a human | No | No for the routine sink test |
+| Touches the ACTIVE release | Activates its own only in the disposable database | Reuses or seeds a release only in the disposable database |
 
 **If mail is the thing you changed, the assessment skill will pass regardless** —
 it never looks at the mail path, and that path swallows its own failures.
 
-Note the release asymmetry before running either against an environment whose
-requirements baseline you care about: `ARCHIVED` is terminal, so an archived
-release can never be made ACTIVE again.
+The release lifecycle remains terminal (`ARCHIVED` cannot become `ACTIVE`),
+but these tests exercise it only inside their disposable database.
 
 ### `/createtestdata` vs the E2E skills
 
@@ -210,8 +209,8 @@ design decision that is yours to make.
 Does **not** run the mandatory gates. It will remind you they still apply.
 
 ### `/testsuite` — fast test tier + coverage evaluation
-**Never starts the stack.** It *stops* the dev backend first, because the
-integration tests bind 8080 and a running backend turns the suite into a hang.
+**Never starts or stops the regular stack.** Backend integration tests use a
+fresh disposable database and leave the existing 8080/4321 services untouched.
 
 Runs `./scripts/runbackendtests.sh` (needs `TEST_DB_*` from `pass-cli`),
 `./gradlew :cli:test`, `npm ci && npm test && npm run build` in `src/frontend`,
@@ -242,7 +241,7 @@ Needs `SECMAN_ADMIN_NAME/PASS` and `SECMAN_USER_USER/PASS` (vault field
 `./scripts/test/provision-test-user.sh` — idempotent.
 
 ### `/e2evulnexception` — full vuln + exception loop (mandatory gate)
-⚠️ **Destructive: Phase 10 wipes every row in the target database.**
+⚠️ **Run only in the disposable `secman_e2e_*` database created by the isolated runner.** Phase 10 is global within that database.
 
 Two users, two assets, three vulnerability rows; the exception lifecycle
 (approve, reject, cancel) plus authorization negatives via MCP; then the same
@@ -253,7 +252,7 @@ Supports a **read-only QA mode**: ask for a static review and it inspects the
 driver, the spec and the cleanup semantics without starting anything.
 
 ### `/e2eexception` — narrow MCP exception test
-⚠️ **Destructive: step 2 deletes every asset.**
+⚠️ **Step 2 deletes every asset in its disposable test database only.**
 
 An 11-step MCP workflow ending in approval. Prefer `/e2evulnexception` unless you
 specifically want the fast path.
@@ -290,7 +289,7 @@ Use it after touching `AssetController`, `AssetFilterService`, the add-system
 page, or workgroup/ownership logic.
 
 ### `/importtest` — CrowdStrike import debugging
-⚠️ **Writes real data.**
+⚠️ **Imports live Falcon data into the disposable database only.**
 
 Runs `./scripts/import.sh` and watches the backend log for ERROR-level stack
 traces in the import window, fixing and re-running up to 5 times. Catches the
@@ -309,23 +308,19 @@ severity drift.
 **Exit code 1 means mismatches were found — that is the deliverable, not a
 failure.** Only exit 2 is a real error.
 
-### `/aws-account-owner-email` — the owner notification actually lands
-⚠️ **Sends real email to an address you supply.** Every re-run of the fix loop
-sends again.
+### `/aws-account-owner-email` — owner notification to the local sink
+Routine runs send only to the runner's loopback SMTP sink. Real inbox delivery
+needs a separate, explicit opt-in and is not claimed by this skill.
 
-Imports one new account via the CLI and another via MCP, both mapped to that
-address, then asserts the `EmailService` INFO line inside a **per-import byte
+Imports one new account via the CLI and another via MCP, both mapped to a
+reserved `.test` address, then asserts the `EmailService` INFO line inside a **per-import byte
 window** of `.e2e-logs/backend.log` — so a leftover line from an earlier run
-cannot pass the test. Ends by asking you what actually arrived, because the log
-only proves SMTP accepted the message, not that it was delivered or that the body
-is right.
+cannot pass the test. This proves local SMTP acceptance, not external delivery.
 
 Aborts in preflight when no SMTP config is active, before creating anything: a
 send that silently no-ops is indistinguishable from a regression, so a green run
-without SMTP would be a lie. It rejects reserved placeholder recipients
-(`example.com`, `*.test`, `*.invalid`, `*.local`) for the same reason — a relay
-accepts them, the log reads `Successfully sent`, and nobody can check an inbox.
-`ALLOW_PLACEHOLDER_RECIPIENT=true` overrides that for a local mail sink.
+without SMTP would be a lie. Use `ALLOW_PLACEHOLDER_RECIPIENT=true` with the
+runner's local sink; never use a real recipient in the routine gate.
 
 Two things it deliberately will not do — **create or delete a user for the
 recipient address** (usually a real account; the mail is sent with or without
@@ -381,15 +376,13 @@ assessor. Every business operation is performed through MCP.
 Unlike `/aws-account-risk-assessment`, this skill does not activate a requirements
 release and therefore cannot terminally archive the environment's current
 baseline. Cleanup runs before and after and matches exact `e2e-mcp-ra-` fixture
-names. Use `--keep-data` only for explicit manual inspection.
+names. The runner removes the entire owned database after the test.
 
 ### `/cleanup-mcp-risk-assessment-lifecycle` — remove a retained fixture
 
-Runs the lifecycle driver's `--cleanup-only` mode. It is idempotent and removes
-the exact assessment, mapping, requirement, use case, respondent, and
-assessor created by the lifecycle skill. Use it after `--keep-data` or an
-interrupted run; it does not need the original manually supplied email because
-it resolves that address from the exact fixture username.
+Routine cleanup is automatic: the isolated runner removes verified abandoned
+test databases before each run. Legacy fixtures on a persistent database have
+no durable ownership proof; report them for review and do not delete them.
 
 ### `/mcp-requirement-use-case-lifecycle` — reversible requirement relationship test
 
@@ -415,24 +408,22 @@ it in a loop. Leaves the exception request `PENDING` on purpose.
 All of them inherit `.claude/skills/_shared/stack-lifecycle.md`. Worth knowing
 even if you never read a skill:
 
-- **Cold start is mandatory** — both stop scripts run unconditionally before
-  starting, because a running instance may predate the working tree.
-  `/createtestdata` is the single documented exception.
-- **Liveness is port-bind, not HTTP** — `lsof -iTCP:8080` (120s) and `:4321` (60s).
-- **`SECMAN_HOST` from `pass-cli`, never `localhost`.**
+- **Mutating E2E skills use the isolated runner** — it creates and removes an
+  owned MariaDB schema and starts separate 18080/14321 services without touching
+  the regular stack. `/createtestdata` is manual and records a cleanup manifest.
+- **Liveness is port-bind, not HTTP** — the runner checks its own 18080/14321 ports.
+- **Use runner-provided URLs** for tests; never aim at the current SecMan database.
 - **5 fix iterations total per run**, not per phase.
-- Two failure modes that masquerade as bugs: the stop scripts always exit 0 even
-  when a kill fails (so the port must be re-polled), and Vite may bind **4322**
-  when 4321 is taken, making a successful frontend look like a failed one.
+- If an isolated port is occupied, inspect it; the runner refuses to displace
+  the listener. It only stops processes it started and verifies by working directory.
 
 ---
 
 ## Known rough edges
 
-- `scripts/test/test-e2e-exception-workflowsupport.sh:33` still defaults
-  `BASE_URL` to `http://localhost:8080` and carries the dev DB password inline.
-  `/e2eexception` overrides the URL, but the script's own default predates the
-  current convention.
+- Older skill sections still describe direct dev-stack starts; their prominent
+  database-safety overrides take precedence. The direct mutating drivers now
+  reject targets without the isolated runner's ownership marker.
 - `e2e-runner.config.json` is dead pre-script-era config — it points at a
   `./frontend` directory that does not exist and invokes `gradle :backendng:run`
   directly. Nothing should read it.

@@ -11,6 +11,11 @@ const { chromium } = require('playwright');
 const USERNAME = process.env.SECMAN_LOGIN_USER || process.env.SECMAN_ADMIN_NAME;
 const PASSWORD = process.env.SECMAN_LOGIN_PASS || process.env.SECMAN_ADMIN_PASS;
 const BASE_URL = process.env.SECMAN_BACKEND_URL;
+if (!/^secman_e2e_[a-f0-9]{16}$/.test(process.env.SECMAN_TEST_ISOLATED_DB || '') ||
+    BASE_URL !== process.env.SECMAN_E2E_FRONTEND_URL) {
+  console.error('JavaScript scanner requires scripts/test/run-isolated-e2e.sh');
+  process.exit(2);
+}
 const INSECURE = process.env.SECMAN_INSECURE;
 const RUN_LABEL = process.env.SECMAN_RUN_LABEL || '';
 const JSON_OUT = process.env.SECMAN_SCAN_JSON_OUT || '';

@@ -15,12 +15,11 @@ assertj 3.27.7
 ## Run
 
 ```bash
-./gradlew build                                              # everything
-./gradlew :backendng:test                                    # backend
-./gradlew :backendng:test --tests "*ServiceTest*"            # unit only
-./gradlew :backendng:test --tests "*IntegrationTest*"        # integration (needs TEST_DB_*)
-./gradlew :backendng:test --tests "VulnerabilityServiceTest" # one class
-./gradlew :backendng:test --tests "VulnerabilityServiceTest.addVulnerabilityFromCli_createsNewAsset"
+./scripts/test/run-isolated-e2e.sh --database-only -- ./gradlew build
+./scripts/runbackendtests.sh                                  # backend
+./scripts/runbackendtests.sh --tests "*ServiceTest*"
+./scripts/runbackendtests.sh --tests "*IntegrationTest*"
+./scripts/runbackendtests.sh --tests "VulnerabilityServiceTest"
 ./gradlew :cli:test
 ./gradlew :cli:test --tests "AddVulnerabilityCommandTest"
 
@@ -38,32 +37,14 @@ open src/cli/build/reports/tests/test/index.html
 `/testsuite` runs all four tiers plus the frontend build gate, the skill-sync
 check, and the coverage report in one pass — see `docs/SKILLS.md`.
 
-> All HTTP traffic in tests goes through `SECMAN_HOST` (resolved via `pass-cli`). Never hardcode `http://localhost:8080` / `:4321`.
+> HTTP E2E tests use the runner-provided `SECMAN_BACKEND_URL` and `FRONTEND_URL` on loopback. Do not target the persistent 8080/4321 stack.
 
 ## Test database
 
-Integration tests need a reachable MariaDB. The datasource is read by
-`src/test/resources/application-test.yml` from three env vars, supplied via `pass-cli`:
-
-| Var | Default |
-|---|---|
-| `TEST_DB_URL` | `jdbc:mariadb://localhost:3306/secman_test` |
-| `TEST_DB_USERNAME` | `secman_test` |
-| `TEST_DB_PASSWORD` | `secman_test` |
-
-> ⚠️ **The schema is created and dropped on every run** (Hibernate `hbm2ddl.auto=create-drop`;
-> Flyway is off in the `test` environment). Point `TEST_DB_*` **only** at a dedicated, disposable
-> database — never at `DB_CONNECT`, which would drop the dev or production tables.
-
-One-time local setup:
-```sql
-CREATE DATABASE IF NOT EXISTS secman_test;
-CREATE USER IF NOT EXISTS 'secman_test'@'localhost' IDENTIFIED BY 'secman_test';
-GRANT ALL PRIVILEGES ON secman_test.* TO 'secman_test'@'localhost';
-```
-
-Integration tests bind port **8080**, so stop any running dev backend first
-(`./scripts/stopbackenddev.sh`) or the suite hangs on a `BindException`.
+`./scripts/runbackendtests.sh` creates an owned `secman_e2e_*` MariaDB schema,
+sets `TEST_DB_URL`, `TEST_DB_USERNAME`, and `TEST_DB_PASSWORD`, and drops the
+schema after the run. The Gradle task refuses a direct run without the runner's
+ownership marker. Existing SecMan rows and the 8080/4321 stack are untouched.
 
 ## Layout
 
@@ -275,17 +256,18 @@ SECMAN_BASE_URL="$SECMAN_HOST" \
   npx playwright test
 ```
 
-Liveness in the runner is **port-bind**, not HTTP probe: backend `:8080` (120s budget), frontend `:4321` (60s). Functional checks still flow through `SECMAN_HOST`.
+Liveness in the isolated runner is **port-bind**, not HTTP probe: backend
+`:18080` (120s budget), frontend `:14321` (60s). Functional checks use the
+runner-provided loopback URLs and never target the regular stack.
 
 ## CI
 
 **There is no CI pipeline in this repo** — no `.github/workflows/`. Verification is local and
-gated by CLAUDE.md's Hard Principles: `./gradlew build` clean, a clean
+gated by CLAUDE.md's Hard Principles: an isolated `./gradlew build` clean, a clean
 `./scripts/startbackenddev.sh` startup, and the two mandatory E2E gates above.
 
-A CI job would need a reachable MariaDB and the `TEST_DB_*` vars exported; there is no
-Docker service to provision and no skip flag to set, because integration tests no longer
-gate themselves.
+A CI job needs a local MariaDB administrator connection so the isolated runner
+can create and remove a marked schema. There is no Docker service or skip flag.
 
 The frontend tier is the exception and would be the cheapest thing to wire up first:
 `cd src/frontend && npm ci && npm test && npm run build` needs no database, no
@@ -295,9 +277,9 @@ secrets, and no `pass-cli` — only Node ≥ 22 for `--experimental-strip-types`
 
 | Symptom | Fix |
 |---|---|
-| Integration tests fail at startup with a connection error | `TEST_DB_*` unset or DB unreachable. They no longer skip — a missing DB is a failure. Check `mariadb -u secman_test -p secman_test` |
-| Integration tests hang, `BindException: 8080` | a dev backend is running — `./scripts/stopbackenddev.sh` |
-| Schema-mismatch failures | the run left a partial schema; drop and recreate `secman_test` (it is `create-drop`, nothing of value lives there) |
+| Integration tests fail at startup with a connection error | Check local MariaDB access, then rerun `./scripts/runbackendtests.sh`; do not point tests at `secman` |
+| E2E test port occupied | Inspect 18080/14321/1925; the runner never stops an unrelated listener |
+| An old `secman_e2e_*` schema remains | Rerun the isolated runner; only an exact ownership marker with a dead runner PID permits automatic removal |
 | Gradle build dies mid-run on a dev machine | IntelliJ's daemon-stop can kill CLI Gradle builds — isolate with `-Dorg.gradle.daemon.registry.base` |
 | `verify` fails unexpectedly | check `MockKAnnotations.init(this, relaxed=true/false)` choice; missing `every {}` setup |
 | Tests pass alone, fail together | unique test data (`"host-${System.nanoTime()}"`); cleanup in `@AfterEach`; per-test transactions |

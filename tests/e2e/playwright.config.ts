@@ -1,4 +1,7 @@
 import { defineConfig } from '@playwright/test';
+import { requireIsolatedTarget } from './helpers/isolated-target';
+
+requireIsolatedTarget();
 
 export default defineConfig({
   testDir: '.',
@@ -17,7 +20,7 @@ export default defineConfig({
   ],
 
   use: {
-    baseURL: process.env.SECMAN_BASE_URL || process.env.SECMAN_BACKEND_URL || 'http://localhost:4321',
+    baseURL: process.env.FRONTEND_URL || process.env.SECMAN_BASE_URL || process.env.SECMAN_BACKEND_URL || 'http://localhost:4321',
     ignoreHTTPSErrors: true,
     navigationTimeout: 30_000,
     actionTimeout: 10_000,

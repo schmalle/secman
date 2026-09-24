@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import fs from 'node:fs';
+import { requireIsolatedTarget } from './helpers/isolated-target';
 
 /**
  * Phase 8 (UI) of the full vulnerability + exception E2E test.
@@ -294,6 +295,7 @@ async function rejectCaseThroughUi(page: Page, item: MatrixCase) {
 }
 
 test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
+    test.beforeAll(() => requireIsolatedTarget());
 
     test('admin sees both test assets and all CVEs in vulnerability list', async ({ page }) => {
         await login(page, ADMIN.user, ADMIN.pass);

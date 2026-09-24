@@ -2,6 +2,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_URL="${SECMAN_E2E_BACKEND_URL:-}"
+source "$SCRIPT_DIR/../scripts/test/lib/isolated-target.sh"
+secman_test_require_isolated
+[[ "${SECMAN_BACKEND_URL:-}" == "${SECMAN_E2E_FRONTEND_URL:-}" ]] || {
+  echo "Scanner URL is not the isolated frontend" >&2; exit 2;
+}
 # shellcheck source=lib/secman-test-tls.sh
 source "$SCRIPT_DIR/lib/secman-test-tls.sh"
 

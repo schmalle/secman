@@ -30,6 +30,11 @@ context: fork
 
 # Test suite — fast tier run, repair, and coverage evaluation
 
+> Safety update: runbackendtests.sh now creates and deletes a disposable test
+> database. Integration tests use a random port. Preserve any already-running
+> backend/frontend; the old port-8080 stop instructions below do not apply.
+> Direct Gradle test runs without the disposable database marker fail closed.
+
 You run every test in this repo that does **not** need a running backend and
 frontend, fix what fails, and then tell the user where the coverage actually is.
 
@@ -57,40 +62,23 @@ not run them here.
 
 ---
 
-## Step 1 — Free port 8080
+## Step 1 — Preserve the running stack
 
-Integration tests start a Micronaut context on 8080. A dev backend already bound
-there makes the whole suite hang on a `BindException`, which reads like a slow
-test rather than a port clash.
-
-Run unconditionally — the script is a safe no-op when nothing is running:
-
-```bash
-./scripts/stopbackenddev.sh
-```
-
-Then confirm the port is actually free (port-bind check, not an HTTP probe):
-
-```bash
-lsof -iTCP:8080 -sTCP:LISTEN -n -P
-```
-
-No output means free. If something still holds it, report that and stop — do not
-`kill` by PID; the stop script owns process lifecycle.
+Do not stop backend or frontend services. The integration-test Micronaut context
+uses port -1 and the test database is separate from the running application.
 
 ## Step 2 — Backend tests
 
-`TEST_DB_*` comes from `pass-cli`, so this runs **outside any sandbox**
-(`sandbox_permissions: "require_escalated"`). A sandboxed shell cannot reach
-`pass-cli`, and the datasource silently falls back to defaults that may not exist.
+`runbackendtests.sh` creates a marked disposable schema and a user confined to
+it. Run outside the sandbox so it can reach local MariaDB and `pass-cli`. There
+is no fallback to a persistent test database.
 
 ```bash
 ./scripts/runbackendtests.sh
 ```
 
-> ⚠️ The test schema is `create-drop`. `TEST_DB_URL` must point at a disposable
-> database — never at `DB_CONNECT`. If the resolved URL looks like the dev or
-> production database, **stop and report**; do not run the suite.
+> The test schema is `create-drop`. Direct Gradle test invocation without
+> the isolated schema marker fails before running tests.
 
 Integration tests fail rather than skip when no database is reachable. A
 connection error at startup is therefore an environment finding to report, not a

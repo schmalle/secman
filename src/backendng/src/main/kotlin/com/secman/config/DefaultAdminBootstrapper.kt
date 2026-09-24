@@ -5,6 +5,7 @@ import com.secman.repository.UserRepository
 import io.micronaut.context.event.ApplicationEventListener
 import io.micronaut.runtime.event.ApplicationStartupEvent
 import io.micronaut.context.annotation.Requires
+import io.micronaut.context.annotation.Value
 import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
@@ -25,11 +26,27 @@ import java.security.SecureRandom
 @Requires(notEnv = ["cli"])
 @Singleton
 open class DefaultAdminBootstrapper(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    @Value("\${SECMAN_TEST_ISOLATED_DB:}") private val isolatedDb: String = "",
+    @Value("\${DB_CONNECT:}") private val dbConnect: String = "",
+    @Value("\${SECMAN_E2E_ADMIN_NAME:}") private val isolatedAdminName: String = "",
+    @Value("\${SECMAN_E2E_ADMIN_EMAIL:}") private val isolatedAdminEmail: String = "",
+    @Value("\${SECMAN_E2E_ADMIN_PASS:}") private val isolatedAdminPass: String = ""
 ) : ApplicationEventListener<ApplicationStartupEvent> {
 
     private val log = LoggerFactory.getLogger(DefaultAdminBootstrapper::class.java)
     private val passwordEncoder = BCryptPasswordEncoder()
+
+    private val isolatedTest = isolatedDb.isNotBlank().also { enabled ->
+        if (enabled) {
+            require(Regex("secman_e2e_[a-f0-9]{16}").matches(isolatedDb) &&
+                dbConnect == "jdbc:mariadb://127.0.0.1:3306/$isolatedDb" &&
+                isolatedAdminName.isNotBlank() && isolatedAdminEmail.isNotBlank() &&
+                isolatedAdminPass.isNotBlank()) {
+                "Isolated admin bootstrap requires a verified test database and credentials"
+            }
+        }
+    }
 
     companion object {
         const val DEFAULT_ADMIN_USERNAME = "admin"
@@ -59,17 +76,23 @@ open class DefaultAdminBootstrapper(
                 return
             }
 
-            val generatedPassword = generateSecurePassword()
+            val generatedPassword = if (isolatedTest) isolatedAdminPass else generateSecurePassword()
+            val adminName = if (isolatedTest) isolatedAdminName else DEFAULT_ADMIN_USERNAME
+            val adminEmail = if (isolatedTest) isolatedAdminEmail else DEFAULT_ADMIN_EMAIL
 
             val admin = User(
-                username = DEFAULT_ADMIN_USERNAME,
-                email = DEFAULT_ADMIN_EMAIL,
+                username = adminName,
+                email = adminEmail,
                 passwordHash = passwordEncoder.encode(generatedPassword)!!,
                 roles = mutableSetOf(User.Role.ADMIN, User.Role.USER),
                 authSource = User.AuthSource.LOCAL
             )
 
             userRepository.save(admin)
+            if (isolatedTest) {
+                log.info("Isolated test admin created (username={})", adminName)
+                return
+            }
             log.warn("Default admin user created (username={}); generated credential printed to console only, never logged", DEFAULT_ADMIN_USERNAME)
             // The generated credential is written straight to stdout, bypassing SLF4J/Logback
             // entirely, so it never reaches a log file, log appender or centralized log

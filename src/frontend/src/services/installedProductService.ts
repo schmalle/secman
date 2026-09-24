@@ -70,6 +70,8 @@ export async function getInstalledProductsByServer(
 
 export async function getInstalledProductNames(): Promise<string[]> {
   const response = await authenticatedGet('/api/installed-products/names');
+  // A plain USER cannot access this inventory; an empty suggestion list is expected.
+  if (response.status === 403) return [];
   if (!response.ok) {
     throw new Error(`Failed to fetch installed product names: ${response.status}`);
   }

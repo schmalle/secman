@@ -54,6 +54,12 @@ test('installed products supports server-specific product lookup', () => {
     assert.match(serviceSource, /\/api\/installed-products\/by-server/);
 });
 
+test('installed-product name suggestions treat a plain-user denial as empty', () => {
+    const serviceSource = readFileSync(new URL('../services/installedProductService.ts', import.meta.url), 'utf8');
+
+    assert.match(serviceSource, /if \(response\.status === 403\) return \[\];/);
+});
+
 test('installed products pages the table instead of requesting the whole inventory', () => {
     const componentSource = readFileSync(new URL('./InstalledProducts.tsx', import.meta.url), 'utf8');
     const serviceSource = readFileSync(new URL('../services/installedProductService.ts', import.meta.url), 'utf8');

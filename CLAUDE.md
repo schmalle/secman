@@ -32,7 +32,7 @@ Security requirement, vulnerability and risk management platform.
 - **Backend dev start**: always `./scripts/startbackenddev.sh` (sources `pass-cli` env, runs Micronaut). Never call `./gradlew run` directly.
 - **Frontend dev start**: always `./scripts/startfrontenddev.sh` (sources `pass-cli` env, runs `npm run dev`). Never call `npm run dev` directly.
 - Both dev-start scripts require `pass-cli` and must be run **outside any sandbox** (e.g. Bash tool `dangerouslyDisableSandbox: true`, or escalated/unsandboxed permissions in other harnesses) — a sandboxed shell cannot reach `pass-cli` to source secrets, so the process fails to start cleanly.
-- **Host URL in tests**: read `SECMAN_HOST` from `pass-cli`. Never hardcode `http://localhost:8080` or `http://localhost:4321`.
+- **Host URL in tests**: operator/read-only checks use `SECMAN_HOST` from `pass-cli`; mutating tests use only the isolated runner's exported loopback URLs. Never hardcode the regular 8080/4321 stack.
 
 ## Key Entities
 
@@ -138,7 +138,7 @@ CrowdStrike monitoring: `src/clinotify/check_crowdstrike_checkin.py` polls `/api
 5a-relay. **Relay changes (`src/relay/`) are complete only when** `cd src/relay && go build ./... && go vet ./... && gofmt -l . && go test ./...` are all clean. It is a separate Go module: `./gradlew build` does not compile it and will not catch a break. It has **no third-party dependencies by contract** — adding one needs a stated reason in the PR body, the same bar as `src/clinotify`.
 5a. **Frontend changes are complete only when** `cd src/frontend && npm ci && npm run build` exits 0. TypeScript errors, missing imports, and broken Astro/React components are caught here — do not skip this step for any frontend file edit.
 5b. **Backend contract changes are complete only when the `extensions/` clients are updated in the same change.** Renaming a path, renaming or retyping a request/response field, tightening `@Secured`, or altering the auth scheme breaks those clients **silently** — nothing in this build compiles or tests against them, so the failure surfaces in production, not in CI. See **Extension Clients** for the surface and the verification rules. `/finalizer` automates the check.
-6. Tests route HTTP through `SECMAN_HOST` (from `pass-cli`). No hardcoded localhost URLs.
+6. Normal-stack tests route HTTP through `SECMAN_HOST` (from `pass-cli`). Database-mutating E2E tests use only the URLs and restricted database supplied by `./scripts/test/run-isolated-e2e.sh`; never hardcode a test URL in a driver.
 7. **Mandatory post-change E2E gates** (in addition to build + startup):
    - **`/e2ejs`** must report **0 JS errors** for both admin and normal-user runs against `SECMAN_HOST`. RBAC 403s on role-gated endpoints and documented 404s (e.g., `/api/wg-vulns`, `/api/domain-vulns` for users without mappings) are NOT JS errors. A page that throws or logs `console.error` IS — fix before merge.
    - **`/e2evulnexception`** must run the full vuln + exception lifecycle (MCP + UI, setup + teardown) with **0 failures**.
@@ -254,7 +254,7 @@ JUnit 6, Mockk, AssertJ, `@MicronautTest`. Integration tests run against an **ex
 - `TestDataFactory` — admin/vuln/regular user, asset, vulnerability builders.
 - `TestAuthHelper` — JWT login → bearer token.
 
-Datasource env (set via `pass-cli`; defaults to a local `secman_test`): `TEST_DB_URL`, `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`. Schema is Hibernate `create-drop` (Flyway off in `test`), so **point `TEST_DB_*` only at a disposable test DB — never `DB_CONNECT`** (it would drop tables). Integration tests now run **unconditionally** — they fail (not skip) if no test DB is reachable.
+Run backend tests through `./scripts/runbackendtests.sh` or wrap Gradle with `./scripts/test/run-isolated-e2e.sh --database-only --`. The runner creates and owns a fresh MariaDB schema, sets `TEST_DB_*`, and removes it after the run. Direct Gradle tests without its ownership marker fail before execution.
 
 ```kotlin
 class MyIntegrationTest : BaseIntegrationTest() { @Inject lateinit var repo: Repository }
@@ -267,12 +267,7 @@ must be extracted out of `.tsx` into a sibling `.ts` module to be unit-testable 
 resolver hook in `src/frontend/test/` handles extensionless specifiers and raises a
 pointed error on `.tsx`). Details in `docs/TESTING.md` §Frontend.
 
-One-time local setup (admin DB user):
-```sql
-CREATE DATABASE IF NOT EXISTS secman_test;
-CREATE USER IF NOT EXISTS 'secman_test'@'localhost' IDENTIFIED BY 'secman_test';
-GRANT ALL PRIVILEGES ON secman_test.* TO 'secman_test'@'localhost';
-```
+No persistent `secman_test` setup is needed. Existing application rows are never test input or cleanup targets.
 
 ## File Layout
 
@@ -296,15 +291,25 @@ Fix and commit **inside the extension repo, path-scoped** (`git -C extensions/<r
 
 ## E2E Runner
 
+**Database safety:** Database-mutating test drivers must be invoked through
+`./scripts/test/run-isolated-e2e.sh -- <driver and arguments>`. It creates a
+marked disposable schema and restricted database user, copies schema structure
+and Flyway history but no application rows, and starts a separate stack on
+18080/14321. It cleans verified abandoned test schemas before a new run and
+removes its own schema on exit. Direct driver calls fail closed. Do not delete
+an unverified legacy fixture merely because its name matches a test prefix.
+The normal 8080/4321 cold-start and stop rules below apply to read-only skills;
+the isolated runner owns the lifecycle for mutating skills.
+
 Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`, `/e2eeol`, `/account-onboarding`, `/aws-account-workgroup-import`, `/importtest`, `/crowdstrike-vuln-match` skills.
 
-- **Cold start is mandatory**: every skill that touches the running stack assumes backend and frontend must be started by the skill itself. It always begins by killing any running backend/frontend via `./scripts/stopbackenddev.sh` / `./scripts/stopfrontenddev.sh` (unconditional — even if ports look free; the scripts are safe no-ops), then starts both fresh via the canonical start scripts. Never reuse an already-running instance; never assume services are up.
+- **Cold start for read-only skills**: stop the regular backend/frontend via the canonical stop scripts before restarting them. Database-mutating skills never stop or reuse that stack; the isolated runner starts and stops its own services.
 - Backend changes (Kotlin/Java) → restart required.
 - Frontend changes → Vite hot-reload (no restart).
 - Config (`astro.config.mjs`, `application.yml`) → restart.
 - Logs: `.e2e-logs/` (gitignored). Max 5 fix iterations.
 - **Liveness check is port-bind**, not HTTP: `lsof -iTCP:8080 -sTCP:LISTEN -n -P` (120s budget) and `:4321` (60s budget).
-- **Functional checks** still go through `SECMAN_HOST` from `pass-cli`. Never `curl localhost`.
+- **Functional checks** use `SECMAN_HOST` for the regular stack or the runner-provided test-only URLs for isolated E2E. Never target regular 8080/4321 for a mutating test.
 
 ---
 

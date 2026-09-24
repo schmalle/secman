@@ -2,8 +2,7 @@
 # Provision the e2ejs test user (`secmanuser` by default) so the skill's
 # normal-user pass can run. Idempotent: exits 0 if the account already exists.
 #
-# Wraps everything in `pass-cli run` so SECMAN_HOST, admin creds, and the test
-# user creds are all injected from Proton Pass — never read manually.
+# The isolated runner injects the target and Proton Pass credentials.
 
 set -euo pipefail
 
@@ -11,18 +10,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../../tests/lib/secman-test-tls.sh
 source "$(cd "$SCRIPT_DIR/../.." && pwd)/tests/lib/secman-test-tls.sh"
 
-# When invoked directly, set up pass:// templates and re-exec under pass-cli.
-# On the second invocation pass-cli has resolved the env vars, so we skip
-# this block to avoid clobbering the resolved values back to literals.
-if [[ -z "${SECMAN_HOST_RESOLVED:-}" ]]; then
-    export SECMAN_HOST="pass://Test/SECMAN/SECMAN_HOST"
-    export SECMAN_ADMIN_NAME="pass://Test/SECMAN/SECMAN_ADMIN_NAME"
-    export SECMAN_ADMIN_PASS="pass://Test/SECMAN/SECMAN_ADMIN_PASS"
-    export SECMAN_USER_NAME="pass://Test/SECMAN/SECMAN_USER_NAME"
-    export SECMAN_USER_PASS="pass://Test/SECMAN/SECMAN_USER_PASS"
-    export SECMAN_HOST_RESOLVED=1
-    exec pass-cli run -- "$0" "$@"
-fi
+BASE_URL="${SECMAN_E2E_BACKEND_URL:-}"
+# shellcheck source=lib/isolated-target.sh
+source "$SCRIPT_DIR/lib/isolated-target.sh"
+secman_test_require_isolated
+export SECMAN_HOST="${SECMAN_E2E_BACKEND_URL:-}"
+export SECMAN_USER_NAME="${SECMAN_USER_NAME:-${SECMAN_USER_USER:-}}"
 
 provision() {
     : "${SECMAN_HOST:?SECMAN_HOST not resolved by pass-cli}"

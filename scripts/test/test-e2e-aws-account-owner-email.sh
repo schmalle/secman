@@ -95,6 +95,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 BASE_URL="${BASE_URL:-${SECMAN_BACKEND_URL:-}}"
+source "$SCRIPT_DIR/lib/isolated-target.sh"
+secman_test_require_isolated
 BACKEND_LOG="${BACKEND_LOG:-$REPO_ROOT/.e2e-logs/backend.log}"
 VERBOSE="${VERBOSE:-false}"
 SKIP_CLI="${SKIP_CLI:-false}"
@@ -769,6 +771,11 @@ phase_mcp_import() {
 # =============================================================================
 
 print_inbox_checklist() {
+    if [[ -n "${SECMAN_TEST_ISOLATED_DB:-}" ]]; then
+        phase "Loopback SMTP acceptance"
+        log_info "Messages went to the disposable local sink; no external inbox delivery is claimed."
+        return
+    fi
     phase "Inbox check — confirm delivery to $RECIPIENT_EMAIL"
 
     local deadline

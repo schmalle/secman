@@ -19,6 +19,13 @@ context: fork
 
 # MCP risk-assessment lifecycle
 
+> **Database-safety override:** Run this skill's database-mutating driver inside
+> `./scripts/test/run-isolated-e2e.sh -- <driver and arguments>`. The runner
+> starts and stops its own stack on test-only ports, checks ownership, and removes
+> its disposable database. The direct 8080/4321 start, stop, and driver commands
+> below are superseded by this rule. Never run the driver directly against the
+> current SecMan database; an unverified legacy fixture is preserved and reported.
+
 Run the complete, reversible test fixture and iterate on failures. Read
 `.claude/skills/_shared/stack-lifecycle.md` before touching the stack.
 
@@ -68,7 +75,8 @@ The address domain must be allowed by the MCP API key's delegation policy.
 - the completed assessment is listable by use case;
 - pre-run and `EXIT` cleanup remove only exact `e2e-mcp-ra-` fixture markers.
 
-Use `--keep-data` only when the user explicitly wants to inspect the fixture.
+Automated runs never retain fixture data. For manual inspection, use the
+separate `createtestdata` utility and its ownership-checked cleanup command.
 Tell them to invoke `cleanup-mcp-risk-assessment-lifecycle` afterwards.
 
 The maintained contract and PaperclipAI examples are in

@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { requireIsolatedTarget } from './helpers/isolated-target';
 
 const requiredEnvVars = ['SECMAN_ADMIN_NAME', 'SECMAN_ADMIN_PASS'] as const;
 const missing = requiredEnvVars.filter((key) => !process.env[key]);
@@ -273,6 +274,7 @@ async function cleanupRiskAssessmentE2eData(request: APIRequestContext) {
 
 test.describe.serial('Risk assessment end-to-end lifecycle', () => {
   test.beforeAll(async ({ request }) => {
+    requireIsolatedTarget();
     await cleanupRiskAssessmentE2eData(request);
     await loginApi(request, BOOTSTRAP_ADMIN.user, BOOTSTRAP_ADMIN.pass);
     fixture = await createFixture(request);

@@ -29,6 +29,26 @@ error-classification table and its report template stay in the skill.
 
 ---
 
+## 0. Database safety for test skills
+
+Any skill that creates or changes SecMan database rows must run its driver through
+`./scripts/test/run-isolated-e2e.sh -- <driver and arguments>`. The runner creates
+a marked, disposable database with a database user that can access only that
+database, starts a separate stack on 18080/14321, removes abandoned databases
+only when their exact ownership marker verifies them, and deletes its own
+database on exit. It never copies application rows from the current database.
+The driver also checks the marker, so invoking it directly fails before writes.
+
+For these skills, the isolated runner replaces the cold-start, port, and teardown
+steps below. Never stop the existing 8080/4321 stack to run a database-mutating
+test. Read-only skills continue to use the normal stack lifecycle. The backend
+unit/integration tier uses `./scripts/runbackendtests.sh`, which invokes the
+same runner in database-only mode. Do not use `--keep-data` in an automated run.
+If a prior fixture has no ownership record, preserve it and report it; a name
+or prefix by itself is not proof that the test created it.
+
+---
+
 ## 1. Cold start is mandatory and unconditional
 
 Never reuse a running backend or frontend. A running instance may predate the

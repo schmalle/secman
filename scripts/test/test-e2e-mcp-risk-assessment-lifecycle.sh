@@ -10,6 +10,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 source "$REPO_ROOT/tests/lib/secman-test-tls.sh"
 
 BASE_URL="${BASE_URL:-${SECMAN_BACKEND_URL:-}}"
+source "$SCRIPT_DIR/lib/isolated-target.sh"
+secman_test_require_isolated
 E2E_PREFIX="e2e-mcp-ra-"
 OWNER_USER="${E2E_PREFIX}owner"
 CHAMPION_USER="${E2E_PREFIX}champion"
@@ -24,13 +26,11 @@ AWS_ACCOUNT_ID="893${SUFFIX}000"
 TEST_PASSWORD="E2eMcpRa!${SUFFIX}"
 
 USER_EMAIL="${E2E_RISK_ASSESSMENT_USER_EMAIL:-}"
-KEEP_DATA=false
 CLEANUP_ONLY=false
 VERBOSE=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --user-email) USER_EMAIL="${2:-}"; shift 2 ;;
-        --keep-data) KEEP_DATA=true; shift ;;
         --cleanup-only) CLEANUP_ONLY=true; shift ;;
         --verbose|-v) VERBOSE=true; shift ;;
         *) echo "Unknown argument: $1" >&2; exit 2 ;;
@@ -175,7 +175,7 @@ cleanup_fixture() {
 
 finish() {
     local exit_code=$?
-    if [[ "$KEEP_DATA" != true && "$CLEANUP_ONLY" != true ]]; then cleanup_fixture || true; fi
+    if [[ "$CLEANUP_ONLY" != true ]]; then cleanup_fixture || true; fi
     command rm -f "$COOKIE_JAR"
     if [[ $exit_code -ne 0 ]]; then exit "$exit_code"; fi
 }

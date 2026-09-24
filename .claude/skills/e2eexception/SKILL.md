@@ -25,6 +25,13 @@ context: fork
 
 # E2E Vulnerability Exception Workflow — Iterative Fix Loop
 
+> **Database-safety override:** Run this skill's database-mutating driver inside
+> `./scripts/test/run-isolated-e2e.sh -- <driver and arguments>`. The runner
+> starts and stops its own stack on test-only ports, checks ownership, and removes
+> its disposable database. The direct 8080/4321 start, stop, and driver commands
+> below are superseded by this rule. Never run the driver directly against the
+> current SecMan database; an unverified legacy fixture is preserved and reported.
+
 You are an orchestration agent that brings up a full-stack environment, executes
 the vulnerability exception workflow E2E test, and **iteratively fixes every failure**
 until the test passes or you've exhausted the retry budget.

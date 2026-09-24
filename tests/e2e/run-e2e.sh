@@ -2,6 +2,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -z "${SECMAN_TEST_ISOLATED_DB:-}" ]]; then
+  exec "$SCRIPT_DIR/../../scripts/test/run-isolated-e2e.sh" -- "$0" "$@"
+fi
+BASE_URL="${SECMAN_E2E_BACKEND_URL:-}"
+source "$SCRIPT_DIR/../../scripts/test/lib/isolated-target.sh"
+secman_test_require_isolated
 # shellcheck source=../lib/secman-test-tls.sh
 source "$SCRIPT_DIR/../lib/secman-test-tls.sh"
 
@@ -15,8 +21,8 @@ fi
 # --- Environment variables resolved via pass-cli (Proton Pass) ---
 # Pass-CLI URIs follow: pass://<vault>/<item>/<field>
 # Field name in vault differs from env var name in some cases (notably SECMAN_USER_USER -> SECMAN_USER_NAME).
-export SECMAN_BACKEND_URL="pass://Test/SECMAN/SECMAN_BACKEND_BASE_URL"
-export SECMAN_BASE_URL="pass://Test/SECMAN/SECMAN_BACKEND_BASE_URL"
+export SECMAN_BACKEND_URL="${SECMAN_E2E_BACKEND_URL:-pass://Test/SECMAN/SECMAN_BACKEND_BASE_URL}"
+export SECMAN_BASE_URL="${SECMAN_E2E_BACKEND_URL:-pass://Test/SECMAN/SECMAN_BACKEND_BASE_URL}"
 export SECMAN_ADMIN_NAME="pass://Test/SECMAN/SECMAN_ADMIN_NAME"
 export SECMAN_ADMIN_PASS="pass://Test/SECMAN/SECMAN_ADMIN_PASS"
 export SECMAN_USER_USER="pass://Test/SECMAN/SECMAN_USER_NAME"

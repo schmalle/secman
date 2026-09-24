@@ -31,6 +31,8 @@ export SECMAN_TEST_DOMAIN="pass://test/secman/SECMAN_TEST_DOMAIN"
 
 # Configuration
 BASE_URL="${SECMAN_BASE_URL:-${SECMAN_BACKEND_URL:-}}"
+source "$SCRIPT_DIR/../scripts/test/lib/isolated-target.sh"
+secman_test_require_isolated
 TEST_USER_NAME="E2E_TEST_USER_$(date +%s)"
 TEST_USER_EMAIL=""  # Set after SECMAN_TEST_DOMAIN is resolved
 TEST_ASSET_NAME="E2E_TEST_ASSET_$(date +%s)"

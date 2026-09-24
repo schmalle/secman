@@ -28,7 +28,9 @@ export SECMAN_ADMIN_PASS="${SECMAN_ADMIN_PASS:-pass://test/secman/SECMAN_ADMIN_P
 export SECMAN_MCP_KEY="${SECMAN_MCP_KEY:-pass://test/secman/SECMAN_MCP_KEY}"
 
 # Configuration
-BASE_URL="${SECMAN_BASE_URL:-http://localhost:8080}"
+BASE_URL="${SECMAN_BASE_URL:-${SECMAN_BACKEND_URL:-}}"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/test/lib/isolated-target.sh"
+secman_test_require_isolated
 TIMESTAMP=$(date +%s)
 TEST_REQ_SHORTREQ_1="E2E_RELEASE_REQ_A_${TIMESTAMP}"
 TEST_REQ_SHORTREQ_2="E2E_RELEASE_REQ_B_${TIMESTAMP}"

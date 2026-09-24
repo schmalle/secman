@@ -68,6 +68,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 BASE_URL="${BASE_URL:-${SECMAN_BACKEND_URL:-}}"
+source "$SCRIPT_DIR/lib/isolated-target.sh"
+secman_test_require_isolated
 VERBOSE="${VERBOSE:-false}"
 
 STAMP="$(date +%s)"

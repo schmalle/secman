@@ -192,6 +192,18 @@ micronaut {
 // Configure test task to use JUnit 5 platform - Feature 056
 tasks.test {
     useJUnitPlatform()
+    doFirst {
+        val schema = System.getenv("SECMAN_TEST_ISOLATED_DB").orEmpty()
+        val url = System.getenv("TEST_DB_URL").orEmpty()
+        val dbUser = System.getenv("TEST_DB_USERNAME").orEmpty()
+        require(Regex("secman_e2e_[a-f0-9]{16}").matches(schema) &&
+            url == "jdbc:mariadb://127.0.0.1:3306/$schema" &&
+            dbUser == schema &&
+            System.getenv("DB_CONNECT") == url &&
+            !System.getenv("SECMAN_TEST_OWNER_TOKEN").isNullOrBlank()) {
+            "Backend tests require scripts/test/run-isolated-e2e.sh --database-only"
+        }
+    }
     if (System.getenv("MICRONAUT_ENVIRONMENTS").isNullOrBlank()) {
         environment("MICRONAUT_ENVIRONMENTS", "test")
     }
