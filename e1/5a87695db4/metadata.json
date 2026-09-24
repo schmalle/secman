@@ -3,7 +3,7 @@
   "checkpoint_id": "e15a87695db4",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 22,
+  "checkpoints_count": 23,
   "files_touched": [
     "CLAUDE.md",
     "scripts/import.sh",
@@ -30,14 +30,21 @@
       "compact_transcript": "/e1/5a87695db4/2/transcript.jsonl",
       "content_hash": "/e1/5a87695db4/2/content_hash.txt",
       "prompt": "/e1/5a87695db4/2/prompt.txt"
+    },
+    {
+      "metadata": "/e1/5a87695db4/3/metadata.json",
+      "transcript": "/e1/5a87695db4/3/full.jsonl",
+      "compact_transcript": "/e1/5a87695db4/3/transcript.jsonl",
+      "content_hash": "/e1/5a87695db4/3/content_hash.txt",
+      "prompt": "/e1/5a87695db4/3/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 1673992,
+    "input_tokens": 1803663,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 84770048,
-    "output_tokens": 169785,
-    "api_call_count": 601,
+    "cache_read_tokens": 88702336,
+    "output_tokens": 184026,
+    "api_call_count": 645,
     "subagent_tokens_complete": false
   }
 }
