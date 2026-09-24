@@ -6,7 +6,7 @@ import PortHistory from './PortHistory';
 import VulnerabilityHistory from './VulnerabilityHistory';
 import { BulkDeleteConfirmModal } from './BulkDeleteConfirmModal';
 import { bulkDeleteAssets, type BulkDeleteResult } from '../services/assetService';
-import { exportVulnerabilitiesServerSide, cancelExportJob, type ExportJob } from '../services/vulnerabilityManagementService';
+import { exportVulnerabilitiesServerSide, cancelExportJob, getDistinctAdDomains, type ExportJob } from '../services/vulnerabilityManagementService';
 import { scrollContainerStyle, stickyHeaderCellStyle } from './scrollableTableStyles';
 
 interface WorkgroupSummary {
@@ -60,6 +60,7 @@ interface AssetOverviewResponse {
 const AssetManagement: React.FC = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [workgroups, setWorkgroups] = useState<Workgroup[]>([]);
+  const [adDomainOptions, setAdDomainOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [accessibleCount, setAccessibleCount] = useState<number | null>(null);
   const [matchingCount, setMatchingCount] = useState(0);
@@ -132,6 +133,7 @@ const AssetManagement: React.FC = () => {
     setCompactRows(window.localStorage.getItem('assetOverviewCompactRows') === 'true');
     setUrlStateReady(true);
     fetchWorkgroups();
+    getDistinctAdDomains().then(setAdDomainOptions).catch(() => {});
     fetchAssetCount();
     if (isAdmin(getUser()?.roles) || isSecChampion(getUser()?.roles)) {
       fetchOwnerCandidates();
@@ -563,10 +565,6 @@ const AssetManagement: React.FC = () => {
     () => [...new Set(assets.map(a => a.owner).filter(Boolean))].sort(),
     [assets]
   );
-  const adDomainOptions = useMemo(
-    () => [...new Set(assets.map(a => a.adDomain).filter(Boolean))].sort(),
-    [assets]
-  );
   const assetWorkgroupOptions = useMemo(
     () => [...new Set(assets.flatMap(a => a.workgroups?.map(w => w.name) || []))].sort(),
     [assets]
@@ -945,14 +943,20 @@ const AssetManagement: React.FC = () => {
                 </div>
                 <div className="col-md-3">
                   <label htmlFor="adDomainFilter" className="form-label">AD Domain</label>
-                  <input
-                    type="text"
+                  <select
                     id="adDomainFilter"
-                    className="form-control"
-                    placeholder="Filter by domain..."
+                    className="form-select"
                     value={adDomainFilter}
                     onChange={(e) => { setAdDomainFilter(e.target.value); setPage(0); }}
-                  />
+                  >
+                    <option value="">All AD Domains</option>
+                    {adDomainFilter && !adDomainOptions.includes(adDomainFilter) && (
+                      <option value={adDomainFilter}>{adDomainFilter}</option>
+                    )}
+                    {adDomainOptions.map(domain => (
+                      <option key={domain} value={domain}>{domain}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="row mt-2">
