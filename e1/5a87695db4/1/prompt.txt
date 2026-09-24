@@ -1,0 +1,1 @@
+[Image #1] i dont understand the error as the script uses the "key" attribut, please run "./scripts/awsasset.sh" and fix bugs until it works
