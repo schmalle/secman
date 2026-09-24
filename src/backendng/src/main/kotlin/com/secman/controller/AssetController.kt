@@ -6,8 +6,6 @@ import com.secman.domain.Criticality
 import com.secman.domain.NetworkZone
 import com.secman.domain.Vulnerability
 import com.secman.dto.*
-import io.micronaut.data.model.Page
-import io.micronaut.data.model.Pageable
 import com.secman.repository.AssetRepository
 import com.secman.repository.DemandRepository
 import com.secman.repository.RiskAssessmentRepository
@@ -35,6 +33,8 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import org.slf4j.LoggerFactory
 import java.net.URI
+import com.secman.security.GrantAuthority
+import com.secman.util.CloudIdentifierDisplay
 
 @Controller("/api/assets")
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -49,6 +49,7 @@ open class AssetController(
     private val scanResultRepository: ScanResultRepository,
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val assetFilterService: AssetFilterService,
+    private val assetOverviewQueryService: com.secman.service.AssetOverviewQueryService,
     private val userRepository: UserRepository,
     private val workgroupRepository: com.secman.repository.WorkgroupRepository,
     private val assetBulkDeleteService: com.secman.service.AssetBulkDeleteService,
@@ -126,6 +127,44 @@ open class AssetController(
     data class AssetCountResponse(
         val count: Long
     )
+
+    /** One bounded page returned to the interactive inventory. */
+    @Serdeable
+    data class AssetOverviewResponse(
+        val items: List<AssetOverviewRow>,
+        val matchingCount: Long,
+        val page: Int,
+        val pageSize: Int,
+        val totalPages: Int
+    )
+
+    /** Narrow inventory projection; detail-only relations are intentionally omitted. */
+    @Serdeable
+    data class AssetOverviewRow(
+        val assetId: Long,
+        val name: String,
+        val ipAddress: String?,
+        val uri: String?,
+        val owner: String,
+        val cloudAccountId: String?,
+        val cloudInstanceId: String?,
+        val adDomain: String?,
+        val osVersion: String?
+    ) {
+        companion object {
+            fun from(asset: Asset) = AssetOverviewRow(
+                assetId = requireNotNull(asset.id),
+                name = asset.name,
+                ipAddress = asset.ip,
+                uri = asset.uri,
+                owner = asset.owner,
+                cloudAccountId = CloudIdentifierDisplay.accountId(asset.cloudAccountId),
+                cloudInstanceId = CloudIdentifierDisplay.instanceId(asset.cloudInstanceId),
+                adDomain = asset.adDomain,
+                osVersion = asset.osVersion
+            )
+        }
+    }
 
     /**
      * Response DTO for Asset entity to prevent exposing internal JPA fields.
@@ -275,6 +314,53 @@ open class AssetController(
         }
     }
 
+    /** Bounded inventory query for the interactive asset overview. */
+    @Get("/search")
+    @Transactional(readOnly = true)
+    open fun search(
+        authentication: Authentication,
+        @QueryValue(defaultValue = "0") page: Int,
+        @QueryValue(defaultValue = "50") pageSize: Int,
+        @Nullable @QueryValue name: String?,
+        @Nullable @QueryValue ip: String?,
+        @Nullable @QueryValue owner: String?,
+        @Nullable @QueryValue adDomain: String?,
+        @Nullable @QueryValue accountId: String?,
+        @Nullable @QueryValue workgroupId: Long?
+    ): HttpResponse<*> {
+        if (page !in 0..MAX_OVERVIEW_PAGE || pageSize !in ALLOWED_OVERVIEW_PAGE_SIZES) {
+            return HttpResponse.badRequest(ErrorResponse("Page must be non-negative and pageSize must be 25, 50, 100, or 250"))
+        }
+
+        val filterValues = listOf(name, ip, owner, adDomain, accountId).map { it?.trim()?.takeIf(String::isNotEmpty) }
+        val restrictedIds = if (GrantAuthority.canManage(authentication.roles)) null else {
+            assetFilterService.getAccessibleAssetIds(authentication)
+        }
+        val result = assetOverviewQueryService.search(
+            restrictedIds,
+            com.secman.service.AssetOverviewQueryService.Filters(
+                name = filterValues[0],
+                ipAddress = filterValues[1],
+                owner = filterValues[2],
+                adDomain = filterValues[3],
+                accountId = filterValues[4],
+                workgroupId = workgroupId
+            ),
+            page,
+            pageSize
+        )
+
+        return HttpResponse.ok(
+            AssetOverviewResponse(
+                items = result.assets.map(AssetOverviewRow::from),
+                matchingCount = result.total,
+                page = page,
+                pageSize = pageSize,
+                totalPages = if (result.total == 0L) 0 else ((result.total + pageSize - 1) / pageSize).toInt()
+            )
+        )
+    }
+
     /**
      * Count all assets in the system without loading asset rows.
      * Used by dashboard summary cards where a global inventory count is desired.
@@ -286,6 +372,11 @@ open class AssetController(
             assetRepository.count()
         } else assetFilterService.getAccessibleAssetIds(authentication).size.toLong()
         return HttpResponse.ok(AssetCountResponse(count))
+    }
+
+    companion object {
+        private const val MAX_OVERVIEW_PAGE = 100_000
+        private val ALLOWED_OVERVIEW_PAGE_SIZES = setOf(25, 50, 100, 250)
     }
 
     /**

@@ -37,3 +37,22 @@ test('asset list uses WebKit-safe sticky header cells inside a fixed shell', () 
     assert.match(source, /<th style=\{stickyHeaderCellStyle\}>Name<\/th>/);
     assert.doesNotMatch(source, /<thead[^>]+position: 'sticky'/);
 });
+
+test('asset overview uses bounded server-side pagination', () => {
+    const source = readFileSync(new URL('./AssetManagement.tsx', import.meta.url), 'utf8');
+
+    assert.match(source, /\/api\/assets\/search\?\$\{params\}/);
+    assert.match(source, /\[25, 50, 100, 250\]/);
+    assert.match(source, /setTimeout\(\(\) => fetchAssets\(controller\.signal\), 300\)/);
+    assert.match(source, /controller\.abort\(\)/);
+    assert.doesNotMatch(source, /authenticatedGet\('\/api\/assets'\)/);
+});
+
+test('asset overview progressively loads the count and table rows', () => {
+    const source = readFileSync(new URL('./AssetManagement.tsx', import.meta.url), 'utf8');
+
+    assert.match(source, /authenticatedGet\('\/api\/assets\/count'\)/);
+    assert.match(source, /Assets \(…\)/);
+    assert.match(source, /aria-label="Loading assets"/);
+    assert.match(source, /matching of.*accessible assets/);
+});

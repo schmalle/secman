@@ -23,6 +23,7 @@ Stack: Kotlin 2.4.20 / Java 25 · Micronaut 5.1 · Hibernate JPA · Astro 7.3 / 
 | Doc | What's inside |
 |---|---|
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Layered architecture, data model, design patterns |
+| [ASSET_OVERVIEW_PERFORMANCE_PLAN.md](./ASSET_OVERVIEW_PERFORMANCE_PLAN.md) | Server-paged asset overview UX, cloud-identifier quality rules, rollout and performance budgets |
 | [DEPLOYMENT.md](./DEPLOYMENT.md) | Linux production: nginx, systemd, SSL, hardening, monitoring |
 | [ENVIRONMENT.md](./ENVIRONMENT.md) | All env vars (backend / frontend / CLI) |
 | [CLI.md](./CLI.md) | CLI commands, cron, S3, AWS Secrets Manager |
