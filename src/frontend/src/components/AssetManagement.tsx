@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete, getUser, hasVulnAccess } from '../utils/auth';
 import { isAdmin, isSecChampion } from '../utils/permissions';
 import { useClientRoles } from '../utils/useClientAuth';
