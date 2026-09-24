@@ -183,6 +183,7 @@ open class AssetController(
         val nameOverriddenBy: String? = null,
         val type: String,
         val ip: String?,
+        val ipAddresses: List<String>,
         val uri: String?,
         val owner: String,
         val description: String?,
@@ -237,6 +238,7 @@ open class AssetController(
                     nameOverriddenBy = asset.nameOverriddenBy,
                     type = asset.type,
                     ip = asset.ip,
+                    ipAddresses = (asset.ipAddresses + listOfNotNull(asset.ip)).distinct().sorted(),
                     uri = asset.uri,
                     owner = asset.owner,
                     description = asset.description,
@@ -564,10 +566,12 @@ open class AssetController(
             }
 
             // Create new asset with manual creator tracking
+            val primaryIp = request.ip?.trim()?.takeIf { it.isNotBlank() }
             val asset = Asset(
                 name = trimmedName,
                 type = trimmedType,
-                ip = request.ip?.trim()?.takeIf { it.isNotBlank() },
+                ip = primaryIp,
+                ipAddresses = primaryIp?.let { mutableSetOf(it) } ?: mutableSetOf(),
                 uri = normalizedUri,
                 owner = trimmedOwner,
                 description = request.description?.trim()?.takeIf { it.isNotBlank() },
@@ -643,6 +647,8 @@ open class AssetController(
             
             request.ip?.let { newIp ->
                 asset.ip = newIp.trim().takeIf { it.isNotBlank() }
+                asset.ipAddresses.clear()
+                asset.ip?.let(asset.ipAddresses::add)
             }
 
             request.uri?.let { newUri ->

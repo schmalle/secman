@@ -34,6 +34,7 @@ interface Asset {
   nameOverriddenBy?: string;
   type: string;
   ip?: string;
+  ipAddresses?: string[];
   uri?: string;
   owner: string;
   description?: string;
@@ -536,6 +537,61 @@ const AssetManagement: React.FC = () => {
     setSelectedAssetForVulns(null);
   };
 
+  // Filter assets based on current filter values. Memoized: the render below reads
+  // this several times, and each call used to re-scan the full asset array.
+  const filteredAssets = useMemo(() => {
+    return assets.filter(asset => {
+      // Text filters use partial matching
+      const nameMatch = !nameFilter || asset.name.toLowerCase().includes(nameFilter.toLowerCase());
+      const displayedIps = asset.ipAddresses?.length ? asset.ipAddresses : asset.ip ? [asset.ip] : [];
+      const ipMatch = !ipFilter || displayedIps.some(ip => ip.toLowerCase().includes(ipFilter.toLowerCase()));
+      const accountIdMatch = !accountIdFilter || (asset.cloudAccountId && asset.cloudAccountId.toLowerCase().includes(accountIdFilter.toLowerCase()));
+      // Dropdown filters use exact matching
+      const ownerMatch = !ownerFilter || asset.owner === ownerFilter;
+      const adDomainMatch = !adDomainFilter || asset.adDomain === adDomainFilter;
+      const workgroupMatch = !workgroupFilter || (
+        asset.workgroups && asset.workgroups.some(wg => wg.name === workgroupFilter)
+      );
+
+      return nameMatch && ipMatch && accountIdMatch && ownerMatch && adDomainMatch && workgroupMatch;
+    });
+  }, [assets, nameFilter, ipFilter, accountIdFilter, ownerFilter, adDomainFilter, workgroupFilter]);
+
+  // Dropdown option lists derived from the asset array — memoized so the
+  // Set + sort work runs when assets change, not on every keystroke re-render.
+  const ownerOptions = useMemo(
+    () => [...new Set(assets.map(a => a.owner).filter(Boolean))].sort(),
+    [assets]
+  );
+  const adDomainOptions = useMemo(
+    () => [...new Set(assets.map(a => a.adDomain).filter(Boolean))].sort(),
+    [assets]
+  );
+  const assetWorkgroupOptions = useMemo(
+    () => [...new Set(assets.flatMap(a => a.workgroups?.map(w => w.name) || []))].sort(),
+    [assets]
+  );
+
+  if (loading) {
+    return (
+      <div className="d-flex justify-content-center">
+        <div className="spinner-border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container-fluid p-4">
+        <div className="alert alert-danger" role="alert">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="container-fluid p-4 d-flex flex-column"
@@ -996,7 +1052,7 @@ const AssetManagement: React.FC = () => {
                     <thead className="table-light">
                       <tr>
                         <th style={stickyHeaderCellStyle}>Name</th>
-                        <th style={stickyHeaderCellStyle}>IP Address</th>
+                        <th style={stickyHeaderCellStyle}>IP Addresses</th>
                         <th style={stickyHeaderCellStyle}>URI</th>
                         <th style={stickyHeaderCellStyle}>Instance ID</th>
                         <th style={stickyHeaderCellStyle}>Account ID</th>
@@ -1009,7 +1065,13 @@ const AssetManagement: React.FC = () => {
                       {assets.map((asset) => (
                         <tr key={asset.id}>
                           <td>{asset.name}</td>
-                          <td>{asset.ip || '-'}</td>
+                          <td>
+                            {(asset.ipAddresses?.length ? asset.ipAddresses : asset.ip ? [asset.ip] : []).length > 0
+                              ? (asset.ipAddresses?.length ? asset.ipAddresses : [asset.ip!]).map(ip => (
+                                  <code className="d-block" key={ip}>{ip}</code>
+                                ))
+                              : '-'}
+                          </td>
                           <td>
                             {asset.uri ? (
                               asset.uri.toLowerCase().startsWith('http://') || asset.uri.toLowerCase().startsWith('https://') ? (
