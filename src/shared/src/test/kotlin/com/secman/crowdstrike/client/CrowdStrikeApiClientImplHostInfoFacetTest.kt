@@ -4,6 +4,7 @@ import com.secman.crowdstrike.auth.CrowdStrikeAuthService
 import com.secman.crowdstrike.dto.CrowdStrikeVulnerabilityDto
 import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.crowdstrike.dto.resolveHostIp
+import com.secman.crowdstrike.dto.resolveHostIps
 import com.secman.crowdstrike.model.AuthToken
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpResponse
@@ -110,14 +111,31 @@ class CrowdStrikeApiClientImplHostInfoFacetTest {
             blockingClient.exchange(capture(requests), Map::class.java)
         } answers {
             val uri = firstArg<HttpRequest<Any>>().uri.toString()
-            if (uri.contains("/devices/entities/devices/v2")) {
+            if (uri.contains("network-address-history")) {
+                HttpResponse.ok(
+                    mapOf(
+                        "resources" to listOf(
+                            mapOf(
+                                "device_id" to "device-1",
+                                "history" to listOf(
+                                    mapOf("ip_address" to "10.7.8.12"),
+                                    mapOf("ip_address" to "10.7.8.13")
+                                )
+                            )
+                        )
+                    )
+                )
+            } else if (uri.contains("/devices/entities/devices/v2")) {
                 HttpResponse.ok(
                     mapOf(
                         "resources" to listOf(
                             mapOf(
                                 "device_id" to "device-1",
                                 "hostname" to "server01",
-                                "local_ip" to "10.7.8.9"
+                                "local_ip" to "10.7.8.9",
+                                "external_ip" to "203.0.113.9",
+                                "connection_ip" to "192.0.2.9",
+                                "ip" to listOf("10.7.8.10", "10.7.8.11")
                             )
                         )
                     )
@@ -142,6 +160,9 @@ class CrowdStrikeApiClientImplHostInfoFacetTest {
 
         // Device metadata still wins when the vulnerability row itself carries no local_ip.
         assertThat(vulns.single().ip).isEqualTo("10.7.8.9")
+        assertThat(vulns.single().ipAddresses).containsExactly(
+            "10.7.8.10", "10.7.8.11", "10.7.8.12", "10.7.8.13", "10.7.8.9", "192.0.2.9", "203.0.113.9"
+        )
     }
 
     @Test
@@ -156,6 +177,16 @@ class CrowdStrikeApiClientImplHostInfoFacetTest {
         assertThat(rows.resolveHostIp()).isEqualTo("10.11.12.13")
         assertThat(listOf(vulnerabilityDto(ip = null)).resolveHostIp()).isNull()
         assertThat(emptyList<CrowdStrikeVulnerabilityDto>().resolveHostIp()).isNull()
+    }
+
+    @Test
+    fun `resolveHostIps unions and deduplicates all addresses across host rows`() {
+        val rows = listOf(
+            vulnerabilityDto(ip = "10.0.0.1").copy(ipAddresses = setOf("10.0.0.1", "203.0.113.1")),
+            vulnerabilityDto(ip = "10.0.0.2").copy(ipAddresses = setOf("203.0.113.1"))
+        )
+
+        assertThat(rows.resolveHostIps()).containsExactly("10.0.0.1", "10.0.0.2", "203.0.113.1")
     }
 
     private fun vulnerabilityDto(ip: String?) = CrowdStrikeVulnerabilityDto(

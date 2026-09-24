@@ -34,6 +34,7 @@ interface Asset {
   nameOverriddenBy?: string;
   type: string;
   ip?: string;
+  ipAddresses?: string[];
   uri?: string;
   owner: string;
   description?: string;
@@ -469,7 +470,8 @@ const AssetManagement: React.FC = () => {
     return assets.filter(asset => {
       // Text filters use partial matching
       const nameMatch = !nameFilter || asset.name.toLowerCase().includes(nameFilter.toLowerCase());
-      const ipMatch = !ipFilter || (asset.ip && asset.ip.toLowerCase().includes(ipFilter.toLowerCase()));
+      const displayedIps = asset.ipAddresses?.length ? asset.ipAddresses : asset.ip ? [asset.ip] : [];
+      const ipMatch = !ipFilter || displayedIps.some(ip => ip.toLowerCase().includes(ipFilter.toLowerCase()));
       const accountIdMatch = !accountIdFilter || (asset.cloudAccountId && asset.cloudAccountId.toLowerCase().includes(accountIdFilter.toLowerCase()));
       // Dropdown filters use exact matching
       const ownerMatch = !ownerFilter || asset.owner === ownerFilter;
@@ -957,7 +959,7 @@ const AssetManagement: React.FC = () => {
                     <thead className="table-light">
                       <tr>
                         <th style={stickyHeaderCellStyle}>Name</th>
-                        <th style={stickyHeaderCellStyle}>IP Address</th>
+                        <th style={stickyHeaderCellStyle}>IP Addresses</th>
                         <th style={stickyHeaderCellStyle}>URI</th>
                         <th style={stickyHeaderCellStyle}>Instance ID</th>
                         <th style={stickyHeaderCellStyle}>Account ID</th>
@@ -970,7 +972,13 @@ const AssetManagement: React.FC = () => {
                       {filteredAssets.map((asset) => (
                         <tr key={asset.id}>
                           <td>{asset.name}</td>
-                          <td>{asset.ip || '-'}</td>
+                          <td>
+                            {(asset.ipAddresses?.length ? asset.ipAddresses : asset.ip ? [asset.ip] : []).length > 0
+                              ? (asset.ipAddresses?.length ? asset.ipAddresses : [asset.ip!]).map(ip => (
+                                  <code className="d-block" key={ip}>{ip}</code>
+                                ))
+                              : '-'}
+                          </td>
                           <td>
                             {asset.uri ? (
                               asset.uri.toLowerCase().startsWith('http://') || asset.uri.toLowerCase().startsWith('https://') ? (
