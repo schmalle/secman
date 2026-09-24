@@ -16,6 +16,14 @@ test('CrowdStrike name overrides are visible and resettable', () => {
     assert.match(source, /\/name\/reset/);
 });
 
+test('asset inventory displays and filters every stored IP address', () => {
+    const source = readFileSync(new URL('./AssetManagement.tsx', import.meta.url), 'utf8');
+
+    assert.match(source, /IP Addresses/);
+    assert.match(source, /asset\.ipAddresses\?\.length/);
+    assert.match(source, /displayedIps\.some/);
+});
+
 test('asset list uses WebKit-safe sticky header cells inside a fixed shell', () => {
     const source = readFileSync(new URL('./AssetManagement.tsx', import.meta.url), 'utf8');
     const styleSource = readFileSync(new URL('./scrollableTableStyles.ts', import.meta.url), 'utf8');

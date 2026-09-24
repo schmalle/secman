@@ -1,5 +1,20 @@
 # CrowdStrike Vulnerability Import
 
+## Asset IP addresses
+
+CrowdStrike's official Hosts API exposes the current `local_ip`, `external_ip`,
+and `connection_ip` fields on a device entity. It also defines
+`POST /devices/combined/devices/network-address-history/v1`, whose per-device
+`history` entries carry `ip_address`. The import queries both structures in
+bounded 100-device chunks, unions and deduplicates their addresses, and stores
+up to 100 addresses per asset. See CrowdStrike's official SDK definitions for
+the [Hosts operations](https://github.com/CrowdStrike/falconpy/blob/main/src/falconpy/_endpoint/_hosts.py)
+and [network-address history response](https://github.com/CrowdStrike/gofalcon/blob/main/falcon/models/deviceapi_network_address_history_v1.go).
+
+`Asset.ip` remains the compatibility primary address. The complete set is held
+in `asset_ip_address` and returned as `ipAddresses`; the asset inventory renders
+and filters on that complete set.
+
 Service: `CrowdStrikeVulnerabilityImportService` (`src/backendng/src/main/kotlin/com/secman/service/`).
 Spec: `specs/048-prevent-duplicate-vulnerabilities/`.
 
