@@ -283,7 +283,7 @@ Always rediscover the surface; a written list means a newly added call gets chec
 ```bash
 grep -rnE '/api/|"/mcp"|X-MCP-User-Email' extensions --include='*.py' --exclude-dir=.venv
 ```
-As of 2026-09-24: legacy calls remain `POST /api/auth/login`, `POST /api/vulnerabilities/cli-add`, `PUT /api/assets/import`, and `POST /api/scan/upload-nmap`. Version 1 uses `GET /api/integrations/v1/scanners/{id}/subjects` and `POST /api/integrations/v1/runs`; see `docs/INTEGRATION_RESULTS.md`.
+As of 2026-09-25: legacy calls remain `POST /api/auth/login`, `POST /api/vulnerabilities/cli-add`, `PUT /api/assets/import`, and `POST /api/scan/upload-nmap`. Version 1 uses `GET /api/integrations/v1/scanners/{id}/subjects` and `POST /api/integrations/v1/runs`; see `docs/INTEGRATION_RESULTS.md`.
 
 When you change any of those endpoints, verify all five dimensions against the client: **path, HTTP method, request field names, response fields the client reads, and `@Secured` roles / required headers**. Field names matter most — Jackson drops unknown keys without error, so a rename makes the client "succeed" while sending nothing. Update the client's `tests/` too; a test asserting the old shape is drift.
 
@@ -313,7 +313,7 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-09-24*
+*Last updated: 2026-09-25*
 
 ## Recent Changes
 
