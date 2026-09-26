@@ -1,0 +1,60 @@
+{
+  "cli_version": "0.11.2",
+  "checkpoint_id": "0c2974e47545",
+  "session_id": "01a0dc55-8ad6-7b02-8282-a9b90adc5e35",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-26T06:38:31.36616Z",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "CLAUDE.md"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.6-sol",
+  "turn_id": "f32656de5c88",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 229664,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 7901568,
+    "output_tokens": 20280,
+    "api_call_count": 56
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-26T06:38:31.288383Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 1,
+    "human_removed": 0,
+    "total_committed": 0,
+    "total_lines_changed": 1,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 498,
+      "user_lines_removed": 353,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "src/frontend/src/components/AnalyticsTabs.css": 10,
+        "src/frontend/src/components/AnalyticsTabs.tsx": 6,
+        "src/frontend/src/components/AssetManagement.css": 112,
+        "src/frontend/src/components/AssetManagement.test.ts": 4,
+        "src/frontend/src/components/AssetManagement.tsx": 122,
+        "src/frontend/src/components/CurrentVulnerabilitiesTable.css": 73,
+        "src/frontend/src/components/CurrentVulnerabilitiesTable.tsx": 121,
+        "tests/e2e/vuln-exception-full.spec.ts": 50
+      },
+      "user_removed_per_file": {
+        "src/frontend/src/components/AnalyticsTabs.tsx": 12,
+        "src/frontend/src/components/AssetManagement.test.ts": 1,
+        "src/frontend/src/components/AssetManagement.tsx": 136,
+        "src/frontend/src/components/CurrentVulnerabilitiesTable.tsx": 204
+      }
+    }
+  ]
+}
