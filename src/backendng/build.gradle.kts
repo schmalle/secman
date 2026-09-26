@@ -125,6 +125,7 @@ dependencies {
     kspTest("io.micronaut:micronaut-inject-java")
     testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.3")
     testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.3")
+    testImplementation("org.junit.jupiter:junit-jupiter-params:6.1.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.3")
     testImplementation("io.micronaut.test:micronaut-test-junit5:5.1.1")
     testImplementation("io.mockk:mockk:1.14.11")
