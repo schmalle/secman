@@ -8,6 +8,7 @@ import { BulkDeleteConfirmModal } from './BulkDeleteConfirmModal';
 import { bulkDeleteAssets, type BulkDeleteResult } from '../services/assetService';
 import { exportVulnerabilitiesServerSide, cancelExportJob, getDistinctAdDomains, type ExportJob } from '../services/vulnerabilityManagementService';
 import { scrollContainerStyle, stickyHeaderCellStyle } from './scrollableTableStyles';
+import './AssetManagement.css';
 
 interface WorkgroupSummary {
   id: number;
@@ -67,7 +68,8 @@ const AssetManagement: React.FC = () => {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
   const [totalPages, setTotalPages] = useState(0);
-  const [compactRows, setCompactRows] = useState(false);
+  const [compactRows, setCompactRows] = useState(true);
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [urlStateReady, setUrlStateReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -130,7 +132,7 @@ const AssetManagement: React.FC = () => {
     setAdDomainFilter(params.get('adDomain') || '');
     setAccountIdFilter(params.get('accountId') || '');
     setWorkgroupFilter(params.get('workgroupId') || '');
-    setCompactRows(window.localStorage.getItem('assetOverviewCompactRows') === 'true');
+    setCompactRows(window.localStorage.getItem('assetOverviewCompactRows') !== 'false');
     setUrlStateReady(true);
     fetchWorkgroups();
     getDistinctAdDomains().then(setAdDomainOptions).catch(() => {});
@@ -569,6 +571,18 @@ const AssetManagement: React.FC = () => {
     () => [...new Set(assets.flatMap(a => a.workgroups?.map(w => w.name) || []))].sort(),
     [assets]
   );
+  const hasFilters = Boolean(nameFilter || ipFilter || ownerFilter || adDomainFilter || accountIdFilter || workgroupFilter);
+  const advancedFilterCount = [ipFilter, ownerFilter, accountIdFilter].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setNameFilter('');
+    setIpFilter('');
+    setAccountIdFilter('');
+    setOwnerFilter('');
+    setAdDomainFilter('');
+    setWorkgroupFilter('');
+    setPage(0);
+  };
 
   if (loading) {
     return (
@@ -591,17 +605,12 @@ const AssetManagement: React.FC = () => {
   }
 
   return (
-    <div
-      className="container-fluid p-4 d-flex flex-column"
-      style={showForm
-        ? { minHeight: 0 }
-        : { height: 'calc(100dvh - 9.5rem)', minHeight: 0, overflow: 'hidden' }}
-    >
+    <div className={`asset-management container-fluid d-flex flex-column${showForm ? ' asset-management--form' : ''}`}>
       <div className="row">
         <div className="col-12">
-          <div className="d-flex justify-content-between align-items-center mb-4">
-            <h2>Asset Management</h2>
-            <div className="btn-group" role="group">
+          <div className="asset-management__heading d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h2 className="mb-0">Asset Management</h2>
+            <div className="d-flex flex-wrap gap-2 align-items-center">
               <button
                 type="button"
                 className="btn btn-primary"
@@ -653,15 +662,20 @@ const AssetManagement: React.FC = () => {
               )}
               {/* Feature 029: Bulk Delete Button (ADMIN only, hidden when no assets) */}
               {canManageGrants && matchingCount > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  onClick={() => setShowBulkDeleteModal(true)}
-                  disabled={isDeletingBulk}
-                >
-                  <i className="bi bi-trash3-fill me-2"></i>
-                  Delete All Assets
-                </button>
+                <details className="asset-management__actions">
+                  <summary className="btn btn-outline-secondary">More actions</summary>
+                  <div className="asset-management__actions-menu">
+                    <button
+                      type="button"
+                      className="btn btn-danger"
+                      onClick={() => setShowBulkDeleteModal(true)}
+                      disabled={isDeletingBulk}
+                    >
+                      <i className="bi bi-trash3-fill me-2"></i>
+                      Delete All Assets
+                    </button>
+                  </div>
+                </details>
               )}
             </div>
           </div>
@@ -902,127 +916,101 @@ const AssetManagement: React.FC = () => {
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
 
       {/* Filters */}
-      <div className="row mb-3 flex-shrink-0">
-        <div className="col-12">
-          <div className="card">
-            <div className="card-body">
-              <h6 className="card-title">Filters</h6>
-              <div className="row">
-                <div className="col-md-3">
-                  <label htmlFor="nameFilter" className="form-label">Name</label>
-                  <input
-                    type="text"
-                    id="nameFilter"
-                    className="form-control"
-                    placeholder="Filter by name..."
-                    value={nameFilter}
-                    onChange={(e) => { setNameFilter(e.target.value); setPage(0); }}
-                  />
-                </div>
-                <div className="col-md-3">
-                  <label htmlFor="ipFilter" className="form-label">IP Address</label>
-                  <input
-                    type="text"
-                    id="ipFilter"
-                    className="form-control"
-                    placeholder="Filter by IP..."
-                    value={ipFilter}
-                    onChange={(e) => { setIpFilter(e.target.value); setPage(0); }}
-                  />
-                </div>
-                <div className="col-md-3">
-                  <label htmlFor="ownerFilter" className="form-label">Owner</label>
-                  <input
-                    type="text"
-                    id="ownerFilter"
-                    className="form-control"
-                    placeholder="Filter by owner..."
-                    value={ownerFilter}
-                    onChange={(e) => { setOwnerFilter(e.target.value); setPage(0); }}
-                  />
-                </div>
-                <div className="col-md-3">
-                  <label htmlFor="adDomainFilter" className="form-label">AD Domain</label>
-                  <select
-                    id="adDomainFilter"
-                    className="form-select"
-                    value={adDomainFilter}
-                    onChange={(e) => { setAdDomainFilter(e.target.value); setPage(0); }}
-                  >
-                    <option value="">All AD Domains</option>
-                    {adDomainFilter && !adDomainOptions.includes(adDomainFilter) && (
-                      <option value={adDomainFilter}>{adDomainFilter}</option>
-                    )}
-                    {adDomainOptions.map(domain => (
-                      <option key={domain} value={domain}>{domain}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="row mt-2">
-                <div className="col-md-3">
-                  <label htmlFor="workgroupFilter" className="form-label">Workgroups</label>
-                  <select
-                    id="workgroupFilter"
-                    className="form-select"
-                    value={workgroupFilter}
-                    onChange={(e) => { setWorkgroupFilter(e.target.value); setPage(0); }}
-                  >
-                    <option value="">All Workgroups</option>
-                    {workgroups.length > 0 ? (
-                      workgroups.map(wg => (
-                        <option key={wg.id} value={wg.id}>{wg.name}</option>
-                      ))
-                    ) : null}
-                  </select>
-                </div>
-                <div className="col-md-3">
-                  <label htmlFor="accountIdFilter" className="form-label">Account ID</label>
-                  <input
-                    type="text"
-                    id="accountIdFilter"
-                    className="form-control"
-                    placeholder="Filter by Account ID..."
-                    value={accountIdFilter}
-                    onChange={(e) => { setAccountIdFilter(e.target.value); setPage(0); }}
-                  />
-                </div>
-              </div>
-              {(nameFilter || ipFilter || accountIdFilter || ownerFilter || adDomainFilter || workgroupFilter) && (
-                <div className="mt-2">
-                  <button
-                    className="btn btn-sm btn-outline-secondary"
-                    onClick={() => {
-                      setNameFilter('');
-                      setIpFilter('');
-                      setAccountIdFilter('');
-                      setOwnerFilter('');
-                      setAdDomainFilter('');
-                      setWorkgroupFilter('');
-                      setPage(0);
-                    }}
-                  >
-                    Clear All Filters
-                  </button>
-                </div>
+      <section className="asset-management__filters flex-shrink-0" aria-label="Asset filters">
+        <div className="asset-management__filter-row">
+          <div>
+            <label htmlFor="nameFilter" className="form-label">Name</label>
+            <input
+              type="search"
+              id="nameFilter"
+              className="form-control"
+              placeholder="Filter by name..."
+              value={nameFilter}
+              onChange={(e) => { setNameFilter(e.target.value); setPage(0); }}
+            />
+          </div>
+          <div>
+            <label htmlFor="adDomainFilter" className="form-label">AD Domain</label>
+            <select
+              id="adDomainFilter"
+              className="form-select"
+              value={adDomainFilter}
+              onChange={(e) => { setAdDomainFilter(e.target.value); setPage(0); }}
+            >
+              <option value="">All AD Domains</option>
+              {adDomainFilter && !adDomainOptions.includes(adDomainFilter) && (
+                <option value={adDomainFilter}>{adDomainFilter}</option>
               )}
-            </div>
+              {adDomainOptions.map(domain => (
+                <option key={domain} value={domain}>{domain}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="workgroupFilter" className="form-label">Workgroups</label>
+            <select
+              id="workgroupFilter"
+              className="form-select"
+              value={workgroupFilter}
+              onChange={(e) => { setWorkgroupFilter(e.target.value); setPage(0); }}
+            >
+              <option value="">All Workgroups</option>
+              {workgroups.map(wg => (
+                <option key={wg.id} value={wg.id}>{wg.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="asset-management__filter-actions d-flex flex-wrap align-items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              aria-expanded={showMoreFilters}
+              aria-controls="assetMoreFilters"
+              onClick={() => setShowMoreFilters(value => !value)}
+            >
+              More filters{advancedFilterCount > 0 ? ` (${advancedFilterCount})` : ''}
+            </button>
+            {hasFilters && <button type="button" className="btn btn-link" onClick={clearFilters}>Clear all</button>}
           </div>
         </div>
-      </div>
+        {showMoreFilters && (
+          <div id="assetMoreFilters" className="asset-management__more-filters">
+            <div>
+              <label htmlFor="ipFilter" className="form-label">IP Address</label>
+              <input type="search" id="ipFilter" className="form-control" placeholder="Filter by IP..." value={ipFilter}
+                onChange={(e) => { setIpFilter(e.target.value); setPage(0); }} />
+            </div>
+            <div>
+              <label htmlFor="ownerFilter" className="form-label">Owner</label>
+              <input type="search" id="ownerFilter" className="form-control" placeholder="Filter by owner..." value={ownerFilter}
+                onChange={(e) => { setOwnerFilter(e.target.value); setPage(0); }} />
+            </div>
+            <div>
+              <label htmlFor="accountIdFilter" className="form-label">Account ID</label>
+              <input type="search" id="accountIdFilter" className="form-control" placeholder="Filter by Account ID..." value={accountIdFilter}
+                onChange={(e) => { setAccountIdFilter(e.target.value); setPage(0); }} />
+            </div>
+          </div>
+        )}
+        {!showMoreFilters && advancedFilterCount > 0 && (
+          <div className="asset-management__active-filters" aria-label="Active additional filters">
+            {ipFilter && <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => { setIpFilter(''); setPage(0); }} aria-label={`Remove IP Address filter: ${ipFilter}`}>IP: {ipFilter} ×</button>}
+            {ownerFilter && <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => { setOwnerFilter(''); setPage(0); }} aria-label={`Remove Owner filter: ${ownerFilter}`}>Owner: {ownerFilter} ×</button>}
+            {accountIdFilter && <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => { setAccountIdFilter(''); setPage(0); }} aria-label={`Remove Account ID filter: ${accountIdFilter}`}>Account ID: {accountIdFilter} ×</button>}
+          </div>
+        )}
+      </section>
 
-      <div className="row flex-grow-1" style={{ minHeight: 0 }}>
-        <div className="col-12 h-100">
-          <div className="card h-100">
-            <div className="card-body d-flex flex-column" style={{ minHeight: 0, overflow: 'hidden' }}>
-              <div className="d-flex justify-content-between align-items-center flex-shrink-0 mb-2">
-                <h5 className="card-title mb-0">
+      <section className="asset-management__results d-flex flex-column flex-grow-1" aria-label="Asset results">
+              <div className="asset-management__results-toolbar d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
+                <h5 className="mb-0">
                   {accessibleCount === null
                     ? 'Assets (…)'
                     : loading && assets.length === 0
                       ? `${accessibleCount.toLocaleString()} accessible assets`
                       : `${matchingCount.toLocaleString()} matching of ${accessibleCount.toLocaleString()} accessible assets`}
                 </h5>
+                <div className="d-flex flex-wrap align-items-center gap-3">
                 <label className="d-flex align-items-center gap-2">
                   Rows
                   <select className="form-select form-select-sm" value={pageSize} onChange={(event) => {
@@ -1034,13 +1022,14 @@ const AssetManagement: React.FC = () => {
                     {[25, 50, 100, 250].map(size => <option key={size} value={size}>{size}</option>)}
                   </select>
                 </label>
-                <label className="form-check-label ms-3">
+                <label className="form-check-label">
                   <input className="form-check-input me-1" type="checkbox" checked={compactRows} onChange={(event) => {
                     setCompactRows(event.target.checked);
                     window.localStorage.setItem('assetOverviewCompactRows', String(event.target.checked));
                   }} />
                   Compact rows
                 </label>
+                </div>
               </div>
               {loading && assets.length === 0 ? (
                 <div aria-label="Loading assets">{Array.from({ length: 8 }, (_, index) => <div className="placeholder-glow py-2" key={index}><span className="placeholder col-12"></span></div>)}</div>
@@ -1156,10 +1145,7 @@ const AssetManagement: React.FC = () => {
                   <button className="btn btn-sm btn-outline-secondary" disabled={page + 1 >= totalPages || loading} onClick={() => setPage(value => value + 1)}>Next</button>
                 </nav>
               </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      </section>
 
       {/* Port History Modal */}
       {showPortHistory && selectedAssetForPorts && selectedAssetForPorts.id && (
