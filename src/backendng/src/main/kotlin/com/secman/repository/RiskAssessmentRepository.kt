@@ -90,6 +90,7 @@ interface RiskAssessmentRepository : JpaRepository<RiskAssessment, Long> {
             LEFT JOIN ra.awsAccount account
             WHERE (:status IS NULL OR ra.status = :status)
               AND (:useCaseName IS NULL OR LOWER(uc.name) = LOWER(:useCaseName))
+              AND (:basisType IS NULL OR ra.assessmentBasisType = :basisType)
               AND (
                     :privileged = true
                     OR EXISTS (SELECT aa.id FROM AssessmentAssignment aa
@@ -105,6 +106,7 @@ interface RiskAssessmentRepository : JpaRepository<RiskAssessment, Long> {
             LEFT JOIN ra.awsAccount account
             WHERE (:status IS NULL OR ra.status = :status)
               AND (:useCaseName IS NULL OR LOWER(uc.name) = LOWER(:useCaseName))
+              AND (:basisType IS NULL OR ra.assessmentBasisType = :basisType)
               AND (
                     :privileged = true
                     OR EXISTS (SELECT aa.id FROM AssessmentAssignment aa
@@ -115,6 +117,7 @@ interface RiskAssessmentRepository : JpaRepository<RiskAssessment, Long> {
         """
     )
     fun findForMcp(
+        basisType: com.secman.domain.AssessmentBasisType?,
         status: String?,
         useCaseName: String?,
         viewerId: Long,

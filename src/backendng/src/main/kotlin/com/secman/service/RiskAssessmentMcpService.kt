@@ -63,6 +63,8 @@ open class RiskAssessmentMcpService(
         context: McpExecutionContext,
         status: String?,
         useCaseName: String?,
+        openOnly: Boolean,
+        assessmentType: String?,
         page: Int,
         pageSize: Int
     ): Map<String, Any> {
@@ -71,10 +73,21 @@ open class RiskAssessmentMcpService(
         require(normalizedStatus == null || normalizedStatus in VALID_STATUSES) {
             "status must be STARTED or COMPLETED"
         }
+        require(!openOnly || normalizedStatus == null || normalizedStatus == "STARTED") {
+            "openOnly cannot be combined with status $normalizedStatus"
+        }
+        val normalizedType = assessmentType?.trim()?.uppercase()
+        require(normalizedType == null || normalizedType in VALID_BASIS_TYPES) {
+            "assessmentType must be DEMAND, ASSET or AWS_ACCOUNT"
+        }
+        val basisType = normalizedType?.let(AssessmentBasisType::valueOf)
+        val effectiveStatus = if (openOnly) "STARTED" else normalizedStatus
+        val normalizedUseCaseName = useCaseName?.trim()?.takeIf { it.isNotBlank() }
         val privileged = context.isAdmin || context.delegatedUserRoles?.contains("SECCHAMPION") == true
         val result = riskAssessmentRepository.findForMcp(
-            normalizedStatus,
-            useCaseName?.trim()?.takeIf { it.isNotBlank() },
+            basisType,
+            effectiveStatus,
+            normalizedUseCaseName,
             viewerId,
             privileged,
             if (privileged) setOf(-1L) else context.accessibleAssetIds.orEmpty().ifEmpty { setOf(-1L) },
@@ -88,7 +101,13 @@ open class RiskAssessmentMcpService(
             "page" to result.pageNumber,
             "pageSize" to result.size,
             "totalPages" to result.totalPages,
-            "totalElements" to result.totalSize
+            "totalElements" to result.totalSize,
+            "filtersApplied" to mapOf(
+                "status" to effectiveStatus,
+                "openOnly" to openOnly,
+                "assessmentType" to basisType?.name,
+                "useCaseName" to normalizedUseCaseName
+            )
         )
     }
 
@@ -302,6 +321,7 @@ open class RiskAssessmentMcpService(
         "id" to assessment.id,
         "status" to assessment.status,
         "basisType" to assessment.assessmentBasisType.name,
+        "assessmentType" to assessment.assessmentBasisType.name,
         "basisId" to assessment.assessmentBasisId,
         "awsAccountId" to assessment.awsAccount?.awsAccountId,
         "asset" to assessment.getAssetBasis()?.let {
@@ -336,6 +356,7 @@ open class RiskAssessmentMcpService(
 
     companion object {
         val VALID_STATUSES = setOf("STARTED", "COMPLETED")
+        val VALID_BASIS_TYPES = AssessmentBasisType.entries.map { it.name }.toSet()
         const val MAX_ANSWERS = 200
         const val MAX_USE_CASES = 50
         const val MAX_COMMENT_LENGTH = 4000

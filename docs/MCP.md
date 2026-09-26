@@ -366,7 +366,7 @@ progress and cost. Neither tool submits or accepts answers. See
 |---|---|---|
 | `create_risk_assessment` | `awsAccountId` (12 digits), `useCaseIds` (one or more), `assessorEmail`, `respondentEmail`, `endDate` | `ASSESSMENTS_WRITE` |
 | `notify_risk_assessment_respondent` | `assessmentId`; optional `dryRun`, `respondentEmail` | `NOTIFICATIONS_SEND` |
-| `list_risk_assessments` | none; optional `status`, `useCaseName`, `page`, `pageSize` | `ASSESSMENTS_READ` |
+| `list_risk_assessments` | none; optional `status`, `openOnly`, `assessmentType`, `useCaseName`, `page`, `pageSize` | `ASSESSMENTS_READ` |
 | `get_risk_assessment_questionnaire` | `assessmentId` | `ASSESSMENTS_READ` |
 | `get_risk_assessment_answers` | `assessmentId` | `ASSESSMENTS_READ` |
 | `save_risk_assessment_answers` | `assessmentId`, `answers[]` | `ASSESSMENTS_EXECUTE` |
@@ -402,6 +402,8 @@ The answer and submit operations require the assigned respondent; evaluation
 requires an assigned assessor, ADMIN, or SECCHAMPION. USER-only respondents can answer their assigned sections. Evaluation never creates final acceptance; that action requires an independent human through REST/UI. See
 [MCP risk-assessment lifecycle](MCP_RISK_ASSESSMENT_LIFECYCLE.md) for schemas,
 PaperclipAI envelopes, permission requirements, and the holistic E2E driver.
+
+- **`list_risk_assessments`** — optional filters: `status` (`STARTED` | `COMPLETED`, case-insensitive), `openOnly` (boolean, default `false`; equivalent to `status: "STARTED"`), `assessmentType` (`DEMAND` | `ASSET` | `AWS_ACCOUNT`, case-insensitive), `useCaseName` (exact, case-insensitive), `page` (default `0`) and `pageSize` (1–100, default `20`). `openOnly: true` combined with any non-`STARTED` status is rejected, never silently resolved. Type, status and visibility predicates are applied in the database query, so `totalElements` and `totalPages` are exact for every filter combination. The response gains `filtersApplied` (`status`, `openOnly`, `assessmentType`, `useCaseName`; `null` when unset) reporting the effective normalized filters — `openOnly: true` alone reports `status: "STARTED"`. Each summary carries `assessmentType` as a documented alias of the legacy `basisType` (always identical values; existing readers of `basisType` are unaffected). Example — the open AWS-account assessments: `{"openOnly": true, "assessmentType": "AWS_ACCOUNT", "page": 0, "pageSize": 20}`. A request failing validation returns `VALIDATION_ERROR`: an unknown `status`, `openOnly: true` with `status: "COMPLETED"`, an unknown `assessmentType`, or `page` < 0 / `pageSize` outside 1–100.
 
 ### Statistics for automation
 

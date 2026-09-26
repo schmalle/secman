@@ -109,6 +109,7 @@ open class McpStatisticsService(
         useCaseName: String?,
         status: String?
     ): Long = riskAssessmentRepository.findForMcp(
+        null,
         status,
         useCaseName,
         viewerId,

@@ -85,11 +85,11 @@ class McpStatisticsServiceTest {
 
     @Test
     fun `risk statistics are scoped by delegated actor and exact use case`() {
-        every { assessments.findForMcp(null, "Cloud", 7, false, any(), any(), Pageable.from(0, 1)) } returns
+        every { assessments.findForMcp(null, null, "Cloud", 7, false, any(), any(), Pageable.from(0, 1)) } returns
             Page.of(emptyList(), Pageable.from(0, 1), 6)
-        every { assessments.findForMcp("STARTED", "Cloud", 7, false, any(), any(), Pageable.from(0, 1)) } returns
+        every { assessments.findForMcp(null, "STARTED", "Cloud", 7, false, any(), any(), Pageable.from(0, 1)) } returns
             Page.of(emptyList(), Pageable.from(0, 1), 4)
-        every { assessments.findForMcp("COMPLETED", "Cloud", 7, false, any(), any(), Pageable.from(0, 1)) } returns
+        every { assessments.findForMcp(null, "COMPLETED", "Cloud", 7, false, any(), any(), Pageable.from(0, 1)) } returns
             Page.of(emptyList(), Pageable.from(0, 1), 1)
 
         val result = service.riskAssessments(context(setOf("RISK")), " Cloud ")
