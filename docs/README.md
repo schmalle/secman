@@ -32,6 +32,7 @@ Stack: Kotlin 2.4.20 / Java 25 · Micronaut 5.1 · Hibernate JPA · Astro 7.3 / 
 | [MCP.md](./MCP.md) | MCP tools, API keys, delegation, troubleshooting |
 | [MCP_REQUIREMENT_MANAGEMENT.md](./MCP_REQUIREMENT_MANAGEMENT.md) | Complete MCP requirement/use-case CRUD, assignment workflow, and Paperclip contract |
 | [MCP_STATISTICS.md](./MCP_STATISTICS.md) | Aggregate estate, scoped vulnerability, and risk-assessment MCP statistics for Paperclip |
+| [RISK_ASSESSMENT_COMPLETION_PLAN.md](./RISK_ASSESSMENT_COMPLETION_PLAN.md) | Gap analysis and implementation plan for open-assessment discovery, answer recommendations, and new-AWS-account owner mail |
 | [PAPERCLIP.md](./PAPERCLIP.md) | Paperclip security-work setup and SecMan MCP boundary |
 | [PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md](./PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md) | Automated risk-assessment company, agents, heartbeats, and respondent reminders |
 | [INTEGRATION_RESULTS.md](./INTEGRATION_RESULTS.md) | Shared checker contract, lifecycle, evidence and rollout |
