@@ -32,11 +32,12 @@ Proton Pass by `pass-cli`.
 > logging rules. **Section 1 (cold start) deliberately does not apply here** —
 > see "Stack Handling" below.
 
-**Nothing is ever deleted, and fixtures accumulate.** Every run adds a user, a
-system, a vulnerability and an exception request to whatever database
-`SECMAN_HOST` points at, with no upper bound. That is the intended behaviour for
-manual testing, but it means this skill should not be run in a loop or as part of
-an automated harness — delete old fixtures by hand when they pile up.
+This is a **manual seeding utility**, not an automated test. It records exact
+fixture IDs and the target in a manifest under `.e2e-logs/manual-fixtures/`.
+The fixture stays available for inspection until the user runs
+`./scripts/manual/cleanup-test-data.sh <manifest>`. Cleanup verifies each
+record's ID and identity before deletion. Do not use this skill in an automated
+test loop, and do not delete older unrecorded fixtures by prefix.
 
 ## What Gets Created
 
@@ -142,6 +143,6 @@ requests.
 
 ## What This Skill Does NOT Do
 
-- No cleanup or teardown — see the accumulation warning at the top.
+- No automatic teardown; the printed manifest path is required for explicit cleanup.
 - No approval of the exception request — leaving it `PENDING` is the point.
 - No cold restart — see "Stack Handling".

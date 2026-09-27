@@ -19,4 +19,9 @@
 #   ./scripts/test/test-e2e-exception-workflowsupport.sh --help
 #
 
-pass-cli run --env-file ./secmanpp.env -- ./scripts/test/test-e2e-exception-workflowsupport.sh
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_URL="${SECMAN_E2E_BACKEND_URL:-}"
+source "$SCRIPT_DIR/lib/isolated-target.sh"
+secman_test_require_isolated
+exec "$SCRIPT_DIR/test-e2e-exception-workflowsupport.sh" "$@"

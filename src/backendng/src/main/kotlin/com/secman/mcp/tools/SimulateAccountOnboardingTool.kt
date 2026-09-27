@@ -60,6 +60,7 @@ class SimulateAccountOnboardingTool(
                 "type" to "string",
                 "description" to "Where the mail goes. A live run really sends to this address."
             ),
+            "useDefaultSettings" to mapOf("type" to "boolean", "description" to "Use the saved onboarding policy instead of mode"),
             "mode" to mapOf(
                 "type" to "string",
                 "description" to "WELCOME_ONLY sends a welcome mail only. DIRECT also starts a risk " +
@@ -93,7 +94,7 @@ class SimulateAccountOnboardingTool(
                 "default" to false
             )
         ),
-        "required" to listOf("awsAccountId", "ownerEmail", "mode")
+        "required" to listOf("awsAccountId", "ownerEmail")
     )
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
@@ -112,12 +113,12 @@ class SimulateAccountOnboardingTool(
         if (!EmailAddressValidator.isValidRecipient(ownerEmail)) {
             return McpToolResult.error("VALIDATION_ERROR", "ownerEmail must be a valid single email address")
         }
-        val modeRaw = (arguments["mode"] as? String)?.trim().orEmpty()
-        val mode = runCatching { AccountOnboardingMode.valueOf(modeRaw.uppercase()) }.getOrNull()
-            ?: return McpToolResult.error(
-                "VALIDATION_ERROR",
-                "mode must be one of ${AccountOnboardingMode.entries.joinToString(", ") { it.name }}"
-            )
+        val useDefaults = arguments["useDefaultSettings"] as? Boolean ?: false
+        val modeRaw = (arguments["mode"] as? String)?.trim()
+        val mode = modeRaw?.let { runCatching { AccountOnboardingMode.valueOf(it.uppercase()) }.getOrNull() }
+        if ((useDefaults && modeRaw != null) || (!useDefaults && mode == null)) {
+            return McpToolResult.error("VALIDATION_ERROR", "Choose a valid mode or useDefaultSettings=true")
+        }
 
         val dryRun = arguments["dryRun"] as? Boolean ?: false
         val actorKey = context.delegatedUserEmail ?: "mcp-admin-key"
@@ -139,7 +140,8 @@ class SimulateAccountOnboardingTool(
             deadlineDays = (arguments["riskAssessmentDeadlineDays"] as? Number)?.toInt(),
             expiryDays = (arguments["questionnaireExpiryDays"] as? Number)?.toInt(),
             simulated = true,
-            simulatedBy = actor?.email?.ifBlank { actor.username } ?: actorKey
+            simulatedBy = actor?.email?.ifBlank { actor.username } ?: actorKey,
+            useDefaultSettings = useDefaults
         ) ?: return McpToolResult.error("VALIDATION_ERROR", "mode is required")
 
         onboardingService.validateRequest(plan, newAccountCount = 1)?.let {
@@ -165,7 +167,7 @@ class SimulateAccountOnboardingTool(
                 mapOf(
                     "awsAccountId" to awsAccountId,
                     "ownerEmail" to ownerEmail,
-                    "mode" to mode.name,
+                    "mode" to plan.mode.name,
                     "dryRun" to dryRun,
                     "onboarding" to outcome.onboarding.map { ob ->
                         mapOf(
@@ -173,6 +175,7 @@ class SimulateAccountOnboardingTool(
                             "ownerEmail" to ob.ownerEmail,
                             "mode" to ob.mode,
                             "welcomeEmailSent" to ob.welcomeEmailSent,
+                            "welcomeEmail" to ob.welcomeEmail,
                             // The invite id, never the token: an MCP result travels into an
                             // agent transcript, which is not a place for a live credential.
                             "questionnaireInviteId" to ob.questionnaireInviteId,

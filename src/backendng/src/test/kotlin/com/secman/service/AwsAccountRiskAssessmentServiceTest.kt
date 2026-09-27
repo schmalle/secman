@@ -28,6 +28,9 @@ import java.util.concurrent.CompletableFuture
 
 class AwsAccountRiskAssessmentServiceTest {
 
+    private val workflow = mockk<AssessmentWorkflowService>(relaxed = true)
+    private val tokens = mockk<com.secman.repository.AssessmentTokenRepository>()
+    private val inviteToken = mockk<com.secman.domain.AssessmentToken>(relaxed = true)
     private val userRepository = mockk<UserRepository>(relaxed = true)
     private val useCaseRepository = mockk<UseCaseRepository>(relaxed = true)
     private val awsAccountRepository = mockk<AwsAccountRepository>(relaxed = true)
@@ -63,7 +66,7 @@ class AwsAccountRiskAssessmentServiceTest {
     fun setup() {
         service = AwsAccountRiskAssessmentService(
             userRepository = userRepository,
-            workflow = mockk(relaxed = true),
+            workflow = workflow,
             useCaseRepository = useCaseRepository,
             awsAccountRepository = awsAccountRepository,
             riskAssessmentRepository = riskAssessmentRepository,
@@ -76,8 +79,15 @@ class AwsAccountRiskAssessmentServiceTest {
             // test untouched otherwise is that it proves the extraction changed no behaviour.
             // A mock would render "" and hide exactly the break it exists to catch.
             templateRenderer = EmailTemplateRenderer(),
-            selfProvider = Provider { service }
+            selfProvider = Provider { service },
+            assessmentTokens = tokens
         )
+        every { workflow.prepareReminder(any(), any(), any()) } returns mockk<RiskAssessmentMcpService.OutstandingReminder> {
+            every { accountless } returns true
+        }
+        every { inviteToken.token } returns java.util.UUID.randomUUID().toString()
+        every { workflow.issueToken(any(), any(), any()) } returns inviteToken
+        every { tokens.save(any<com.secman.domain.AssessmentToken>()) } answers { firstArg() }
         every { releaseRequirementScopeService.findActiveRelease() } returns activeRelease
         every { releaseRequirementScopeService.requirementsForRelease(42L, 5L) } returns releaseRequirements
         every { useCaseRepository.findByNameIgnoreCase("Cloud Onboarding") } returns Optional.of(useCase)
@@ -284,10 +294,11 @@ class AwsAccountRiskAssessmentServiceTest {
 
     @Test
     fun `start notification deep-links to the assessment that was just created`() {
-        // The owner should land on their questionnaire, not the assessment list — the link
-        // must carry the id of the assessment this very mail is about. Pointing into the
-        // authenticated app (not /respond/{token}) is deliberate: the app forces a login,
-        // whereas a token link would let anyone holding the mail answer for the owner.
+        every { workflow.prepareReminder(any(), any(), "alice@corp.com") } returns mockk<RiskAssessmentMcpService.OutstandingReminder> {
+            every { accountless } returns false
+        }
+        every { userRepository.findByEmailIgnoreCase("alice@corp.com") } returns
+            Optional.of(user(10L, "alice", "alice@corp.com", User.Role.USER))
         val body = slot<String>()
         every { emailService.sendEmailWithInlineImages(any(), any(), capture(body), any(), any(), any(), any()) } returns
             CompletableFuture.completedFuture(true)
@@ -413,7 +424,7 @@ class AwsAccountRiskAssessmentServiceTest {
             "Cloud Onboarding", 7, null
         )
 
-        assertThat(results.single().error).isNull()
+        assertThat(results.single().error).isEqualTo("Assessment created but owner notification failed")
         assertThat(results.single().riskAssessmentId).isNotNull()
     }
 
@@ -435,6 +446,45 @@ class AwsAccountRiskAssessmentServiceTest {
     }
 
     // --- processDeadlineReminders ---------------------------------------------
+
+    @Test
+    fun `external owner gets one assignment scoped invitation and no account is created`() {
+        val body = slot<String>()
+        val assessment = slot<RiskAssessment>()
+        every { riskAssessmentRepository.save(capture(assessment)) } answers { firstArg<RiskAssessment>().apply { id = 1000L } }
+        every { emailService.sendEmailWithInlineImages(any(), any(), capture(body), any(), any(), any(), any()) } returns CompletableFuture.completedFuture(true)
+        service.startAssessmentsForNewAccounts(listOf(NewAccountImportInfo("111111111111", listOf("external@example.test"))),
+            "Cloud Onboarding", 7, 9L)
+        assertThat(assessment.captured.respondent).isNull()
+        assertThat(assessment.captured.respondentEmail).isEqualTo("external@example.test")
+        assertThat(body.captured).contains("/respond/${inviteToken.token}")
+        verify(exactly = 1) { workflow.issueToken(1000L, "external@example.test", any()) }
+        verify(exactly = 1) { emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { userRepository.save(any<User>()) }
+    }
+
+    @Test
+    fun `simulations mark tracking and suppress scheduled mail`() {
+        val captured = slot<AwsAccountRiskAssessment>()
+        every { trackingRepository.save(capture(captured)) } answers { firstArg() }
+        service.startAssessmentsForNewAccounts(listOf(NewAccountImportInfo("111111111111", listOf("external@example.test"))),
+            "Cloud Onboarding", 7, 9L, simulatedBy = "administrator")
+        assertThat(captured.captured.simulated).isTrue()
+        assertThat(captured.captured.riskAssessment.notes).startsWith("SIMULATION")
+        val today = LocalDate.now()
+        every { trackingRepository.findPendingDeadlineReminders(today, today.plusDays(2)) } returns listOf(captured.captured)
+        assertThat(service.processDeadlineReminders(today)).isZero()
+        verify(exactly = 1) { emailService.sendEmailWithInlineImages(any(), match { it.startsWith("[SIMULATION]") }, any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `SMTP rejection reports failure but keeps the created assessment`() {
+        every { emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any(), any(), any()) } returns CompletableFuture.completedFuture(false)
+        val result = service.startAssessmentsForNewAccounts(
+            listOf(NewAccountImportInfo("111111111111", listOf("external@example.test"))), "Cloud Onboarding", 7, 9L).single()
+        assertThat(result.riskAssessmentId).isNotNull()
+        assertThat(result.error).isEqualTo("Assessment created but owner notification failed")
+    }
 
     private fun tracking(endDate: LocalDate, twoSent: Boolean = false, oneSent: Boolean = false): AwsAccountRiskAssessment {
         val assessment = RiskAssessment(

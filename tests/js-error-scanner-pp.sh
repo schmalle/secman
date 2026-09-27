@@ -2,12 +2,23 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -z "${SECMAN_TEST_ISOLATED_DB:-}" ]]; then
+  exec "$SCRIPT_DIR/../scripts/test/run-isolated-e2e.sh" -- bash -c \
+    './scripts/test/provision-test-user.sh && SECMAN_BACKEND_URL="$FRONTEND_URL" ./tests/js-error-scanner-pp.sh'
+fi
 # shellcheck source=lib/secman-test-tls.sh
 source "$SCRIPT_DIR/lib/secman-test-tls.sh"
 
 ## TLS/host policy enforcement
 CURRENT_BACKEND_URL="${SECMAN_BACKEND_URL:-}"
-if [ -n "$CURRENT_BACKEND_URL" ] && [ "$CURRENT_BACKEND_URL" != "https://secman.covestro.net" ] && [[ "$CURRENT_BACKEND_URL" != pass://* ]]; then
+if [[ -n "${SECMAN_TEST_ISOLATED_DB:-}" ]]; then
+  BASE_URL="${SECMAN_E2E_BACKEND_URL:-}"
+  source "$SCRIPT_DIR/../scripts/test/lib/isolated-target.sh"
+  secman_test_require_isolated
+  [[ "$CURRENT_BACKEND_URL" == "${SECMAN_E2E_FRONTEND_URL:-}" ]] || {
+    echo "ERROR: scanner URL is not the isolated frontend" >&2; exit 2;
+  }
+elif [ -n "$CURRENT_BACKEND_URL" ] && [ "$CURRENT_BACKEND_URL" != "https://secman.covestro.net" ] && [[ "$CURRENT_BACKEND_URL" != pass://* ]]; then
   echo "ERROR: SECMAN_BACKEND_URL must be https://secman.covestro.net (or pass:// URI)."
   exit 2
 fi

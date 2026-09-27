@@ -155,6 +155,7 @@ open class UserDashboardService(
     private fun toRiskAssessmentTodo(assessment: RiskAssessment, email: String): RiskAssessmentTodoDto {
         val id = requireNotNull(assessment.id) { "Persisted risk assessment must have an ID" }
         val basisName = when (assessment.assessmentBasisType) {
+            AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> assessment.solutionName
             AssessmentBasisType.ASSET -> assetRepository.findById(assessment.assessmentBasisId)
                 .map { it.name }.orElse(null)
             AssessmentBasisType.DEMAND -> demandRepository.findById(assessment.assessmentBasisId)

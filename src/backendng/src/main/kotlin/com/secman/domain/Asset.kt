@@ -73,6 +73,13 @@ data class Asset(
     @Column
     var ip: String? = null,
 
+    /** All current addresses reported for this asset; [ip] remains the compatibility primary address. */
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "asset_ip_address", joinColumns = [JoinColumn(name = "asset_id")])
+    @Column(name = "ip_address", nullable = false, length = 45)
+    @BatchSize(size = 50)
+    var ipAddresses: MutableSet<String> = mutableSetOf(),
+
     /**
      * Canonical URI for assets that are identified by an addressable endpoint
      * rather than only a hostname or IP address. Examples include web apps,

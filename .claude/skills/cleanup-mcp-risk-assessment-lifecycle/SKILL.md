@@ -1,10 +1,9 @@
 ---
 name: cleanup-mcp-risk-assessment-lifecycle
 description: >
-  Remove all data created by the holistic MCP risk-assessment lifecycle fixture.
-  Deletes only rows identified by exact e2e-mcp-ra fixture markers and is safe to
-  rerun after an interrupted or --keep-data test. Use when the user asks to clean
-  up or remove the MCP risk-assessment test data.
+  Audit interrupted MCP risk-assessment test fixtures. The isolated runner
+  removes verified runner-owned databases; legacy rows without durable
+  ownership proof are reported, never deleted by prefix alone.
 context: fork
 ---
 
@@ -16,23 +15,15 @@ context: fork
 
 # Cleanup MCP risk-assessment lifecycle fixture
 
-Read `.claude/skills/_shared/stack-lifecycle.md`, then cold-start the backend and
-frontend. Start scripts require Bash tool `dangerouslyDisableSandbox: true`.
-
-Run the idempotent cleanup:
+Read `.claude/skills/_shared/stack-lifecycle.md`. Do not start the regular
+backend or run the old `--cleanup-only` driver on a persistent database.
+Run the ownership-verified abandoned-database sweep:
 
 ```bash
-pass-cli run --env-file ./secmanpp.env -- \
-  ./scripts/test/test-e2e-mcp-risk-assessment-lifecycle.sh --cleanup-only
+./scripts/test/run-isolated-e2e.sh --database-only -- /usr/bin/true
 ```
 
-Success requires exit 0 and `Fixture cleanup completed`. Stop both services
-afterwards, including on failure.
-
-The cleanup order is assessment, mapping, the now-unreferenced nameless AWS
-account row, requirement, use case, and users. It resolves the manually supplied address from the fixture username and
-deletes the mapping by exact email. It identifies the assessment by an exact
-notes marker and other entities by exact fixture names. Never broaden any match
-to a substring or account-number fragment.
-
-Report what was removed and whether the cleanup completed. Never commit or push.
+The runner removes only abandoned schemas with its exact ownership marker. For
+historical `e2e-mcp-ra-` rows on a persistent database, gather a read-only
+inventory and report it. Names or prefixes alone do not prove test ownership;
+preserve those rows until the user supplies stronger evidence. Never commit or push.

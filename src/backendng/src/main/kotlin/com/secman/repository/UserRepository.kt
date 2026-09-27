@@ -39,6 +39,9 @@ interface UserRepository : JpaRepository<User, Long> {
     """)
     fun findAllWithWorkgroups(): List<User>
 
+    @Query("SELECT u FROM User u WHERE u.enabled = true AND (LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%'))) ORDER BY u.username")
+    fun searchAssessmentParticipants(query: String, pageable: io.micronaut.data.model.Pageable): List<User>
+
     fun findByUsername(username: String): Optional<User>
 
     fun findByEmail(email: String): Optional<User>

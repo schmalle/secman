@@ -1,0 +1,10 @@
+@media (max-width: 575px), (max-height: 500px) {
+  .analytics-tabs {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .analytics-tabs__content {
+    overflow: visible !important;
+  }
+}

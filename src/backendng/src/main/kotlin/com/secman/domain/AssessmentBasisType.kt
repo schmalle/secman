@@ -21,5 +21,7 @@ enum class AssessmentBasisType {
     /**
      * Risk assessment is based directly on an AWS account, without a synthetic asset.
      */
-    AWS_ACCOUNT
+    AWS_ACCOUNT,
+    SAAS,
+    COTS
 }

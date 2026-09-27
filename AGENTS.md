@@ -51,31 +51,32 @@ the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
 | `testsuite` | Fast test tier (backend, CLI, frontend) + name-reference coverage gaps | no |
 | `integration-contract-test` | Shared v1 SecMan contract for GitHub, Visual, and Web checkers | no |
 | `e2ejs` | Scan every page for JS errors as admin *and* normal user | no |
-| `e2evulnexception` | Full vuln + exception lifecycle over MCP and the UI | ⚠️ **wipes the DB** |
-| `e2eexception` | Fast MCP-only exception smoke test | ⚠️ **deletes all assets** |
-| `e2eeol` | Full end-of-life lifecycle: catalogue sync, matching, owner mail, top-10 repos, authz negatives | seeds + removes a testbed; rebuilds derived `eol_finding` rows |
-| `admin-asset-e2e` | Admin adds a system + vulnerability, normal user sees it | adds one asset |
-| `importtest` | Run and debug the CrowdStrike import | ⚠️ **imports live data** |
+| `e2evulnexception` | Full vuln + exception lifecycle over MCP and the UI | disposable test DB only |
+| `e2eexception` | Fast MCP-only exception smoke test | disposable test DB only |
+| `e2eeol` | Full end-of-life lifecycle: catalogue sync, matching, owner mail, top-10 repos, authz negatives | disposable test DB only |
+| `admin-asset-e2e` | Admin adds a system + vulnerability, normal user sees it | disposable test DB only |
+| `importtest` | Run and debug the CrowdStrike import | imports into disposable test DB only |
 | `crowdstrike-vuln-match` | Compare stored rows against a fresh Falcon query | no |
-| `aws-account-risk-assessment` | New AWS account starts a correctly scoped assessment | seeds + removes a testbed |
-| `aws-account-owner-email` | The account owner actually receives the mail | testbed, ⚠️ **sends real mail** |
-| `account-onboarding` | Welcome mail, direct and guided assessments, the owner's tokenized questionnaire | seeds + removes a testbed |
-| `mcp-risk-assessment-lifecycle` | Full MCP setup, respondent answer/submit, and assessor evaluation with a manually supplied email | seeds + removes a testbed |
-| `cleanup-mcp-risk-assessment-lifecycle` | Remove a retained or interrupted MCP risk-assessment lifecycle fixture | removes only exact fixture markers |
-| `mcp-requirement-use-case-lifecycle` | Requirement create/list, use-case create/list, assignment verification, deletion, and post-delete listing through MCP | seeds + removes two exact fixtures |
-| `aws-account-workgroup-import` | AWS display-name import and workgroup linking | seeds + removes a testbed |
-| `requirement-export-template` | Word export-template lifecycle and validation | seeds + removes a testbed |
-| `createtestdata` | Seed a fixture to click through | adds a fixture |
+| `aws-account-risk-assessment` | New AWS account starts a correctly scoped assessment | disposable test DB only |
+| `aws-account-owner-email` | Verify owner notification reaches a loopback SMTP sink | disposable test DB; real delivery separate opt-in |
+| `account-onboarding` | Welcome mail, direct and guided assessments, the owner's tokenized questionnaire | disposable test DB only |
+| `mcp-risk-assessment-lifecycle` | Full MCP setup, respondent answer/submit, and assessor evaluation with a manually supplied email | disposable test DB only |
+| `cleanup-mcp-risk-assessment-lifecycle` | Audit interrupted lifecycle fixtures | removes only verified runner-owned databases |
+| `mcp-requirement-use-case-lifecycle` | Requirement create/list, use-case create/list, assignment verification, deletion, and list-again through MCP | disposable test DB only |
+| `aws-account-workgroup-import` | AWS display-name import and workgroup linking | disposable test DB only |
+| `requirement-export-template` | Word export-template lifecycle and validation | disposable test DB only |
+| `createtestdata` | Seed a fixture to click through | manual fixture with explicit manifest cleanup |
 
-The three destructive ones are unsafe against a shared instance — resolve
-`SECMAN_HOST` before running them. `aws-account-risk-assessment` carries a
-quieter one: it activates its own requirements release, archiving the current
-`ACTIVE` one, and `ARCHIVED` is terminal.
+Database-mutating test skills use `./scripts/test/run-isolated-e2e.sh`; direct
+driver execution against the current database is forbidden. The runner creates
+a marked schema and restricted user, checks and removes its own abandoned
+schemas before a run, and drops its schema on exit. Unverified legacy fixtures
+are preserved and reported. `/createtestdata` is a separate manual utility.
 
 `.agents/skills/_shared/stack-lifecycle.md` is **mandatory reading** before any
-skill that touches the running stack: it defines the unconditional cold start
-(both stop scripts first, even when the ports look free), port-bind liveness
-(`lsof -iTCP:8080`, 120s; `:4321`, 60s), the `pass-cli` credentials, the log
+skill that touches the running stack: its database-safety override puts mutating
+tests in a separate 18080/14321 stack, while the normal cold-start rules apply
+only to read-only skills on 8080/4321. It also defines `pass-cli` credentials, the log
 paths and the 5-iteration fix budget. The start scripts need `pass-cli`, so run
 them with `sandbox_permissions: "require_escalated"` — a sandboxed shell cannot
 reach the vault and the process fails to start.
@@ -93,7 +94,7 @@ subagents in `.claude/agents/`, which no skill spawns.
 - TS/TSX: 2-space indent, named exports, ESLint via `npm run lint`. Import order: external → internal → relative.
 
 ## Tests (mandatory)
-Always write tests for new code. JUnit 6 + Mockk for unit; integration tests run against an **external MariaDB** (no Docker/Testcontainers — removed from the build) via `BaseIntegrationTest`. Tests must route HTTP through `SECMAN_HOST` (sourced from `pass-cli`) — never hardcode `http://localhost:*`. After **every** change, the `e2ejs` and `e2evulnexception` skills (§Skills) must exit clean (see `CLAUDE.md` principle 7).
+Always write tests for new code. JUnit 6 + Mockk for unit; integration tests run against an **external MariaDB** (no Docker/Testcontainers — removed from the build) via `BaseIntegrationTest`, using the disposable schema created by `./scripts/runbackendtests.sh`. Normal-stack HTTP checks use `SECMAN_HOST` from `pass-cli`; the isolated runner supplies its own loopback URLs. After **every** change, the `e2ejs` and `e2evulnexception` skills (§Skills) must exit clean (see `CLAUDE.md` principle 7).
 
 ## Commits / PRs
 - `type(scope): description` (Conventional Commits) or short `Type: Summary` form.

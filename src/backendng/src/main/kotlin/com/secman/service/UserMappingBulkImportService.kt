@@ -39,12 +39,12 @@ open class UserMappingBulkImportService(
      * instead of getting a half-done import.
      */
     open fun validate(request: BulkUserMappingRequest): String? {
-        if (request.notifyNewAccounts) {
+        if (request.notifyNewAccounts && request.notifyAddress != null) {
             // notifyAddress is handed to InternetAddress.parse, where a comma would silently
             // split one recipient into two and a CR/LF would reach a mail header. One shared
             // boundary check — see EmailAddressValidator for what it rejects and why.
             if (!EmailAddressValidator.isValidRecipient(request.notifyAddress)) {
-                return "notifyAddress must be a valid email when notifyNewAccounts is true"
+                return "notifyAddress must be a valid email when provided"
             }
         }
         // Reject the one combination that cannot be honoured rather than guessing which half
@@ -60,7 +60,8 @@ open class UserMappingBulkImportService(
             sendWelcomeEmail = request.sendWelcomeEmail,
             useCaseName = request.riskAssessmentUseCase,
             deadlineDays = request.riskAssessmentDeadlineDays,
-            expiryDays = request.questionnaireExpiryDays
+            expiryDays = request.questionnaireExpiryDays,
+            useDefaultSettings = request.notifyNewAccounts
         ) ?: return null
 
         return accountOnboardingService.validateRequest(plan)
@@ -77,6 +78,16 @@ open class UserMappingBulkImportService(
         requestorUserId: Long?,
         source: String = "Bulk import"
     ): BulkUserMappingResponse {
+        val plan = accountOnboardingService.planFrom(
+            explicitMode = request.onboardingMode,
+            startRiskAssessment = request.startRiskAssessment,
+            sendWelcomeEmail = request.sendWelcomeEmail,
+            useCaseName = request.riskAssessmentUseCase,
+            deadlineDays = request.riskAssessmentDeadlineDays,
+            expiryDays = request.questionnaireExpiryDays,
+            useDefaultSettings = request.notifyNewAccounts
+        )
+        plan?.let { require(accountOnboardingService.validateRequest(it) == null) { "Saved onboarding configuration is not ready" } }
         val result = userMappingService.bulkCreateMappings(request)
 
         // Link every account whose entry carried a display name to the workgroup named
@@ -87,7 +98,7 @@ open class UserMappingBulkImportService(
 
         // Send the operator email AFTER the transaction has committed, so a
         // slow/failed send never rolls back the persisted mappings.
-        var finalResult = if (request.notifyNewAccounts && !request.dryRun && result.newAccounts.isNotEmpty()) {
+        var finalResult = if (request.notifyNewAccounts && request.notifyAddress != null && !request.dryRun && result.newAccounts.isNotEmpty()) {
             val recipient = request.notifyAddress!!.trim()
             val sent = newAccountNotificationService.sendImportNotification(recipient, result.newAccounts)
             result.copy(
@@ -106,14 +117,7 @@ open class UserMappingBulkImportService(
         //
         // Unlike the two side effects above this runs on a dry run too: it persists and sends
         // nothing, but reports what it *would* do, which is the point of asking for a preview.
-        val plan = accountOnboardingService.planFrom(
-            explicitMode = request.onboardingMode,
-            startRiskAssessment = request.startRiskAssessment,
-            sendWelcomeEmail = request.sendWelcomeEmail,
-            useCaseName = request.riskAssessmentUseCase,
-            deadlineDays = request.riskAssessmentDeadlineDays,
-            expiryDays = request.questionnaireExpiryDays
-        )
+
         if (plan != null && result.newAccounts.isNotEmpty()) {
             val outcome = accountOnboardingService.onboardNewAccounts(
                 newAccounts = result.newAccounts,

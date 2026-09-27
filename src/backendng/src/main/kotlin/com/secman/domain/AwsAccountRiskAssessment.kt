@@ -56,6 +56,9 @@ data class AwsAccountRiskAssessment(
     @NotBlank
     var useCaseName: String,
 
+    @Column(nullable = false)
+    var simulated: Boolean = false,
+
     /** When the "2 days before deadline" reminder was sent. NULL = not yet sent. */
     @Column(name = "reminder_two_days_sent_at")
     var reminderTwoDaysSentAt: LocalDateTime? = null,

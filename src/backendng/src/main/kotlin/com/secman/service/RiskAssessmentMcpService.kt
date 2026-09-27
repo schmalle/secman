@@ -39,7 +39,8 @@ open class RiskAssessmentMcpService(
     private val assetFilter: AssetFilterService,
     private val workflow: AssessmentWorkflowService,
     private val access: RiskAssessmentAccessService,
-    private val releaseRequirementScopeService: ReleaseRequirementScopeService
+    private val releaseRequirementScopeService: ReleaseRequirementScopeService,
+    private val recommendationService: RiskAssessmentRecommendationService
 ) {
     private val log = LoggerFactory.getLogger(RiskAssessmentMcpService::class.java)
 
@@ -63,18 +64,31 @@ open class RiskAssessmentMcpService(
         context: McpExecutionContext,
         status: String?,
         useCaseName: String?,
+        openOnly: Boolean,
+        assessmentType: String?,
         page: Int,
         pageSize: Int
     ): Map<String, Any> {
         val viewerId = context.delegatedUserId ?: throw SecurityException("Delegation is required")
-        val normalizedStatus = status?.uppercase()
+        val normalizedStatus = status?.trim()?.uppercase(java.util.Locale.ROOT)
         require(normalizedStatus == null || normalizedStatus in VALID_STATUSES) {
             "status must be STARTED or COMPLETED"
         }
+        require(!openOnly || normalizedStatus == null || normalizedStatus == "STARTED") {
+            "openOnly cannot be combined with status $normalizedStatus"
+        }
+        val normalizedType = assessmentType?.trim()?.uppercase(java.util.Locale.ROOT)
+        require(normalizedType == null || normalizedType in VALID_BASIS_TYPES) {
+            "assessmentType must be DEMAND, ASSET or AWS_ACCOUNT"
+        }
+        val basisType = normalizedType?.let(AssessmentBasisType::valueOf)
+        val effectiveStatus = if (openOnly) "STARTED" else normalizedStatus
+        val normalizedUseCaseName = useCaseName?.trim()?.takeIf { it.isNotBlank() }
         val privileged = context.isAdmin || context.delegatedUserRoles?.contains("SECCHAMPION") == true
         val result = riskAssessmentRepository.findForMcp(
-            normalizedStatus,
-            useCaseName?.trim()?.takeIf { it.isNotBlank() },
+            basisType,
+            effectiveStatus,
+            normalizedUseCaseName,
             viewerId,
             privileged,
             if (privileged) setOf(-1L) else context.accessibleAssetIds.orEmpty().ifEmpty { setOf(-1L) },
@@ -88,7 +102,13 @@ open class RiskAssessmentMcpService(
             "page" to result.pageNumber,
             "pageSize" to result.size,
             "totalPages" to result.totalPages,
-            "totalElements" to result.totalSize
+            "totalElements" to result.totalSize,
+            "filtersApplied" to mapOf(
+                "status" to effectiveStatus,
+                "openOnly" to openOnly,
+                "assessmentType" to basisType?.name,
+                "useCaseName" to normalizedUseCaseName
+            )
         )
     }
 
@@ -244,42 +264,44 @@ open class RiskAssessmentMcpService(
 
     @Transactional(readOnly = true)
     open fun evaluate(context: McpExecutionContext, assessmentId: Long): Map<String, Any> {
-        val assessment = accessibleAssessment(context, assessmentId)
-        val viewerId = context.delegatedUserId!!
-        val canEvaluate = context.isAdmin ||
-            context.delegatedUserRoles?.contains("SECCHAMPION") == true ||
-            access.canReview(assessment, authentication(context))
+        val assessment = accessibleAssessment(context, assessmentId, lockForRecommendation = true)
+        val canEvaluate = access.canAnalyze(assessment, authentication(context))
         if (!canEvaluate) throw SecurityException("Only the assessor, requestor, ADMIN or SECCHAMPION may evaluate")
         check(assessment.status == "COMPLETED") { "Only a completed assessment can be evaluated" }
 
-        val requirements = requirementsFor(assessment)
-        val responses = responseRepository.findByRiskAssessmentId(assessmentId).associateBy { it.requirement.id }
-        val answerCounts = AnswerType.entries.associate { type ->
-            type.name to responses.values.count { it.answerType == type }
-        }
-        val findings = requirements.mapNotNull { requirement ->
-            val response = responses[requirement.id] ?: return@mapNotNull null
-            if (response.answerType == AnswerType.YES) return@mapNotNull null
-            mapOf(
-                "requirementId" to requirement.id,
-                "internalId" to requirement.internalId,
-                "shortreq" to requirement.shortreq,
-                "answerType" to response.answerType?.name,
-                "comment" to response.comment
-            )
-        }
+        val rec = recommendationService.recommend(assessment, completedOnly = true)
+        log.info("AUDIT operation=ASSESSMENT_ANALYSIS actorId={} assessmentId={} revision={} outcome={}",
+            context.delegatedUserId, assessmentId, rec.answerRevision, rec.recommendation)
         return mapOf(
             "assessment" to assessmentSummary(assessment),
-            "verdict" to if (answerCounts[AnswerType.NO.name] == 0) "COMPLIANT" else "NON_COMPLIANT",
-            "answerCounts" to answerCounts,
-            "requirementCount" to requirements.size,
-            "findings" to findings
+            "verdict" to rec.verdict,
+            "answerCounts" to rec.answerCounts,
+            "requirementCount" to rec.requirementCount,
+            "findings" to rec.findings.map { finding ->
+                mapOf(
+                    "requirementId" to finding.requirementId,
+                    "internalId" to finding.internalId,
+                    "shortreq" to finding.shortreq,
+                    "answerType" to finding.answerType,
+                    "reason" to finding.reason,
+                    "comment" to finding.comment
+                )
+            },
+            "assessmentId" to rec.assessmentId,
+            "recommendation" to rec.recommendation.name,
+            "answerRevision" to rec.answerRevision,
+            "summary" to rec.summary,
+            "missingAnswerCount" to rec.missingAnswerCount,
+            "generatedAt" to rec.generatedAt.toString(),
+            "advisory" to rec.advisory,
+            "policyVersion" to rec.policyVersion
         )
     }
 
-    private fun accessibleAssessment(context: McpExecutionContext, assessmentId: Long): RiskAssessment {
-        val assessment = riskAssessmentRepository.findById(assessmentId)
-            .orElseThrow { NoSuchElementException("Risk assessment not found") }
+    private fun accessibleAssessment(context: McpExecutionContext, assessmentId: Long, lockForRecommendation: Boolean = false): RiskAssessment {
+        val assessment = (if (lockForRecommendation) workflow.findForRecommendation(assessmentId)
+            else riskAssessmentRepository.findById(assessmentId).orElse(null))
+            ?: throw NoSuchElementException("Risk assessment not found")
         if (context.delegatedUserId == null) throw SecurityException("Delegation is required")
         if (!canAccess(context, assessment)) throw NoSuchElementException("Risk assessment not found")
         return assessment
@@ -302,6 +324,7 @@ open class RiskAssessmentMcpService(
         "id" to assessment.id,
         "status" to assessment.status,
         "basisType" to assessment.assessmentBasisType.name,
+        "assessmentType" to assessment.assessmentBasisType.name,
         "basisId" to assessment.assessmentBasisId,
         "awsAccountId" to assessment.awsAccount?.awsAccountId,
         "asset" to assessment.getAssetBasis()?.let {
@@ -336,6 +359,7 @@ open class RiskAssessmentMcpService(
 
     companion object {
         val VALID_STATUSES = setOf("STARTED", "COMPLETED")
+        val VALID_BASIS_TYPES = AssessmentBasisType.entries.map { it.name }.toSet()
         const val MAX_ANSWERS = 200
         const val MAX_USE_CASES = 50
         const val MAX_COMMENT_LENGTH = 4000

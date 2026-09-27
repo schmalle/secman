@@ -22,6 +22,33 @@ Every tool is listed in [Tool reference](#tool-reference) below — that section
 
 `Origin` is validated per spec — non-browser clients without `Origin` are allowed; localhost always allowed; configure others under `secman.mcp.transport.allowed-origins` in `application.yml`.
 
+## Query vulnerabilities from a shell
+
+[`tests/mcp/query-vulnerabilities.sh`](../tests/mcp/query-vulnerabilities.sh) calls
+`get_vulnerabilities` through the Streamable HTTP endpoint and prints its JSON
+result. It takes the SecMan URL, an MCP API key and a delegated user email. The
+email is required: SecMan requires identity delegation for every `tools/list` and
+`tools/call` request. The key must have `VULNERABILITIES_READ`, and delegation
+must be enabled and permitted for that user.
+
+```bash
+export SECMAN_MCP_KEY='sk-…'
+./tests/mcp/query-vulnerabilities.sh \
+  --url 'https://secman.example.com' \
+  --user-email 'analyst@example.com'
+```
+
+Pass either the server base URL or its full `/mcp` endpoint. The script performs
+MCP initialization, confirms that `get_vulnerabilities` is available to the key,
+then executes the query. Filter options include `--cve-id`, repeatable `--severity`,
+`--asset-id`, `--start-date`, `--end-date`, `--page`, and `--page-size`. Findings
+covered by exceptions and installer artifacts remain excluded by default; use
+`--include-excepted` or `--include-installers` to include them. Use `--help` for
+the complete option list. Requires `curl` and `jq`.
+
+For a server with a self-signed certificate, add `--insecure`. This passes
+`--insecure` to curl and disables certificate verification for that request.
+
 ## Effective permissions
 
 ```
@@ -336,15 +363,15 @@ Delegation required throughout. Most are ADMIN-only; the three onboarding tools 
 
 | Tool | Arguments | Roles | Deleg. |
 |---|---|---|---|
-| `import_user_mappings` | `mappings[]`*, `dryRun`, `startRiskAssessment`, `riskAssessmentUseCase`, `riskAssessmentDeadlineDays`, `onboardingMode`, `sendWelcomeEmail`, `questionnaireExpiryDays` | ADMIN | yes |
+| `import_user_mappings` | `mappings[]`*, `dryRun`, `notifyNewAccounts`, `notifyAddress`, `startRiskAssessment`, `riskAssessmentUseCase`, `riskAssessmentDeadlineDays`, `onboardingMode`, `sendWelcomeEmail`, `questionnaireExpiryDays` | ADMIN | yes |
 | `link_workgroup_aws_accounts` | `dryRun` | ADMIN | yes |
 | `list_user_mappings` | `email`, `page`, `size` (max 100) | ADMIN | yes |
 | `list_aws_account_risk_assessments` | `awsAccountId`, `ownerEmail`, `status`, `limit` (1–100, default 20) | ADMIN | yes |
-| `simulate_account_onboarding` | `awsAccountId`*, `ownerEmail`*, `mode`*, `riskAssessmentUseCase`, `riskAssessmentDeadlineDays` (1–3650), `questionnaireExpiryDays` (1–90), `sendWelcomeEmail`, `dryRun` | ADMIN, SECCHAMPION | yes |
+| `simulate_account_onboarding` | `awsAccountId`*, `ownerEmail`*, `mode` or `useDefaultSettings`, `riskAssessmentUseCase`, `riskAssessmentDeadlineDays` (1–3650), `questionnaireExpiryDays` (1–90), `sendWelcomeEmail`, `dryRun` | ADMIN, SECCHAMPION | yes |
 | `list_account_onboarding_rules` | `activeOnly` (default `true`) | ADMIN, SECCHAMPION | yes |
 | `preview_account_onboarding_rules` | `answers[]`* (`{questionKey`*, `choiceKeys[]`*`}`) | ADMIN, SECCHAMPION | yes |
 
-- **`import_user_mappings`** — `mappings` holds up to 1000 entries, each with `email`* plus at least one of `awsAccountId` (12 digits) or `domain`. Optionally starts a risk assessment for the owner of every brand-new AWS account the import introduces: `startRiskAssessment` (bool), `riskAssessmentUseCase` (required when it is true), `riskAssessmentDeadlineDays` (1..3650, default `7`). Returns counts `created`, `createdPending` (user does not exist yet), `skipped`, `errors[]`, plus `newAccounts[]` (`awsAccountId`, `emails`) and `riskAssessments[]` (`awsAccountId`, `ownerEmail`, `riskAssessmentId`, `assessor`, `endDate`, `useCase`, `releaseVersion`, `requirementCount`, `skipped`, `skipReason`, `error`). A `riskAssessments[]` entry carries **either** `error` (the assessment failed) **or** `skipped`/`skipReason` (the pair already had an open assessment — an idempotent no-op; do not report it as a failure). Runs the same code path as REST `POST /api/user-mappings/bulk` and CLI `manage-user-mappings import`, so brand-new-account detection is identical. Assessments are pinned to the ACTIVE requirements release; the call is rejected with `VALIDATION_ERROR` when none exists or it carries no requirements for the use case. `onboardingMode` (`WELCOME_ONLY` | `DIRECT` | `GUIDED`) selects what happens for the owner instead; omitting it falls back to `startRiskAssessment`, which on its own means `DIRECT` with no welcome mail — byte-identical to the behaviour before onboarding modes existed. `sendWelcomeEmail` overrides that, and `questionnaireExpiryDays` (1..90, default 14) sets how long a `GUIDED` link lives. The result gains `onboarding[]` with the same three shapes as `riskAssessments[]`. Combining `startRiskAssessment` with a non-`DIRECT` mode is a `VALIDATION_ERROR`. See `docs/AWS_ACCOUNT_RISK_ASSESSMENT.md` and `docs/ACCOUNT_ONBOARDING.md`.
+- **`import_user_mappings`** — `mappings` holds up to 1000 entries, each with `email`* plus at least one of `awsAccountId` (12 digits) or `domain`. Optionally starts a risk assessment for the owner of every brand-new AWS account the import introduces: `startRiskAssessment` (bool), `riskAssessmentUseCase` (required when it is true), `riskAssessmentDeadlineDays` (1..3650, default `7`). Returns counts `created`, `createdPending` (user does not exist yet), `skipped`, `errors[]`, plus `newAccounts[]` (`awsAccountId`, `emails`) and `riskAssessments[]` (`awsAccountId`, `ownerEmail`, `riskAssessmentId`, `assessor`, `endDate`, `useCase`, `releaseVersion`, `requirementCount`, `skipped`, `skipReason`, `error`). A `riskAssessments[]` entry carries **either** `error` (creation or notification failed; a created assessment ID may still be present) **or** `skipped`/`skipReason` (the pair already had an open assessment — an idempotent no-op; do not report it as a failure). Runs the same code path as REST `POST /api/user-mappings/bulk` and CLI `manage-user-mappings import`, so brand-new-account detection is identical. Assessments are pinned to the ACTIVE requirements release; the call is rejected with `VALIDATION_ERROR` when none exists or it carries no requirements for the use case. `onboardingMode` (`WELCOME_ONLY` | `DIRECT` | `GUIDED`) selects what happens for the owner instead; omitting it falls back to `startRiskAssessment`, which on its own means `DIRECT` with no welcome mail — byte-identical to the behaviour before onboarding modes existed. `sendWelcomeEmail` overrides that, and `questionnaireExpiryDays` (1..90, default 14) sets how long a `GUIDED` link lives. The result gains `onboarding[]` with the same three shapes as `riskAssessments[]`. Combining `startRiskAssessment` with a non-`DIRECT` mode is a `VALIDATION_ERROR`. See `docs/AWS_ACCOUNT_RISK_ASSESSMENT.md` and `docs/ACCOUNT_ONBOARDING.md`.
 
 Risk-assessment automation also supports asset bases: `create_risk_assessment`
 accepts exactly one of `awsAccountId` or an accessible `assetId`. Suppliers are
@@ -358,7 +385,9 @@ progress and cost. Neither tool submits or accepts answers. See
 
 - **`link_workgroup_aws_accounts`** — the correction path for the above: re-links every account whose stored display name has no workgroup assignment yet, with no file involved. Use it for mappings imported before display names were captured, or when the matching workgroup did not exist at import time. `dryRun` reports without creating or assigning. Returns the same `workgroupLinks` shape (as the top-level result). Idempotent; existing assignments are never removed, so an account renamed between imports keeps its old workgroup alongside the new one. Same code path as REST `POST /api/user-mappings/link-workgroup-accounts` and CLI `manage-user-mappings link-workgroups`. See `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`.
 - **`list_user_mappings`** returns the full `UserMappingDto` (id, email, awsAccountId, domain, userId, isFutureMapping, applied/created/updatedAt). `email` is a case-insensitive partial match.
-- **`simulate_account_onboarding`** runs the whole onboarding path against an AWS account id and email address you supply — the *same* code path a real import runs, not a mock — so the welcome mail and the guided questionnaire can be exercised without waiting for a real account. `mode` is `WELCOME_ONLY` | `DIRECT` | `GUIDED`; `riskAssessmentUseCase` is required for `DIRECT`. Returns `onboarding[]` and `riskAssessments[]` in the shapes above. **It really sends mail** unless `dryRun` is true, so it is rate limited (20 live runs per actor per hour), every simulated message says it is a test and names the actor, and the invite is stamped `simulated`. The invite **id** is returned; the token never is.
+- **Saved onboarding settings:** set `notifyNewAccounts: true` on `import_user_mappings` to apply the web-configured welcome-only (default) or direct-assessment policy. `notifyAddress` is optional and adds an operator summary. Explicit `onboardingMode` or legacy `startRiskAssessment` takes precedence.
+
+- **`simulate_account_onboarding`** runs the whole onboarding path against an AWS account id and email address you supply — the *same* code path a real import runs, not a mock — so the welcome mail and the guided questionnaire can be exercised without waiting for a real account. `mode` is `WELCOME_ONLY` | `DIRECT` | `GUIDED`; `riskAssessmentUseCase` is required for explicit `DIRECT`. Alternatively, omit `mode` and set `useDefaultSettings: true` to use the saved policy. DIRECT simulation creates a marked assessment and excludes automatic AWS deadline reminders. Returns `onboarding[]` and `riskAssessments[]` in the shapes above. **It really sends mail** unless `dryRun` is true, so it is rate limited (20 live runs per actor per hour), every simulated message says it is a test and names the actor, and the invite is stamped `simulated`. The invite **id** is returned; the token never is.
 
 ### Complete risk-assessment lifecycle
 
@@ -366,7 +395,7 @@ progress and cost. Neither tool submits or accepts answers. See
 |---|---|---|
 | `create_risk_assessment` | `awsAccountId` (12 digits), `useCaseIds` (one or more), `assessorEmail`, `respondentEmail`, `endDate` | `ASSESSMENTS_WRITE` |
 | `notify_risk_assessment_respondent` | `assessmentId`; optional `dryRun`, `respondentEmail` | `NOTIFICATIONS_SEND` |
-| `list_risk_assessments` | none; optional `status`, `useCaseName`, `page`, `pageSize` | `ASSESSMENTS_READ` |
+| `list_risk_assessments` | none; optional `status`, `openOnly`, `assessmentType`, `useCaseName`, `page`, `pageSize` | `ASSESSMENTS_READ` |
 | `get_risk_assessment_questionnaire` | `assessmentId` | `ASSESSMENTS_READ` |
 | `get_risk_assessment_answers` | `assessmentId` | `ASSESSMENTS_READ` |
 | `save_risk_assessment_answers` | `assessmentId`, `answers[]` | `ASSESSMENTS_EXECUTE` |
@@ -402,6 +431,8 @@ The answer and submit operations require the assigned respondent; evaluation
 requires an assigned assessor, ADMIN, or SECCHAMPION. USER-only respondents can answer their assigned sections. Evaluation never creates final acceptance; that action requires an independent human through REST/UI. See
 [MCP risk-assessment lifecycle](MCP_RISK_ASSESSMENT_LIFECYCLE.md) for schemas,
 PaperclipAI envelopes, permission requirements, and the holistic E2E driver.
+
+- **`list_risk_assessments`** — optional filters: `status` (`STARTED` | `COMPLETED`, case-insensitive), `openOnly` (boolean, default `false`; equivalent to `status: "STARTED"`), `assessmentType` (`DEMAND` | `ASSET` | `AWS_ACCOUNT`, case-insensitive), `useCaseName` (exact, case-insensitive), `page` (default `0`) and `pageSize` (1–100, default `20`). `openOnly: true` combined with any non-`STARTED` status is rejected, never silently resolved. Type, status and visibility predicates are applied in the database query, so `totalElements` and `totalPages` are exact for every filter combination. The response gains `filtersApplied` (`status`, `openOnly`, `assessmentType`, `useCaseName`; `null` when unset) reporting the effective normalized filters — `openOnly: true` alone reports `status: "STARTED"`. Each summary carries `assessmentType` as a documented alias of the legacy `basisType` (always identical values; existing readers of `basisType` are unaffected). Example — the open AWS-account assessments: `{"openOnly": true, "assessmentType": "AWS_ACCOUNT", "page": 0, "pageSize": 20}`. A request failing validation returns `VALIDATION_ERROR`: an unknown `status`, `openOnly: true` with `status: "COMPLETED"`, an unknown `assessmentType`, or `page` < 0 / `pageSize` outside 1–100.
 
 ### Statistics for automation
 
@@ -602,3 +633,79 @@ secman:
 | Connection refused | backend down; firewall; wrong path (must end in `/mcp`) |
 
 Enable debug headers (logs all `/mcp/**` and `/api/**` headers + decoded JWT claims): `SECMAN_DEBUG=true`. Do not use in production.
+
+### Assessment recommendation policy (version 2.0)
+
+`evaluate_risk_assessment` remains a completed-only READ operation requiring
+`ASSESSMENTS_READ` and delegation. Analysis is permitted for ADMIN, SECCHAMPION,
+an active assigned assessor, or the requestor **provided the requestor can still
+view the assessment**. Requestor metadata alone grants no access. Acceptance
+permissions are unchanged. Missing and inaccessible assessments both return
+`NOT_FOUND`; a visible assessment without analysis authority returns `FORBIDDEN`.
+
+```json
+{"jsonrpc":"2.0","id":"open-cloud","method":"tools/call","params":{"name":"list_risk_assessments","arguments":{"openOnly":true,"assessmentType":"AWS_ACCOUNT","page":0,"pageSize":20}}}
+```
+
+```json
+{"jsonrpc":"2.0","id":"analyze","method":"tools/call","params":{"name":"evaluate_risk_assessment","arguments":{"assessmentId":9001}}}
+```
+
+The existing `assessment`, `verdict`, `answerCounts`, `requirementCount`, and
+`findings` fields remain. Additional fields are `assessmentId`, `answerRevision`,
+`recommendation`, `summary`, `missingAnswerCount`, `generatedAt`, `advisory: true`,
+and `policyVersion: "2.0"`. Only requirements in the pinned questionnaire affect
+the recommendation. `N_A` now yields `NEEDS_REVIEW`; the legacy `verdict` still
+means “no explicit NO” and can remain `COMPLIANT` while review is needed. Never
+use that compatibility field as approval. Missing/null answers require review;
+there is no persisted `UNKNOWN` answer enum.
+
+Representative policy fields for one submitted N/A answer:
+
+```json
+{"assessmentId":9001,"answerRevision":12,"recommendation":"NEEDS_REVIEW","verdict":"COMPLIANT","answerCounts":{"YES":0,"NO":0,"N_A":1},"missingAnswerCount":0,"requirementCount":1,"summary":"1 not-applicable answer requires reviewer confirmation.","advisory":true,"policyVersion":"2.0"}
+```
+
+Invalid filters return tool error `VALIDATION_ERROR`, for example
+`openOnly: true` with `status: "COMPLETED"`. An unsubmitted evaluation returns
+`CONFLICT`. Recommendations never submit, accept, change answers, or call an LLM.
+
+### Owner welcome-mail delivery tools
+
+Both tools require `USER_ACTIVITY` and an **ADMIN delegated user**, in addition
+to the normal verified MCP key. An admin key cannot override a non-admin delegate.
+
+- `list_owner_mail_notifications`: READ, optional `page` (default 0) and
+  `pageSize` (default 20, maximum 100). Returns `notifications`, `totalElements`,
+  `page`, and `pageSize`; each row contains account, owner, timestamps, and
+  `welcomeEmail` delivery status. Expired recipient metadata is not returned.
+- `retry_owner_mail_notification`: WRITE, required positive `notificationId`.
+  Only retained `FAILED` records may be retried. Sent, pending/uncertain, and
+  expired records return `CONFLICT`; missing ids return `NOT_FOUND`.
+
+```json
+{"jsonrpc":"2.0","id":"deliveries","method":"tools/call","params":{"name":"list_owner_mail_notifications","arguments":{"page":0,"pageSize":20}}}
+```
+
+```json
+{"jsonrpc":"2.0","id":"retry","method":"tools/call","params":{"name":"retry_owner_mail_notification","arguments":{"notificationId":42}}}
+```
+
+A disabled/unconfigured provider is independent of mapping success:
+
+```json
+{"requested":true,"status":"FAILED","notificationId":42,"retryable":true,"errorCode":"NO_ACTIVE_PROVIDER"}
+```
+
+`FORBIDDEN` is returned for a non-admin delegate. SMTP acceptance produces `SENT`,
+not proof of inbox delivery. A transport failure after sending began leaves
+`PENDING` with `DELIVERY_UNCERTAIN` and `retryable: false`, preventing blind
+resends. See [Account onboarding](ACCOUNT_ONBOARDING.md) for retention and retry.
+
+### Vulnerability-query E2E regression
+
+Run `./scripts/test/test-e2e-mcp-vulnerability-query.sh --project=chrome` to
+verify discovery, query filters, pagination and delegated asset access through
+both MCP HTTP entry points. This test is also discovered by the full
+`./tests/e2e/run-e2e.sh` suite. It uses disposable data and generated API keys;
+it does not query the persistent development database.

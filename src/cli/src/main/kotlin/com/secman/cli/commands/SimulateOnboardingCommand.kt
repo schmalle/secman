@@ -73,9 +73,14 @@ class SimulateOnboardingCommand(
                 "--risk-usecase. GUIDED mails a one-time questionnaire link and creates the " +
                 "assessment from the answers. Valid values: \${COMPLETION-CANDIDATES}."
         ],
-        required = true
     )
-    lateinit var mode: ImportCommand.OnboardingMode
+    var mode: ImportCommand.OnboardingMode? = null
+
+    @Option(
+        names = ["--use-default-settings"],
+        description = ["Use the welcome or risk-assessment policy saved in the web UI, instead of --mode"]
+    )
+    var useDefaultSettings: Boolean = false
 
     @Option(
         names = ["--risk-usecase"],
@@ -118,6 +123,13 @@ class SimulateOnboardingCommand(
      * JSON field. Everything here is re-checked server side.
      */
     fun validateOptions(): String? {
+        if ((mode != null) == useDefaultSettings) {
+            return "Specify either --mode or --use-default-settings"
+        }
+        if (useDefaultSettings && (riskUseCase != null || welcomeEmail != null ||
+                riskDeadlineDays != 7 || questionnaireExpiryDays != 14)) {
+            return "--use-default-settings cannot be combined with onboarding overrides"
+        }
         if (!ACCOUNT_ID_PATTERN.matches(awsAccountId.trim())) {
             return "--aws-account-id must be exactly 12 digits (got '${awsAccountId.trim()}')"
         }
@@ -175,7 +187,7 @@ class SimulateOnboardingCommand(
             println("Backend: $backendUrl")
             println("Account: ${awsAccountId.trim()}")
             println("Owner:   ${ownerEmail.trim()}")
-            println("Mode:    $mode")
+            println("Mode:    ${mode?.name ?: "saved backend settings"}")
             println()
 
             val result = onboardingCliService.simulate(
@@ -183,7 +195,8 @@ class SimulateOnboardingCommand(
                 authToken = token,
                 awsAccountId = awsAccountId.trim(),
                 ownerEmail = ownerEmail.trim(),
-                mode = mode.name,
+                mode = mode?.name,
+                useDefaultSettings = useDefaultSettings,
                 riskUseCase = riskUseCase,
                 riskDeadlineDays = if (mode == ImportCommand.OnboardingMode.DIRECT) riskDeadlineDays else null,
                 questionnaireExpiryDays = if (mode == ImportCommand.OnboardingMode.GUIDED) {
@@ -197,7 +210,7 @@ class SimulateOnboardingCommand(
             println("Result")
             println("=".repeat(60))
 
-            var failures = 0
+            var failures = if (result.onboarding.isEmpty()) 1 else 0
             result.onboarding.forEach { ob ->
                 val where = "${ob.awsAccountId}  ${ob.ownerEmail}"
                 when {
@@ -218,7 +231,10 @@ class SimulateOnboardingCommand(
                         println("  ✅ $where  ->  assessment #${ob.riskAssessmentId}" +
                             (if (ob.welcomeEmailSent) ", welcome mail sent" else ""))
                     ob.welcomeEmailSent -> println("  ✉️  $where  ->  welcome mail sent")
-                    else -> println("  ⚠️  $where  ->  nothing sent (check the email configuration)")
+                    else -> {
+                        failures++
+                        println("  ❌ $where  ->  nothing sent (check the email configuration)")
+                    }
                 }
             }
 

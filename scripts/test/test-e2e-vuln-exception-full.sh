@@ -42,6 +42,8 @@ source "$REPO_ROOT/tests/lib/secman-test-tls.sh"
 # =============================================================================
 
 BASE_URL="${BASE_URL:-${SECMAN_BACKEND_URL:-}}"
+source "$SCRIPT_DIR/lib/isolated-target.sh"
+secman_test_require_isolated
 FRONTEND_URL="${FRONTEND_URL:-}"
 # Strip trailing whitespace/newlines from secrets — pass-cli can append a trailing
 # newline depending on how the source field is stored, which would corrupt headers
@@ -116,10 +118,10 @@ EXCEPTION_REASON_CANCEL="E2E test scenario: the requester will cancel this reque
 EXCEPTION_REASON_MATRIX_PREFIX="E2E TEST MATRIX"
 
 # DB credentials (matches existing test scripts)
-DB_HOST="127.0.0.1"
-DB_USER="secman"
-DB_PASS="CHANGEME"
-DB_NAME="secman"
+DB_HOST="${DB_HOST:?isolated DB_HOST required}"
+DB_USER="${DB_USER:?isolated DB_USER required}"
+DB_PASS="${DB_PASS:?isolated DB_PASS required}"
+DB_NAME="${DB_NAME:?isolated DB_NAME required}"
 
 # Colors
 RED='\033[0;31m'
@@ -372,7 +374,7 @@ trigger_view_refresh() {
 }
 
 db_exec() {
-    mariadb -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -N -e "$1" 2>/dev/null || true
+    MYSQL_PWD="$DB_PASS" mariadb -h "$DB_HOST" -u "$DB_USER" "$DB_NAME" -N -e "$1" 2>/dev/null
 }
 
 matrix_case_subject_value() {

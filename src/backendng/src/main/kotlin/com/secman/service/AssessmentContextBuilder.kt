@@ -30,6 +30,11 @@ class AssessmentContextBuilder(
         val fewShot = collectFewShot(assessment)
 
         return when (assessment.assessmentBasisType) {
+            AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> AssessmentContext(
+                basisType = assessment.assessmentBasisType.name, basisLabel = assessment.solutionName ?: "Unknown solution",
+                assetType = null, assetGroups = emptyList(), cloudAccountId = null, osVersion = null,
+                demandDescription = null, useCases = useCases, fewShotExamples = fewShot
+            )
             AssessmentBasisType.ASSET -> {
                 val asset = assetRepository.findById(assessment.assessmentBasisId).orElse(null)
                 AssessmentContext(

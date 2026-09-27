@@ -1,12 +1,11 @@
 ---
 name: aws-account-owner-email
 description: >
-  Run the end-to-end test proving the owner of a newly discovered AWS account
-  actually receives the risk-assessment start email. Asks for the mailbox the
-  test mail should be delivered to, seeds the testbed, imports a brand-new
+  Run the isolated end-to-end test proving a newly discovered AWS account
+  triggers the owner notification to a loopback SMTP sink. Seeds the testbed, imports a brand-new
   12-digit account via the CLI and again via MCP, asserts in the backend log
   that SMTP accepted a send to that exact address for that exact account, then
-  pauses so a human can confirm the mail arrived. Cleans up before and after
+  reports SMTP acceptance. Real inbox delivery is a separate opt-in check. Cleans up before and after
   and never creates or deletes a user for the recipient address. Use this skill
   whenever the user mentions testing the AWS account owner notification, "does
   the account owner get an email", "risk assessment email", "new account email
@@ -27,6 +26,17 @@ description: >
 > change done. See `CLAUDE.md` §"Tooling Conventions" and `AGENTS.md` §Skills.
 
 # AWS Account Owner Email — Iterative Fix Loop
+
+> **Database-safety override:** Run this skill's database-mutating driver inside
+> `./scripts/test/run-isolated-e2e.sh -- <driver and arguments>`. The runner
+> starts and stops its own stack on test-only ports, checks ownership, and removes
+> its disposable database. The direct 8080/4321 start, stop, and driver commands
+> below are superseded by this rule. Never run the driver directly against the
+> current SecMan database; an unverified legacy fixture is preserved and reported.
+> Routine runs use the runner's loopback SMTP sink. Use a reserved `.test`
+> recipient and `ALLOW_PLACEHOLDER_RECIPIENT=true`; backend log acceptance
+> proves the send path, not inbox delivery. Do not perform the historical
+> real-mail/inbox phase without a separate explicit user request.
 
 You are an orchestration agent. Get the recipient address, bring up the stack,
 run the driver, and **iteratively fix every failure** until it passes or the

@@ -91,7 +91,7 @@ class UserMappingBulkImportServiceTest {
 
         // planFrom is real logic living on the collaborator, so stub it to mirror what the real
         // one does rather than letting a relaxed mock return null and silently disable onboarding.
-        every { onboardingService.planFrom(any(), any(), any(), any(), any(), any(), any(), any()) } answers {
+        every { onboardingService.planFrom(any(), any(), any(), any(), any(), any(), any(), any(), any()) } answers {
             val explicit = firstArg<AccountOnboardingMode?>()
             val legacyFlag = secondArg<Boolean>()
             val mode = AccountOnboardingMode.resolve(explicit, legacyFlag)
@@ -115,12 +115,27 @@ class UserMappingBulkImportServiceTest {
             )
     }
 
+    @Test
+    fun `notify-only pins and validates saved plan before importing then onboards without summary`() {
+        val savedPlan = plan(AccountOnboardingMode.WELCOME_ONLY, welcome = true, useCase = null)
+        every { onboardingService.planFrom(any(), any(), any(), any(), any(), any(), any(), any(), true) } returns savedPlan
+        service.execute(request(notify = true), 9L)
+        verifyOrder {
+            onboardingService.planFrom(any(), any(), any(), any(), any(), any(), any(), any(), true)
+            onboardingService.validateRequest(savedPlan, any())
+            userMappingService.bulkCreateMappings(any())
+            onboardingService.onboardNewAccounts(any(), savedPlan, 9L, false)
+        }
+        verify(exactly = 1) { onboardingService.planFrom(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { newAccountNotificationService.sendImportNotification(any(), any()) }
+    }
+
     // --- validate -------------------------------------------------------------
 
     @Test
-    fun `notify without a valid address is rejected`() {
+    fun `notification address is optional but must be valid when supplied`() {
         assertThat(service.validate(request(notify = true, notifyAddress = null)))
-            .contains("notifyAddress")
+            .isNull()
         assertThat(service.validate(request(notify = true, notifyAddress = "not-an-email")))
             .contains("notifyAddress")
         assertThat(service.validate(request(notify = true, notifyAddress = "ops@corp.com")))

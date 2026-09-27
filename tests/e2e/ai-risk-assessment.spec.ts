@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { requireIsolatedTarget } from './helpers/isolated-target';
 
 /**
  * Feature 088 — AI-Assisted Risk Assessment Answers (US1 MVP).
@@ -49,6 +50,7 @@ async function login(page: import('@playwright/test').Page, username: string, pa
 }
 
 test.describe.serial('AI pre-fill MVP', () => {
+  test.beforeAll(() => requireIsolatedTarget());
   const consoleErrors: string[] = [];
 
   test.beforeEach(async ({ page }) => {

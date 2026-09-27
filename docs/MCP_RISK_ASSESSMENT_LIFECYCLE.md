@@ -359,3 +359,29 @@ Cleanup identifies the assessment by an exact notes marker, derives the exact
 account number from that assessment before deleting it, and removes the account
 row only after it is nameless and unreferenced. All other rows use exact fixture
 names. It never uses a broad substring and is safe to repeat.
+
+## Discovery and advisory analysis
+
+Find open cloud assessments with `list_risk_assessments` arguments
+`{"openOnly":true,"assessmentType":"AWS_ACCOUNT","page":0,"pageSize":20}`.
+Read `filtersApplied` to report the actual normalized query. `assessmentType`
+and legacy `basisType` are identical; open always means `STARTED`.
+
+After the respondent submits, call `evaluate_risk_assessment` with
+`{"assessmentId":9001}`. Policy 2.0 returns `NOT_OK` for any scoped NO,
+`NEEDS_REVIEW` for N/A, missing answers, or zero scoped requirements, and `OK`
+only for a complete submitted questionnaire containing Yes answers. Existing
+`verdict` is retained for compatibility and is not the recommendation.
+
+REST `GET /api/risk-assessments/9001/recommendation` and **Risk assessments →
+Analyze answers** use the same policy and findings. The UI additionally analyzes
+started questionnaires as `NEEDS_REVIEW`. An active assessor, ADMIN,
+SECCHAMPION, or a requestor who still has assessment visibility can analyze.
+Requestors do not gain acceptance authority from this operation.
+
+Every result contains the answer revision, generation time, and policy version.
+The read holds the assessment row lock used by answer writers. The UI discards
+results when it detects a new revision (on window focus and every 15 seconds),
+then asks for Refresh. Findings open the corresponding answer. This is always
+**advisory: human approval is still required**. No recommendation changes answers
+or lifecycle state, and no AI narrative is generated.

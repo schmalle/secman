@@ -91,4 +91,25 @@ class DefaultAdminBootstrapperTest {
         verify(exactly = 0) { userRepository.save(any()) }
         assertThat(capturedOut.toString()).isEmpty()
     }
+
+    @Test
+    fun `isolated bootstrap uses supplied credentials without printing them`() {
+        val savedUser = slot<com.secman.domain.User>()
+        every { userRepository.save(capture(savedUser)) } answers { savedUser.captured }
+        val password = DefaultAdminBootstrapper.generateSecurePassword()
+        val isolated = DefaultAdminBootstrapper(
+            userRepository,
+            "secman_e2e_0123456789abcdef",
+            "jdbc:mariadb://127.0.0.1:3306/secman_e2e_0123456789abcdef",
+            "e2e-admin", "e2e-admin@example.test", password
+        )
+
+        isolated.bootstrapDefaultAdmin()
+
+        assertThat(savedUser.captured.username).isEqualTo("e2e-admin")
+        assertThat(savedUser.captured.email).isEqualTo("e2e-admin@example.test")
+        assertThat(BCryptPasswordEncoder().matches(password, savedUser.captured.passwordHash)).isTrue()
+        assertThat(capturedOut.toString()).doesNotContain(password)
+        assertThat(logAppender.list.map { it.formattedMessage }).noneMatch { it.contains(password) }
+    }
 }

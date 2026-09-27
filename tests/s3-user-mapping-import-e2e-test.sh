@@ -40,7 +40,9 @@ export SECMAN_ADMIN_EMAIL="${SECMAN_ADMIN_EMAIL:-pass://test/secman/SECMAN_ADMIN
 # Configuration
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 JAR_PATH="$REPO_ROOT/src/cli/build/libs/cli-0.1.0-all.jar"
-BASE_URL="${SECMAN_BASE_URL:-http://localhost:8080}"
+BASE_URL="${SECMAN_BASE_URL:-${SECMAN_BACKEND_URL:-}}"
+source "$SCRIPT_DIR/../scripts/test/lib/isolated-target.sh"
+secman_test_require_isolated
 TIMESTAMP=$(date +%s)
 TEST_EMAIL="e2e-s3-import-${TIMESTAMP}@test.secman.local"
 S3_TEST_KEY="e2e-test/user-mappings-${TIMESTAMP}.csv"

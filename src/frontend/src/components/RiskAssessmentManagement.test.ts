@@ -11,3 +11,12 @@ test('risk assessment form supports an account-native AWS basis', () => {
   assert.match(source, /pattern="\[0-9\]\{12\}"/);
   assert.doesNotMatch(source, /AWS_ACCOUNT[\s\S]{0,300}dataToSubmit\.assetId/);
 });
+
+test('analyze answers action is gated on review authority and opens the recommendation modal', () => {
+  assert.match(source, /import AssessmentRecommendationModal from '\.\/AssessmentRecommendationModal';/);
+  assert.match(source, /\{assessment\.canAnalyze && \(/);
+  assert.match(source, /Analyze answers/);
+  assert.match(source, /onClick=\{\(\) => setRecommendationAssessment\(assessment\)\}/);
+  assert.match(source, /<AssessmentRecommendationModal[\s\S]{0,200}assessmentId=\{recommendationAssessment\.id\}/);
+  assert.match(source, /onReviewAnswers=\{\(requirementId\) => \{[\s\S]{0,200}handleCheckAnswers\(assessment, requirementId\)/);
+});

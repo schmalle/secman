@@ -87,6 +87,8 @@ class ImportUserMappingsTool(
                 ),
                 "maxItems" to MAX_MAPPINGS
             ),
+            "notifyNewAccounts" to mapOf("type" to "boolean", "description" to "Apply the saved onboarding action to new account owners unless an explicit mode overrides it"),
+            "notifyAddress" to mapOf("type" to "string", "description" to "Optional email recipient for the import summary"),
             "dryRun" to mapOf(
                 "type" to "boolean",
                 "description" to "If true, validate without creating mappings",
@@ -175,6 +177,8 @@ class ImportUserMappingsTool(
                 )
             },
             dryRun = arguments["dryRun"] as? Boolean ?: false,
+            notifyNewAccounts = arguments["notifyNewAccounts"] as? Boolean ?: false,
+            notifyAddress = (arguments["notifyAddress"] as? String)?.trim(),
             startRiskAssessment = arguments["startRiskAssessment"] as? Boolean ?: false,
             riskAssessmentUseCase = (arguments["riskAssessmentUseCase"] as? String)?.trim()
                 ?.takeIf { it.isNotBlank() },
@@ -283,6 +287,7 @@ class ImportUserMappingsTool(
                             "ownerEmail" to ob.ownerEmail,
                             "mode" to ob.mode,
                             "welcomeEmailSent" to ob.welcomeEmailSent,
+                            "welcomeEmail" to ob.welcomeEmail,
                             "questionnaireInviteId" to ob.questionnaireInviteId,
                             "questionnaireExpiresAt" to ob.questionnaireExpiresAt,
                             "riskAssessmentId" to ob.riskAssessmentId,

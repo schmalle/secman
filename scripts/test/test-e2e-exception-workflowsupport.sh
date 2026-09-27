@@ -29,7 +29,9 @@ source "$(cd "$SCRIPT_DIR/../.." && pwd)/tests/lib/secman-test-tls.sh"
 # Configuration
 # =============================================================================
 
-BASE_URL="${BASE_URL:-http://localhost:8080}"
+BASE_URL="${BASE_URL:-${SECMAN_BACKEND_URL:-}}"
+source "$SCRIPT_DIR/lib/isolated-target.sh"
+secman_test_require_isolated
 SECMAN_MCP_KEY="${SECMAN_MCP_KEY:-}"
 VERBOSE="${VERBOSE:-false}"
 
@@ -308,7 +310,7 @@ fi
 if [[ -n "$user_id_to_delete" ]]; then
     # Clean up related data first (exception request audit logs, etc.)
     log_verbose "Cleaning up related data for user ID: $user_id_to_delete"
-    mariadb -h 127.0.0.1 -u secman -p"CHANGEME" secman -e "
+    MYSQL_PWD="$DB_PASS" mariadb -h "$DB_HOST" -u "$DB_USER" "$DB_NAME" -e "
         DELETE FROM exception_request_audit WHERE actor_user_id = $user_id_to_delete;
         DELETE FROM vulnerability_exception_request WHERE requested_by_user_id = $user_id_to_delete OR reviewed_by_user_id = $user_id_to_delete;
     " 2>/dev/null || true
@@ -340,7 +342,7 @@ log "Deleted: $deleted_assets assets, $deleted_vulns vulnerabilities, $deleted_s
 # Clear the materialized view directly (no auth needed, simpler for cleanup)
 # This ensures stale data from previous test runs is removed
 log "Clearing materialized view..."
-mariadb -h 127.0.0.1 -u secman -p"CHANGEME" secman -e "TRUNCATE TABLE outdated_asset_materialized_view;" 2>/dev/null || true
+MYSQL_PWD="$DB_PASS" mariadb -h "$DB_HOST" -u "$DB_USER" "$DB_NAME" -e "TRUNCATE TABLE outdated_asset_materialized_view;" 2>/dev/null || true
 success "Step 1: All assets deleted and view cleared"
 
 # =============================================================================
@@ -440,7 +442,7 @@ fi
 
 # Get the numeric vulnerability ID from the database by CVE
 # The MCP create_exception_request tool requires the numeric ID, not the CVE string
-overdue_vuln_id=$(mariadb -h 127.0.0.1 -u secman -p"CHANGEME" secman -N -e "SELECT id FROM vulnerability WHERE vulnerability_id = '$TEST_CVE_OVERDUE' LIMIT 1;" 2>/dev/null)
+overdue_vuln_id=$(MYSQL_PWD="$DB_PASS" mariadb -h "$DB_HOST" -u "$DB_USER" "$DB_NAME" -N -e "SELECT id FROM vulnerability WHERE vulnerability_id = '$TEST_CVE_OVERDUE' LIMIT 1;" 2>/dev/null)
 
 if [[ -z "$overdue_vuln_id" ]]; then
     fail "Could not find vulnerability ID for $TEST_CVE_OVERDUE in database"
@@ -567,7 +569,7 @@ log "Step 11: Cleaning up test data..."
 # vulnerability row id, so it survives asset/vuln teardown and would suppress the same CVE
 # in the overdue view on the next run. Delete it (scoped strictly to the test CVEs).
 log_verbose "Cleaning up related data for user ID: $user_id"
-mariadb -h 127.0.0.1 -u secman -p"CHANGEME" secman -e "
+MYSQL_PWD="$DB_PASS" mariadb -h "$DB_HOST" -u "$DB_USER" "$DB_NAME" -e "
     DELETE FROM exception_request_audit WHERE actor_user_id = $user_id;
     DELETE FROM vulnerability_exception_request WHERE requested_by_user_id = $user_id OR reviewed_by_user_id = $user_id;
     DELETE FROM vulnerability_exception_request WHERE subject_value IN ('$TEST_CVE_OVERDUE', '$TEST_CVE_NON_OVERDUE');

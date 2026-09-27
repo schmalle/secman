@@ -33,7 +33,8 @@ interface Requirement {
 
 interface RiskAssessment {
   id: number;
-  assessmentBasisType: 'DEMAND' | 'ASSET' | 'AWS_ACCOUNT';
+  solutionName?: string;
+  assessmentBasisType: 'DEMAND' | 'ASSET' | 'AWS_ACCOUNT' | 'SAAS' | 'COTS';
   assessmentBasisId: number;
   demand?: Demand;
   asset?: Asset;
@@ -87,6 +88,7 @@ interface ResponseFormData {
 }
 
 interface AssessmentPerformanceProps {
+  focusedRequirementId?: number;
   assessmentId: number;
   mode: 'perform' | 'review';
   onClose: () => void;
@@ -97,12 +99,19 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
   assessmentId, 
   mode, 
   onClose,
-  onComplete 
+  onComplete,
+  focusedRequirementId
 }) => {
   const [assessmentData, setAssessmentData] = useState<AssessmentData | null>(null);
   const [requirementsWithResponses, setRequirementsWithResponses] = useState<RequirementWithResponse[]>([]);
   const [responses, setResponses] = useState<ResponseFormData>({});
   const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (loading || focusedRequirementId == null) return;
+    const target = document.getElementById(`assessment-answer-${focusedRequirementId}`);
+    target?.scrollIntoView({ block: 'center' });
+    target?.focus();
+  }, [loading, focusedRequirementId]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -488,7 +497,9 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
                         ? `Demand: ${assessmentData.assessment.demand?.title}`
                         : assessmentData.assessment.assessmentBasisType === 'AWS_ACCOUNT'
                           ? `AWS account: ${assessmentData.assessment.awsAccount?.name || assessmentData.assessment.awsAccount?.awsAccountId}`
-                          : `Asset: ${assessmentData.assessment.asset?.name}`}
+                          : assessmentData.assessment.assessmentBasisType === 'SAAS' || assessmentData.assessment.assessmentBasisType === 'COTS'
+                            ? `${assessmentData.assessment.assessmentBasisType}: ${assessmentData.assessment.solutionName}`
+                            : `Asset: ${assessmentData.assessment.asset?.name}`}
                     </p>
                     <p className="mb-1">
                       <strong>Assessor:</strong> {assessmentData.assessment.assessor?.username}
@@ -640,7 +651,7 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
                     item.response?.source ??
                     'MANUAL';
                   return (
-                  <div key={item.requirement.id} className="list-group-item">
+                  <div key={item.requirement.id} id={`assessment-answer-${item.requirement.id}`} tabIndex={-1} className="list-group-item">
                     <div className="d-flex justify-content-between align-items-start mb-2">
                       <h6 className="mb-1">
                         {index + 1}. {item.requirement.shortreq}

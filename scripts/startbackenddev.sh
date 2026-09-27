@@ -2,7 +2,7 @@
 # secman - CLI wrapper for secman security management tool
 
 export MICRONAUT_ENVIRONMENTS=dev
-export SECMAN_BACKEND_URL="pass://Test/SECMAN//SECMAN_BACKEND_BASE_URL"
+export SECMAN_BACKEND_URL="${SECMAN_E2E_BACKEND_URL:-pass://Test/SECMAN//SECMAN_BACKEND_BASE_URL}"
 # pass-cli is the source of truth for the database, unless the environment
 # already names one. The shielded dev container (docs/APPLE_CONTAINER_DEV.md)
 # is what sets it: `up --db container|host` decides whether the stack talks to
@@ -28,13 +28,13 @@ export SECMAN_ADMIN_EMAIL="pass://Test/SECMAN/SECMAN_ADMIN_EMAIL"
 export AWS_ACCESS_KEY_ID="pass://Test/SECMAN/SECMAN_AWS_ACCESS_KEY_ID"
 export AWS_SECRET_ACCESS_KEY="pass://Test/SECMAN/SECMAN_AWS_SECRET_ACCESS_KEY"
 export AWS_SESSION_TOKEN="pass://Test/SECMAN/SECMAN_AWS_ACCESS_TOKEN"
-export SECMAN_BACKEND_URL="pass://Test/SECMAN/SECMAN_BACKEND_BASE_URL"
+export SECMAN_BACKEND_URL="${SECMAN_E2E_BACKEND_URL:-pass://Test/SECMAN/SECMAN_BACKEND_BASE_URL}"
 export SECMAN_INSECURE="pass://Test/SECMAN/SECMAN_SSL_ACCEPT_ALL"
-export FRONTEND_URL="pass://Test/SECMAN/SECMAN_BACKEND_BASE_URL"
-export SECMAN_BACKEND_URL="pass://Test/SECMAN/SECMAN_BACKEND_BASE_URL"
+export FRONTEND_URL="${SECMAN_E2E_FRONTEND_URL:-pass://Test/SECMAN/SECMAN_BACKEND_BASE_URL}"
+export SECMAN_BACKEND_URL="${SECMAN_E2E_BACKEND_URL:-pass://Test/SECMAN/SECMAN_BACKEND_BASE_URL}"
 
 
 
 export JWT_SECRET=$(openssl rand -base64 48)
 
-pass-cli run -- gradle :backendng:clean backendng:run
+pass-cli run -- ./gradlew :backendng:clean backendng:run

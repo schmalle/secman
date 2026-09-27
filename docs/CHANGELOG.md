@@ -1,5 +1,29 @@
 # Changelog (archived from CLAUDE.md)
 
+## 2026-09-27 — MCP vulnerability query E2E regression
+
+- Added an automatically discovered Playwright regression and `scripts/test/test-e2e-mcp-vulnerability-query.sh`. It verifies MCP initialization/discovery, the severity-array schema, default/CVE/severity/asset queries, pagination and hydrated asset names on both HTTP transports. Explicitly delegated non-admin access is tested alongside invalid-key, missing-delegation, missing-permission and ungranted-asset refusals. All fixtures and keys are restricted to the disposable runner database.
+
+## 2026-09-27 — guest invitation E2E regression
+
+- Added `assessment-guest-invitation.spec.ts` to automatic Playwright suite discovery and `scripts/test/test-e2e-assessment-guest-invitation.sh` as its isolated entry point. It creates an email-only respondent, sends to the loopback sink, and checks anonymous questionnaire loading, saving, reload, and submission.
+- The browser regression uncovered stale public-questionnaire API fields. The guest page now reads the current assessment/response contract, sends `answerType`, and submits the token-bound recipient email. The public page no longer mounts the login-only attachment widget.
+
+## 2026-09-27 — respondent invitation compatibility
+
+- The tokenized `/respond/:token` questionnaire uses the existing public layout, avoiding the authenticated layout’s login redirect. Backend token expiry, revocation, and assignment scope checks remain in force. The numeric assessment-response route is constrained to 1–19 digits to prevent a collision with 32-character token URLs.
+
+- Migration V282 makes the obsolete assessment-token `respondent_email` column optional when present. Current token creation writes `email`; the legacy NOT NULL constraint previously blocked external respondent notifications before delivery. Existing values are preserved.
+
+## 2026-09-27 — solution assessments and saved owner onboarding
+
+- Account Onboarding is under Admin → Users & Access, visible only to ADMIN and SECCHAMPION. Champions see only that destination in the admin menu. Existing-account and repeat-import regression coverage confirms that adding another owner does not trigger onboarding again.
+
+- Risk assessment creation supports SAAS/COTS with a required solution name, searchable existing assessors/respondents, and accountless external respondents using the existing assignment-bound questionnaire tokens. Each participant uses a single searchable picker with keyboard selection; external respondents can be invited by typing their email. Participant lookup is manager-only and bounded to 100 enabled users.
+- Account Onboarding now saves a welcome-email (default) or direct-risk-assessment policy. ADMIN edits sanitized welcome content with the requirements HTML editor. File/S3 `--createnotify` (alias `--notify-new-accounts`) uses that policy; the operator summary address is optional. Explicit legacy mode flags retain precedence. Saved policy is validated and pinned before mapping persistence, and email remains post-commit.
+- The manual `./scripts/test-account-onboarding.sh <email>` builds the CLI, generates a simulated account ID, and exercises the saved policy. DIRECT simulations create external assignments/token links, mark mail and tracking as simulated, skip automatic reminders, and report delivery failure without rolling back the assessment.
+- Migrations V280 and V281 add solution/respondent fields, settings, and simulation tracking. See [setup and manual testing](RISK_ASSESSMENT_SETUP.md).
+
 ## Context summaries preserved before compression (2026-09-06)
 
 - **Source-review quick wins: hot-path queries, transaction scope, dashboard parallelism (2026-08-27)** — first execution pass over `docs/SOURCE_REVIEW_COMPLEXITY_SPEED.md` §6. `AssetFilterService` admin paths use a new `findAllIds()` projection and the scan path became two batch queries (no more full-table `findAll()` + in-memory filter); eight `findAll().filter{hasRole}` sites became role queries; `NormMappingService` no longer holds a transaction across its OpenRouter loop (per-requirement apply transactions via self-`Provider`); the private CrowdStrike deadlock-retry copy merged into shared `DeadlockRetry`; new `GET /api/workgroups/tree` replaces the frontend's recursive per-node walk; home dashboard fetches run concurrently, the `McpDashboard` interval leak is fixed, dead `utils/api-config.ts` and the legacy unpaged `getCurrentVulnerabilities` are deleted. Backend build/startup + E2E gates still owed before merge (authoring env had no Gradle mirror/DB/pass-cli) — detail in `docs/CHANGELOG.md`.
@@ -132,3 +156,6 @@ The full history. Every change is written here **verbatim** when it happens; CLA
   - Rule-B fence: `owner = "CrowdStrike Import"` AND `crowdStrikeLastImportedAt IS NULL` AND no `manualCreator` AND no `scanUploader` AND `COALESCE(lastSeen, updatedAt, createdAt) < cutoff`.
   - `crowdstrike_cleanup_run` gains `legacy_candidate_count` and `legacy_deleted_count` (V210). Safety brake denominator widens to `countCrowdStrikeTracked + countLegacyCrowdStrikeTotal` when `include-legacy` is on.
   - Each cleanup candidate carries a `CleanupCandidateReason` enum (`TIMESTAMP_STALE` | `LEGACY_NULL_TIMESTAMP`) — surfaced in the dry-run summary and history table on the admin Falcon-config page.
+# Unreleased
+
+- **Dependency refresh and MCP vulnerability schema** — updated stable backend, CLI, and shared-library dependencies, and refreshed the Astro/frontend toolchain and patch releases. The npm lockfile also resolves the vulnerable transitive `devalue` package to 5.9.4. Corrected `get_vulnerabilities.severity` so its allowed values are declared for array items, matching the argument type expected by the tool. Backend/shared/CLI compilation and the frontend production build pass; E2E tests were not run.

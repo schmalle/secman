@@ -30,7 +30,9 @@ export SECMAN_MCP_KEY="pass://test/secman/SECMAN_MCP_KEY"
 export SECMAN_TEST_DOMAIN="pass://test/secman/SECMAN_TEST_DOMAIN"
 
 # Configuration
-BASE_URL="${SECMAN_BASE_URL:-http://localhost:8080}"
+BASE_URL="${SECMAN_BASE_URL:-${SECMAN_BACKEND_URL:-}}"
+source "$SCRIPT_DIR/../scripts/test/lib/isolated-target.sh"
+secman_test_require_isolated
 TEST_USER_NAME="E2E_DEFAULT_ROLES_$(date +%s)"
 TEST_USER_EMAIL=""  # Set after SECMAN_TEST_DOMAIN is resolved
 

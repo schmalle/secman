@@ -11,10 +11,9 @@ import org.slf4j.LoggerFactory
  * the existing `aws-account-risk-assessment-*` mails must render byte-identically, which is
  * what `AwsAccountRiskAssessmentServiceTest` continues to assert.
  *
- * Why classpath files and not DB-backed templates: the bodies are versioned with the code
- * that supplies their placeholders, so a template and its renderer cannot drift apart at
- * runtime, and there is no stored-HTML sink to sanitize. The Thymeleaf path in
- * [EmailTemplateService] is a different mechanism used by other features; do not mix them.
+ * Assessment and questionnaire templates remain classpath resources. Editable welcome mail
+ * uses the same literal placeholder renderer through [AccountOnboardingSettingsService],
+ * which sanitizes stored HTML. Neither path evaluates content through Thymeleaf.
  */
 @Singleton
 open class EmailTemplateRenderer {

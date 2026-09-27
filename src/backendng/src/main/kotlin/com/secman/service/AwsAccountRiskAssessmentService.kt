@@ -65,7 +65,8 @@ open class AwsAccountRiskAssessmentService(
     // is returned — never holding a pooled connection across the blocking SMTP send. A Provider
     // (lazy) is used so the bean can depend on a provider of itself without a construction cycle.
     private val selfProvider: Provider<AwsAccountRiskAssessmentService>,
-    @io.micronaut.context.annotation.Value("\${secman.assessment.reminder-service-user-id:0}") private val reminderServiceUserId: Long = 0
+    @io.micronaut.context.annotation.Value("\${secman.assessment.reminder-service-user-id:0}") private val reminderServiceUserId: Long = 0,
+    private val assessmentTokens: com.secman.repository.AssessmentTokenRepository? = null
 ) {
     private val log = LoggerFactory.getLogger(AwsAccountRiskAssessmentService::class.java)
 
@@ -182,7 +183,8 @@ open class AwsAccountRiskAssessmentService(
         newAccounts: List<NewAccountImportInfo>,
         useCaseName: String,
         deadlineDays: Int,
-        requestorUserId: Long?
+        requestorUserId: Long?,
+        simulatedBy: String? = null
     ): List<AccountRiskAssessmentInfo> {
         if (newAccounts.isEmpty()) return emptyList()
 
@@ -240,7 +242,7 @@ open class AwsAccountRiskAssessmentService(
             for (ownerEmail in account.emails) {
                 val assessor = secChampions[assessorIndex % secChampions.size]
                 assessorIndex++
-                val info = try {
+                var info = try {
                     selfProvider.get().createAssessment(
                         awsAccountId = account.awsAccountId,
                         ownerEmail = ownerEmail,
@@ -249,7 +251,8 @@ open class AwsAccountRiskAssessmentService(
                         assessor = assessor,
                         requestor = requestorUser ?: assessor,
                         activeRelease = activeRelease,
-                        requirementCount = requirementCount
+                        requirementCount = requirementCount,
+                        simulatedBy = simulatedBy
                     )
                 } catch (e: Exception) {
                     log.error(
@@ -262,7 +265,6 @@ open class AwsAccountRiskAssessmentService(
                         error = "Failed to start risk assessment: ${e.message}"
                     )
                 }
-                results += info
 
                 // Notify the owner only AFTER the persist transaction has committed, so the
                 // blocking SMTP send holds no pooled DB connection. Both `error` and `skipped`
@@ -275,13 +277,15 @@ open class AwsAccountRiskAssessmentService(
                     try {
                         notifyAssessmentStarted(
                             ownerEmail, account.awsAccountId, useCase.name, endDate, assessor, activeRelease,
-                            info.riskAssessmentId
+                            info.riskAssessmentId, simulatedBy
                         )
                     } catch (e: Exception) {
+                        info = info.copy(error = "Assessment created but owner notification failed")
                         log.warn("Risk assessment {} created, but owner notification to {} failed: {}",
                             info.riskAssessmentId, ownerEmail, e.message)
                     }
                 }
+                results += info
             }
         }
         return results
@@ -306,7 +310,8 @@ open class AwsAccountRiskAssessmentService(
         assessor: User,
         requestor: User,
         activeRelease: Release,
-        requirementCount: Int
+        requirementCount: Int,
+        simulatedBy: String? = null
     ): AccountRiskAssessmentInfo {
         val today = LocalDate.now()
         require(useCases.isNotEmpty()) { "createAssessment requires at least one use case" }
@@ -354,6 +359,7 @@ open class AwsAccountRiskAssessmentService(
             awsAccount = awsAccount
         )
         assessment.respondent = ownerUser
+        assessment.respondentEmail = if (ownerUser == null) ownerEmail else null
         assessment.useCases = useCases.toMutableSet()
         // Pin to the current version of the security requirements. The questionnaire is
         // then resolved from that release's frozen snapshots (see
@@ -365,6 +371,7 @@ open class AwsAccountRiskAssessmentService(
         // notes is capped at 1024 by the column, and the use case list is now unbounded in
         // principle — truncate rather than fail the insert after the import already committed.
         assessment.notes = EmailAddressValidator.sanitizeForEcho(
+            (if (simulatedBy != null) "SIMULATION requested by $simulatedBy. " else "") +
             "Automatically started by AWS account mapping import for account " +
                 "$awsAccountId (owner: $ownerEmail, use case: $joinedUseCaseNames, " +
                 "requirements version: ${activeRelease.version})",
@@ -380,7 +387,8 @@ open class AwsAccountRiskAssessmentService(
                 ownerEmail = ownerEmail,
                 riskAssessment = saved,
                 // Column widened to 1024 in V253 for exactly this: a union of names, not one.
-                useCaseName = joinedUseCaseNames.take(1024)
+                useCaseName = joinedUseCaseNames.take(1024),
+                simulated = simulatedBy != null
             )
         )
 
@@ -443,7 +451,7 @@ open class AwsAccountRiskAssessmentService(
      * @return number of reminder emails sent
      */
     open fun processDeadlineReminders(today: LocalDate = LocalDate.now()): Int {
-        val pending = trackingRepository.findPendingDeadlineReminders(today, today.plusDays(2))
+        val pending = trackingRepository.findPendingDeadlineReminders(today, today.plusDays(2)).filterNot { it.simulated }
         if (pending.isEmpty()) return 0
 
         var sent = 0
@@ -531,25 +539,38 @@ open class AwsAccountRiskAssessmentService(
         endDate: LocalDate,
         assessor: User,
         release: Release,
-        assessmentId: Long?
+        assessmentId: Long?,
+        simulatedBy: String? = null
     ) {
-        val subject = "Risk assessment started for your AWS account $awsAccountId"
+        val subject = (if (simulatedBy != null) "[SIMULATION] " else "") + "Risk assessment started for your AWS account $awsAccountId"
+        val simulationText = simulatedBy?.let { "SIMULATION requested by ${EmailAddressValidator.sanitizeForEcho(it)}.\n\n" }.orEmpty()
+        val simulationHtml = simulatedBy?.let { "<p><strong>SIMULATION</strong> requested by ${templateRenderer.escapeHtml(it)}.</p>" }.orEmpty()
+        val authenticated = io.micronaut.security.authentication.Authentication.build(
+            assessor.username, assessor.roles.map { it.name }, mapOf("userId" to assessor.id!!))
+        val accountless = assessmentId?.let { workflow.prepareReminder(it, authenticated, ownerEmail).accountless } ?: false
+        val recipientUrl = if (assessmentId != null && accountless) {
+            val token = requireNotNull(assessmentTokens) { "Assessment token repository unavailable" }
+                .save(workflow.issueToken(assessmentId, ownerEmail, authenticated))
+            appConfig.backend.baseUrl.trimEnd('/') + "/respond/${token.token}"
+        } else assessmentUrl(assessmentId)
         val values = mapOf(
             "awsAccountId" to awsAccountId,
             "useCaseName" to useCaseNames,
             "requirementsVersion" to "${release.version} (${release.name})",
             "assessor" to assessor.email.ifBlank { assessor.username },
             "deadline" to endDate.format(DATE_FORMAT),
-            "assessmentsUrl" to assessmentUrl(assessmentId),
+            "assessmentsUrl" to recipientUrl,
         )
 
-        emailService.sendEmailWithInlineImages(
+        val accepted = emailService.sendEmailWithInlineImages(
             to = ownerEmail,
             subject = subject,
-            textContent = render(templateRenderer.readText(STARTED_TEMPLATE), values, escape = false),
-            htmlContent = render(templateRenderer.readHtml(STARTED_TEMPLATE), values, escape = true),
+            textContent = simulationText + render(templateRenderer.readText(STARTED_TEMPLATE), values, escape = false),
+            htmlContent = simulationHtml + render(templateRenderer.readHtml(STARTED_TEMPLATE), values, escape = true),
             inlineImages = loadLogoInlineImage(),
+            beforeSend = { assessmentId?.let { workflow.authorizeReminder(it, assessor.id!!, ownerEmail) } }
         ).get()
+        check(accepted) { "Owner notification delivery failed" }
     }
 
     /**

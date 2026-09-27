@@ -16,11 +16,22 @@ test('CrowdStrike name overrides are visible and resettable', () => {
     assert.match(source, /\/name\/reset/);
 });
 
+test('asset inventory displays and filters every stored IP address', () => {
+    const source = readFileSync(new URL('./AssetManagement.tsx', import.meta.url), 'utf8');
+
+    assert.match(source, /IP Addresses/);
+    assert.match(source, /asset\.ipAddresses\?\.length/);
+    assert.match(source, /displayedIps\.some/);
+});
+
 test('asset list uses WebKit-safe sticky header cells inside a fixed shell', () => {
     const source = readFileSync(new URL('./AssetManagement.tsx', import.meta.url), 'utf8');
     const styleSource = readFileSync(new URL('./scrollableTableStyles.ts', import.meta.url), 'utf8');
+    const layoutSource = readFileSync(new URL('./AssetManagement.css', import.meta.url), 'utf8');
 
-    assert.match(source, /height: 'calc\(100dvh - 9\.5rem\)'/);
+    assert.match(source, /asset-management container-fluid d-flex flex-column/);
+    assert.match(layoutSource, /height: calc\(100dvh - 9\.5rem\)/);
+    assert.match(layoutSource, /\.asset-management__results \{\s*min-height: 0;\s*overflow: hidden;/);
     assert.match(source, /scrollContainerStyle, stickyHeaderCellStyle/);
     assert.match(styleSource, /overflow: 'auto'/);
     assert.match(styleSource, /export const stickyHeaderCellStyle: React\.CSSProperties/);
@@ -28,4 +39,23 @@ test('asset list uses WebKit-safe sticky header cells inside a fixed shell', () 
     assert.match(source, /borderCollapse: 'separate'/);
     assert.match(source, /<th style=\{stickyHeaderCellStyle\}>Name<\/th>/);
     assert.doesNotMatch(source, /<thead[^>]+position: 'sticky'/);
+});
+
+test('asset overview uses bounded server-side pagination', () => {
+    const source = readFileSync(new URL('./AssetManagement.tsx', import.meta.url), 'utf8');
+
+    assert.match(source, /\/api\/assets\/search\?\$\{params\}/);
+    assert.match(source, /\[25, 50, 100, 250\]/);
+    assert.match(source, /setTimeout\(\(\) => fetchAssets\(controller\.signal\), 300\)/);
+    assert.match(source, /controller\.abort\(\)/);
+    assert.doesNotMatch(source, /authenticatedGet\('\/api\/assets'\)/);
+});
+
+test('asset overview progressively loads the count and table rows', () => {
+    const source = readFileSync(new URL('./AssetManagement.tsx', import.meta.url), 'utf8');
+
+    assert.match(source, /authenticatedGet\('\/api\/assets\/count'\)/);
+    assert.match(source, /Assets \(…\)/);
+    assert.match(source, /aria-label="Loading assets"/);
+    assert.match(source, /matching of.*accessible assets/);
 });

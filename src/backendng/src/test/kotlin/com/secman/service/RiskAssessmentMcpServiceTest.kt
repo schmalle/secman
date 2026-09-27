@@ -47,8 +47,10 @@ class RiskAssessmentMcpServiceTest {
     private val keys = mockk<com.secman.repository.McpApiKeyRepository>(relaxed = true)
     private val workflow = AssessmentWorkflowService(entityManager, assessments, assignments, mockk(relaxed = true), mockk(relaxed = true),
         responses, users, keys, requirements, releaseScope, access)
+    private val recommendationService = RiskAssessmentRecommendationService(responses, workflow)
     private val service = RiskAssessmentMcpService(
-        assessments, responses, requirements, useCases, awsAccounts, assets, users, filter, workflow, access, releaseScope
+        assessments, responses, requirements, useCases, awsAccounts, assets, users, filter, workflow, access, releaseScope,
+        recommendationService
     )
 
     private val assessor = user(1, "champ", "champ@example.test", User.Role.SECCHAMPION)
@@ -102,6 +104,7 @@ class RiskAssessmentMcpServiceTest {
         assessment.status = "STARTED"
         every { users.findById(any()) } answers { Optional.ofNullable(listOf(assessor, respondent, outsider).find { it.id == firstArg<Long>() }) }
         every { entityManager.find(RiskAssessment::class.java, assessment.id!!, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE) } returns assessment
+        every { entityManager.find(RiskAssessment::class.java, assessment.id!!, jakarta.persistence.LockModeType.PESSIMISTIC_READ) } returns assessment
         every { assignments.findByAssessmentId(assessment.id!!) } returns listOf(
             com.secman.domain.AssessmentAssignment(id = 4, assessmentId = assessment.id!!, userId = assessor.id, email = assessor.email, role = "ASSESSOR"),
             com.secman.domain.AssessmentAssignment(id = 5, assessmentId = assessment.id!!, userId = respondent.id, email = respondent.email, role = "RESPONDENT"))
@@ -262,16 +265,175 @@ class RiskAssessmentMcpServiceTest {
     @Test
     fun `list forwards open status and use case filter and returns account identity`() {
         every {
-            assessments.findForMcp("STARTED", useCase.name, respondent.id!!, false, any(), any(), Pageable.from(0, 20))
+            assessments.findForMcp(null, "STARTED", useCase.name, respondent.id!!, false, any(), any(), Pageable.from(0, 20))
         } returns Page.of(listOf(assessment), Pageable.from(0, 20), 1L)
 
-        val result = service.list(context(respondent), "started", useCase.name, 0, 20)
+        val result = service.list(context(respondent), "started", useCase.name, false, null, 0, 20)
 
         @Suppress("UNCHECKED_CAST")
         val rows = result["assessments"] as List<Map<String, Any?>>
         assertThat(rows).hasSize(1)
         assertThat(rows.single()["awsAccountId"]).isEqualTo(awsAccount.awsAccountId)
         assertThat(result["totalElements"]).isEqualTo(1L)
+        @Suppress("UNCHECKED_CAST")
+        val filters = result["filtersApplied"] as Map<String, Any?>
+        assertThat(filters["status"]).isEqualTo("STARTED")
+        assertThat(filters["openOnly"]).isEqualTo(false)
+        assertThat(filters["assessmentType"]).isNull()
+        assertThat(filters["useCaseName"]).isEqualTo(useCase.name)
+    }
+
+    @Test
+    fun `list without filters reports empty filtersApplied`() {
+        every {
+            assessments.findForMcp(null, null, null, respondent.id!!, false, any(), any(), Pageable.from(0, 20))
+        } returns Page.of(listOf(assessment), Pageable.from(0, 20), 1L)
+
+        val result = service.list(context(respondent), null, null, false, null, 0, 20)
+
+        assertThat(result["filtersApplied"]).isEqualTo(
+            mapOf("status" to null, "openOnly" to false, "assessmentType" to null, "useCaseName" to null)
+        )
+    }
+
+    @Test
+    fun `openOnly alone forwards and reports the STARTED status`() {
+        every {
+            assessments.findForMcp(null, "STARTED", null, respondent.id!!, false, any(), any(), Pageable.from(0, 20))
+        } returns Page.of(listOf(assessment), Pageable.from(0, 20), 1L)
+
+        val result = service.list(context(respondent), null, null, true, null, 0, 20)
+
+        @Suppress("UNCHECKED_CAST")
+        val filters = result["filtersApplied"] as Map<String, Any?>
+        assertThat(filters["status"]).isEqualTo("STARTED")
+        assertThat(filters["openOnly"]).isEqualTo(true)
+        verify { assessments.findForMcp(null, "STARTED", null, respondent.id!!, false, any(), any(), Pageable.from(0, 20)) }
+    }
+
+    @Test
+    fun `openOnly tolerates the equivalent STARTED status`() {
+        every {
+            assessments.findForMcp(null, "STARTED", null, respondent.id!!, false, any(), any(), Pageable.from(0, 20))
+        } returns Page.of(listOf(assessment), Pageable.from(0, 20), 1L)
+
+        val result = service.list(context(respondent), "STARTED", null, true, null, 0, 20)
+
+        @Suppress("UNCHECKED_CAST")
+        assertThat((result["filtersApplied"] as Map<String, Any?>)["status"]).isEqualTo("STARTED")
+    }
+
+    @Test
+    fun `list forwards each supported status normalized to uppercase`() {
+        listOf("started" to "STARTED", "completed" to "COMPLETED").forEach { (input, expected) ->
+            every {
+                assessments.findForMcp(null, expected, null, respondent.id!!, false, any(), any(), Pageable.from(0, 20))
+            } returns Page.of(emptyList(), Pageable.from(0, 20), 0L)
+
+            val result = service.list(context(respondent), input, null, false, null, 0, 20)
+
+            @Suppress("UNCHECKED_CAST")
+            assertThat((result["filtersApplied"] as Map<String, Any?>)["status"]).isEqualTo(expected)
+        }
+    }
+
+    @Test
+    fun `list normalizes and forwards each assessment type to the repository`() {
+        AssessmentBasisType.entries.forEach { type ->
+            every {
+                assessments.findForMcp(type, null, null, respondent.id!!, false, any(), any(), Pageable.from(0, 20))
+            } returns Page.of(emptyList(), Pageable.from(0, 20), 0L)
+
+            val result = service.list(context(respondent), null, null, false, type.name.lowercase(), 0, 20)
+
+            @Suppress("UNCHECKED_CAST")
+            assertThat((result["filtersApplied"] as Map<String, Any?>)["assessmentType"]).isEqualTo(type.name)
+            verify { assessments.findForMcp(type, null, null, respondent.id!!, false, any(), any(), Pageable.from(0, 20)) }
+        }
+    }
+
+    @Test
+    fun `openOnly combined with a non-open status is rejected`() {
+        assertThatThrownBy { service.list(context(respondent), "COMPLETED", null, true, null, 0, 20) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("openOnly")
+
+        verify(exactly = 0) { assessments.findForMcp(any(), any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `unknown assessment type is rejected before repository access`() {
+        assertThatThrownBy { service.list(context(respondent), null, null, false, "SERVER", 0, 20) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("assessmentType")
+
+        verify(exactly = 0) { assessments.findForMcp(any(), any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `summaries expose assessmentType as an alias of basisType`() {
+        every {
+            assessments.findForMcp(null, null, null, respondent.id!!, false, any(), any(), Pageable.from(0, 20))
+        } returns Page.of(listOf(assessment), Pageable.from(0, 20), 1L)
+
+        val result = service.list(context(respondent), null, null, false, null, 0, 20)
+
+        @Suppress("UNCHECKED_CAST")
+        val row = (result["assessments"] as List<Map<String, Any?>>).single()
+        assertThat(row["assessmentType"]).isEqualTo("AWS_ACCOUNT")
+        assertThat(row["basisType"]).isEqualTo(row["assessmentType"])
+    }
+
+    @Test
+    fun `mixed basis types keep repository paging and totals`() {
+        val supplier = Asset(id = 32, name = "Example SaaS", type = "SUPPLIER", owner = assessor.username,
+            uri = "https://supplier.example.test")
+        val assetAssessment = RiskAssessment(
+            id = 41,
+            startDate = LocalDate.now(),
+            endDate = LocalDate.now().plusDays(7),
+            assessmentBasisType = AssessmentBasisType.ASSET,
+            assessmentBasisId = supplier.id!!,
+            assessor = assessor,
+            requestor = assessor,
+            respondent = respondent,
+            asset = supplier,
+            useCases = mutableSetOf(useCase)
+        )
+        every {
+            assessments.findForMcp(null, null, null, assessor.id!!, true, setOf(-1L), setOf(""), Pageable.from(0, 20))
+        } returns Page.of(listOf(assessment, assetAssessment), Pageable.from(0, 20), 21L)
+
+        val result = service.list(context(assessor, isAdmin = true), null, null, false, null, 0, 20)
+
+        @Suppress("UNCHECKED_CAST")
+        val rows = result["assessments"] as List<Map<String, Any?>>
+        assertThat(rows.map { it["assessmentType"] }).containsExactly("AWS_ACCOUNT", "ASSET")
+        assertThat(result["totalElements"]).isEqualTo(21L)
+        assertThat(result["totalPages"]).isEqualTo(2)
+    }
+
+    @Test
+    fun `privileged viewers pass the global visibility flag and sentinel sets`() {
+        every {
+            assessments.findForMcp(null, null, null, assessor.id!!, true, setOf(-1L), setOf(""), Pageable.from(0, 20))
+        } returns Page.of(listOf(assessment), Pageable.from(0, 20), 1L)
+
+        service.list(context(assessor, isAdmin = true), null, null, false, null, 0, 20)
+
+        verify { assessments.findForMcp(null, null, null, assessor.id!!, true, setOf(-1L), setOf(""), Pageable.from(0, 20)) }
+    }
+
+    @Test
+    fun `delegated viewers keep asset and account scoping`() {
+        every { filter.getAccessibleAwsAccountIds(any()) } returns emptySet()
+        every {
+            assessments.findForMcp(null, "STARTED", useCase.name, respondent.id!!, false, setOf(-1L), setOf(""), Pageable.from(0, 20))
+        } returns Page.of(listOf(assessment), Pageable.from(0, 20), 1L)
+
+        service.list(context(respondent), "started", useCase.name, false, null, 0, 20)
+
+        verify { assessments.findForMcp(null, "STARTED", useCase.name, respondent.id!!, false, setOf(-1L), setOf(""), Pageable.from(0, 20)) }
     }
 
     @Test
@@ -324,6 +486,7 @@ class RiskAssessmentMcpServiceTest {
     @Test
     fun `assessor evaluates completed answers and receives non-compliant finding`() {
         assessment.status = "COMPLETED"
+        assessment.answerRevision = 5
         val response = Response(
             answerType = AnswerType.NO,
             comment = "Gap confirmed",
@@ -336,9 +499,101 @@ class RiskAssessmentMcpServiceTest {
         val result = service.evaluate(context(assessor), assessment.id!!)
 
         assertThat(result["verdict"]).isEqualTo("NON_COMPLIANT")
+        assertThat(result["recommendation"]).isEqualTo("NOT_OK")
+        assertThat(result["answerRevision"]).isEqualTo(5L)
+        assertThat(result["missingAnswerCount"]).isEqualTo(0)
+        assertThat(result["summary"]).isEqualTo("1 requirement is not met.")
+        assertThat(result["advisory"]).isEqualTo(true)
+        assertThat(result["policyVersion"]).isEqualTo(RiskAssessmentRecommendationService.POLICY_VERSION)
+        java.time.Instant.parse(result["generatedAt"] as String)
         @Suppress("UNCHECKED_CAST")
-        assertThat(result["findings"] as List<Map<String, Any?>>).singleElement()
-            .extracting("requirementId").isEqualTo(requirement.id)
+        val findings = result["findings"] as List<Map<String, Any?>>
+        val finding = findings.single()
+        assertThat(finding["requirementId"]).isEqualTo(requirement.id)
+        assertThat(finding["internalId"]).isEqualTo(requirement.internalId)
+        assertThat(finding["shortreq"]).isEqualTo(requirement.shortreq)
+        assertThat(finding["answerType"]).isEqualTo("NO")
+        assertThat(finding["reason"]).isEqualTo("Requirement is explicitly not met.")
+        assertThat(finding["comment"]).isEqualTo("Gap confirmed")
+    }
+
+    @Test
+    fun `evaluation keeps every legacy key and adds the recommendation metadata`() {
+        assessment.status = "COMPLETED"
+        val response = Response(
+            answerType = AnswerType.YES,
+            respondentEmail = respondent.email,
+            riskAssessment = assessment,
+            requirement = requirement
+        )
+        every { responses.findByRiskAssessmentId(assessment.id!!) } returns listOf(response)
+
+        val result = service.evaluate(context(assessor), assessment.id!!)
+
+        assertThat(result.keys).containsExactlyInAnyOrder(
+            "assessment", "verdict", "answerCounts", "requirementCount", "findings",
+            "recommendation", "answerRevision", "summary", "missingAnswerCount", "generatedAt",
+            "advisory", "policyVersion", "assessmentId"
+        )
+        assertThat(result["verdict"]).isEqualTo("COMPLIANT")
+        assertThat(result["recommendation"]).isEqualTo("OK")
+        assertThat(result["answerCounts"]).isEqualTo(mapOf("YES" to 1, "NO" to 0, "N_A" to 0))
+        assertThat(result["requirementCount"]).isEqualTo(1)
+        assertThat(result["findings"]).isEqualTo(emptyList<Map<String, Any?>>())
+    }
+
+    @Test
+    fun `evaluation rejects an unsubmitted assessment`() {
+        assertThatThrownBy { service.evaluate(context(assessor), assessment.id!!) }
+            .isInstanceOf(IllegalStateException::class.java)
+            .hasMessageContaining("completed")
+    }
+
+    @Test
+    fun `completed assessment with a blank answer is NEEDS_REVIEW and lists the missing answer`() {
+        assessment.status = "COMPLETED"
+
+        val result = service.evaluate(context(assessor), assessment.id!!)
+
+        assertThat(result["verdict"]).isEqualTo("COMPLIANT")
+        assertThat(result["recommendation"]).isEqualTo("NEEDS_REVIEW")
+        assertThat(result["missingAnswerCount"]).isEqualTo(1)
+        @Suppress("UNCHECKED_CAST")
+        val findings = result["findings"] as List<Map<String, Any?>>
+        val finding = findings.single()
+        assertThat(finding["requirementId"]).isEqualTo(requirement.id)
+        assertThat(finding["answerType"]).isNull()
+        assertThat(finding["reason"]).isEqualTo("No answer submitted.")
+    }
+
+    @Test
+    fun `MCP evaluation matches the shared recommendation service`() {
+        assessment.status = "COMPLETED"
+        assessment.answerRevision = 9
+        val response = Response(
+            answerType = AnswerType.N_A,
+            comment = "Out of scope",
+            respondentEmail = respondent.email,
+            riskAssessment = assessment,
+            requirement = requirement
+        )
+        every { responses.findByRiskAssessmentId(assessment.id!!) } returns listOf(response)
+
+        val viaMcp = service.evaluate(context(assessor), assessment.id!!)
+        val direct = recommendationService.recommend(assessment)
+
+        assertThat(viaMcp["recommendation"]).isEqualTo(direct.recommendation.name)
+        assertThat(viaMcp["verdict"]).isEqualTo(direct.verdict)
+        assertThat(viaMcp["answerCounts"]).isEqualTo(direct.answerCounts)
+        assertThat(viaMcp["requirementCount"]).isEqualTo(direct.requirementCount)
+        assertThat(viaMcp["answerRevision"]).isEqualTo(direct.answerRevision)
+        assertThat(viaMcp["missingAnswerCount"]).isEqualTo(direct.missingAnswerCount)
+        @Suppress("UNCHECKED_CAST")
+        val mcpFindings = viaMcp["findings"] as List<Map<String, Any?>>
+        assertThat(mcpFindings.map { it["requirementId"] }).isEqualTo(direct.findings.map { it.requirementId })
+        assertThat(mcpFindings.map { it["answerType"] }).isEqualTo(direct.findings.map { it.answerType })
+        assertThat(mcpFindings.map { it["reason"] }).isEqualTo(direct.findings.map { it.reason })
+        assertThat(mcpFindings.map { it["comment"] }).isEqualTo(direct.findings.map { it.comment })
     }
 
     @Test

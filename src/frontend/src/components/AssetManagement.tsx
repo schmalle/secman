@@ -6,8 +6,9 @@ import PortHistory from './PortHistory';
 import VulnerabilityHistory from './VulnerabilityHistory';
 import { BulkDeleteConfirmModal } from './BulkDeleteConfirmModal';
 import { bulkDeleteAssets, type BulkDeleteResult } from '../services/assetService';
-import { exportVulnerabilitiesServerSide, cancelExportJob, type ExportJob } from '../services/vulnerabilityManagementService';
+import { exportVulnerabilitiesServerSide, cancelExportJob, getDistinctAdDomains, type ExportJob } from '../services/vulnerabilityManagementService';
 import { scrollContainerStyle, stickyHeaderCellStyle } from './scrollableTableStyles';
+import './AssetManagement.css';
 
 interface WorkgroupSummary {
   id: number;
@@ -34,6 +35,7 @@ interface Asset {
   nameOverriddenBy?: string;
   type: string;
   ip?: string;
+  ipAddresses?: string[];
   uri?: string;
   owner: string;
   description?: string;
@@ -48,10 +50,27 @@ interface Asset {
   workgroups?: WorkgroupSummary[];
 }
 
+interface AssetOverviewResponse {
+  items: Array<Omit<Asset, 'id' | 'ip'> & { assetId: number; ipAddress?: string }>;
+  matchingCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 const AssetManagement: React.FC = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [workgroups, setWorkgroups] = useState<Workgroup[]>([]);
+  const [adDomainOptions, setAdDomainOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [accessibleCount, setAccessibleCount] = useState<number | null>(null);
+  const [matchingCount, setMatchingCount] = useState(0);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalPages, setTotalPages] = useState(0);
+  const [compactRows, setCompactRows] = useState(true);
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [urlStateReady, setUrlStateReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
@@ -71,12 +90,12 @@ const AssetManagement: React.FC = () => {
   const [selectedAssetForVulns, setSelectedAssetForVulns] = useState<Asset | null>(null);
 
   // Filter states
-  const [nameFilter, setNameFilter] = useState<string>('');
-  const [ipFilter, setIpFilter] = useState<string>('');
-  const [ownerFilter, setOwnerFilter] = useState<string>('');
-  const [adDomainFilter, setAdDomainFilter] = useState<string>('');
-  const [accountIdFilter, setAccountIdFilter] = useState<string>('');
-  const [workgroupFilter, setWorkgroupFilter] = useState<string>('');
+  const [nameFilter, setNameFilter] = useState('');
+  const [ipFilter, setIpFilter] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState('');
+  const [adDomainFilter, setAdDomainFilter] = useState('');
+  const [accountIdFilter, setAccountIdFilter] = useState('');
+  const [workgroupFilter, setWorkgroupFilter] = useState('');
 
   // Bulk delete states (Feature 029 - User Story 1)
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
@@ -103,23 +122,80 @@ const AssetManagement: React.FC = () => {
   const [domainError, setDomainError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchAssets();
+    const params = new URLSearchParams(window.location.search);
+    const requestedSize = Number(params.get('pageSize')) || Number(window.localStorage.getItem('assetOverviewPageSize'));
+    setPage(Math.max(0, Number(params.get('page')) || 0));
+    if ([25, 50, 100, 250].includes(requestedSize)) setPageSize(requestedSize);
+    setNameFilter(params.get('name') || '');
+    setIpFilter(params.get('ip') || '');
+    setOwnerFilter(params.get('owner') || '');
+    setAdDomainFilter(params.get('adDomain') || '');
+    setAccountIdFilter(params.get('accountId') || '');
+    setWorkgroupFilter(params.get('workgroupId') || '');
+    setCompactRows(window.localStorage.getItem('assetOverviewCompactRows') !== 'false');
+    setUrlStateReady(true);
     fetchWorkgroups();
+    getDistinctAdDomains().then(setAdDomainOptions).catch(() => {});
+    fetchAssetCount();
     if (isAdmin(getUser()?.roles) || isSecChampion(getUser()?.roles)) {
       fetchOwnerCandidates();
     }
   }, []);
 
-  const fetchAssets = async () => {
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => fetchAssets(controller.signal), 300);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [page, pageSize, nameFilter, ipFilter, ownerFilter, adDomainFilter, accountIdFilter, workgroupFilter]);
+
+  useEffect(() => {
+    if (!urlStateReady) return;
+    const params = new URLSearchParams();
+    if (page) params.set('page', String(page));
+    if (pageSize !== 50) params.set('pageSize', String(pageSize));
+    if (nameFilter) params.set('name', nameFilter);
+    if (ipFilter) params.set('ip', ipFilter);
+    if (ownerFilter) params.set('owner', ownerFilter);
+    if (adDomainFilter) params.set('adDomain', adDomainFilter);
+    if (accountIdFilter) params.set('accountId', accountIdFilter);
+    if (workgroupFilter) params.set('workgroupId', workgroupFilter);
+    window.history.replaceState(null, '', `${window.location.pathname}${params.size ? `?${params}` : ''}`);
+  }, [urlStateReady, page, pageSize, nameFilter, ipFilter, ownerFilter, adDomainFilter, accountIdFilter, workgroupFilter]);
+
+  const fetchAssetCount = async () => {
     try {
-      const response = await authenticatedGet('/api/assets');
+      const response = await authenticatedGet('/api/assets/count');
+      if (response.ok) setAccessibleCount((await response.json()).count);
+    } catch {
+      // The paged result remains usable if the independent total cannot load.
+    }
+  };
+
+  const fetchAssets = async (signal?: AbortSignal) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+      if (nameFilter.trim()) params.set('name', nameFilter.trim());
+      if (ipFilter.trim()) params.set('ip', ipFilter.trim());
+      if (ownerFilter.trim()) params.set('owner', ownerFilter.trim());
+      if (adDomainFilter.trim()) params.set('adDomain', adDomainFilter.trim());
+      if (accountIdFilter.trim()) params.set('accountId', accountIdFilter.trim());
+      if (workgroupFilter) params.set('workgroupId', workgroupFilter);
+      const response = await authenticatedGet(`/api/assets/search?${params}`, { signal });
       if (response.ok) {
-        const data = await response.json();
-        setAssets(data);
+        const data: AssetOverviewResponse = await response.json();
+        setAssets(data.items.map(item => ({ ...item, id: item.assetId, ip: item.ipAddress })));
+        setMatchingCount(data.matchingCount);
+        setTotalPages(data.totalPages);
+        setError(null);
       } else {
         setError(`Failed to fetch assets: ${response.status}`);
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
@@ -244,13 +320,15 @@ const AssetManagement: React.FC = () => {
     }
   };
 
-  const handleEdit = (asset: Asset) => {
-    console.log('Edit button clicked for asset:', asset.name, asset);
-    setEditingAsset(asset);
-    setFormData({
-      ...asset,
-      workgroupIds: asset.workgroups?.map(wg => wg.id) || []
-    });
+  const handleEdit = async (asset: Asset) => {
+    const response = await authenticatedGet(`/api/assets/${asset.id}`);
+    if (!response.ok) {
+      setError('Unable to load the asset details for editing.');
+      return;
+    }
+    const detail: Asset = await response.json();
+    setEditingAsset(detail);
+    setFormData({ ...detail, workgroupIds: detail.workgroups?.map(wg => wg.id) || [] });
     setShowForm(true);
 
     // Scroll to top to show the form
@@ -469,7 +547,8 @@ const AssetManagement: React.FC = () => {
     return assets.filter(asset => {
       // Text filters use partial matching
       const nameMatch = !nameFilter || asset.name.toLowerCase().includes(nameFilter.toLowerCase());
-      const ipMatch = !ipFilter || (asset.ip && asset.ip.toLowerCase().includes(ipFilter.toLowerCase()));
+      const displayedIps = asset.ipAddresses?.length ? asset.ipAddresses : asset.ip ? [asset.ip] : [];
+      const ipMatch = !ipFilter || displayedIps.some(ip => ip.toLowerCase().includes(ipFilter.toLowerCase()));
       const accountIdMatch = !accountIdFilter || (asset.cloudAccountId && asset.cloudAccountId.toLowerCase().includes(accountIdFilter.toLowerCase()));
       // Dropdown filters use exact matching
       const ownerMatch = !ownerFilter || asset.owner === ownerFilter;
@@ -488,14 +567,22 @@ const AssetManagement: React.FC = () => {
     () => [...new Set(assets.map(a => a.owner).filter(Boolean))].sort(),
     [assets]
   );
-  const adDomainOptions = useMemo(
-    () => [...new Set(assets.map(a => a.adDomain).filter(Boolean))].sort(),
-    [assets]
-  );
   const assetWorkgroupOptions = useMemo(
     () => [...new Set(assets.flatMap(a => a.workgroups?.map(w => w.name) || []))].sort(),
     [assets]
   );
+  const hasFilters = Boolean(nameFilter || ipFilter || ownerFilter || adDomainFilter || accountIdFilter || workgroupFilter);
+  const advancedFilterCount = [ipFilter, ownerFilter, accountIdFilter].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setNameFilter('');
+    setIpFilter('');
+    setAccountIdFilter('');
+    setOwnerFilter('');
+    setAdDomainFilter('');
+    setWorkgroupFilter('');
+    setPage(0);
+  };
 
   if (loading) {
     return (
@@ -518,17 +605,12 @@ const AssetManagement: React.FC = () => {
   }
 
   return (
-    <div
-      className="container-fluid p-4 d-flex flex-column"
-      style={showForm
-        ? { minHeight: 0 }
-        : { height: 'calc(100dvh - 9.5rem)', minHeight: 0, overflow: 'hidden' }}
-    >
+    <div className={`asset-management container-fluid d-flex flex-column${showForm ? ' asset-management--form' : ''}`}>
       <div className="row">
         <div className="col-12">
-          <div className="d-flex justify-content-between align-items-center mb-4">
-            <h2>Asset Management</h2>
-            <div className="btn-group" role="group">
+          <div className="asset-management__heading d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h2 className="mb-0">Asset Management</h2>
+            <div className="d-flex flex-wrap gap-2 align-items-center">
               <button
                 type="button"
                 className="btn btn-primary"
@@ -579,16 +661,21 @@ const AssetManagement: React.FC = () => {
                 </>
               )}
               {/* Feature 029: Bulk Delete Button (ADMIN only, hidden when no assets) */}
-              {canManageGrants && filteredAssets.length > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  onClick={() => setShowBulkDeleteModal(true)}
-                  disabled={isDeletingBulk}
-                >
-                  <i className="bi bi-trash3-fill me-2"></i>
-                  Delete All Assets
-                </button>
+              {canManageGrants && matchingCount > 0 && (
+                <details className="asset-management__actions">
+                  <summary className="btn btn-outline-secondary">More actions</summary>
+                  <div className="asset-management__actions-menu">
+                    <button
+                      type="button"
+                      className="btn btn-danger"
+                      onClick={() => setShowBulkDeleteModal(true)}
+                      disabled={isDeletingBulk}
+                    >
+                      <i className="bi bi-trash3-fill me-2"></i>
+                      Delete All Assets
+                    </button>
+                  </div>
+                </details>
               )}
             </div>
           </div>
@@ -826,138 +913,139 @@ const AssetManagement: React.FC = () => {
           </div>
         </div>
       )}
+      {error && <div className="alert alert-danger" role="alert">{error}</div>}
 
       {/* Filters */}
-      <div className="row mb-3 flex-shrink-0">
-        <div className="col-12">
-          <div className="card">
-            <div className="card-body">
-              <h6 className="card-title">Filters</h6>
-              <div className="row">
-                <div className="col-md-3">
-                  <label htmlFor="nameFilter" className="form-label">Name</label>
-                  <input
-                    type="text"
-                    id="nameFilter"
-                    className="form-control"
-                    placeholder="Filter by name..."
-                    value={nameFilter}
-                    onChange={(e) => setNameFilter(e.target.value)}
-                  />
-                </div>
-                <div className="col-md-3">
-                  <label htmlFor="ipFilter" className="form-label">IP Address</label>
-                  <input
-                    type="text"
-                    id="ipFilter"
-                    className="form-control"
-                    placeholder="Filter by IP..."
-                    value={ipFilter}
-                    onChange={(e) => setIpFilter(e.target.value)}
-                  />
-                </div>
-                <div className="col-md-3">
-                  <label htmlFor="ownerFilter" className="form-label">Owner</label>
-                  <select
-                    id="ownerFilter"
-                    className="form-select"
-                    value={ownerFilter}
-                    onChange={(e) => setOwnerFilter(e.target.value)}
-                  >
-                    <option value="">All Owners</option>
-                    {ownerOptions.map(owner => (
-                      <option key={owner} value={owner}>{owner}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-md-3">
-                  <label htmlFor="adDomainFilter" className="form-label">AD Domain</label>
-                  <select
-                    id="adDomainFilter"
-                    className="form-select"
-                    value={adDomainFilter}
-                    onChange={(e) => setAdDomainFilter(e.target.value)}
-                  >
-                    <option value="">All Domains</option>
-                    {adDomainOptions.map(domain => (
-                      <option key={domain} value={domain}>{domain}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="row mt-2">
-                <div className="col-md-3">
-                  <label htmlFor="workgroupFilter" className="form-label">Workgroups</label>
-                  <select
-                    id="workgroupFilter"
-                    className="form-select"
-                    value={workgroupFilter}
-                    onChange={(e) => setWorkgroupFilter(e.target.value)}
-                  >
-                    <option value="">All Workgroups</option>
-                    {workgroups.length > 0 ? (
-                      workgroups.map(wg => (
-                        <option key={wg.id} value={wg.name}>{wg.name}</option>
-                      ))
-                    ) : (
-                      assetWorkgroupOptions.map(name => (
-                        <option key={name} value={name}>{name}</option>
-                      ))
-                    )}
-                  </select>
-                </div>
-                <div className="col-md-3">
-                  <label htmlFor="accountIdFilter" className="form-label">Account ID</label>
-                  <input
-                    type="text"
-                    id="accountIdFilter"
-                    className="form-control"
-                    placeholder="Filter by Account ID..."
-                    value={accountIdFilter}
-                    onChange={(e) => setAccountIdFilter(e.target.value)}
-                  />
-                </div>
-              </div>
-              {(nameFilter || ipFilter || accountIdFilter || ownerFilter || adDomainFilter || workgroupFilter) && (
-                <div className="mt-2">
-                  <button
-                    className="btn btn-sm btn-outline-secondary"
-                    onClick={() => {
-                      setNameFilter('');
-                      setIpFilter('');
-                      setAccountIdFilter('');
-                      setOwnerFilter('');
-                      setAdDomainFilter('');
-                      setWorkgroupFilter('');
-                    }}
-                  >
-                    Clear All Filters
-                  </button>
-                </div>
+      <section className="asset-management__filters flex-shrink-0" aria-label="Asset filters">
+        <div className="asset-management__filter-row">
+          <div>
+            <label htmlFor="nameFilter" className="form-label">Name</label>
+            <input
+              type="search"
+              id="nameFilter"
+              className="form-control"
+              placeholder="Filter by name..."
+              value={nameFilter}
+              onChange={(e) => { setNameFilter(e.target.value); setPage(0); }}
+            />
+          </div>
+          <div>
+            <label htmlFor="adDomainFilter" className="form-label">AD Domain</label>
+            <select
+              id="adDomainFilter"
+              className="form-select"
+              value={adDomainFilter}
+              onChange={(e) => { setAdDomainFilter(e.target.value); setPage(0); }}
+            >
+              <option value="">All AD Domains</option>
+              {adDomainFilter && !adDomainOptions.includes(adDomainFilter) && (
+                <option value={adDomainFilter}>{adDomainFilter}</option>
               )}
-            </div>
+              {adDomainOptions.map(domain => (
+                <option key={domain} value={domain}>{domain}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="workgroupFilter" className="form-label">Workgroups</label>
+            <select
+              id="workgroupFilter"
+              className="form-select"
+              value={workgroupFilter}
+              onChange={(e) => { setWorkgroupFilter(e.target.value); setPage(0); }}
+            >
+              <option value="">All Workgroups</option>
+              {workgroups.map(wg => (
+                <option key={wg.id} value={wg.id}>{wg.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="asset-management__filter-actions d-flex flex-wrap align-items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              aria-expanded={showMoreFilters}
+              aria-controls="assetMoreFilters"
+              onClick={() => setShowMoreFilters(value => !value)}
+            >
+              More filters{advancedFilterCount > 0 ? ` (${advancedFilterCount})` : ''}
+            </button>
+            {hasFilters && <button type="button" className="btn btn-link" onClick={clearFilters}>Clear all</button>}
           </div>
         </div>
-      </div>
+        {showMoreFilters && (
+          <div id="assetMoreFilters" className="asset-management__more-filters">
+            <div>
+              <label htmlFor="ipFilter" className="form-label">IP Address</label>
+              <input type="search" id="ipFilter" className="form-control" placeholder="Filter by IP..." value={ipFilter}
+                onChange={(e) => { setIpFilter(e.target.value); setPage(0); }} />
+            </div>
+            <div>
+              <label htmlFor="ownerFilter" className="form-label">Owner</label>
+              <input type="search" id="ownerFilter" className="form-control" placeholder="Filter by owner..." value={ownerFilter}
+                onChange={(e) => { setOwnerFilter(e.target.value); setPage(0); }} />
+            </div>
+            <div>
+              <label htmlFor="accountIdFilter" className="form-label">Account ID</label>
+              <input type="search" id="accountIdFilter" className="form-control" placeholder="Filter by Account ID..." value={accountIdFilter}
+                onChange={(e) => { setAccountIdFilter(e.target.value); setPage(0); }} />
+            </div>
+          </div>
+        )}
+        {!showMoreFilters && advancedFilterCount > 0 && (
+          <div className="asset-management__active-filters" aria-label="Active additional filters">
+            {ipFilter && <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => { setIpFilter(''); setPage(0); }} aria-label={`Remove IP Address filter: ${ipFilter}`}>IP: {ipFilter} ×</button>}
+            {ownerFilter && <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => { setOwnerFilter(''); setPage(0); }} aria-label={`Remove Owner filter: ${ownerFilter}`}>Owner: {ownerFilter} ×</button>}
+            {accountIdFilter && <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => { setAccountIdFilter(''); setPage(0); }} aria-label={`Remove Account ID filter: ${accountIdFilter}`}>Account ID: {accountIdFilter} ×</button>}
+          </div>
+        )}
+      </section>
 
-      <div className="row flex-grow-1" style={{ minHeight: 0 }}>
-        <div className="col-12 h-100">
-          <div className="card h-100">
-            <div className="card-body d-flex flex-column" style={{ minHeight: 0, overflow: 'hidden' }}>
-              <h5 className="card-title flex-shrink-0">Assets ({filteredAssets.length})</h5>
-              {filteredAssets.length === 0 ? (
+      <section className="asset-management__results d-flex flex-column flex-grow-1" aria-label="Asset results">
+              <div className="asset-management__results-toolbar d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
+                <h5 className="mb-0">
+                  {accessibleCount === null
+                    ? 'Assets (…)'
+                    : loading && assets.length === 0
+                      ? `${accessibleCount.toLocaleString()} accessible assets`
+                      : `${matchingCount.toLocaleString()} matching of ${accessibleCount.toLocaleString()} accessible assets`}
+                </h5>
+                <div className="d-flex flex-wrap align-items-center gap-3">
+                <label className="d-flex align-items-center gap-2">
+                  Rows
+                  <select className="form-select form-select-sm" value={pageSize} onChange={(event) => {
+                    const nextSize = Number(event.target.value);
+                    setPageSize(nextSize);
+                    setPage(0);
+                    window.localStorage.setItem('assetOverviewPageSize', String(nextSize));
+                  }}>
+                    {[25, 50, 100, 250].map(size => <option key={size} value={size}>{size}</option>)}
+                  </select>
+                </label>
+                <label className="form-check-label">
+                  <input className="form-check-input me-1" type="checkbox" checked={compactRows} onChange={(event) => {
+                    setCompactRows(event.target.checked);
+                    window.localStorage.setItem('assetOverviewCompactRows', String(event.target.checked));
+                  }} />
+                  Compact rows
+                </label>
+                </div>
+              </div>
+              {loading && assets.length === 0 ? (
+                <div aria-label="Loading assets">{Array.from({ length: 8 }, (_, index) => <div className="placeholder-glow py-2" key={index}><span className="placeholder col-12"></span></div>)}</div>
+              ) : assets.length === 0 ? (
                 <p className="text-muted">
-                  {assets.length === 0
+                  {matchingCount === 0 && !nameFilter && !ipFilter && !accountIdFilter && !ownerFilter && !adDomainFilter && !workgroupFilter
                     ? 'No assets found. Click "Add New Asset" to create one.'
                     : 'No assets match the current filters.'}
                 </p>
               ) : (
                 <div className="table-responsive flex-grow-1" style={scrollContainerStyle}>
-                  <table className="table table-striped table-hover" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+                  <table className={`table table-striped table-hover ${compactRows ? 'table-sm' : ''}`} style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
                     <thead className="table-light">
                       <tr>
                         <th style={stickyHeaderCellStyle}>Name</th>
-                        <th style={stickyHeaderCellStyle}>IP Address</th>
+                        <th style={stickyHeaderCellStyle}>IP Addresses</th>
                         <th style={stickyHeaderCellStyle}>URI</th>
                         <th style={stickyHeaderCellStyle}>Instance ID</th>
                         <th style={stickyHeaderCellStyle}>Account ID</th>
@@ -967,10 +1055,16 @@ const AssetManagement: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredAssets.map((asset) => (
+                      {assets.map((asset) => (
                         <tr key={asset.id}>
                           <td>{asset.name}</td>
-                          <td>{asset.ip || '-'}</td>
+                          <td>
+                            {(asset.ipAddresses?.length ? asset.ipAddresses : asset.ip ? [asset.ip] : []).length > 0
+                              ? (asset.ipAddresses?.length ? asset.ipAddresses : [asset.ip!]).map(ip => (
+                                  <code className="d-block" key={ip}>{ip}</code>
+                                ))
+                              : '-'}
+                          </td>
                           <td>
                             {asset.uri ? (
                               asset.uri.toLowerCase().startsWith('http://') || asset.uri.toLowerCase().startsWith('https://') ? (
@@ -1042,17 +1136,16 @@ const AssetManagement: React.FC = () => {
                   </table>
                 </div>
               )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Back to Home button */}
-      <div className="row mt-3 flex-shrink-0">
-        <div className="col-12">
-          <a href="/" className="btn btn-secondary">Back to Home</a>
-        </div>
-      </div>
+              <div className="d-flex justify-content-between align-items-center flex-shrink-0 pt-2">
+                <span className="text-muted">
+                  {matchingCount === 0 ? 'Showing 0 assets' : `Showing ${page * pageSize + 1}–${Math.min((page + 1) * pageSize, matchingCount)} of ${matchingCount.toLocaleString()}`}
+                </span>
+                <nav className="btn-group" aria-label="Asset pages">
+                  <button className="btn btn-sm btn-outline-secondary" disabled={page === 0 || loading} onClick={() => setPage(value => value - 1)}>Previous</button>
+                  <button className="btn btn-sm btn-outline-secondary" disabled={page + 1 >= totalPages || loading} onClick={() => setPage(value => value + 1)}>Next</button>
+                </nav>
+              </div>
+      </section>
 
       {/* Port History Modal */}
       {showPortHistory && selectedAssetForPorts && selectedAssetForPorts.id && (
@@ -1094,7 +1187,7 @@ const AssetManagement: React.FC = () => {
         onClose={() => setShowBulkDeleteModal(false)}
         onConfirm={handleBulkDelete}
         isDeleting={isDeletingBulk}
-        assetCount={filteredAssets.length}
+        assetCount={matchingCount}
       />
 
     </div>

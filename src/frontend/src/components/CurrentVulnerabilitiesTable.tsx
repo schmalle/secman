@@ -36,6 +36,7 @@ import CveLink from "./CveLink";
 import { isAdmin, hasRole, hasVulnAccess } from "../utils/auth";
 import SearchableSelect from "./SearchableSelect";
 import { scrollContainerStyle, stickyHeaderCellStyle } from "./scrollableTableStyles";
+import "./CurrentVulnerabilitiesTable.css";
 import {
   buildVulnerabilityExportFilters,
   describeExportScope,
@@ -97,6 +98,7 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const [adDomainFilter, setAdDomainFilter] = useState<string>("");
   const [cloudAccountIdFilter, setCloudAccountIdFilter] = useState<string>("");
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
 
   // Available filter options (lazy-loaded)
   const [availableProducts, setAvailableProducts] = useState<string[]>([]);
@@ -709,10 +711,11 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
 
   const sortedVulnerabilities = getSortedVulnerabilities();
   const totalCount = paginatedResponse?.totalElements || 0;
+  const advancedFilterCount = [productFilter, cloudAccountIdFilter].filter(Boolean).length + Number(includeInstallerFindings);
 
   return (
     <div
-      className={`container-fluid d-flex flex-column ${embedded ? "p-0" : "p-4"}`}
+      className={`current-vulns container-fluid d-flex flex-column ${embedded ? "current-vulns--embedded p-0" : "p-4"}`}
       style={{
         height: embedded ? "100%" : "calc(100dvh - 9.5rem)",
         minHeight: 0,
@@ -721,7 +724,7 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
     >
       <div className="row flex-shrink-0">
         <div className="col-12">
-          <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
             <h2 className={embedded ? "h4 mb-0" : "mb-0"}>
               <i className="bi bi-shield-exclamation me-2"></i>
               Current Vulnerabilities
@@ -911,210 +914,122 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
       )}
 
       {/* Filters */}
-      <div className="row g-2 mb-2 flex-shrink-0">
-        <div className="col-md-3">
-          <label htmlFor="severityFilter" className="form-label">
-            Severity
-          </label>
-          <select
-            id="severityFilter"
-            className="form-select"
-            value={severityFilter}
-            onChange={(e) => {
-              setSeverityFilter(e.target.value);
-              handleFilterChange();
-            }}
-          >
-            <option value="">All Severities</option>
-            <option value="Critical">Critical</option>
-            <option value="High">High</option>
-            <option value="Medium">Medium</option>
-            <option value="Low">Low</option>
-          </select>
-        </div>
-        <div className="col-md-3">
-          <label htmlFor="systemFilter" className="form-label">
-            System
-          </label>
-          <input
-            type="text"
-            id="systemFilter"
-            className="form-control"
-            placeholder="Filter by system name..."
-            value={systemFilter}
-            onChange={(e) => {
-              const value = e.target.value;
-              setSystemFilter(value);
-              if (systemFilterTimeoutRef.current) {
-                clearTimeout(systemFilterTimeoutRef.current);
-              }
-              systemFilterTimeoutRef.current = setTimeout(() => {
-                setDebouncedSystemFilter(value);
-                handleFilterChange();
-              }, 300);
-            }}
-          />
-        </div>
-        <div className="col-md-3">
-          <label htmlFor="exceptionFilter" className="form-label">
-            Overdue Status
-            <i
-              className="bi bi-question-circle ms-2 text-muted"
-              data-bs-toggle="tooltip"
-              title="Filter by vulnerability overdue status. OVERDUE = exceeds threshold, EXCEPTED = has active exception, OK = within threshold"
-              style={{ cursor: "help", fontSize: "0.875rem" }}
-            ></i>
-          </label>
-          <select
-            id="exceptionFilter"
-            className="form-select"
-            value={exceptionFilter}
-            onChange={(e) => {
-              setExceptionFilter(e.target.value);
-              handleFilterChange();
-            }}
-          >
-            <option value="not_excepted">Not Excepted</option>
-            <option value="">All (incl. Excepted)</option>
-            <option value="overdue">🔴 Overdue Only</option>
-            <option value="excepted">🛡️ Excepted Only</option>
-            <option value="ok">✅ OK Only</option>
-          </select>
-        </div>
-        <div className="col-md-3">
-          <label htmlFor="productFilter" className="form-label">
-            Product
-          </label>
-          <SearchableSelect
-            id="productFilter"
-            value={productFilter}
-            options={availableProducts}
-            placeholder="Filter products..."
-            allLabel="All Products"
-            onFocus={loadProducts}
-            onChange={(val) => {
-              setProductFilter(val);
-              handleFilterChange();
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Second row of filters */}
-      <div className="row g-2 mb-3 flex-shrink-0">
-        <div className="col-md-3">
-          <label htmlFor="cveFilter" className="form-label">
-            <i className="bi bi-search me-2"></i>
-            CVE
-          </label>
-          <input
-            type="search"
-            id="cveFilter"
-            className="form-control"
-            placeholder="Search by CVE, e.g. CVE-2026-1234..."
-            value={cveFilter}
-            onChange={(e) => {
-              const value = e.target.value.trim();
-              setCveFilter(value);
-              if (cveFilterTimeoutRef.current) {
-                clearTimeout(cveFilterTimeoutRef.current);
-              }
-              cveFilterTimeoutRef.current = setTimeout(() => {
-                setDebouncedCveFilter(value);
-                handleFilterChange();
-              }, 300);
-            }}
-          />
-        </div>
-        <div className="col-md-3">
-          <label htmlFor="adDomainFilter" className="form-label">
-            <i className="bi bi-building me-2"></i>
-            AD Domain
-          </label>
-          <select
-            id="adDomainFilter"
-            className="form-select"
-            value={adDomainFilter}
-            onFocus={loadAdDomains}
-            onChange={(e) => {
-              setAdDomainFilter(e.target.value);
-              handleFilterChange();
-            }}
-          >
-            <option value="">All Domains</option>
-            {availableAdDomains.map((domain) => (
-              <option key={domain} value={domain}>
-                {domain}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="col-md-3">
-          <label htmlFor="cloudAccountIdFilter" className="form-label">
-            <i className="bi bi-cloud me-2"></i>
-            AWS Account ID
-          </label>
-          <select
-            id="cloudAccountIdFilter"
-            className="form-select"
-            value={cloudAccountIdFilter}
-            onFocus={loadCloudAccountIds}
-            onChange={(e) => {
-              setCloudAccountIdFilter(e.target.value);
-              handleFilterChange();
-            }}
-          >
-            <option value="">All Accounts</option>
-            {availableCloudAccountIds.map((accountId) => (
-              <option key={accountId} value={accountId}>
-                {accountId}
-              </option>
-            ))}
-          </select>
-          <input
-            type="text"
-            className="form-control mt-2"
-            placeholder="Or enter account ID manually..."
-            value={cloudAccountIdFilter}
-            onChange={(e) => {
-              setCloudAccountIdFilter(e.target.value.trim());
-              handleFilterChange();
-            }}
-          />
-        </div>
-
-        <div className="col-md-3 d-flex align-items-end">
-          <div className="form-check mb-2">
-            <input
-              className="form-check-input"
-              type="checkbox"
-              id="includeInstallerFindings"
-              checked={includeInstallerFindings}
-              onChange={(e) => {
-                setIncludeInstallerFindings(e.target.checked);
-                handleFilterChange();
-              }}
-            />
-            <label className="form-check-label" htmlFor="includeInstallerFindings">
-              <i className="bi bi-box-seam me-2"></i>
-              Include installer / setup findings
-              <span
-                className="d-block text-muted small"
-                title="Findings whose affected product is an installer or setup payload rather than deployed software. Rules under Admin -> Product classification."
-              >
-                e.g. &quot;Chrome Installer&quot;, &quot;Photon Setup&quot;
-              </span>
-            </label>
+      <section className="current-vulns__filters flex-shrink-0" aria-label="Vulnerability filters">
+        <div className="current-vulns__filter-row">
+          <div>
+            <label htmlFor="systemFilter" className="form-label">System</label>
+            <input type="search" id="systemFilter" className="form-control" placeholder="Filter by system name..."
+              value={systemFilter} onChange={(e) => {
+                const value = e.target.value;
+                setSystemFilter(value);
+                if (systemFilterTimeoutRef.current) clearTimeout(systemFilterTimeoutRef.current);
+                systemFilterTimeoutRef.current = setTimeout(() => {
+                  setDebouncedSystemFilter(value);
+                  handleFilterChange();
+                }, 300);
+              }} />
           </div>
+          <div>
+            <label htmlFor="cveFilter" className="form-label">CVE</label>
+            <input type="search" id="cveFilter" className="form-control" placeholder="Search by CVE..."
+              value={cveFilter} onChange={(e) => {
+                const value = e.target.value.trim();
+                setCveFilter(value);
+                if (cveFilterTimeoutRef.current) clearTimeout(cveFilterTimeoutRef.current);
+                cveFilterTimeoutRef.current = setTimeout(() => {
+                  setDebouncedCveFilter(value);
+                  handleFilterChange();
+                }, 300);
+              }} />
+          </div>
+          <div>
+            <label htmlFor="severityFilter" className="form-label">Severity</label>
+            <select id="severityFilter" className="form-select" value={severityFilter}
+              onChange={(e) => { setSeverityFilter(e.target.value); handleFilterChange(); }}>
+              <option value="">All Severities</option>
+              <option value="Critical">Critical</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="exceptionFilter" className="form-label" title="OVERDUE exceeds threshold; EXCEPTED has an active exception; OK is within threshold">Overdue Status</label>
+            <select id="exceptionFilter" className="form-select" value={exceptionFilter}
+              onChange={(e) => { setExceptionFilter(e.target.value); handleFilterChange(); }}>
+              <option value="not_excepted">Not Excepted</option>
+              <option value="">All (incl. Excepted)</option>
+              <option value="overdue">🔴 Overdue Only</option>
+              <option value="excepted">🛡️ Excepted Only</option>
+              <option value="ok">✅ OK Only</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="adDomainFilter" className="form-label">AD Domain</label>
+            <select id="adDomainFilter" className="form-select" value={adDomainFilter}
+              onFocus={loadAdDomains}
+              onChange={(e) => { setAdDomainFilter(e.target.value); handleFilterChange(); }}>
+              <option value="">All Domains</option>
+              {availableAdDomains.map((domain) => <option key={domain} value={domain}>{domain}</option>)}
+            </select>
+          </div>
+          <button type="button" className="btn btn-outline-secondary" aria-expanded={showMoreFilters}
+            aria-controls="vulnerabilityMoreFilters" onClick={() => setShowMoreFilters(value => !value)}>
+            More filters{advancedFilterCount > 0 ? ` (${advancedFilterCount})` : ""}
+          </button>
         </div>
-      </div>
+        {showMoreFilters && (
+          <div id="vulnerabilityMoreFilters" className="current-vulns__more-filters">
+            <div>
+              <label htmlFor="productFilter" className="form-label">Product</label>
+              <SearchableSelect id="productFilter" value={productFilter} options={availableProducts}
+                placeholder="Filter products..." allLabel="All Products" onFocus={loadProducts}
+                onChange={(value) => { setProductFilter(value); handleFilterChange(); }} />
+            </div>
+            <div>
+              <label htmlFor="cloudAccountIdFilter" className="form-label">AWS Account ID</label>
+              <select id="cloudAccountIdFilter" className="form-select" value={cloudAccountIdFilter}
+                onFocus={loadCloudAccountIds}
+                onChange={(e) => { setCloudAccountIdFilter(e.target.value); handleFilterChange(); }}>
+                <option value="">All Accounts</option>
+                {availableCloudAccountIds.map((accountId) => <option key={accountId} value={accountId}>{accountId}</option>)}
+              </select>
+              <input type="text" className="form-control mt-2" aria-label="Enter AWS Account ID manually"
+                placeholder="Or enter account ID manually..." value={cloudAccountIdFilter}
+                onChange={(e) => { setCloudAccountIdFilter(e.target.value.trim()); handleFilterChange(); }} />
+            </div>
+            <div className="form-check align-self-end mb-2">
+              <input className="form-check-input" type="checkbox" id="includeInstallerFindings"
+                checked={includeInstallerFindings}
+                onChange={(e) => { setIncludeInstallerFindings(e.target.checked); handleFilterChange(); }} />
+              <label className="form-check-label" htmlFor="includeInstallerFindings"
+                title="Include installer and setup payload findings such as Chrome Installer or Photon Setup">
+                Include installer / setup findings
+              </label>
+            </div>
+          </div>
+        )}
+        {!showMoreFilters && advancedFilterCount > 0 && (
+          <div className="current-vulns__active-filters" aria-label="Active additional filters">
+            {productFilter && <button type="button" className="btn btn-sm btn-outline-secondary"
+              aria-label={`Remove Product filter: ${productFilter}`}
+              onClick={() => { setProductFilter(""); handleFilterChange(); }}>Product: {productFilter} ×</button>}
+            {cloudAccountIdFilter && <button type="button" className="btn btn-sm btn-outline-secondary"
+              aria-label={`Remove AWS Account ID filter: ${cloudAccountIdFilter}`}
+              onClick={() => { setCloudAccountIdFilter(""); handleFilterChange(); }}>AWS: {cloudAccountIdFilter} ×</button>}
+            {includeInstallerFindings && <button type="button" className="btn btn-sm btn-outline-secondary"
+              aria-label="Exclude installer and setup findings"
+              onClick={() => { setIncludeInstallerFindings(false); handleFilterChange(); }}>Installer findings ×</button>}
+          </div>
+        )}
+      </section>
 
       {/* Table */}
       <div className="row flex-grow-1" style={{ minHeight: 0 }}>
         <div className="col-12 h-100">
           <div className="card h-100">
             <div className="card-body d-flex flex-column" style={{ minHeight: 0, overflow: "hidden" }}>
-              <h5 className="card-title flex-shrink-0">
+              <h5 className="card-title flex-shrink-0 mb-1">
                 Vulnerabilities ({totalCount}
                 {exceptionFilter === "not_excepted" && " not excepted"}
                 {exceptionFilter === "excepted" && " excepted"}
@@ -1123,12 +1038,14 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
                 {exceptionFilter === "" && " total, incl. excepted"})
               </h5>
               {exceptionFilter === "not_excepted" && (
-                <p className="text-muted small mb-2">
-                  Excepted vulnerabilities are hidden by default. This figure equals the
-                  <strong> Not excepted</strong> count on the Account Vulnerabilities view;
-                  switch <strong>Overdue Status</strong> to <em>All (incl. Excepted)</em> to
-                  see the full total.
-                </p>
+                <details className="current-vulns__count-help text-muted small mb-1">
+                  <summary>About this count</summary>
+                  <p className="mb-1">
+                    Excepted vulnerabilities are hidden by default. This figure equals the
+                    <strong> Not excepted</strong> count on the Account Vulnerabilities view;
+                    switch <strong>Overdue Status</strong> to <em>All (incl. Excepted)</em> to see the full total.
+                  </p>
+                </details>
               )}
               {sortedVulnerabilities.length === 0 ? (
                 <p className="text-muted">

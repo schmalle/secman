@@ -91,17 +91,19 @@ class AccountOnboardingCliService(
         authToken: String,
         awsAccountId: String,
         ownerEmail: String,
-        mode: String,
+        mode: String?,
         riskUseCase: String? = null,
         riskDeadlineDays: Int? = null,
         questionnaireExpiryDays: Int? = null,
         sendWelcomeEmail: Boolean? = null,
-        dryRun: Boolean = false
+        dryRun: Boolean = false,
+        useDefaultSettings: Boolean = false
     ): SimulateOnboardingResult {
         val bodyMap = buildMap<String, Any> {
             put("awsAccountId", awsAccountId)
             put("ownerEmail", ownerEmail)
-            put("mode", mode)
+            mode?.let { put("mode", it) }
+            if (useDefaultSettings) put("useDefaultSettings", true)
             put("dryRun", dryRun)
             riskUseCase?.let { put("riskAssessmentUseCase", it) }
             riskDeadlineDays?.let { put("riskAssessmentDeadlineDays", it) }
@@ -199,7 +201,7 @@ class AccountOnboardingCliService(
         return SimulateOnboardingResult(
             awsAccountId = body["awsAccountId"]?.toString() ?: awsAccountId,
             ownerEmail = body["ownerEmail"]?.toString() ?: ownerEmail,
-            mode = body["mode"]?.toString() ?: mode,
+            mode = body["mode"]?.toString() ?: mode ?: "DEFAULT",
             dryRun = (body["dryRun"] as? Boolean) ?: dryRun,
             onboarding = onboarding,
             riskAssessments = riskAssessments,

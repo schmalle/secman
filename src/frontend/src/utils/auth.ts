@@ -120,8 +120,8 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
 /**
  * Convenience method for GET requests
  */
-export async function authenticatedGet(url: string): Promise<Response> {
-    return authenticatedFetch(url, { method: 'GET' });
+export async function authenticatedGet(url: string, options: RequestInit = {}): Promise<Response> {
+    return authenticatedFetch(url, { ...options, method: 'GET' });
 }
 
 /**

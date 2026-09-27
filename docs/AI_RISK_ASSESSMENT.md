@@ -143,3 +143,16 @@ The raw float **and** the band are persisted, so the thresholds can be retuned w
 - Tasks: `specs/088-ai-risk-assessment-answers/tasks.md`
 - Flyway migration: `src/backendng/src/main/resources/db/migration/V215__ai_risk_assessment_answers.sql`
 - Prompt: `src/backendng/src/main/resources/ai-prompts/compliance-assistant.txt`
+
+## Post-submission analysis is separate from AI pre-fill
+
+**Analyze answers** is deterministic recommendation policy 2.0, shared with
+MCP `evaluate_risk_assessment`. AI pre-fill drafts answers before submission;
+analysis examines the pinned questionnaire and current answer revision.
+N/A requires reviewer attention, NO means Not OK, and missing/unsubmitted
+answers cannot be OK. The compatibility `verdict` field is not approval.
+
+Analysis sends no comments, identity fields, or attachments to OpenRouter and
+has no AI feature flag. Optional AI remediation narrative has not been added.
+An authorized human must independently accept the assessment through the
+existing workflow, even when the advisory recommendation is OK.

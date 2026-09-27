@@ -69,6 +69,8 @@ email_regex='^[^[:space:],;:< >"\\]+@[^[:space:],;:< >"\\]+\.[^[:space:],;:< >"\
 
 BASE_URL="${SECMAN_HOST:-${SECMAN_BACKEND_URL}}"
 BASE_URL="${BASE_URL%/}"
+source "$SCRIPT_DIR/lib/isolated-target.sh"
+secman_test_require_isolated
 if [[ "$BASE_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$ ]]; then
     CURL_PROTOCOL='=https'
 elif [[ "$BASE_URL" =~ ^http://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]{1,5})?$ ]]; then

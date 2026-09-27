@@ -3,6 +3,7 @@ import CurrentVulnerabilitiesTable from './CurrentVulnerabilitiesTable';
 import ExternalExposureAnalytics from './ExternalExposureAnalytics';
 import VulnerabilityStatisticsPage from './statistics/VulnerabilityStatisticsPage';
 import VulnerabilityHeatmap from './VulnerabilityHeatmap';
+import './AnalyticsTabs.css';
 
 /**
  * One destination for the vulnerability analysis views that used to be
@@ -119,17 +120,11 @@ const AnalyticsTabs: React.FC = () => {
 
   return (
     <div
-      className="container-fluid py-3 d-flex flex-column"
+      className="analytics-tabs container-fluid p-0 d-flex flex-column"
       style={{ height: 'calc(100dvh - 9.5rem)', minHeight: 0, overflow: 'hidden' }}
     >
-      <div className="flex-shrink-0">
-        <p className="scand-label mb-1">Vulnerability Management · Analyze</p>
-        <h1 className="mb-1">Analytics</h1>
-        <p className="text-secondary mb-2">
-          One destination for the analysis views that used to be separate entries in the rail.
-        </p>
-
-        <div className="d-flex flex-wrap align-items-center gap-3 mb-3">
+      <div className="analytics-tabs__header flex-shrink-0 d-flex flex-wrap align-items-center gap-3 mb-2">
+        <h1 className="h3 mb-0">Analytics</h1>
           <div className="btn-group" role="tablist" aria-label="Analysis view">
             {visibleTabs.map((tab) => {
               const selected = tab.id === active;
@@ -148,15 +143,14 @@ const AnalyticsTabs: React.FC = () => {
             })}
           </div>
           {TABS.find((tab) => tab.id === active)?.standalone && (
-            <a className="small" href={TABS.find((tab) => tab.id === active)!.standalone}>
+            <a className="small ms-auto" href={TABS.find((tab) => tab.id === active)!.standalone}>
               Open this view on its own page
             </a>
           )}
-        </div>
       </div>
 
       <div
-        className={`flex-grow-1 ${active === 'overview' ? '' : 'overflow-auto'}`}
+        className={`analytics-tabs__content flex-grow-1 ${active === 'overview' ? '' : 'overflow-auto'}`}
         style={{ minHeight: 0 }}
       >
         {active === 'overview' && <CurrentVulnerabilitiesTable embedded />}

@@ -118,7 +118,9 @@ export async function uploadUserMappingsCSV(file: File): Promise<ImportResult> {
     throw new Error(errorData.error || `Upload failed with status ${response.status}`);
   }
 
-  return await response.json();
+  const result = await response.json();
+  return { ...result, errors: result.errors?.map((error: string | { reason: string }) =>
+    typeof error === 'string' ? error : error.reason) };
 }
 
 /**

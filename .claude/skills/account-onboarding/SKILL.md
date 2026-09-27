@@ -32,6 +32,13 @@ context: fork
 
 # Account Onboarding — Iterative Fix Loop
 
+> **Database-safety override:** Run this skill's database-mutating driver inside
+> `./scripts/test/run-isolated-e2e.sh -- <driver and arguments>`. The runner
+> starts and stops its own stack on test-only ports, checks ownership, and removes
+> its disposable database. The direct 8080/4321 start, stop, and driver commands
+> below are superseded by this rule. Never run the driver directly against the
+> current SecMan database; an unverified legacy fixture is preserved and reported.
+
 You are an orchestration agent. Bring up the stack, run the CLI + MCP + public
 questionnaire driver, and **iteratively fix every failure** until it passes or the
 retry budget is spent.
@@ -79,13 +86,11 @@ Build the CLI jar first (`./gradlew :cli:shadowJar`) — the driver refuses to s
 without `src/cli/build/libs/cli-0.1.0-all.jar`. Backend changes always require a
 backend restart; rebuild the jar only when you touched `src/cli/`.
 
-**The backend log matters here more than in other skills.** An invite token is a
-credential, so no API, CLI printout or MCP result ever returns one — several
-assertions check exactly that. The only place the full token legitimately appears
-is the questionnaire URL inside the rendered mail, which lands in
-`.e2e-logs/backend.log`. If that file is not where the driver looks, the
-owner-flow phases report `[WARN]` and are skipped; point `SECMAN_BACKEND_LOG` at
-the real path rather than treating the skip as a pass.
+**Invite tokens remain credentials.** The isolated driver reads only its exact
+fixture's invite token using the runner's restricted database user. It never
+prints a full token or adds one to an API response. The loopback SMTP sink
+discards message bodies. Failure to retrieve a fixture token fails the owner
+flow rather than silently skipping it.
 
 ## Phase 2 — Run the driver
 
@@ -156,8 +161,7 @@ shape the asset sweep matches — an account outside that shape leaves its asset
 behind for good.
 
 Report a table: phase, assertion, result, and for anything still failing the file
-and the reason. Say explicitly if the owner-flow phases were skipped for want of a
-backend log — that is a gap in coverage, not a pass.
+and the reason. Report any owner-flow phase that could not run as a coverage failure.
 
 ## Constraints
 

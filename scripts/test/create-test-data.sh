@@ -9,7 +9,8 @@
 # The exception request is deliberately left PENDING: only ADMIN/SECCHAMPION
 # requests auto-approve, and the test user is a plain USER.
 #
-# Nothing is deleted. The fixture is meant to be driven manually afterwards.
+# This manual fixture remains until scripts/manual/cleanup-test-data.sh is run
+# with its exact ownership manifest. Automated tests use disposable databases.
 #
 # All credentials and the host URL come from Proton Pass via pass-cli.
 
@@ -47,10 +48,24 @@ else
     BASE_URL="https://${SECMAN_HOST%/}"
 fi
 
-STAMP="$(date +%Y%m%d-%H%M%S)"
+STAMP="$(date +%Y%m%d-%H%M%S)-$(openssl rand -hex 4)"
 TEST_USER="testdata-user-${STAMP}"
 TEST_EMAIL="${TEST_USER}@e2e.local"
 TEST_ASSET="testdata-host-${STAMP}"
+MANIFEST_DIR="$REPO_ROOT/.e2e-logs/manual-fixtures"
+MANIFEST_FILE="$MANIFEST_DIR/$STAMP.json"
+mkdir -p "$MANIFEST_DIR"
+jq -n --arg target "$BASE_URL" --arg user "$TEST_USER" --arg email "$TEST_EMAIL" \
+    --arg asset "$TEST_ASSET" \
+    '{target:$target,userName:$user,userEmail:$email,assetName:$asset}' > "$MANIFEST_FILE"
+
+record_manifest_id() {
+    local field="$1" id="$2" temp
+    [[ "$id" =~ ^[0-9]+$ ]] || { echo "Missing numeric $field; inspect $MANIFEST_FILE" >&2; exit 1; }
+    temp="$(mktemp "$MANIFEST_FILE.XXXXXX")"
+    jq --arg field "$field" --argjson id "$id" '.[$field]=$id' "$MANIFEST_FILE" > "$temp"
+    mv "$temp" "$MANIFEST_FILE"
+}
 TEST_CVE="CVE-2021-44228"
 TEST_SEVERITY="HIGH"
 DAYS_OPEN=45
@@ -93,6 +108,7 @@ post "$ADMIN_JAR" /api/users \
     "$(jq -nc --arg u "$TEST_USER" --arg e "$TEST_EMAIL" --arg p "$SECMAN_USER_PASS" \
         '{username:$u,email:$e,password:$p,roles:["USER"]}')" 200 201
 USER_ID=$(jq -r '.id // empty' "$BODY")
+record_manifest_id userId "$USER_ID"
 echo "  ✓ user id=${USER_ID:-?}"
 
 # owner = the test user's username so the asset resolves under the unified
@@ -103,6 +119,7 @@ post "$ADMIN_JAR" /api/assets \
         '{name:$n,type:"Server",ip:"10.99.0.1",owner:$o,
           description:"Synthetic fixture created by scripts/test/create-test-data.sh"}')" 200 201
 ASSET_ID=$(jq -r '.id' "$BODY")
+record_manifest_id assetId "$ASSET_ID"
 echo "  ✓ asset id=${ASSET_ID}"
 
 echo "→ [3/4] Adding ${TEST_SEVERITY} vulnerability ${TEST_CVE} to '${TEST_ASSET}' …"
@@ -110,6 +127,7 @@ post "$ADMIN_JAR" /api/vulnerabilities/cli-add \
     "$(jq -nc --arg h "$TEST_ASSET" --arg c "$TEST_CVE" --arg s "$TEST_SEVERITY" --argjson d "$DAYS_OPEN" \
         '{hostname:$h,cve:$c,criticality:$s,daysOpen:$d}')" 200
 VULN_ID=$(jq -r '.id' "$BODY")
+record_manifest_id vulnerabilityId "$VULN_ID"
 ASSET_CREATED=$(jq -r '.assetCreated' "$BODY")
 if [[ "$ASSET_CREATED" != "false" ]]; then
     echo "✗ cli-add created a second asset instead of reusing '${TEST_ASSET}'" >&2
@@ -132,6 +150,7 @@ post "$USER_JAR" /api/vulnerability-exception-requests \
                   "so remediation is deferred pending the next maintenance window."),
           expirationDate:$x}')" 200 201
 REQ_ID=$(jq -r '.id' "$BODY")
+record_manifest_id requestId "$REQ_ID"
 REQ_STATUS=$(jq -r '.status' "$BODY")
 echo "  ✓ exception request id=${REQ_ID} status=${REQ_STATUS}"
 
@@ -154,6 +173,6 @@ cat <<EOF
                        expires ${EXPIRES_AT}
 
   Approve/reject it as admin at ${BASE_URL}/exception-requests
-  Nothing was deleted — this fixture is left in place.
+  Manual fixture retained. Cleanup: ./scripts/manual/cleanup-test-data.sh $MANIFEST_FILE
 ────────────────────────────────────────────────────────────
 EOF

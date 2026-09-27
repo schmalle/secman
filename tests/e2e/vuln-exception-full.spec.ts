@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import fs from 'node:fs';
+import { requireIsolatedTarget } from './helpers/isolated-target';
 
 /**
  * Phase 8 (UI) of the full vulnerability + exception E2E test.
@@ -294,6 +295,7 @@ async function rejectCaseThroughUi(page: Page, item: MatrixCase) {
 }
 
 test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
+    test.beforeAll(() => requireIsolatedTarget());
 
     test('admin sees both test assets and all CVEs in vulnerability list', async ({ page }) => {
         await login(page, ADMIN.user, ADMIN.pass);
@@ -729,6 +731,56 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
         expect(body).not.toContain(AWS_ACCOUNT_C);
         expect(body).not.toContain(AWS_ASSET_C);
 
+        await logout(page);
+    });
+
+    test('asset overview shows rows above the fold and keeps hidden filters visible', async ({ page }) => {
+        await login(page, ADMIN.user, ADMIN.pass);
+        await page.setViewportSize({ width: 2048, height: 638 });
+        await page.goto('/assets');
+        await expect(page.locator('.asset-management__results tbody tr').first()).toBeVisible();
+
+        const visibleRows = await page.locator('.asset-management__results tbody tr').evaluateAll((rows) => {
+            const viewport = document.querySelector('.asset-management__results .table-responsive')!.getBoundingClientRect();
+            return rows.filter((row) => {
+                const bounds = row.getBoundingClientRect();
+                return bounds.top >= viewport.top && bounds.bottom <= viewport.bottom;
+            }).length;
+        });
+        expect(visibleRows).toBeGreaterThanOrEqual(4);
+
+        await page.getByRole('button', { name: 'More filters' }).click();
+        await page.locator('#ownerFilter').fill(USER1.user);
+        await expect.poll(() => page.url()).toContain(`owner=${USER1.user}`);
+        await page.getByRole('button', { name: 'More filters (1)' }).click();
+        await expect(page.getByRole('button', { name: `Remove Owner filter: ${USER1.user}` })).toBeVisible();
+        await expect(page.locator('#ownerFilter')).toHaveCount(0);
+        await page.getByRole('button', { name: `Remove Owner filter: ${USER1.user}` }).click();
+        await expect.poll(() => page.url()).not.toContain('owner=');
+        await logout(page);
+    });
+
+    test('analytics overview keeps vulnerability rows visible with advanced filters collapsed', async ({ page }) => {
+        await login(page, ADMIN.user, ADMIN.pass);
+        await page.setViewportSize({ width: 2048, height: 638 });
+        await page.goto('/analytics');
+        await expect(page.locator('.current-vulns tbody tr').first()).toBeVisible();
+
+        const visibleRows = await page.locator('.current-vulns tbody tr').evaluateAll((rows) => {
+            const viewport = document.querySelector('.current-vulns .table-responsive')!.getBoundingClientRect();
+            return rows.filter((row) => {
+                const bounds = row.getBoundingClientRect();
+                return bounds.top >= viewport.top && bounds.bottom <= viewport.bottom;
+            }).length;
+        });
+        expect(visibleRows).toBeGreaterThanOrEqual(3);
+
+        await page.getByRole('button', { name: 'More filters' }).click();
+        await page.locator('#includeInstallerFindings').check();
+        await page.getByRole('button', { name: 'More filters (1)' }).click();
+        await expect(page.getByRole('button', { name: 'Exclude installer and setup findings' })).toBeVisible();
+        await page.getByRole('button', { name: 'Exclude installer and setup findings' }).click();
+        await expect(page.getByRole('button', { name: 'More filters' })).toBeVisible();
         await logout(page);
     });
 

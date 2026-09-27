@@ -27,10 +27,16 @@ open class RiskAssessmentAccessService(
     fun canReview(assessment: RiskAssessment, authentication: Authentication): Boolean =
         isGlobal(authentication) || activeAssignments(assessment, authentication).any { it.role == "ASSESSOR" }
 
+    /** Analysis does not confer acceptance or resource access. */
+    fun canAnalyze(assessment: RiskAssessment, authentication: Authentication): Boolean =
+        canReview(assessment, authentication) ||
+            (actorId(authentication) == assessment.requestor.id && canView(assessment, authentication))
+
     /** Combine task grants with resource visibility without treating requestors as owners. */
     fun canView(assessment: RiskAssessment, authentication: Authentication): Boolean =
         canReview(assessment, authentication) || activeAssignments(assessment, authentication).isNotEmpty() ||
             when (assessment.assessmentBasisType) {
+                AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> false
                 AssessmentBasisType.AWS_ACCOUNT -> assessment.awsAccount?.awsAccountId?.let {
                     assets.canAccessAwsAccount(it, authentication)
                 } == true

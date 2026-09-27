@@ -2147,6 +2147,7 @@ open class CrowdStrikeApiClientImpl(
     private data class DeviceMetadata(
         val hostname: String?,
         val ip: String?,
+        val ipAddresses: Set<String>,
         val adDomain: String?,  // Feature 043: Active Directory domain
         val cloudAccountId: String?,
         val cloudInstanceId: String?,
@@ -2166,6 +2167,7 @@ open class CrowdStrikeApiClientImpl(
 
         deviceIds.chunked(chunkSize).forEach { chunk ->
             try {
+                val addressHistory = resolveNetworkAddressHistory(chunk, token)
                 var uriBuilder = UriBuilder.of("/devices/entities/devices/v2")
                 chunk.forEach { id ->
                     uriBuilder = uriBuilder.queryParam("ids", id)
@@ -2209,11 +2211,13 @@ open class CrowdStrikeApiClientImpl(
                         (device["system"] as? Map<*, *>)?.get("hostname")?.toString()
                     )
 
+                    val ipAddresses = (collectIpAddresses(device, nestedDevice) + addressHistory[deviceId].orEmpty())
+                        .take(MAX_IP_ADDRESSES_PER_DEVICE)
+                        .toSortedSet()
                     val ip = firstNonBlank(
                         device["local_ip"]?.toString(),
                         nestedDevice?.get("local_ip")?.toString(),
-                        (device["ip"] as? List<*>)?.firstOrNull()?.toString(),
-                        (device["external_ip"] as? List<*>)?.firstOrNull()?.toString()
+                        ipAddresses.firstOrNull()
                     )
 
                     // Extract Active Directory domain (Feature 043)
@@ -2244,6 +2248,7 @@ open class CrowdStrikeApiClientImpl(
                     metadataByDeviceId[deviceId] = DeviceMetadata(
                         hostname = hostname,
                         ip = ip,
+                        ipAddresses = ipAddresses,
                         adDomain = adDomain,
                         cloudAccountId = cloudAccountId,
                         cloudInstanceId = cloudInstanceId,
@@ -2274,9 +2279,60 @@ open class CrowdStrikeApiClientImpl(
         return metadataByDeviceId
     }
 
+    /** Retrieve the authoritative Falcon IP history in the same bounded chunks as device details. */
+    private fun resolveNetworkAddressHistory(deviceIds: List<String>, token: AuthToken): Map<String, Set<String>> {
+        return try {
+            val request = HttpRequest.POST(
+                "/devices/combined/devices/network-address-history/v1",
+                mapOf("ids" to deviceIds)
+            )
+                .header("Authorization", "Bearer ${token.accessToken}")
+                .header("Accept", "application/json")
+            @Suppress("UNCHECKED_CAST")
+            val body = httpClient.toBlocking().exchange(request, Map::class.java).body() as? Map<String, Any>
+                ?: return emptyMap()
+            val resources = body["resources"] as? List<*> ?: return emptyMap()
+            resources.mapNotNull { resource ->
+                val row = resource as? Map<*, *> ?: return@mapNotNull null
+                val deviceId = row["device_id"]?.toString()?.takeIf(String::isNotBlank)
+                    ?: return@mapNotNull null
+                val addresses = (row["history"] as? List<*>).orEmpty()
+                    .mapNotNull { (it as? Map<*, *>)?.get("ip_address")?.toString() }
+                    .map(String::trim)
+                    .filter(String::isNotBlank)
+                    .take(MAX_IP_ADDRESSES_PER_DEVICE)
+                    .toSet()
+                deviceId to addresses
+            }.toMap()
+        } catch (e: Exception) {
+            log.warn("Unable to retrieve CrowdStrike network address history for {} devices: {}", deviceIds.size, e.message)
+            emptyMap()
+        }
+    }
+
     private fun firstNonBlank(vararg values: String?): String? {
         return values.firstOrNull { !it.isNullOrBlank() }
     }
+
+    private companion object {
+        const val MAX_IP_ADDRESSES_PER_DEVICE = 100
+    }
+
+    /** Falcon device entities expose current addresses as scalar fields and may also return arrays. */
+    private fun collectIpAddresses(vararg sources: Map<*, *>?): Set<String> =
+        sources.filterNotNull()
+            .flatMap { source ->
+                listOf("local_ip", "external_ip", "connection_ip", "ip").flatMap { field ->
+                    when (val value = source[field]) {
+                        is Collection<*> -> value.mapNotNull { it?.toString() }
+                        null -> emptyList()
+                        else -> listOf(value.toString())
+                    }
+                }
+            }
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .toSortedSet()
 
     /**
      * Map CrowdStrike API response to DTOs (bulk query version)
@@ -2320,6 +2376,13 @@ open class CrowdStrikeApiClientImpl(
                     hostInfo?.get("local_ip")?.toString(),
                     deviceInfo?.get("local_ip")?.toString()
                 )
+                val ipAddresses = buildSet {
+                    metadata?.ipAddresses?.let(::addAll)
+                    listOf(vuln, hostInfo, deviceInfo).filterNotNull().forEach { source ->
+                        addAll(collectIpAddresses(source))
+                    }
+                    ip?.let(::add)
+                }
 
                 // Extract Active Directory domain (Feature 043)
                 val adDomain = firstNonBlank(
@@ -2391,6 +2454,7 @@ open class CrowdStrikeApiClientImpl(
                     id = id,
                     hostname = hostname,
                     ip = ip,
+                    ipAddresses = ipAddresses,
                     adDomain = adDomain,  // Feature 043
                     osVersion = osVersion,
                     cveId = cveId,

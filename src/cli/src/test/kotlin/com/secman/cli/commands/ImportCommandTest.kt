@@ -56,8 +56,8 @@ class ImportCommandTest {
     }
 
     @Test
-    fun `createnotify without notify-address is rejected`() {
-        assertThat(cmd(createnotify = true, notifyAddress = null).validateNotifyOptions()).isNotNull()
+    fun `createnotify without summary address uses saved owner onboarding policy`() {
+        assertThat(cmd(createnotify = true, notifyAddress = null).validateNotifyOptions()).isNull()
     }
 
     @Test
@@ -249,5 +249,16 @@ class ImportCommandTest {
     fun `the CLI questionnaire expiry bounds match the backend bounds`() {
         assertThat(ImportCommand.MIN_QUESTIONNAIRE_EXPIRY_DAYS).isEqualTo(1)
         assertThat(ImportCommand.MAX_QUESTIONNAIRE_EXPIRY_DAYS).isEqualTo(90)
+    }
+    @Test
+    fun `new account notification alias is accepted for file and S3 imports`() {
+        val fileCommand = ImportCommand(service)
+        picocli.CommandLine(fileCommand).parseArgs("--file", "mappings.csv", "--notify-new-accounts")
+        assertThat(fileCommand.createnotify).isTrue()
+        assertThat(fileCommand.notifyAddress).isNull()
+        val s3Command = ImportS3Command(io.mockk.mockk(), service)
+        picocli.CommandLine(s3Command).parseArgs("--bucket", "example-bucket", "--key", "mappings.csv", "--createnotify")
+        assertThat(s3Command.createnotify).isTrue()
+        assertThat(s3Command.notifyAddress).isNull()
     }
 }

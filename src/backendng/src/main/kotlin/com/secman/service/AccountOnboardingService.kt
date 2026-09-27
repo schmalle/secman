@@ -63,6 +63,7 @@ open class AccountOnboardingService(
     private val riskAssessmentRepository: RiskAssessmentRepository,
     private val userRepository: UserRepository,
     private val emailService: EmailService,
+    private val ownerMailDeliveryService: OwnerMailDeliveryService,
     private val templateRenderer: EmailTemplateRenderer,
     private val releaseRequirementScopeService: ReleaseRequirementScopeService,
     private val objectMapper: ObjectMapper,
@@ -81,7 +82,8 @@ open class AccountOnboardingService(
     @Value("\${secman.account-onboarding.reminder-template:account-onboarding-reminder}")
     private val reminderTemplate: String,
     @Value("\${secman.account-onboarding.reminder-days-before:3}")
-    private val reminderDaysBefore: Int
+    private val reminderDaysBefore: Int,
+    private val settings: AccountOnboardingSettingsService? = null
 ) {
     private val log = LoggerFactory.getLogger(AccountOnboardingService::class.java)
 
@@ -141,17 +143,20 @@ open class AccountOnboardingService(
         deadlineDays: Int?,
         expiryDays: Int?,
         simulated: Boolean = false,
-        simulatedBy: String? = null
+        simulatedBy: String? = null,
+        useDefaultSettings: Boolean = false
     ): OnboardingPlan? {
-        val mode = AccountOnboardingMode.resolve(explicitMode, startRiskAssessment) ?: return null
+        val defaults = if (useDefaultSettings && explicitMode == null && !startRiskAssessment)
+            settings?.get() ?: com.secman.dto.AccountOnboardingSettingsDto() else null
+        val mode = AccountOnboardingMode.resolve(explicitMode, startRiskAssessment) ?: defaults?.mode ?: return null
         return OnboardingPlan(
             mode = mode,
             // The compatibility carve-out: a caller sending only startRiskAssessment=true gets
             // exactly what it got before onboarding modes existed, welcome mail included (i.e.
             // absent). Naming a mode is the opt-in.
-            sendWelcomeEmail = sendWelcomeEmail ?: (explicitMode != null),
-            useCaseName = useCaseName?.trim(),
-            deadlineDays = deadlineDays ?: AwsAccountRiskAssessmentService.DEFAULT_DEADLINE_DAYS,
+            sendWelcomeEmail = if (defaults != null) mode == AccountOnboardingMode.WELCOME_ONLY else sendWelcomeEmail ?: (explicitMode != null),
+            useCaseName = defaults?.riskAssessmentUseCase ?: useCaseName?.trim(),
+            deadlineDays = defaults?.riskAssessmentDeadlineDays ?: deadlineDays ?: AwsAccountRiskAssessmentService.DEFAULT_DEADLINE_DAYS,
             expiryDays = expiryDays ?: defaultExpiryDays,
             simulated = simulated,
             simulatedBy = simulatedBy
@@ -234,13 +239,14 @@ open class AccountOnboardingService(
                 newAccounts = newAccounts,
                 useCaseName = plan.useCaseName!!,
                 deadlineDays = plan.deadlineDays,
-                requestorUserId = requestorUserId
+                requestorUserId = requestorUserId,
+                simulatedBy = if (plan.simulated) plan.simulatedBy ?: "administrator" else null
             )
         }
         val assessmentByPair = riskAssessments.associateBy { it.awsAccountId to it.ownerEmail.lowercase() }
 
         for (account in newAccounts) {
-            for (ownerEmail in account.emails) {
+            for (ownerEmail in account.emails.map { it.trim().lowercase(java.util.Locale.ROOT) }.distinct()) {
                 onboarding += onboardOnePair(
                     awsAccountId = account.awsAccountId,
                     ownerEmail = ownerEmail,
@@ -274,6 +280,7 @@ open class AccountOnboardingService(
             awsAccountId = awsAccountId,
             ownerEmail = ownerEmail,
             mode = plan.mode.name,
+            welcomeEmail = com.secman.dto.OwnerMailDelivery(requested = plan.sendWelcomeEmail),
             dryRun = dryRun
         )
 
@@ -284,19 +291,15 @@ open class AccountOnboardingService(
         }
 
         return try {
-            when (plan.mode) {
+            val result = when (plan.mode) {
                 AccountOnboardingMode.WELCOME_ONLY -> {
-                    val sent = if (dryRun) false else sendWelcomeEmail(awsAccountId, ownerEmail, plan)
-                    base.copy(welcomeEmailSent = sent)
+                    base
                 }
 
                 AccountOnboardingMode.DIRECT -> {
                     // The assessment itself was created (or skipped) by the delegated call
                     // above; here we only add the welcome mail and mirror the outcome.
-                    val sent = if (dryRun || !plan.sendWelcomeEmail) false
-                    else sendWelcomeEmail(awsAccountId, ownerEmail, plan)
                     base.copy(
-                        welcomeEmailSent = sent,
                         riskAssessmentId = directResult?.riskAssessmentId,
                         skipped = directResult?.skipped ?: false,
                         skipReason = directResult?.skipReason,
@@ -306,12 +309,29 @@ open class AccountOnboardingService(
 
                 AccountOnboardingMode.GUIDED -> onboardGuided(awsAccountId, ownerEmail, plan, requestor, dryRun, base)
             }
+            if (result.error != null || result.skipped) result
+            else if (plan.simulated) {
+                val sent = !dryRun && plan.sendWelcomeEmail && sendWelcomeEmail(awsAccountId, ownerEmail, plan)
+                val status = when {
+                    !plan.sendWelcomeEmail -> "SKIPPED"
+                    dryRun -> "WOULD_SEND"
+                    sent -> "SENT"
+                    else -> "FAILED"
+                }
+                // Simulations deliberately bypass import deduplication and have no retry record.
+                result.copy(welcomeEmailSent = sent, welcomeEmail = com.secman.dto.OwnerMailDelivery(
+                    requested = plan.sendWelcomeEmail, status = status,
+                    errorCode = if (status == "FAILED") "DELIVERY_FAILED" else null))
+            } else {
+                val delivery = ownerMailDeliveryService.welcome(awsAccountId, ownerEmail, plan.sendWelcomeEmail, dryRun, requestor?.id)
+                result.copy(welcomeEmailSent = delivery.status == "SENT", welcomeEmail = delivery)
+            }
         } catch (e: Exception) {
             log.error(
                 "Onboarding failed for AWS account {} / owner {}: {}",
                 awsAccountId, EmailAddressValidator.sanitizeForEcho(ownerEmail), e.message, e
             )
-            base.copy(error = "Onboarding failed: ${e.message}")
+            base.copy(error = "Onboarding failed; consult the server logs")
         }
     }
 
@@ -361,11 +381,9 @@ open class AccountOnboardingService(
 
         val invite = selfProvider.get().createInvite(awsAccountId, ownerEmail, plan, requestor)
         // Mail only now, after createInvite's own transaction committed.
-        val sentWelcome = if (plan.sendWelcomeEmail) sendWelcomeEmail(awsAccountId, ownerEmail, plan) else false
         sendQuestionnaireEmail(invite, plan)
 
         return base.copy(
-            welcomeEmailSent = sentWelcome,
             questionnaireInviteId = invite.id,
             questionnaireExpiresAt = invite.expiresAt.format(DATE_TIME_FORMAT)
         )
@@ -418,7 +436,10 @@ open class AccountOnboardingService(
                 "requirementsVersion" to (release?.let { "${it.version} (${it.name})" } ?: ""),
                 "simulatedBy" to (plan.simulatedBy ?: "")
             )
-            sendTemplated(
+            if (settings != null) {
+                val mail = settings.renderWelcome(values, plan.simulated)
+                emailService.sendEmailWithInlineImages(ownerEmail, mail.subject, mail.text, mail.html, templateRenderer.loadLogoInlineImage()).get()
+            } else sendTemplated(
                 to = ownerEmail,
                 subject = "Welcome - your AWS account $awsAccountId is registered in SecMan",
                 basename = templateRenderer.requireAllowed(welcomeTemplate),

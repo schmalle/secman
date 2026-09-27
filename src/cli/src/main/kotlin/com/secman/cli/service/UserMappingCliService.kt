@@ -689,7 +689,7 @@ class UserMappingCliService(
             })
             put("dryRun", dryRun)
             put("notifyNewAccounts", notifyNewAccounts)
-            put("notifyAddress", notifyAddress ?: "")
+            notifyAddress?.let { put("notifyAddress", it) }
             put("startRiskAssessment", startRiskAssessment)
             riskUseCase?.let { put("riskAssessmentUseCase", it) }
             riskDeadlineDays?.let { put("riskAssessmentDeadlineDays", it) }
@@ -766,6 +766,7 @@ class UserMappingCliService(
                             ownerEmail = it["ownerEmail"]?.toString() ?: "",
                             mode = it["mode"]?.toString() ?: "",
                             welcomeEmailSent = (it["welcomeEmailSent"] as? Boolean) ?: false,
+                            welcomeEmail = (it["welcomeEmail"] as? Map<String, Any?>) ?: emptyMap(),
                             // The invite id, never the token — the CLI prints this and the
                             // printout is routinely pasted into tickets and CI logs.
                             questionnaireInviteId = (it["questionnaireInviteId"] as? Number)?.toLong(),
@@ -797,12 +798,16 @@ class UserMappingCliService(
                     )
                 }
                 404 -> {
-                    if (startRiskAssessment || onboardingMode != null) {
+                    if (startRiskAssessment || onboardingMode != null || notifyNewAccounts) {
                         // The per-row fallback endpoints do no onboarding at all — no welcome
                         // mail, no assessment, no invite. Failing loudly beats silently
                         // importing the mappings and leaving the operator to believe the
                         // owners were contacted.
-                        val flag = if (onboardingMode != null) "--onboarding-mode" else "--start-risk-assessment"
+                        val flag = when {
+                            onboardingMode != null -> "--onboarding-mode"
+                            startRiskAssessment -> "--start-risk-assessment"
+                            else -> "--createnotify"
+                        }
                         throw IllegalArgumentException(
                             "Backend does not support $flag " +
                                 "(bulk endpoint /api/user-mappings/bulk not available)"
@@ -1275,6 +1280,7 @@ data class CliAccountOnboarding(
     val ownerEmail: String,
     val mode: String,
     val welcomeEmailSent: Boolean = false,
+    val welcomeEmail: Map<String, Any?> = emptyMap(),
     val questionnaireInviteId: Long? = null,
     val questionnaireExpiresAt: String? = null,
     val riskAssessmentId: Long? = null,

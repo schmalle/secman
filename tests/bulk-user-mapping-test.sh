@@ -30,7 +30,9 @@ export SECMAN_ADMIN_NAME="${SECMAN_ADMIN_NAME:-pass://test/secman/SECMAN_ADMIN_N
 export SECMAN_ADMIN_PASS="${SECMAN_ADMIN_PASS:-pass://test/secman/SECMAN_ADMIN_PASS}"
 
 # Configuration
-BASE_URL="${SECMAN_BASE_URL:-https://secman.covestro.net}"
+BASE_URL="${SECMAN_BASE_URL:-${SECMAN_BACKEND_URL:-}}"
+source "$SCRIPT_DIR/../scripts/test/lib/isolated-target.sh"
+secman_test_require_isolated
 INSECURE="${SECMAN_INSECURE:-true}"  # Skip SSL verification (internal cert)
 TIMESTAMP=$(date +%s)
 TEST_EMAIL="e2e-bulk-${TIMESTAMP}@test.secman.local"

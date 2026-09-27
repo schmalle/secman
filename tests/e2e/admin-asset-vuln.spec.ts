@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { requireIsolatedTarget } from './helpers/isolated-target';
 
 // --- Environment variable validation ---
 const requiredEnvVars = [
@@ -57,6 +58,7 @@ async function logout(page: import('@playwright/test').Page) {
 // --- Test suite (serial: steps depend on each other) ---
 
 test.describe.serial('Admin add system and vulnerability', () => {
+  test.beforeAll(() => requireIsolatedTarget());
   const consoleErrors: string[] = [];
 
   test('Step 1: Normal user sees asset list without DUMMY', async ({ page }) => {

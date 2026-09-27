@@ -22,7 +22,8 @@ import java.time.Instant
  * Exists because the Excel export was showing only revision numbers for requirements
  * whose internalId was never assigned.
  */
-@Requires(notEnv = ["cli"])
+// Integration tests create a fresh schema; asynchronous legacy migration can race its teardown.
+@Requires(notEnv = ["cli", "test"])
 @Singleton
 open class RequirementIdMigrationService(
     @Inject private val requirementRepository: RequirementRepository,

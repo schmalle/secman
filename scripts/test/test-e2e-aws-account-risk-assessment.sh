@@ -65,6 +65,8 @@ for arg in "$@"; do
 done
 
 BASE_URL="${BASE_URL:-${SECMAN_BACKEND_URL:-}}"
+source "$SCRIPT_DIR/lib/isolated-target.sh"
+secman_test_require_isolated
 VERBOSE="${VERBOSE:-false}"
 SKIP_CLI="${SKIP_CLI:-false}"
 SKIP_MCP="${SKIP_MCP:-false}"

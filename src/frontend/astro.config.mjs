@@ -5,6 +5,17 @@ import node from "@astrojs/node";
 
 const allowedDomain = process.env.SECMAN_DOMAIN || "http://localhost:4321";
 const allowedHost = process.env.SECMAN_HOST || "localhost";
+const backendProxy = {
+  target: allowedDomain,
+  changeOrigin: true,
+  secure: false,
+  ...(process.env.SECMAN_E2E_FRONTEND_DIR && {
+    configure(proxy) {
+      // The disposable stack uses separate ports; production uses this shared origin.
+      proxy.on('proxyReq', (request) => request.setHeader('Origin', 'https://secman.covestro.net'));
+    },
+  }),
+};
 
 // Suppress noisy Vite warnings that are not actionable:
 // - "externalized for browser compatibility" from @astrojs/node server-side dependencies
@@ -32,8 +43,8 @@ export default defineConfig({
     mode: "standalone",
   }),
   server: {
-    host: true,
-    port: 4321,
+    host: process.env.SECMAN_E2E_FRONTEND_HOST ? "127.0.0.1" : true,
+    port: Number(process.env.SECMAN_FRONTEND_PORT || 4321),
   },
   vite: {
     plugins: [suppressDevWarnings],
@@ -53,26 +64,17 @@ export default defineConfig({
       chunkSizeWarningLimit: 1000,
     },
     server: {
+      fs: process.env.SECMAN_E2E_ORIGINAL_FRONTEND_DIR
+        ? { allow: [process.cwd(), process.env.SECMAN_E2E_ORIGINAL_FRONTEND_DIR] }
+        : undefined,
         allowedHosts: [
             allowedHost,
             "secman.schmall.io"
         ],
       proxy: {
-        "/api": {
-          target: allowedDomain,
-          changeOrigin: true,
-          secure: false,
-        },
-        "/oauth": {
-          target: allowedDomain,
-          changeOrigin: true,
-          secure: false,
-        },
-        "/mcp": {
-          target: allowedDomain,
-          changeOrigin: true,
-          secure: false,
-        },
+        "/api": backendProxy,
+        "/oauth": backendProxy,
+        "/mcp": backendProxy,
       },
     },
   },

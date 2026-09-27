@@ -53,8 +53,10 @@ open class GetVulnerabilitiesTool(
             "severity" to mapOf(
                 "type" to "array",
                 "description" to "Filter by CVSS severity levels",
-                "items" to mapOf("type" to "string"),
-                "enum" to listOf("Critical", "High", "Medium", "Low", "Info")
+                "items" to mapOf(
+                    "type" to "string",
+                    "enum" to listOf("Critical", "High", "Medium", "Low", "Info")
+                )
             ),
             "assetId" to mapOf(
                 "type" to "number",

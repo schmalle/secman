@@ -488,6 +488,7 @@ open class AccountOnboardingController(
             )
         }
 
+        if (request.useDefaultSettings && request.mode != null) return badRequest("Choose mode or useDefaultSettings, not both")
         val actor = userRepository.findByUsername(authentication.name).orElse(null)
         val plan = onboardingService.planFrom(
             explicitMode = request.mode,
@@ -497,7 +498,8 @@ open class AccountOnboardingController(
             deadlineDays = request.riskAssessmentDeadlineDays,
             expiryDays = request.questionnaireExpiryDays,
             simulated = true,
-            simulatedBy = actor?.email?.ifBlank { actor.username } ?: authentication.name
+            simulatedBy = actor?.email?.ifBlank { actor.username } ?: authentication.name,
+            useDefaultSettings = request.useDefaultSettings
         ) ?: return badRequest("mode is required")
 
         onboardingService.validateRequest(plan, newAccountCount = 1)?.let { return badRequest(it) }

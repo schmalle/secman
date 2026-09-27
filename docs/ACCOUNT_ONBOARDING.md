@@ -10,6 +10,32 @@ the whole path against an account id and address you make up.
 
 ---
 
+## Saved default for new-account notifications
+
+In **Admin → Users & Access → Account Onboarding**, choose **Welcome email** (the default)
+or **Risk assessment**. ADMIN can save the policy and edit the welcome subject and
+HTML body with the same editor used for requirements. ADMIN and SECCHAMPION can
+read the settings. Direct assessments additionally need a configured use case,
+an ACTIVE requirements release containing that use case's requirements, and a
+SECCHAMPION assessor. Welcome-only mode does not need questionnaire rules or an
+ACTIVE release.
+
+`import` and `import-s3` apply this policy when `--createnotify` (alias
+`--notify-new-accounts`) is supplied. `--notify-address` is optional and adds an
+operator summary. REST/MCP imports use `notifyNewAccounts: true`.
+
+Precedence: explicit `onboardingMode`, then legacy `startRiskAssessment`, then the
+saved policy when notifications are requested; otherwise no owner onboarding.
+Existing GUIDED callers remain supported. Saved DIRECT policy starts the assessment
+and sends its questionnaire invitation; it does not add a welcome message.
+
+Welcome edits apply to future sends and explicit retries. They do not resend past
+SENT events or change the deduplication/delivery audit rules. HTML is sanitized;
+editable content is not evaluated as a server-side template.
+
+Use `./scripts/test-account-onboarding.sh you@example.com` for a manual delivery
+rehearsal of the saved policy. See [setup and testing](RISK_ASSESSMENT_SETUP.md).
+
 ## 1. The three modes
 
 | Mode | Welcome mail | Assessment | Who decides the scope |
@@ -32,10 +58,10 @@ mail**, which is byte-identical to the behaviour before this feature existed.
 ```kotlin
 // domain/AccountOnboardingMode.kt — the single place the two are reconciled
 fun resolve(explicit: AccountOnboardingMode?, startRiskAssessment: Boolean) =
-    explicit ?: if (startRiskAssessment) DIRECT else null   // null == do nothing
+    explicit ?: if (startRiskAssessment) DIRECT else null   // saved notification policy is resolved by the import service
 ```
 
-The welcome mail defaults on only when a mode is named explicitly. That asymmetry is the
+For explicit mode calls the welcome mail defaults on; a notification-only import uses the saved policy. That asymmetry is the
 compatibility contract, and `/account-onboarding` has a phase whose only job is to assert it.
 
 **The one incompatible combination is rejected, never guessed.** `--onboarding-mode
@@ -764,3 +790,71 @@ Two gates matter beyond the new one: `/aws-account-risk-assessment` and
 | Admin UI | `pages/admin/account-onboarding.astro`, `components/admin/AccountOnboarding*.tsx` |
 
 See also: `docs/AWS_ACCOUNT_RISK_ASSESSMENT.md`, `docs/CLI.md`, `docs/MCP.md`.
+
+## Durable welcome-mail delivery and ADMIN retry
+
+All import surfaces share `UserMappingBulkImportService`. Defaults are:
+
+| Input | Assessment behavior | Welcome mail |
+|---|---|---|
+| No onboarding flags | Mapping only | Not requested |
+| Legacy `startRiskAssessment: true` | DIRECT | Not requested unless explicitly enabled |
+| Explicit `WELCOME_ONLY` | None | Requested by default |
+| Explicit `DIRECT` | Start assessment | Requested by default |
+| Explicit `GUIDED` | Invite; assess after answers | Requested by default |
+| Any mode with `sendWelcomeEmail: false` | Mode unchanged | Suppressed, including WELCOME_ONLY |
+
+Only account ids absent from mapping rows before import are onboarded. Each
+validated, normalized mapped email is a separate owner; no AWS root address is
+inferred. Known-account reimports do not start a new welcome event. Missing
+SecMan user rows do not prevent mail to a valid mapped address.
+
+Each onboarding result retains `welcomeEmailSent` and adds `welcomeEmail`:
+
+```json
+{"awsAccountId":"123456789012","ownerEmail":"owner@example.com","welcomeEmailSent":false,"welcomeEmail":{"requested":true,"status":"FAILED","notificationId":42,"retryable":true,"errorCode":"NO_ACTIVE_PROVIDER"}}
+```
+
+Statuses: `SKIPPED` (not sent), `WOULD_SEND` (dry run), `PENDING` (claimed or
+uncertain), `SENT` (SMTP accepted), and `FAILED` (safe to retry before transport).
+Dry runs validate recipients but create no audit row, mint no token, and contact
+no mail provider. Mapping success is independent of delivery success.
+
+The database uniquely reserves the account-discovery welcome event for each
+account/normalized owner and atomically claims sends/retries. Mail starts only
+after mapping commit. Replayed imports and concurrent retries cannot send the
+same claimed event again. SMTP cannot provide exactly-once inbox delivery:
+a process crash or transport error after sending began leaves a pending,
+non-retryable outcome. Verify provider delivery evidence before arranging a
+separate notification; this API never resets a sent or uncertain event.
+
+ADMIN can inspect and retry failures in **Account onboarding → Owner welcome-mail
+delivery**, or use:
+
+- `GET /api/admin/owner-mail-notifications?page=0&pageSize=20`
+- `POST /api/admin/owner-mail-notifications/42/retry` (empty JSON body)
+- MCP `list_owner_mail_notifications` / `retry_owner_mail_notification`.
+
+Safe failures (for example `NO_ACTIVE_PROVIDER`) can be retried after fixing the
+provider. A conflicting retry returns HTTP 409; non-admin callers receive 403.
+
+Recipient email, account id, provider message id, and sanitized error metadata
+are redacted after 90 days by an hourly job and before listing. A one-way SHA-256
+event fingerprint and terminal delivery state remain permanently for deduplication;
+these fingerprints are not authentication credentials or exported to clients.
+No message bodies, invite tokens, or provider secrets are stored in this audit.
+Retries are unavailable after retention expires. Migration `V279` creates the
+notification table. No new configuration or dependency is required.
+
+CSV and XLSX upload endpoints accept the same query options: `dryRun`,
+`onboardingMode`, `sendWelcomeEmail`, `startRiskAssessment`,
+`riskAssessmentUseCase`, `riskAssessmentDeadlineDays`, and
+`questionnaireExpiryDays`. File validation precedes parsing, and parsed rows are
+converted to the shared bulk request. Responses retain `imported`, `skipped`,
+`message`, and `errors`, adding `onboarding`, `riskAssessments`, `newAccounts`,
+`comparison`, and `workgroupLinks`. JSON REST, CLI, and MCP use the same options
+and delivery meanings.
+
+Explicit onboarding simulations report the same `welcomeEmail` status vocabulary,
+but intentionally bypass import deduplication. They have no notification ID and
+cannot be retried through the durable-notification API.

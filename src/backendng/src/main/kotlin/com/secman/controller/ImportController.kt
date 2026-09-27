@@ -42,7 +42,8 @@ open class ImportController(
     private val csvUserMappingParser: com.secman.service.CSVUserMappingParser,
     private val assetImportService: com.secman.service.AssetImportService,
     private val requirementImportService: com.secman.service.RequirementImportService,
-    private val importCompletionNotifier: com.secman.service.ImportCompletionNotifier
+    private val importCompletionNotifier: com.secman.service.ImportCompletionNotifier,
+    private val userMappingBulkImportService: com.secman.service.UserMappingBulkImportService
 ) {
     
     private val log = LoggerFactory.getLogger(ImportController::class.java)
@@ -567,7 +568,9 @@ open class ImportController(
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Secured("ADMIN")
     open fun uploadUserMappings(
-        @Part xlsxFile: CompletedFileUpload
+        @Part xlsxFile: CompletedFileUpload,
+        authentication: Authentication,
+        @RequestBean options: com.secman.dto.UserMappingUploadOptions
     ): HttpResponse<*> {
         return try {
             log.debug("Processing user mapping Excel file upload: {}", xlsxFile.filename)
@@ -578,26 +581,8 @@ open class ImportController(
                 return HttpResponse.badRequest(ErrorResponse(validation))
             }
 
-            // Import user mappings
-            val response = xlsxFile.inputStream.use { inputStream ->
-                userMappingImportService.importFromExcel(inputStream)
-            }
-
-            log.info("Successfully imported user mappings: {}", response.message)
-
-            // Chat fan-out for "New AWS account import completed". This path parses the
-            // sheet row by row and has no new-vs-known account breakdown, so the event
-            // carries the counts only.
-            importCompletionNotifier.awsAccountImportCompleted(
-                source = "Excel upload (${xlsxFile.filename.orEmpty()})",
-                triggeredBy = null,
-                processed = response.imported + response.skipped,
-                imported = response.imported,
-                skipped = response.skipped,
-                errorCount = response.errors.size
-            )
-
-            HttpResponse.ok(response)
+            val parsed = xlsxFile.inputStream.use(userMappingImportService::readMappings)
+            executeMappingUpload(parsed, options, authentication, "Excel upload")
 
         } catch (e: IllegalArgumentException) {
             // Validation errors (missing headers, etc.)
@@ -635,9 +620,9 @@ open class ImportController(
     @Secured("ADMIN")
     open fun uploadUserMappingsCSV(
         @Part csvFile: CompletedFileUpload,
-        authentication: Authentication
+        authentication: Authentication,
+        @RequestBean options: com.secman.dto.UserMappingUploadOptions
     ): HttpResponse<*> {
-        val startTime = System.currentTimeMillis()
         val username = authentication.name
 
         return try {
@@ -666,7 +651,7 @@ open class ImportController(
                 !contentType.contains("text", ignoreCase = true) &&
                 !contentType.contains("octet-stream", ignoreCase = true)) {
                 log.warn("CSV upload: unexpected content-type: {}", contentType)
-                // Allow anyway since browsers may send different content types
+                return HttpResponse.badRequest(ErrorResponse("Unsupported CSV content type"))
             }
 
             // Check file is not empty
@@ -694,26 +679,8 @@ open class ImportController(
                     }
                 }
 
-                // Parse CSV. The actor is passed through so that any workgroup the
-                // display_name column causes to be created records who caused it.
-                val result = csvUserMappingParser.parse(tempFile, userIdOrNull(authentication))
-
-                val duration = System.currentTimeMillis() - startTime
-                log.info("CSV upload completed: user={}, imported={}, skipped={}, duration={}ms",
-                         username, result.imported, result.skipped, duration)
-
-                // Chat fan-out for "New AWS account import completed" (counts only — this
-                // path has no new-vs-known account breakdown).
-                importCompletionNotifier.awsAccountImportCompleted(
-                    source = "CSV upload (${csvFile.filename.orEmpty()})",
-                    triggeredBy = username,
-                    processed = result.imported + result.skipped,
-                    imported = result.imported,
-                    skipped = result.skipped,
-                    errorCount = result.errors.size
-                )
-
-                HttpResponse.ok(result)
+                val parsed = csvUserMappingParser.readMappings(tempFile)
+                executeMappingUpload(parsed, options, authentication, "CSV upload")
 
             } finally {
                 // Clean up temp file
@@ -737,6 +704,34 @@ open class ImportController(
             HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse("An internal error occurred"))
         }
+    }
+
+    private fun executeMappingUpload(
+        parsed: com.secman.dto.ParsedUserMappings,
+        options: com.secman.dto.UserMappingUploadOptions,
+        authentication: Authentication,
+        source: String
+    ): HttpResponse<*> {
+        val request = options.request(parsed.mappings)
+        userMappingBulkImportService.validate(request)?.let { return HttpResponse.badRequest(ErrorResponse(it)) }
+        val result = userMappingBulkImportService.execute(request, userIdOrNull(authentication), source)
+        val imported = result.created + result.createdPending
+        val skipped = result.skipped + parsed.skipped
+        val errors = (parsed.errors + result.errors).take(50)
+        val responseErrors: List<Any> = if (source == "CSV upload") errors.map {
+            mapOf("line" to (Regex("^Row ([0-9]+):").find(it)?.groupValues?.get(1)?.toIntOrNull() ?: 0),
+                "field" to null, "reason" to it, "value" to null)
+        } else errors
+        // Preserve the upload adapters' legacy fields and add the shared delivery contract.
+        return HttpResponse.ok(mapOf(
+            "message" to "Imported $imported mappings, skipped $skipped",
+            "imported" to imported, "skipped" to skipped,
+            "errors" to responseErrors,
+            "totalProcessed" to (result.totalProcessed + parsed.skipped), "created" to result.created,
+            "createdPending" to result.createdPending, "newAccounts" to result.newAccounts,
+            "comparison" to result.comparison, "riskAssessments" to result.riskAssessments,
+            "onboarding" to result.onboarding, "workgroupLinks" to result.workgroupLinks
+        ))
     }
 
     /**

@@ -27,6 +27,12 @@ context: fork
 
 # E2E JavaScript Error Scanner — Iterative Fix Loop (Dual-Role)
 
+> **Database-safety override:** Run this scanner against the disposable stack:
+> `./scripts/test/run-isolated-e2e.sh -- bash -c './scripts/test/provision-test-user.sh && SECMAN_BACKEND_URL="$FRONTEND_URL" ./tests/js-error-scanner-pp.sh'`.
+> The temporary normal user and database are removed when the runner exits.
+> The direct 8080/4321 cold-start and persistent-user provisioning instructions
+> below are superseded. Do not create a scanner user in the current database.
+
 You are an orchestration agent that brings up the full-stack development
 environment on loopback, scans every application page **via the shared URL
 `https://secman.covestro.net` (port 443)** as **two different users in
