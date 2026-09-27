@@ -1,0 +1,41 @@
+{
+  "cli_version": "0.11.2",
+  "checkpoint_id": "a9ba7e8c1f60",
+  "session_id": "01a0b0a1-0e7e-7ec2-8fe2-cb0537206d97",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-27T12:44:57.279689Z",
+  "branch": "dev",
+  "checkpoints_count": 11,
+  "save_step_count": 1,
+  "files_touched": [
+    "README.md",
+    "src/backendng/src/main/kotlin/com/secman/service/UserMappingBulkImportService.kt",
+    "src/cli/src/test/kotlin/com/secman/cli/commands/ImportCommandTest.kt"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "6d18e0184a13",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 1303083,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 69523968,
+    "output_tokens": 149700,
+    "api_call_count": 490
+  },
+  "session_metrics": {
+    "turn_count": 11
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-27T12:44:56.858504Z",
+    "agent_lines": 33,
+    "agent_removed": 15,
+    "human_added": 1545,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1578,
+    "total_lines_changed": 2055,
+    "agent_percentage": 2.335766423357664,
+    "metric_version": 2
+  }
+}
