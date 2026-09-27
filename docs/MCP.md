@@ -709,3 +709,18 @@ verify discovery, query filters, pagination and delegated asset access through
 both MCP HTTP entry points. This test is also discovered by the full
 `./tests/e2e/run-e2e.sh` suite. It uses disposable data and generated API keys;
 it does not query the persistent development database.
+
+### Create a key for another person in the web UI
+
+As an administrator, open **Admin → MCP API Keys → Create New API Key**.
+Choose the key name and permissions, then enable **User Delegation**. Under
+**Add a person**, search by username or email and select the matching person.
+Selected people appear with their email addresses; use the remove button to undo
+a selection. No numeric user IDs are needed. Up to 100 people can be selected.
+
+SecMan includes selected people's email domains automatically. You remain the
+key's managing owner and can revoke it. A selected person uses the key with
+their own email in `X-MCP-User-Email`; their roles and workgroup access still
+limit what they can query. To also use the key yourself, expand **Additional
+email domains / use the key yourself** and add your own email domain. Adding
+a domain alone does not authorize everyone in that domain.
