@@ -26,9 +26,22 @@ open class McpAdminController(
     @Inject private val auditService: McpAuditService,
     @Inject private val toolPermissionService: McpToolPermissionService,
     @Inject private val userService: UserService,
-    @Inject private val apiKeyRepository: com.secman.repository.McpApiKeyRepository
+    @Inject private val apiKeyRepository: com.secman.repository.McpApiKeyRepository,
+    @Inject private val userRepository: com.secman.repository.UserRepository
 ) {
     private val logger = LoggerFactory.getLogger(McpAdminController::class.java)
+
+    @io.micronaut.serde.annotation.Serdeable
+    data class DelegateUser(val id: Long?, val username: String, val email: String)
+
+    /** Minimal, bounded directory lookup for the admin key-creation picker. */
+    @Get("/delegate-users{?query}")
+    fun delegateUsers(@QueryValue(defaultValue = "") query: String): HttpResponse<*> {
+        if (query.length > 255) return HttpResponse.badRequest(mapOf("message" to "Search is too long"))
+        return HttpResponse.ok(userRepository.searchAssessmentParticipants(
+            query.trim(), io.micronaut.data.model.Pageable.from(0, 50)
+        ).map { DelegateUser(it.id, it.username, it.email) })
+    }
 
     // ===== API KEY MANAGEMENT =====
 

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import AssessmentParticipantPicker from './AssessmentParticipantPicker';
+import { delegationDomains, type DelegateUser } from './mcpDelegateSelection';
 import { parseServerDate, formatServerDateTime } from '../utils/dateUtils';
 import {
   hasAllMcpPermissions,
@@ -44,7 +46,33 @@ const McpApiKeyManagement: React.FC = () => {
     delegationEnabled: false,
     allowedDelegationDomains: ''
   });
-  const [delegateIds, setDelegateIds] = useState('');
+  const [delegates, setDelegates] = useState<DelegateUser[]>([]);
+  const [delegateQuery, setDelegateQuery] = useState('');
+  const [delegateMatches, setDelegateMatches] = useState<DelegateUser[]>([]);
+  const [delegateLoading, setDelegateLoading] = useState(false);
+  const [delegateError, setDelegateError] = useState('');
+
+  useEffect(() => {
+    if (!showCreateForm || !createForm.delegationEnabled) return;
+    const controller = new AbortController();
+    setDelegateLoading(true);
+    setDelegateError('');
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/mcp/admin/delegate-users?query=${encodeURIComponent(delegateQuery)}`, {
+          credentials: 'include', signal: controller.signal,
+        });
+        if (!response.ok) throw new Error('User search failed');
+        const users: DelegateUser[] = await response.json();
+        if (!controller.signal.aborted) setDelegateMatches(users);
+      } catch {
+        if (!controller.signal.aborted) setDelegateError('Could not load users. Change the search to try again.');
+      } finally {
+        if (!controller.signal.aborted) setDelegateLoading(false);
+      }
+    }, 250);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [showCreateForm, createForm.delegationEnabled, delegateQuery]);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [showInactive, setShowInactive] = useState(false);
 
@@ -114,13 +142,14 @@ const McpApiKeyManagement: React.FC = () => {
       return;
     }
 
+    const domainsForRequest = delegationDomains(delegates, createForm.allowedDelegationDomains || '');
     if (createForm.delegationEnabled) {
-      if (!createForm.allowedDelegationDomains?.trim()) {
+      if (!domainsForRequest) {
         setError('Allowed delegation domains are required when delegation is enabled');
         return;
       }
       // Validate domain format
-      const domains = createForm.allowedDelegationDomains.split(',').map(d => d.trim()).filter(d => d);
+      const domains = domainsForRequest.split(',').map(d => d.trim()).filter(d => d);
       for (const domain of domains) {
         if (!domain.startsWith('@')) {
           setError(`Invalid domain format: '${domain}' (must start with @)`);
@@ -133,11 +162,7 @@ const McpApiKeyManagement: React.FC = () => {
       }
     }
 
-    const allowedDelegateUserIds = delegateIds.split(',').map(value => value.trim()).filter(Boolean).map(Number);
-    if (allowedDelegateUserIds.length > 100 || allowedDelegateUserIds.some(value => !Number.isSafeInteger(value) || value <= 0)) {
-      setError('Enter at most 100 positive user IDs, separated by commas.');
-      return;
-    }
+    const allowedDelegateUserIds = delegates.map(user => user.id);
 
     try {
       const requestBody = {
@@ -147,10 +172,10 @@ const McpApiKeyManagement: React.FC = () => {
         notes: createForm.notes || undefined,
         delegationEnabled: createForm.delegationEnabled || false,
         allowedDelegateUserIds: createForm.delegationEnabled ? allowedDelegateUserIds : [],
-        allowedDelegationDomains: createForm.delegationEnabled ? createForm.allowedDelegationDomains?.trim() : undefined
+        allowedDelegationDomains: createForm.delegationEnabled ? domainsForRequest : undefined
       };
 
-      console.log('Creating API key with:', requestBody);
+
 
       // Authentication is handled via HttpOnly cookie (credentials: 'include')
       const response = await fetch('/api/mcp/admin/api-keys', {
@@ -162,14 +187,15 @@ const McpApiKeyManagement: React.FC = () => {
         body: JSON.stringify(requestBody)
       });
 
-      console.log('Response status:', response.status);
+
 
       if (response.ok) {
         const data = await response.json();
-        console.log('API key created:', data);
+
         setNewApiKey(data.apiKey);
         setShowCreateForm(false);
-        setDelegateIds('');
+        setDelegates([]);
+        setDelegateQuery('');
         setCreateForm({ name: '', permissions: [], expiresAt: '', notes: '', delegationEnabled: false, allowedDelegationDomains: '' });
         fetchApiKeys();
         setError(null);
@@ -435,26 +461,33 @@ const McpApiKeyManagement: React.FC = () => {
 
                       {createForm.delegationEnabled && (
                         <div className="mb-0">
-                          <label htmlFor="allowedDelegationDomains" className="form-label">
-                            Allowed Email Domains *
-                          </label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            id="allowedDelegationDomains"
-                            value={createForm.allowedDelegationDomains || ''}
-                            onChange={(e) => setCreateForm(prev => ({ ...prev, allowedDelegationDomains: e.target.value }))}
-                            placeholder="@company.com, @subsidiary.com"
-                            required={createForm.delegationEnabled}
-                          />
-                          <div className="form-text">
-                            Comma-separated list of allowed email domains (must start with @).
-                            Delegated users must match a domain and be the key owner or explicitly listed below.
+                          <p className="small text-muted">You manage and can revoke this key. Select the people who will use it; their existing roles and workgroup access still apply.</p>
+                          <div className="d-flex flex-wrap gap-2 mb-2" aria-live="polite">
+                            {delegates.map(user => <span key={user.id} className="border rounded px-2 py-1">
+                              {user.username} <span className="text-muted">({user.email})</span>
+                              <button type="button" className="btn btn-sm py-0 ms-1" aria-label={`Remove ${user.username}`}
+                                onClick={() => setDelegates(current => current.filter(item => item.id !== user.id))}>×</button>
+                            </span>)}
                           </div>
-                          <label htmlFor="delegateUserIds" className="form-label mt-3">Additional delegated user IDs</label>
-                          <input id="delegateUserIds" className="form-control" value={delegateIds}
-                            onChange={event => setDelegateIds(event.target.value)} placeholder="12, 34" />
-                          <div className="form-text">Comma-separated user IDs. Leave empty to permit only the key owner.</div>
+                          {delegates.length < 100 ? <AssessmentParticipantPicker
+                            id="delegate-users" label="Add a person" query={delegateQuery} selectedRef=""
+                            users={delegateMatches.filter(user => !delegates.some(selected => selected.id === user.id))}
+                            loading={delegateLoading} error={delegateError} onQueryChange={setDelegateQuery}
+                            onSelect={ref => {
+                              const user = delegateMatches.find(item => `id:${item.id}` === ref);
+                              if (user) setDelegates(current => current.some(item => item.id === user.id) ? current : [...current, user]);
+                              setDelegateQuery('');
+                            }} /> : <p className="form-text">Maximum of 100 people selected. Remove someone to add another.</p>}
+                          <div className="form-text mt-2">Email domains are included automatically for selected people.</div>
+                          <details className="mt-3">
+                            <summary>Additional email domains / use the key yourself</summary>
+                            <label htmlFor="allowedDelegationDomains" className="form-label mt-2">Additional allowed email domains</label>
+                            <input type="text" className="form-control" id="allowedDelegationDomains"
+                              value={createForm.allowedDelegationDomains || ''}
+                              onChange={event => setCreateForm(prev => ({ ...prev, allowedDelegationDomains: event.target.value }))}
+                              placeholder="@company.com" />
+                            <div className="form-text">To use the key yourself, add your email domain. A domain alone never grants access to other people.</div>
+                          </details>
                         </div>
                       )}
                     </div>
