@@ -1,0 +1,1 @@
+create a shell script under tests to query vulnerabilities using a given MCP key and a given secman server url. also support self signed certificates via shell command, generate documentation besides the script, too

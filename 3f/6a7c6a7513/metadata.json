@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "3f6a7c6a7513",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/MCP.md",
+    "tests/mcp/query-vulnerabilities.sh"
+  ],
+  "sessions": [
+    {
+      "metadata": "/3f/6a7c6a7513/0/metadata.json",
+      "transcript": "/3f/6a7c6a7513/0/full.jsonl",
+      "compact_transcript": "/3f/6a7c6a7513/0/transcript.jsonl",
+      "content_hash": "/3f/6a7c6a7513/0/content_hash.txt",
+      "prompt": "/3f/6a7c6a7513/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 12318,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1292800,
+    "output_tokens": 4647,
+    "api_call_count": 6,
+    "subagent_tokens_complete": true
+  }
+}
