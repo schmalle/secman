@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import RequirementFileUpload from './RequirementFileUpload';
 import { formatServerDate } from '../utils/dateUtils';
 
 interface Requirement {
@@ -10,17 +9,14 @@ interface Requirement {
 
 interface RiskAssessment {
   id: number;
-  asset: {
-    id: number;
-    name: string;
-    type: string;
-  };
+  asset?: { id: number; name: string; type: string } | null;
+  solutionName?: string | null;
+  demand?: { title: string } | null;
+  awsAccount?: { awsAccountId: string; name?: string } | null;
+  assessmentBasisType: string;
   endDate: string;
   status: string;
-  requestor: {
-    username: string;
-  };
-  notes?: string;
+  assessor?: { username: string };
 }
 
 interface ExistingResponse {
@@ -28,16 +24,15 @@ interface ExistingResponse {
   requirement: {
     id: number;
   };
-  answer: 'YES' | 'NO' | 'N_A';
+  answerType: 'YES' | 'NO' | 'N_A';
   comment?: string;
 }
 
 interface AssessmentData {
-  riskAssessment: RiskAssessment;
+  assessment: RiskAssessment;
   requirements: Requirement[];
-  existingResponses: ExistingResponse[];
-  respondentEmail: string;
-  expiresAt: string;
+  responses: ExistingResponse[];
+  recipientEmail: string;
 }
 
 interface ResponseFormData {
@@ -100,9 +95,9 @@ const ResponseInterface: React.FC<ResponseInterfaceProps> = ({ token }) => {
       // Initialize responses with existing data
       const initialResponses: ResponseFormData = {};
       data.requirements.forEach(req => {
-        const existingResponse = data.existingResponses.find(resp => resp.requirement.id === req.id);
+        const existingResponse = data.responses.find(resp => resp.requirement.id === req.id);
         initialResponses[req.id] = {
-          answer: existingResponse?.answer || '',
+          answer: existingResponse?.answerType || '',
           comment: existingResponse?.comment || ''
         };
       });
@@ -123,21 +118,24 @@ const ResponseInterface: React.FC<ResponseInterfaceProps> = ({ token }) => {
     try {
       for (const [requirementId, responseData] of Object.entries(responses)) {
         if (responseData.answer) {
-          await fetch(`/api/responses/${token}/save`, {
+          const saved = await fetch(`/api/responses/${token}/save`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
               requirementId: parseInt(requirementId),
-              answer: responseData.answer,
+              answerType: responseData.answer,
               comment: responseData.comment
             }),
           });
+          if (!saved.ok) throw new Error('Could not save an answer. Please try again.');
         }
       }
+      return true;
     } catch (err) {
-      console.error('Auto-save failed:', err);
+      setError('Could not save your answers. Please try again.');
+      return false;
     } finally {
       setSaving(false);
     }
@@ -190,7 +188,7 @@ const ResponseInterface: React.FC<ResponseInterfaceProps> = ({ token }) => {
           },
           body: JSON.stringify({
             requirementId: parseInt(requirementId),
-            answer: responseData.answer,
+            answerType: responseData.answer,
             comment: responseData.comment
           }),
         });
@@ -238,14 +236,13 @@ const ResponseInterface: React.FC<ResponseInterfaceProps> = ({ token }) => {
     
     try {
       // Save all responses first
-      await saveAllResponses();
+      if (!await saveAllResponses()) throw new Error('Save your answers before submitting.');
       
       // Submit assessment
       const response = await fetch(`/api/responses/${token}/submit`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: assessmentData.recipientEmail }),
       });
       
       if (!response.ok) {
@@ -326,23 +323,19 @@ const ResponseInterface: React.FC<ResponseInterfaceProps> = ({ token }) => {
         <div className="card-body">
           <div className="row">
             <div className="col-md-6">
-              <p><strong>Asset:</strong> {assessmentData.riskAssessment.asset.name}</p>
-              <p><strong>Type:</strong> {assessmentData.riskAssessment.asset.type}</p>
-              <p><strong>Requestor:</strong> {assessmentData.riskAssessment.requestor.username}</p>
+              <p><strong>Assessment:</strong> {assessmentData.assessment.solutionName || assessmentData.assessment.asset?.name || assessmentData.assessment.demand?.title || assessmentData.assessment.awsAccount?.name || assessmentData.assessment.awsAccount?.awsAccountId}</p>
+              <p><strong>Type:</strong> {assessmentData.assessment.assessmentBasisType}</p>
+              <p><strong>Assessor:</strong> {assessmentData.assessment.assessor?.username}</p>
             </div>
             <div className="col-md-6">
-              <p><strong>Respondent:</strong> {assessmentData.respondentEmail}</p>
-              <p><strong>Deadline:</strong> {formatServerDate(assessmentData.expiresAt)}</p>
+              <p><strong>Respondent:</strong> {assessmentData.recipientEmail}</p>
+              <p><strong>Deadline:</strong> {formatServerDate(assessmentData.assessment.endDate)}</p>
               <p><strong>Status:</strong> 
-                <span className="badge bg-warning ms-2">{assessmentData.riskAssessment.status}</span>
+                <span className="badge bg-warning ms-2">{assessmentData.assessment.status}</span>
               </p>
             </div>
           </div>
-          {assessmentData.riskAssessment.notes && (
-            <div className="mt-3">
-              <p><strong>Notes:</strong> {assessmentData.riskAssessment.notes}</p>
-            </div>
-          )}
+
         </div>
       </div>
 
@@ -469,12 +462,7 @@ const ResponseInterface: React.FC<ResponseInterfaceProps> = ({ token }) => {
                     </div>
                   </div>
                   
-                  {/* File Upload Section */}
-                  <RequirementFileUpload
-                    riskAssessmentId={assessmentData.riskAssessment.id}
-                    requirementId={requirement.id}
-                    requirementTitle={requirement.shortreq}
-                  />
+
                 </div>
               ))}
             </div>

@@ -1,10 +1,25 @@
 # Changelog (archived from CLAUDE.md)
 
+## 2026-09-27 — MCP vulnerability query E2E regression
+
+- Added an automatically discovered Playwright regression and `scripts/test/test-e2e-mcp-vulnerability-query.sh`. It verifies MCP initialization/discovery, the severity-array schema, default/CVE/severity/asset queries, pagination and hydrated asset names on both HTTP transports. Explicitly delegated non-admin access is tested alongside invalid-key, missing-delegation, missing-permission and ungranted-asset refusals. All fixtures and keys are restricted to the disposable runner database.
+
+## 2026-09-27 — guest invitation E2E regression
+
+- Added `assessment-guest-invitation.spec.ts` to automatic Playwright suite discovery and `scripts/test/test-e2e-assessment-guest-invitation.sh` as its isolated entry point. It creates an email-only respondent, sends to the loopback sink, and checks anonymous questionnaire loading, saving, reload, and submission.
+- The browser regression uncovered stale public-questionnaire API fields. The guest page now reads the current assessment/response contract, sends `answerType`, and submits the token-bound recipient email. The public page no longer mounts the login-only attachment widget.
+
+## 2026-09-27 — respondent invitation compatibility
+
+- The tokenized `/respond/:token` questionnaire uses the existing public layout, avoiding the authenticated layout’s login redirect. Backend token expiry, revocation, and assignment scope checks remain in force. The numeric assessment-response route is constrained to 1–19 digits to prevent a collision with 32-character token URLs.
+
+- Migration V282 makes the obsolete assessment-token `respondent_email` column optional when present. Current token creation writes `email`; the legacy NOT NULL constraint previously blocked external respondent notifications before delivery. Existing values are preserved.
+
 ## 2026-09-27 — solution assessments and saved owner onboarding
 
 - Account Onboarding is under Admin → Users & Access, visible only to ADMIN and SECCHAMPION. Champions see only that destination in the admin menu. Existing-account and repeat-import regression coverage confirms that adding another owner does not trigger onboarding again.
 
-- Risk assessment creation supports SAAS/COTS with a required solution name, searchable existing assessors/respondents, and accountless external respondents using the existing assignment-bound questionnaire tokens. Unique exact username/email matches can be selected by typing. Participant lookup is manager-only and bounded to 100 enabled users.
+- Risk assessment creation supports SAAS/COTS with a required solution name, searchable existing assessors/respondents, and accountless external respondents using the existing assignment-bound questionnaire tokens. Each participant uses a single searchable picker with keyboard selection; external respondents can be invited by typing their email. Participant lookup is manager-only and bounded to 100 enabled users.
 - Account Onboarding now saves a welcome-email (default) or direct-risk-assessment policy. ADMIN edits sanitized welcome content with the requirements HTML editor. File/S3 `--createnotify` (alias `--notify-new-accounts`) uses that policy; the operator summary address is optional. Explicit legacy mode flags retain precedence. Saved policy is validated and pinned before mapping persistence, and email remains post-commit.
 - The manual `./scripts/test-account-onboarding.sh <email>` builds the CLI, generates a simulated account ID, and exercises the saved policy. DIRECT simulations create external assignments/token links, mark mail and tracking as simulated, skip automatic reminders, and report delivery failure without rolling back the assessment.
 - Migrations V280 and V281 add solution/respondent fields, settings, and simulation tracking. See [setup and manual testing](RISK_ASSESSMENT_SETUP.md).

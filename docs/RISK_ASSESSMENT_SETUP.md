@@ -8,12 +8,11 @@ Choose **SaaS** or **COTS** as the assessment basis and enter the solution name
 solution without creating an asset, demand, or AWS account. Choose the applicable
 use cases to define the questionnaire and set the deadline.
 
-The assessor must be an existing enabled SecMan user. Search by username or email,
-an exact unique username or email selects that user automatically. Partial searches
-narrow the dropdown so you can select the intended match.
+The assessor must be an existing enabled SecMan user. Click the picker to browse,
+or search by username or email and choose a matching person.
 
-For the respondent, select an existing user using the same search, or select the
-external-email option and enter a valid single email address. The external person
+For the respondent, choose an existing user using the same picker, or type a
+valid email address and choose “Invite [email]”. The external person
 does **not** need a SecMan login, and creating the assessment does not register a
 user. Their explicit respondent assignment is scoped to the assessment. Send the
 questionnaire using the assessment's notification action; the recipient uses the
@@ -103,4 +102,4 @@ remain supported. No new dependency is required for these features.
 
 Imports determine newness by AWS account ID across all existing user mappings, including pending users. Re-importing an account or adding another owner to an existing account does not trigger a welcome email or assessment. Only newly discovered account IDs are passed to onboarding.
 
-Participant search displays clickable username/email matches directly beneath the search field. Type part of a name (for example, `schmall`), then select a match; the corresponding assessor or respondent dropdown updates. Loading, empty results, and search failures are shown next to the field.
+Assessor and respondent each use one searchable picker, arranged side by side on wider screens. Click the field to browse or type part of a name (for example, `schmall`). Choose a match with the mouse or arrow keys and Enter; Escape closes the results. For an external respondent, type an email and choose “Invite [email]”. The clear button removes a selection.

@@ -6,8 +6,7 @@ import AssessmentRecommendationModal from './AssessmentRecommendationModal';
 import AiPrefillModal from './AiPrefillModal';
 import { getAiFeatureStatus } from '../services/aiSuggestions';
 import { formatServerDate } from '../utils/dateUtils';
-import { exactParticipantId } from './assessmentParticipantSearch';
-import AssessmentParticipantMatches from './AssessmentParticipantMatches';
+import AssessmentParticipantPicker from './AssessmentParticipantPicker';
 
 interface Asset {
   id: number;
@@ -130,7 +129,6 @@ const RiskAssessmentManagement: React.FC = () => {
   const [respondentSearchLoading, setRespondentSearchLoading] = useState(false);
   const [respondentSearchError, setRespondentSearchError] = useState('');
   const [respondentSearch, setRespondentSearch] = useState('');
-  const [externalRespondent, setExternalRespondent] = useState(false);
   const [formData, setFormData] = useState<RiskAssessment>({
     assessmentBasisType: 'DEMAND',
     assessmentBasisId: 0,
@@ -208,8 +206,6 @@ const RiskAssessmentManagement: React.FC = () => {
           const matches: User[] = await response.json();
           if (!active) return;
           setAssessorUsers(matches);
-          const id = exactParticipantId(matches, assessorSearch);
-          if (id != null) setAssessorRefValue(`id:${id}`);
         }
       } catch {
         if (active) { setAssessorUsers([]); setAssessorSearchError('Could not search assessors. Please try again.'); }
@@ -219,7 +215,7 @@ const RiskAssessmentManagement: React.FC = () => {
   }, [assessorSearch, currentUser]);
 
   useEffect(() => {
-    if (externalRespondent || !currentUser?.roles?.some(role => role === 'ADMIN' || role === 'SECCHAMPION')) return;
+    if (!currentUser?.roles?.some(role => role === 'ADMIN' || role === 'SECCHAMPION')) return;
     let active = true;
     setRespondentSearchLoading(true);
     setRespondentSearchError('');
@@ -231,15 +227,13 @@ const RiskAssessmentManagement: React.FC = () => {
           const matches: User[] = await response.json();
           if (!active) return;
           setRespondentUsers(matches);
-          const id = exactParticipantId(matches, respondentSearch);
-          if (id != null) setRespondentRefValue(`id:${id}`);
         }
       } catch {
         if (active) { setRespondentUsers([]); setRespondentSearchError('Could not search respondents. Please try again.'); }
       } finally { if (active) setRespondentSearchLoading(false); }
     }, 250);
     return () => { active = false; clearTimeout(timer); };
-  }, [respondentSearch, currentUser, externalRespondent]);
+  }, [respondentSearch, currentUser]);
 
   const fetchAssessments = async () => {
     try {
@@ -320,6 +314,11 @@ const RiskAssessmentManagement: React.FC = () => {
         return;
       }
 
+      if (respondentSearch.trim() && !respondentRef) {
+        setError('Select a respondent from the matches, choose the email invitation, or clear the field.');
+        return;
+      }
+
       const dataToSubmit: any = {
         assessorRef,
         endDate: formData.endDate,
@@ -386,7 +385,6 @@ const RiskAssessmentManagement: React.FC = () => {
     setRespondentRefValue(respondentIdForEdit ? `id:${respondentIdForEdit}` : '');
     setAssessorSearch('');
     setRespondentSearch('');
-    setExternalRespondent(false);
     setShowForm(true);
   };
 
@@ -504,7 +502,6 @@ const RiskAssessmentManagement: React.FC = () => {
     setRespondentRefValue('');
     setAssessorSearch('');
     setRespondentSearch('');
-    setExternalRespondent(false);
     setEditingAssessment(null);
     setShowForm(false);
   };
@@ -730,50 +727,21 @@ const RiskAssessmentManagement: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="mb-3">
-                    <label htmlFor="assessorSearch" className="form-label">Find assessor by name or email</label>
-                    <input id="assessorSearch" className="form-control mb-2" type="search" maxLength={255} value={assessorSearch}
-                      onChange={event => { setAssessorSearch(event.target.value); setAssessorRefValue(''); setAssessorUsers([]); setAssessorSearchLoading(true); setAssessorSearchError(''); }} placeholder="Enter an exact username/email, or search part of a name" />
-                    <AssessmentParticipantMatches query={assessorSearch} users={assessorUsers} selectedRef={assessorRefValue}
-                      loading={assessorSearchLoading} error={assessorSearchError} label="Assessor matches"
-                      onSelect={id => setAssessorRefValue(`id:${id}`)} />
-                    <label htmlFor="assessorRef" className="form-label">Assessor *</label>
-                    <select className="form-select" id="assessorRef" value={assessorRefValue}
-                      onChange={event => setAssessorRefValue(event.target.value)} required>
-                      <option value="">Select Assessor</option>
-                      {assessorUsers.filter(user => user.id != null).map(user => (
-                        <option key={user.id} value={`id:${user.id}`}>{user.username} ({user.email})</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="mb-3">
-                    <label htmlFor="respondentSearch" className="form-label">Find respondent by name or email</label>
-                    <input id="respondentSearch" className="form-control mb-2" type="search" maxLength={255} value={respondentSearch}
-                      disabled={externalRespondent} onChange={event => { setRespondentSearch(event.target.value); setRespondentRefValue(''); setRespondentUsers([]); setRespondentSearchLoading(true); setRespondentSearchError(''); }}
-                      placeholder="Enter an exact username/email, or search part of a name" />
-                    <AssessmentParticipantMatches query={respondentSearch} users={respondentUsers} selectedRef={respondentRefValue}
-                      loading={respondentSearchLoading} error={respondentSearchError} label="Respondent matches"
-                      onSelect={id => setRespondentRefValue(`id:${id}`)} hidden={externalRespondent} />
-                    <label htmlFor="respondentRef" className="form-label">Respondent (Addressed Person)</label>
-                    <select className="form-select" id="respondentRef" value={externalRespondent ? '' : respondentRefValue}
-                      disabled={externalRespondent} onChange={event => setRespondentRefValue(event.target.value)}>
-                      <option value="">Select Respondent (Optional)</option>
-                      {respondentUsers.filter(user => user.id != null).map(user => (
-                        <option key={user.id} value={`id:${user.id}`}>{user.username} ({user.email})</option>
-                      ))}
-                    </select>
-                    <div className="form-check mt-2">
-                      <input id="externalRespondent" type="checkbox" className="form-check-input" checked={externalRespondent}
-                        onChange={event => { setExternalRespondent(event.target.checked); setRespondentRefValue(''); }} />
-                      <label htmlFor="externalRespondent" className="form-check-label">Use an email address instead</label>
+                  <div className="row g-3 mb-3">
+                    <div className="col-md-6">
+                      <AssessmentParticipantPicker id="assessor" label="Assessor" required
+                        query={assessorSearch} users={assessorUsers} selectedRef={assessorRefValue}
+                        loading={assessorSearchLoading} error={assessorSearchError}
+                        onQueryChange={query => { setAssessorSearch(query); setAssessorRefValue(''); setAssessorUsers([]); setAssessorSearchLoading(true); }}
+                        onSelect={setAssessorRefValue} />
                     </div>
-                    {externalRespondent && <>
-                      <label htmlFor="respondentEmail" className="form-label mt-2">Respondent email *</label>
-                      <input id="respondentEmail" type="email" className="form-control" required maxLength={255}
-                        value={respondentRefValue.replace(/^email:/, '')}
-                        onChange={event => setRespondentRefValue(`email:${event.target.value}`)} />
-                      <div className="form-text">No SecMan registration is required. Use Notify after saving to send a secure response link.</div>
-                    </>}
+                    <div className="col-md-6">
+                      <AssessmentParticipantPicker id="respondent" label="Respondent" allowEmail
+                        query={respondentSearch} users={respondentUsers} selectedRef={respondentRefValue}
+                        loading={respondentSearchLoading} error={respondentSearchError}
+                        onQueryChange={query => { setRespondentSearch(query); setRespondentRefValue(''); setRespondentUsers([]); setRespondentSearchLoading(true); }}
+                        onSelect={setRespondentRefValue} />
+                    </div>
                   </div>
 
                   </>}

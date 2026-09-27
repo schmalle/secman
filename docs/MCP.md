@@ -674,3 +674,11 @@ A disabled/unconfigured provider is independent of mapping success:
 not proof of inbox delivery. A transport failure after sending began leaves
 `PENDING` with `DELIVERY_UNCERTAIN` and `retryable: false`, preventing blind
 resends. See [Account onboarding](ACCOUNT_ONBOARDING.md) for retention and retry.
+
+### Vulnerability-query E2E regression
+
+Run `./scripts/test/test-e2e-mcp-vulnerability-query.sh --project=chrome` to
+verify discovery, query filters, pagination and delegated asset access through
+both MCP HTTP entry points. This test is also discovered by the full
+`./tests/e2e/run-e2e.sh` suite. It uses disposable data and generated API keys;
+it does not query the persistent development database.

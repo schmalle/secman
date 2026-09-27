@@ -73,7 +73,8 @@ open class ResponseController(
         val completionPercentage: Int,
         val canEdit: Boolean = false,
         val canReview: Boolean = false,
-        val acceptance: AssessmentAcceptance? = null
+        val acceptance: AssessmentAcceptance? = null,
+        val recipientEmail: String? = null
     )
 
     @Serdeable
@@ -168,7 +169,8 @@ open class ResponseController(
                 requirements = requirements,
                 responses = responses,
                 isComplete = responses.size >= requirements.size,
-                completionPercentage = completionPercentage
+                completionPercentage = completionPercentage,
+                recipientEmail = assignment.email
             )
             
             log.debug("Assessment data prepared: {} requirements, {} responses", 
@@ -205,7 +207,8 @@ open class ResponseController(
         return HttpResponse.ok(mapOf("assessmentId" to assessment.id, "status" to assessment.status))
     }
 
-    @Get("/assessment/{id}")
+    // Numeric IDs cannot overlap the 32-character capability-token route.
+    @Get("/assessment/{id:[0-9][0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?}")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     @Transactional(readOnly = true)
     open fun getAllResponses(id: Long, authentication: Authentication): HttpResponse<*> {

@@ -1,5 +1,6 @@
 ---
-import Layout from '../../layouts/Layout.astro';
+// The emailed token authorizes the respondent; this page must not require a login.
+import PublicLayout from '../../layouts/PublicLayout.astro';
 import ResponseInterface from '../../components/ResponseInterface';
 
 const { token } = Astro.params;
@@ -9,6 +10,6 @@ if (!token) {
 }
 ---
 
-<Layout title="Risk Assessment Response">
+<PublicLayout title="Risk Assessment Response">
     <ResponseInterface token={token} client:load />
-</Layout>
+</PublicLayout>
