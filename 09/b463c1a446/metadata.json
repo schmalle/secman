@@ -1,0 +1,24 @@
+{
+  "cli_version": "0.11.2",
+  "checkpoint_id": "09b463c1a446",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 11,
+  "files_touched": [
+    "docs/CLI.md",
+    "src/backendng/src/main/kotlin/com/secman/dto/UserMappingDto.kt",
+    "src/backendng/src/main/kotlin/com/secman/mcp/tools/ImportUserMappingsTool.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/commands/ImportCommand.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/commands/ImportS3Command.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/service/UserMappingCliService.kt"
+  ],
+  "sessions": [
+    {
+      "metadata": "/09/b463c1a446/0/metadata.json",
+      "transcript": "/09/b463c1a446/0/full.jsonl",
+      "compact_transcript": "/09/b463c1a446/0/transcript.jsonl",
+      "content_hash": "/09/b463c1a446/0/content_hash.txt",
+      "prompt": "/09/b463c1a446/0/prompt.txt"
+    }
+  ]
+}
