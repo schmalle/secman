@@ -1,0 +1,35 @@
+yolo
+
+---
+
+implement docs/RISK_ASSESSMENT_COMPLETION_PLAN.md
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"N_A requires NEEDS_REVIEW","question":"The plan requires an explicit recommendation policy for N_A answers. Should N_A remain acceptable as OK (preserving current MCP semantics), or require NEEDS_REVIEW?","questionItemId":"[\"request_user_input_async\",\"call_wudYf9nc0xqQ3HwKq9eMCh9n\",0]"}]
+</send_user_message_question_reply>
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"Retain existing requestor authority","question":"Should requestors retain their existing evaluation authority, alongside assigned assessors, ADMIN and SECCHAMPION?","questionItemId":"[\"request_user_input_async\",\"call_TEdMBJWxeZ9GZNb689MsZOgq\",0]"}]
+</send_user_message_question_reply>
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"Use proposed 90-day policy","question":"For owner-mail delivery records, what retention and redaction policy should apply? My proposed default is 90 days for recipient email and sanitized delivery metadata, with a permanent non-reversible deduplication key and no message bodies or tokens.","questionItemId":"[\"request_user_input_async\",\"call_TEdMBJWxeZ9GZNb689MsZOgq\",1]"}]
+</send_user_message_question_reply>
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"Both web UI and MCP","question":"Should ADMIN retries be available through both the web UI and MCP, or just the web UI?","questionItemId":"[\"request_user_input_async\",\"call_TEdMBJWxeZ9GZNb689MsZOgq\",2]"}]
+</send_user_message_question_reply>
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"secman@schmall.io","question":"Which email address should the isolated MCP lifecycle test assign to its temporary respondent? The mcp-risk-assessment-lifecycle skill requires a user-supplied address and says “Do not select a placeholder silently.” The disposable test stack uses a local mail sink.","questionItemId":"[\"request_user_input_async\",\"call_c1l2h1jaypjFJWefqzXRexOG\",0]"}]
+</send_user_message_question_reply>

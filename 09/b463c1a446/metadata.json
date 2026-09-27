@@ -3,14 +3,54 @@
   "checkpoint_id": "09b463c1a446",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 11,
+  "checkpoints_count": 13,
   "files_touched": [
+    ".agents/skills/account-onboarding/SKILL.md",
+    "docs/ACCOUNT_ONBOARDING.md",
+    "docs/AI_RISK_ASSESSMENT.md",
+    "docs/AWS_ACCOUNT_RISK_ASSESSMENT.md",
     "docs/CLI.md",
+    "docs/MCP.md",
+    "docs/MCP_RISK_ASSESSMENT_LIFECYCLE.md",
+    "docs/RISK_ASSESSMENT_COMPLETION_PLAN.md",
+    "scripts/owasp-check.sh",
+    "scripts/test/owasp-check-test.sh",
+    "scripts/test/run-isolated-e2e.sh",
+    "scripts/test/test-e2e-account-onboarding.sh",
+    "scripts/test/test-e2e-mcp-risk-assessment-lifecycle.sh",
+    "src/backendng/src/main/kotlin/com/secman/controller/ImportController.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/RiskAssessmentController.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/RiskController.kt",
     "src/backendng/src/main/kotlin/com/secman/dto/UserMappingDto.kt",
+    "src/backendng/src/main/kotlin/com/secman/mcp/McpToolPermissions.kt",
+    "src/backendng/src/main/kotlin/com/secman/mcp/tools/EvaluateRiskAssessmentTool.kt",
     "src/backendng/src/main/kotlin/com/secman/mcp/tools/ImportUserMappingsTool.kt",
+    "src/backendng/src/main/kotlin/com/secman/mcp/tools/ListRiskAssessmentsTool.kt",
+    "src/backendng/src/main/kotlin/com/secman/mcp/tools/SimulateAccountOnboardingTool.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/RiskAssessmentRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/AccountOnboardingService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/AssessmentWorkflowService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/AsyncExceptionRecompute.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CSVUserMappingParser.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/EmailService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/RequirementIdMigrationService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/RiskAssessmentAccessService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/RiskAssessmentMcpService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/UserMappingImportService.kt",
+    "src/backendng/src/test/kotlin/com/secman/controller/PublicStandardExportIntegrationTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/controller/RiskAccessControlIntegrationTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/mcp/tools/ListRiskAssessmentsToolTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/AsyncExceptionRecomputeChunkingTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/RiskAssessmentMcpServiceTest.kt",
+    "src/backendng/src/test/resources/application-test.yml",
     "src/cli/src/main/kotlin/com/secman/cli/commands/ImportCommand.kt",
     "src/cli/src/main/kotlin/com/secman/cli/commands/ImportS3Command.kt",
-    "src/cli/src/main/kotlin/com/secman/cli/service/UserMappingCliService.kt"
+    "src/cli/src/main/kotlin/com/secman/cli/service/UserMappingCliService.kt",
+    "src/frontend/src/components/AssessmentPerformance.tsx",
+    "src/frontend/src/components/RiskAssessmentManagement.test.ts",
+    "src/frontend/src/components/RiskAssessmentManagement.tsx",
+    "src/frontend/src/components/admin/AccountOnboardingManager.tsx",
+    "src/frontend/src/services/userMappingService.ts"
   ],
   "sessions": [
     {
@@ -19,6 +59,21 @@
       "compact_transcript": "/09/b463c1a446/0/transcript.jsonl",
       "content_hash": "/09/b463c1a446/0/content_hash.txt",
       "prompt": "/09/b463c1a446/0/prompt.txt"
+    },
+    {
+      "metadata": "/09/b463c1a446/1/metadata.json",
+      "transcript": "/09/b463c1a446/1/full.jsonl",
+      "compact_transcript": "/09/b463c1a446/1/transcript.jsonl",
+      "content_hash": "/09/b463c1a446/1/content_hash.txt",
+      "prompt": "/09/b463c1a446/1/prompt.txt"
     }
-  ]
+  ],
+  "token_usage": {
+    "input_tokens": 614033,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 54723968,
+    "output_tokens": 112364,
+    "api_call_count": 402,
+    "subagent_tokens_complete": true
+  }
 }
