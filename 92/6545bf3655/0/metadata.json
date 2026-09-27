@@ -1,0 +1,104 @@
+{
+  "cli_version": "0.11.2",
+  "checkpoint_id": "926545bf3655",
+  "session_id": "01a0e233-7f24-7e42-aed8-760e5db622fc",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-27T14:20:07.819645Z",
+  "branch": "dev",
+  "checkpoints_count": 6,
+  "save_step_count": 6,
+  "files_touched": [
+    "docs/CHANGELOG.md",
+    "docs/MCP.md",
+    "docs/RISK_ASSESSMENT_SETUP.md",
+    "scripts/test/test-e2e-assessment-guest-invitation.sh",
+    "scripts/test/test-e2e-mcp-vulnerability-query.sh",
+    "src/backendng/src/main/kotlin/com/secman/controller/ResponseController.kt",
+    "src/backendng/src/main/resources/db/migration/V282__assessment_token_legacy_recipient.sql",
+    "src/frontend/src/components/AssessmentParticipantMatches.tsx",
+    "src/frontend/src/components/AssessmentParticipantPicker.test.ts",
+    "src/frontend/src/components/AssessmentParticipantPicker.tsx",
+    "src/frontend/src/components/ResponseInterface.tsx",
+    "src/frontend/src/components/RiskAssessmentManagement.tsx",
+    "src/frontend/src/components/assessmentParticipantSearch.test.ts",
+    "src/frontend/src/components/assessmentParticipantSearch.ts",
+    "src/frontend/src/layouts/assessmentResponseLayout.test.ts",
+    "src/frontend/src/pages/respond/[token].astro",
+    "tests/e2e/assessment-guest-invitation.spec.ts",
+    "tests/e2e/mcp-vulnerability-query.spec.ts",
+    "tests/e2e/readme.md"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-sol",
+  "turn_id": "d57591d18dcc",
+  "checkpoint_transcript_start": 1359,
+  "transcript_lines_at_start": 1359,
+  "compact_transcript_start": 158,
+  "token_usage": {
+    "input_tokens": 120698,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 17418624,
+    "output_tokens": 29291,
+    "api_call_count": 111,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 13
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-27T14:20:07.639135Z",
+    "agent_lines": 456,
+    "agent_removed": 186,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 456,
+    "total_lines_changed": 642,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 118,
+      "agent_lines_removed": 138
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 118,
+      "agent_lines_removed": 138
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 128,
+      "agent_lines_removed": 138
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 148,
+      "agent_lines_removed": 142
+    },
+    {
+      "checkpoint_number": 6,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 316,
+      "agent_lines_removed": 186
+    }
+  ]
+}

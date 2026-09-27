@@ -1,0 +1,45 @@
+{
+  "cli_version": "0.11.2",
+  "checkpoint_id": "926545bf3655",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 6,
+  "files_touched": [
+    "docs/CHANGELOG.md",
+    "docs/MCP.md",
+    "docs/RISK_ASSESSMENT_SETUP.md",
+    "scripts/test/test-e2e-assessment-guest-invitation.sh",
+    "scripts/test/test-e2e-mcp-vulnerability-query.sh",
+    "src/backendng/src/main/kotlin/com/secman/controller/ResponseController.kt",
+    "src/backendng/src/main/resources/db/migration/V282__assessment_token_legacy_recipient.sql",
+    "src/frontend/src/components/AssessmentParticipantMatches.tsx",
+    "src/frontend/src/components/AssessmentParticipantPicker.test.ts",
+    "src/frontend/src/components/AssessmentParticipantPicker.tsx",
+    "src/frontend/src/components/ResponseInterface.tsx",
+    "src/frontend/src/components/RiskAssessmentManagement.tsx",
+    "src/frontend/src/components/assessmentParticipantSearch.test.ts",
+    "src/frontend/src/components/assessmentParticipantSearch.ts",
+    "src/frontend/src/layouts/assessmentResponseLayout.test.ts",
+    "src/frontend/src/pages/respond/[token].astro",
+    "tests/e2e/assessment-guest-invitation.spec.ts",
+    "tests/e2e/mcp-vulnerability-query.spec.ts",
+    "tests/e2e/readme.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/92/6545bf3655/0/metadata.json",
+      "transcript": "/92/6545bf3655/0/full.jsonl",
+      "compact_transcript": "/92/6545bf3655/0/transcript.jsonl",
+      "content_hash": "/92/6545bf3655/0/content_hash.txt",
+      "prompt": "/92/6545bf3655/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 120698,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 17418624,
+    "output_tokens": 29291,
+    "api_call_count": 111,
+    "subagent_tokens_complete": true
+  }
+}
