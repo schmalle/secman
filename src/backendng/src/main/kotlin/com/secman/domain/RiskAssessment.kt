@@ -76,6 +76,12 @@ data class RiskAssessment(
     @NotNull
     var assessmentBasisId: Long,
 
+    @Column(name = "solution_name", length = 255)
+    var solutionName: String? = null,
+
+    @Column(name = "respondent_email", length = 255)
+    var respondentEmail: String? = null,
+
     // Legacy fields for backward compatibility during migration
     @ManyToOne
     @JoinColumn(name = "demand_id")
@@ -181,7 +187,7 @@ data class RiskAssessment(
     fun getDemandBasis(): Demand? {
         return when (assessmentBasisType) {
             AssessmentBasisType.DEMAND -> demand ?: throw IllegalStateException("Demand not loaded for DEMAND basis type")
-            AssessmentBasisType.ASSET, AssessmentBasisType.AWS_ACCOUNT -> null
+            AssessmentBasisType.ASSET, AssessmentBasisType.AWS_ACCOUNT, AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> null
         }
     }
 
@@ -192,14 +198,14 @@ data class RiskAssessment(
     fun getAssetBasis(): Asset? {
         return when (assessmentBasisType) {
             AssessmentBasisType.ASSET -> asset ?: throw IllegalStateException("Asset not loaded for ASSET basis type")
-            AssessmentBasisType.DEMAND, AssessmentBasisType.AWS_ACCOUNT -> null
+            AssessmentBasisType.DEMAND, AssessmentBasisType.AWS_ACCOUNT, AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> null
         }
     }
 
     fun getAwsAccountBasis(): AwsAccount? = when (assessmentBasisType) {
         AssessmentBasisType.AWS_ACCOUNT -> awsAccount
             ?: throw IllegalStateException("AWS account not loaded for AWS_ACCOUNT basis type")
-        AssessmentBasisType.DEMAND, AssessmentBasisType.ASSET -> null
+        AssessmentBasisType.DEMAND, AssessmentBasisType.ASSET, AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> null
     }
 
     /**
@@ -216,7 +222,7 @@ data class RiskAssessment(
                 }
             }
             AssessmentBasisType.ASSET -> getAssetBasis()
-            AssessmentBasisType.AWS_ACCOUNT -> null
+            AssessmentBasisType.AWS_ACCOUNT, AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> null
         }
     }
 
@@ -227,6 +233,7 @@ data class RiskAssessment(
         return when (assessmentBasisType) {
             AssessmentBasisType.DEMAND -> getDemandBasis()?.getAssetName() ?: "Unknown Asset"
             AssessmentBasisType.ASSET -> getAssetBasis()?.name ?: "Unknown Asset"
+            AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> solutionName ?: "Unknown solution"
             AssessmentBasisType.AWS_ACCOUNT -> getAwsAccountBasis()?.name
                 ?: getAwsAccountBasis()?.awsAccountId
                 ?: "Unknown AWS Account"
@@ -240,6 +247,7 @@ data class RiskAssessment(
         return when (assessmentBasisType) {
             AssessmentBasisType.DEMAND -> getDemandBasis()?.getAssetType() ?: "Unknown"
             AssessmentBasisType.ASSET -> getAssetBasis()?.type ?: "Unknown"
+            AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> assessmentBasisType.name
             AssessmentBasisType.AWS_ACCOUNT -> "AWS_ACCOUNT"
         }
     }
@@ -251,6 +259,7 @@ data class RiskAssessment(
         return when (assessmentBasisType) {
             AssessmentBasisType.DEMAND -> getDemandBasis()?.title ?: "Unknown Demand"
             AssessmentBasisType.ASSET -> getAssetBasis()?.name ?: "Unknown Asset"
+            AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> solutionName ?: "Unknown solution"
             AssessmentBasisType.AWS_ACCOUNT -> getAwsAccountBasis()?.let { it.name ?: it.awsAccountId }
                 ?: "Unknown AWS Account"
         }
@@ -263,7 +272,7 @@ data class RiskAssessment(
         return when (assessmentBasisType) {
             AssessmentBasisType.DEMAND -> getDemandBasis()?.getAssetOwner() ?: "Unknown"
             AssessmentBasisType.ASSET -> getAssetBasis()?.owner ?: "Unknown"
-            AssessmentBasisType.AWS_ACCOUNT -> respondent?.email ?: "Unknown"
+            AssessmentBasisType.AWS_ACCOUNT, AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> respondent?.email ?: respondentEmail ?: "Unknown"
         }
     }
 
@@ -273,6 +282,8 @@ data class RiskAssessment(
     @Suppress("DEPRECATION")
     fun validateBasisConsistency(): Boolean {
         return when (assessmentBasisType) {
+            AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> !solutionName.isNullOrBlank() && solutionName!!.length <= 255 &&
+                assessmentBasisId == 0L && demand == null && asset == null && awsAccount == null
             AssessmentBasisType.DEMAND -> {
                 demand != null &&
                 demand?.id == assessmentBasisId &&
@@ -299,6 +310,9 @@ data class RiskAssessment(
         val errors = mutableListOf<String>()
 
         when (assessmentBasisType) {
+            AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> {
+                if (!validateBasisConsistency()) errors.add("Solution assessments require a name (maximum 255 characters) and no linked entity")
+            }
             AssessmentBasisType.DEMAND -> {
                 if (demand == null) {
                     errors.add("Demand entity must be loaded for DEMAND basis type")

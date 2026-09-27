@@ -12,7 +12,7 @@ import {
     canAccessAccountOnboarding
 } from '../utils/permissions';
 import { connectToBadgeUpdates } from '../services/exceptionBadgeService';
-import { ADMIN_NAV, activeHrefForPath, filterAdminNav, groupKeyForPath } from './adminNav';
+import { ADMIN_NAV, activeHrefForPath, adminNavForRoles, filterAdminNav, groupKeyForPath } from './adminNav';
 
 const Sidebar = () => {
     const [assetsExpanded, setAssetsExpanded] = useState(false);
@@ -193,7 +193,7 @@ const Sidebar = () => {
         if (groupKey) setAdminMenuOpen(true);
     }, []);
 
-    const visibleAdminGroups = filterAdminNav(ADMIN_NAV, adminQuery);
+    const visibleAdminGroups = filterAdminNav(adminNavForRoles(userRoles), adminQuery);
 
     return (
         <nav id="sidebar" className="bg-light border-end">
@@ -336,21 +336,6 @@ const Sidebar = () => {
                                     <li>
                                         <a href="/public-classification" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                             <i className="bi bi-funnel me-2"></i> Demand Classification
-                                        </a>
-                                    </li>
-                                )}
-                                {/*
-                                  * Account Onboarding lives here, NOT in the ADMIN section below.
-                                  * That section is gated on `isAdmin` alone, so a SECCHAMPION would
-                                  * never see the link even though the page and its API allow them.
-                                  * RISK MANAGEMENT is gated on hasRisk (ADMIN/RISK/SECCHAMPION), so
-                                  * nesting the ADMIN-or-SECCHAMPION check inside it works — the same
-                                  * shape `hasClassification` uses just above.
-                                  */}
-                                {canAccessAccountOnboarding(userRoles) && (
-                                    <li>
-                                        <a href="/admin/account-onboarding" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                            <i className="bi bi-envelope-paper me-2"></i> Account Onboarding
                                         </a>
                                     </li>
                                 )}
@@ -574,7 +559,7 @@ const Sidebar = () => {
                   * The entries themselves live in adminNav.ts — markup cannot be
                   * searched, a list can.
                   */}
-                {isAdmin && (
+                {canAccessAccountOnboarding(userRoles) && (
                     <li>
                         <div
                             onClick={toggleAdminMenu}

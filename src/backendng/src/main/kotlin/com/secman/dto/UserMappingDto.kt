@@ -68,7 +68,9 @@ data class BulkUserMappingEntry(
 data class BulkUserMappingRequest(
     val mappings: List<BulkUserMappingEntry>,
     val dryRun: Boolean = false,
+    /** Apply the saved onboarding policy unless an explicit mode or legacy assessment flag overrides it. */
     val notifyNewAccounts: Boolean = false,
+    /** Optional recipient of the import summary; account owners receive the configured onboarding separately. */
     val notifyAddress: String? = null,
     /**
      * When true, a risk assessment is started for the owner of every

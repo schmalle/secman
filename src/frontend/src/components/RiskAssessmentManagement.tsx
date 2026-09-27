@@ -6,6 +6,8 @@ import AssessmentRecommendationModal from './AssessmentRecommendationModal';
 import AiPrefillModal from './AiPrefillModal';
 import { getAiFeatureStatus } from '../services/aiSuggestions';
 import { formatServerDate } from '../utils/dateUtils';
+import { exactParticipantId } from './assessmentParticipantSearch';
+import AssessmentParticipantMatches from './AssessmentParticipantMatches';
 
 interface Asset {
   id: number;
@@ -70,7 +72,7 @@ interface RiskAssessment {
   answerRevision?: number;
   id?: number;
   // New unified approach
-  assessmentBasisType: 'DEMAND' | 'ASSET' | 'AWS_ACCOUNT';
+  assessmentBasisType: 'DEMAND' | 'ASSET' | 'AWS_ACCOUNT' | 'SAAS' | 'COTS';
   assessmentBasisId: number;
   // Legacy fields for backward compatibility
   demand?: Demand;
@@ -87,6 +89,8 @@ interface RiskAssessment {
   requestorId: number;
   respondent?: User;
   respondentId?: number;
+  respondentEmail?: string;
+  solutionName?: string;
   notes?: string;
   useCases?: UseCase[];
   useCaseIds?: number[];
@@ -101,7 +105,8 @@ const RiskAssessmentManagement: React.FC = () => {
   const [assessments, setAssessments] = useState<RiskAssessment[]>([]);
   const [approvedDemands, setApprovedDemands] = useState<Demand[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  const [assessorUsers, setAssessorUsers] = useState<User[]>([]);
+  const [respondentUsers, setRespondentUsers] = useState<User[]>([]);
   const [useCases, setUseCases] = useState<UseCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +124,13 @@ const RiskAssessmentManagement: React.FC = () => {
   const [aiFeatureEnabled, setAiFeatureEnabled] = useState(false);
   const [assessorRefValue, setAssessorRefValue] = useState<string>('');
   const [respondentRefValue, setRespondentRefValue] = useState<string>('');
+  const [assessorSearch, setAssessorSearch] = useState('');
+  const [assessorSearchLoading, setAssessorSearchLoading] = useState(false);
+  const [assessorSearchError, setAssessorSearchError] = useState('');
+  const [respondentSearchLoading, setRespondentSearchLoading] = useState(false);
+  const [respondentSearchError, setRespondentSearchError] = useState('');
+  const [respondentSearch, setRespondentSearch] = useState('');
+  const [externalRespondent, setExternalRespondent] = useState(false);
   const [formData, setFormData] = useState<RiskAssessment>({
     assessmentBasisType: 'DEMAND',
     assessmentBasisId: 0,
@@ -171,7 +183,6 @@ const RiskAssessmentManagement: React.FC = () => {
       fetchAssessments();
       fetchApprovedDemands();
       fetchAssets();
-      fetchUsers();
       fetchUseCases();
       // Feature 088: probe whether the AI pre-fill master switch is on.
       // Fails closed: any error / 403 → button stays hidden.
@@ -183,6 +194,52 @@ const RiskAssessmentManagement: React.FC = () => {
       }
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser?.roles?.some(role => role === 'ADMIN' || role === 'SECCHAMPION')) return;
+    let active = true;
+    setAssessorSearchLoading(true);
+    setAssessorSearchError('');
+    const timer = setTimeout(async () => {
+      try {
+        const response = await authenticatedGet(`/api/risk-assessments/participants?query=${encodeURIComponent(assessorSearch)}`);
+        if (!response.ok) throw new Error('Could not search assessors. Please try again.');
+        if (response.ok && active) {
+          const matches: User[] = await response.json();
+          if (!active) return;
+          setAssessorUsers(matches);
+          const id = exactParticipantId(matches, assessorSearch);
+          if (id != null) setAssessorRefValue(`id:${id}`);
+        }
+      } catch {
+        if (active) { setAssessorUsers([]); setAssessorSearchError('Could not search assessors. Please try again.'); }
+      } finally { if (active) setAssessorSearchLoading(false); }
+    }, 250);
+    return () => { active = false; clearTimeout(timer); };
+  }, [assessorSearch, currentUser]);
+
+  useEffect(() => {
+    if (externalRespondent || !currentUser?.roles?.some(role => role === 'ADMIN' || role === 'SECCHAMPION')) return;
+    let active = true;
+    setRespondentSearchLoading(true);
+    setRespondentSearchError('');
+    const timer = setTimeout(async () => {
+      try {
+        const response = await authenticatedGet(`/api/risk-assessments/participants?query=${encodeURIComponent(respondentSearch)}`);
+        if (!response.ok) throw new Error('Could not search respondents. Please try again.');
+        if (response.ok && active) {
+          const matches: User[] = await response.json();
+          if (!active) return;
+          setRespondentUsers(matches);
+          const id = exactParticipantId(matches, respondentSearch);
+          if (id != null) setRespondentRefValue(`id:${id}`);
+        }
+      } catch {
+        if (active) { setRespondentUsers([]); setRespondentSearchError('Could not search respondents. Please try again.'); }
+      } finally { if (active) setRespondentSearchLoading(false); }
+    }, 250);
+    return () => { active = false; clearTimeout(timer); };
+  }, [respondentSearch, currentUser, externalRespondent]);
 
   const fetchAssessments = async () => {
     try {
@@ -212,21 +269,6 @@ const RiskAssessmentManagement: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to fetch approved demands:', err);
-    }
-  };
-
-  const fetchUsers = async () => {
-    try {
-      const response = await authenticatedGet('/api/users?includePending=true');
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data);
-      } else if (response.status !== 401 && response.status !== 403) {
-        // 401/403 = user lacks permission to list users (RBAC); ignore silently.
-        console.error('Failed to fetch users:', response.status);
-      }
-    } catch (err) {
-      console.error('Failed to fetch users:', err);
     }
   };
 
@@ -293,8 +335,11 @@ const RiskAssessmentManagement: React.FC = () => {
         dataToSubmit.demandId = formData.assessmentBasisId;
       } else if (formData.assessmentBasisType === 'ASSET') {
         dataToSubmit.assetId = formData.assessmentBasisId;
-      } else {
+      } else if (formData.assessmentBasisType === 'AWS_ACCOUNT') {
         dataToSubmit.awsAccountId = formData.awsAccountId;
+      } else {
+        dataToSubmit.assessmentBasisType = formData.assessmentBasisType;
+        dataToSubmit.solutionName = formData.solutionName?.trim();
       }
       
       // Set requestor to current user for new assessments
@@ -339,6 +384,9 @@ const RiskAssessmentManagement: React.FC = () => {
     setAssessorRefValue(assessorIdForEdit ? `id:${assessorIdForEdit}` : '');
     const respondentIdForEdit = assessment.respondent?.id ?? assessment.respondentId;
     setRespondentRefValue(respondentIdForEdit ? `id:${respondentIdForEdit}` : '');
+    setAssessorSearch('');
+    setRespondentSearch('');
+    setExternalRespondent(false);
     setShowForm(true);
   };
 
@@ -454,6 +502,9 @@ const RiskAssessmentManagement: React.FC = () => {
     });
     setAssessorRefValue('');
     setRespondentRefValue('');
+    setAssessorSearch('');
+    setRespondentSearch('');
+    setExternalRespondent(false);
     setEditingAssessment(null);
     setShowForm(false);
   };
@@ -583,6 +634,8 @@ const RiskAssessmentManagement: React.FC = () => {
                     >
                       <option value="DEMAND">Demand (Change Request)</option>
                       <option value="ASSET">Asset (Direct Assessment)</option>
+                      <option value="SAAS">SAAS (Software as a Service)</option>
+                      <option value="COTS">COTS (Commercial Off-the-Shelf)</option>
                       <option
                         value="AWS_ACCOUNT"
                         disabled={!currentUser?.roles?.some(role => role === 'ADMIN' || role === 'SECCHAMPION')}
@@ -595,7 +648,9 @@ const RiskAssessmentManagement: React.FC = () => {
                         ? 'Assess risks related to a change request or new asset creation'
                         : formData.assessmentBasisType === 'ASSET'
                           ? 'Assess risks directly on an existing asset'
-                          : 'Assess a 12-digit AWS account directly; no asset will be created'}
+                          : formData.assessmentBasisType === 'AWS_ACCOUNT'
+                            ? 'Assess a 12-digit AWS account directly; no asset will be created'
+                            : 'Assess a named software solution'}
                     </div>
                   </div>
 
@@ -650,6 +705,12 @@ const RiskAssessmentManagement: React.FC = () => {
                         </div>
                       )}
                     </div>
+                  ) : formData.assessmentBasisType === 'SAAS' || formData.assessmentBasisType === 'COTS' ? (
+                    <div className="mb-3">
+                      <label htmlFor="solutionName" className="form-label">{formData.assessmentBasisType} solution name *</label>
+                      <input id="solutionName" name="solutionName" className="form-control" required maxLength={255}
+                        value={formData.solutionName || ''} onChange={handleInputChange} />
+                    </div>
                   ) : (
                     <div className="mb-3">
                       <label htmlFor="awsAccountId" className="form-label">AWS Account ID *</label>
@@ -670,58 +731,49 @@ const RiskAssessmentManagement: React.FC = () => {
                   )}
 
                   <div className="mb-3">
+                    <label htmlFor="assessorSearch" className="form-label">Find assessor by name or email</label>
+                    <input id="assessorSearch" className="form-control mb-2" type="search" maxLength={255} value={assessorSearch}
+                      onChange={event => { setAssessorSearch(event.target.value); setAssessorRefValue(''); setAssessorUsers([]); setAssessorSearchLoading(true); setAssessorSearchError(''); }} placeholder="Enter an exact username/email, or search part of a name" />
+                    <AssessmentParticipantMatches query={assessorSearch} users={assessorUsers} selectedRef={assessorRefValue}
+                      loading={assessorSearchLoading} error={assessorSearchError} label="Assessor matches"
+                      onSelect={id => setAssessorRefValue(`id:${id}`)} />
                     <label htmlFor="assessorRef" className="form-label">Assessor *</label>
-                    {users.length > 0 ? (
-                    <select
-                      className="form-control"
-                      id="assessorRef"
-                      name="assessorRef"
-                      value={assessorRefValue}
-                      onChange={(e) => setAssessorRefValue(e.target.value)}
-                      required
-                    >
+                    <select className="form-select" id="assessorRef" value={assessorRefValue}
+                      onChange={event => setAssessorRefValue(event.target.value)} required>
                       <option value="">Select Assessor</option>
-                      {users.map((user) => (
-                        <option
-                          key={user.id ?? `pending:${user.email}`}
-                          value={user.id != null ? `id:${user.id}` : `email:${user.email}`}
-                        >
-                          {user.username} ({user.email}){user.isPending ? ' [pending]' : ''}
-                        </option>
+                      {assessorUsers.filter(user => user.id != null).map(user => (
+                        <option key={user.id} value={`id:${user.id}`}>{user.username} ({user.email})</option>
                       ))}
                     </select>
-                    ) : (
-                      <input className="form-control" id="assessorRef" type="email"
-                        value={assessorRefValue.replace(/^email:/, '')} onChange={event => setAssessorRefValue(event.target.value ? `email:${event.target.value}` : '')}
-                        placeholder="Existing user's email" required />
-                    )}
                   </div>
-
                   <div className="mb-3">
+                    <label htmlFor="respondentSearch" className="form-label">Find respondent by name or email</label>
+                    <input id="respondentSearch" className="form-control mb-2" type="search" maxLength={255} value={respondentSearch}
+                      disabled={externalRespondent} onChange={event => { setRespondentSearch(event.target.value); setRespondentRefValue(''); setRespondentUsers([]); setRespondentSearchLoading(true); setRespondentSearchError(''); }}
+                      placeholder="Enter an exact username/email, or search part of a name" />
+                    <AssessmentParticipantMatches query={respondentSearch} users={respondentUsers} selectedRef={respondentRefValue}
+                      loading={respondentSearchLoading} error={respondentSearchError} label="Respondent matches"
+                      onSelect={id => setRespondentRefValue(`id:${id}`)} hidden={externalRespondent} />
                     <label htmlFor="respondentRef" className="form-label">Respondent (Addressed Person)</label>
-                    {users.length > 0 ? (
-                    <select
-                      className="form-control"
-                      id="respondentRef"
-                      name="respondentRef"
-                      value={respondentRefValue}
-                      onChange={(e) => setRespondentRefValue(e.target.value)}
-                    >
+                    <select className="form-select" id="respondentRef" value={externalRespondent ? '' : respondentRefValue}
+                      disabled={externalRespondent} onChange={event => setRespondentRefValue(event.target.value)}>
                       <option value="">Select Respondent (Optional)</option>
-                      {users.map((user) => (
-                        <option
-                          key={user.id ?? `pending:${user.email}`}
-                          value={user.id != null ? `id:${user.id}` : `email:${user.email}`}
-                        >
-                          {user.username} ({user.email}){user.isPending ? ' [pending]' : ''}
-                        </option>
+                      {respondentUsers.filter(user => user.id != null).map(user => (
+                        <option key={user.id} value={`id:${user.id}`}>{user.username} ({user.email})</option>
                       ))}
                     </select>
-                    ) : (
-                      <input className="form-control" id="respondentRef" type="email"
-                        value={respondentRefValue.replace(/^email:/, '')} onChange={event => setRespondentRefValue(event.target.value ? `email:${event.target.value}` : '')}
-                        placeholder="Existing user's email"  />
-                    )}
+                    <div className="form-check mt-2">
+                      <input id="externalRespondent" type="checkbox" className="form-check-input" checked={externalRespondent}
+                        onChange={event => { setExternalRespondent(event.target.checked); setRespondentRefValue(''); }} />
+                      <label htmlFor="externalRespondent" className="form-check-label">Use an email address instead</label>
+                    </div>
+                    {externalRespondent && <>
+                      <label htmlFor="respondentEmail" className="form-label mt-2">Respondent email *</label>
+                      <input id="respondentEmail" type="email" className="form-control" required maxLength={255}
+                        value={respondentRefValue.replace(/^email:/, '')}
+                        onChange={event => setRespondentRefValue(`email:${event.target.value}`)} />
+                      <div className="form-text">No SecMan registration is required. Use Notify after saving to send a secure response link.</div>
+                    </>}
                   </div>
 
                   </>}
@@ -803,6 +855,9 @@ const RiskAssessmentManagement: React.FC = () => {
                       <option value="ALL">All Types</option>
                       <option value="DEMAND">Demand</option>
                       <option value="ASSET">Asset</option>
+                      <option value="AWS_ACCOUNT">AWS Account</option>
+                      <option value="SAAS">SAAS</option>
+                      <option value="COTS">COTS</option>
                     </select>
                   </div>
                   <div className="d-flex align-items-center">
@@ -851,7 +906,9 @@ const RiskAssessmentManagement: React.FC = () => {
                       {filteredAssessments.map((assessment) => {
                         const basisType = assessment.assessmentBasisType || (assessment.demand ? 'DEMAND' : 'ASSET');
                         const getBasisInfo = () => {
-                          if (basisType === 'DEMAND' && assessment.demand) {
+                          if (basisType === 'SAAS' || basisType === 'COTS') {
+                            return { title: assessment.solutionName || 'Unknown solution', subtitle: 'Software solution', typeLabel: basisType, typeClass: 'bg-info' };
+                          } else if (basisType === 'DEMAND' && assessment.demand) {
                             return {
                               title: assessment.demand.title,
                               subtitle: assessment.demand.demandType === 'CHANGE' && assessment.demand.existingAsset
@@ -915,7 +972,7 @@ const RiskAssessmentManagement: React.FC = () => {
                           </td>
                           <td>{assessment.assessor?.username || '-'}</td>
                           <td>{assessment.requestor?.username || '-'}</td>
-                          <td>{assessment.respondent?.username || '-'}</td>
+                          <td>{assessment.respondent?.username || assessment.respondentEmail || '-'}</td>
                           <td>
                             {assessment.useCases && assessment.useCases.length > 0 
                               ? assessment.useCases.map(uc => uc.name).join(', ')

@@ -47,7 +47,6 @@ class RiskAssessmentControllerRecommendationTest {
         mockk(relaxed = true),
         mockk(relaxed = true),
         mockk(relaxed = true),
-        mockk(relaxed = true),
         assetFilter,
         workflow,
         mockk(relaxed = true),

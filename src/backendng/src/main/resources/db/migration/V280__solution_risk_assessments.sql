@@ -1,0 +1,3 @@
+ALTER TABLE risk_assessment
+    ADD COLUMN IF NOT EXISTS solution_name VARCHAR(255) NULL,
+    ADD COLUMN IF NOT EXISTS respondent_email VARCHAR(255) NULL;

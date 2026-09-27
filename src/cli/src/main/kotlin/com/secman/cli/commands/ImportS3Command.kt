@@ -134,6 +134,18 @@ class ImportS3Command(
     var dryRun: Boolean = false
 
     @Option(
+        names = ["--createnotify", "--notify-new-accounts"],
+        description = ["Notify new account owners using the saved backend onboarding settings"]
+    )
+    var createnotify: Boolean = false
+
+    @Option(
+        names = ["--notify-address"],
+        description = ["Optional recipient for the import summary when --createnotify is set"]
+    )
+    var notifyAddress: String? = null
+
+    @Option(
         names = ["--start-risk-assessment"],
         description = [
             "Start a risk assessment for the owner of every brand-new AWS account " +
@@ -167,7 +179,7 @@ class ImportS3Command(
                 "WELCOME_ONLY sends a welcome mail only. DIRECT also starts a risk assessment " +
                 "for --risk-usecase. GUIDED mails the owner a one-time link and creates the " +
                 "assessment from their answers. Valid values: \${COMPLETION-CANDIDATES}. " +
-                "Default: none, nothing is sent."
+                "Default: saved backend settings with --createnotify, otherwise none."
         ]
     )
     var onboardingMode: ImportCommand.OnboardingMode? = null
@@ -334,7 +346,7 @@ class ImportS3Command(
                         "Onboarding: GUIDED (welcome mail + guided assessment, " +
                             "link valid $questionnaireExpiryDays day(s))"
                     )
-                null -> {}
+                null -> if (createnotify) println("Onboarding: saved backend settings")
             }
             if (dryRun) {
                 println("Mode: DRY-RUN (validation only, no changes will be made)")
@@ -362,6 +374,8 @@ class ImportS3Command(
                 dryRun = dryRun,
                 backendUrl = backendUrl,
                 authToken = token,
+                notifyNewAccounts = createnotify,
+                notifyAddress = notifyAddress,
                 startRiskAssessment = startRiskAssessment,
                 riskUseCase = riskUseCase,
                 riskDeadlineDays = if (effectiveMode() == ImportCommand.OnboardingMode.DIRECT) {
@@ -416,7 +430,7 @@ class ImportS3Command(
             // markers here rather than emoji, matching this command's existing OK/SKIPPED/FAILED
             // vocabulary — it is commonly run from cron with a non-UTF-8 locale.
             var onboardingFailures = 0
-            if (effectiveMode() != null) {
+            if (effectiveMode() != null || createnotify) {
                 println()
                 if (result.onboarding.isEmpty()) {
                     println("No brand-new AWS accounts in this import — nothing to onboard.")
@@ -425,7 +439,7 @@ class ImportS3Command(
                         println("DRY-RUN — nothing persisted, nothing sent, no invite token minted.")
                         println(
                             "Would onboard ${result.onboarding.size} account/owner pair(s) " +
-                                "in ${effectiveMode()} mode:"
+                                "using ${effectiveMode()?.name ?: "saved backend settings"}:"
                         )
                     } else {
                         println("Onboarding (${result.onboarding.size}):")
@@ -461,7 +475,7 @@ class ImportS3Command(
             }
 
             var riskAssessmentFailures = 0
-            if (startRiskAssessment || onboardingMode == ImportCommand.OnboardingMode.DIRECT) {
+            if (startRiskAssessment || onboardingMode == ImportCommand.OnboardingMode.DIRECT || result.riskAssessments.isNotEmpty()) {
                 println()
                 if (dryRun) {
                     if (result.newAccounts.isNotEmpty()) {
@@ -509,9 +523,14 @@ class ImportS3Command(
                 sendStatisticsEmail(backendUrl, token, dryRun, result, "s3://$effectiveBucket/$effectiveKey")
             }
 
+            if (result.notificationError != null) {
+                println("Operator summary email failed: ${result.notificationError}")
+            } else if (result.notificationSent) {
+                println("Operator summary email sent to ${result.notificationRecipient}")
+            }
             val linkFailures = WorkgroupLinkPrinter.print(result.workgroupLinks)
             // Exit status (T019-T022: cron-friendly exit codes)
-            if (result.errors.isNotEmpty() || linkFailures > 0) {
+            if (result.errors.isNotEmpty() || linkFailures > 0 || result.notificationError != null) {
                 if (dryRun) {
                     println("Validation failed (dry-run)")
                 } else {

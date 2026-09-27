@@ -66,8 +66,9 @@ open class AssessmentWorkflowService(
         check(assignments.findByAssessmentId(assessment.id!!).isEmpty()) { "Assignments already initialized" }
         assignments.save(AssessmentAssignment(assessmentId = assessment.id!!, userId = assessment.assessor.id,
             email = assessment.assessor.email, role = "ASSESSOR"))
-        assessment.respondent?.let {
-            assignments.save(AssessmentAssignment(assessmentId = assessment.id!!, userId = it.id, email = it.email, role = "RESPONDENT"))
+        val recipient = assessment.respondent?.email ?: assessment.respondentEmail
+        recipient?.let {
+            assignments.save(AssessmentAssignment(assessmentId = assessment.id!!, userId = assessment.respondent?.id, email = it, role = "RESPONDENT"))
         }
     }
 
@@ -98,7 +99,7 @@ open class AssessmentWorkflowService(
         val user = userId?.let { users.findById(it).orElseThrow { IllegalArgumentException("Unknown user") } }
             ?: email.trim().takeIf { it.isNotBlank() }?.let { users.findByEmailIgnoreCase(it).orElse(null) }
         require(user?.enabled != false) { "Cannot assign a disabled user" }
-        require(user != null || (role == "RESPONDENT" && email.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")))) {
+        require(user != null || (role == "RESPONDENT" && com.secman.util.EmailAddressValidator.isValidRecipient(email))) {
             "Accountless assignments require a respondent email"
         }
         val recipient = user?.email ?: email.trim().lowercase()
@@ -106,7 +107,10 @@ open class AssessmentWorkflowService(
             .forEach { it.revoked = true; it.version++; assignments.update(it) }
         assessment.assignmentVersion++
         if (user != null && role == "ASSESSOR") assessment.assessor = user
-        if (role == "RESPONDENT" && requirementIds.isEmpty()) assessment.respondent = user
+        if (role == "RESPONDENT" && requirementIds.isEmpty()) {
+            assessment.respondent = user
+            assessment.respondentEmail = recipient
+        }
         assessments.update(assessment)
         org.slf4j.LoggerFactory.getLogger(javaClass).info("Assessment assignment actor={} target={} role={} outcome=assigned", access.actorId(authentication), id, role)
         return assignments.save(AssessmentAssignment(assessmentId = id, userId = user?.id, email = recipient,
@@ -122,7 +126,12 @@ open class AssessmentWorkflowService(
         if (assignment.assessmentId != id) denied()
         assignment.revoked = true
         assignment.version++
-        if (assignment.role == "RESPONDENT" && assessment.respondent?.id == assignment.userId) assessment.respondent = null
+        if (assignment.role == "RESPONDENT" && assignment.requirementIds.isBlank() &&
+            (assessment.respondent?.id == assignment.userId && assignment.userId != null ||
+                assessment.respondentEmail.equals(assignment.email, true))) {
+            assessment.respondent = null
+            assessment.respondentEmail = null
+        }
         org.slf4j.LoggerFactory.getLogger(javaClass).info("Assessment assignment actor={} target={} assignment={} outcome=revoked", access.actorId(authentication), id, assignmentId)
         assignments.update(assignment)
         assessment.assignmentVersion++

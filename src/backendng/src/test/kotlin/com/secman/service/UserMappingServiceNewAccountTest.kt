@@ -24,6 +24,26 @@ open class UserMappingServiceNewAccountTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `repeated imports and additional owners never re-onboard an existing account`() {
+        val firstImport = BulkUserMappingRequest(mappings = listOf(
+            BulkUserMappingEntry(email = "first@corp.com", awsAccountId = "777777777777")
+        ))
+        assertThat(service.bulkCreateMappings(firstImport).newAccounts.map { it.awsAccountId })
+            .containsExactly("777777777777")
+        assertThat(service.bulkCreateMappings(firstImport).newAccounts).isEmpty()
+
+        val mixedImport = BulkUserMappingRequest(mappings = listOf(
+            BulkUserMappingEntry(email = "another@corp.com", awsAccountId = "777777777777"),
+            BulkUserMappingEntry(email = "new@corp.com", awsAccountId = "888888888888")
+        ))
+        val discovered = service.bulkCreateMappings(mixedImport).newAccounts
+        assertThat(discovered).hasSize(1)
+        assertThat(discovered.single().awsAccountId).isEqualTo("888888888888")
+        assertThat(discovered.single().emails).containsExactly("new@corp.com")
+        assertThat(service.bulkCreateMappings(mixedImport).newAccounts).isEmpty()
+    }
+
+    @Test
     fun `newAccounts excludes pre-existing account and includes brand-new with mapped emails`() {
         // Pre-existing account in DB
         repository.save(UserMapping(email = "old@corp.com", awsAccountId = "111111111111", domain = null))

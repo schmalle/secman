@@ -13,7 +13,8 @@ Security requirement, vulnerability and risk-assessment platform.
 - Vulnerability management: CrowdStrike Falcon import, GitHub App Dependabot alert tracking with 30-day non-decrease owner alerts, exception-request workflow, statistics, heatmap, materialized view for fast outdated-asset queries (<2s @ 10k assets).
 - Asset inventory: Nmap/Masscan import, AD/cloud metadata, criticality, workgroup-scoped access.
 - Risk register, demand classification, compliance-framework mapping (SOC2, ISO 27001, NIST), optional AI-assisted pre-fill of compliance answers (OpenRouter LLM, confidence scoring + citations, human review required).
-- AWS account onboarding: a newly discovered account's owner is welcomed and, optionally, given a risk assessment — either scoped by the operator or by the owner answering a short questionnaire whose answers resolve through admin-configured rules.
+- AWS account onboarding: imports requesting notifications use a saved welcome-email (default) or risk-assessment policy. The welcome subject and body are editable in the web UI; advanced guided questionnaires remain supported.
+- Risk assessments support SaaS and COTS solution names, searchable existing assessors/respondents, and email-only respondents who need no SecMan account.
 - AuthN: local (BCrypt) + OAuth2/OIDC + Passkey/WebAuthn + optional MFA.
 - AuthZ: 9-role RBAC with row-level filtering on assets (workgroup, ownership, AWS account, AD domain, sharing rules).
 - AI integration: 90+ tool MCP server (Streamable HTTP) for Claude Desktop/Code, Paperclip, and other MCP clients, with mandatory user delegation.
@@ -110,6 +111,7 @@ All endpoints under `/api/*` require `Authorization: Bearer <jwt>` unless noted.
 | `/api/github-config[/{id}[/test]]`, `/api/github/import`, `.../repositories/{id}/alerts` | GET/POST/PUT/DELETE | ADMIN (import: ADMIN/VULN) |
 | `/api/risk-assessments/{id}/ai-suggestions/...` | GET/POST/DELETE | ADMIN/SECCHAMPION |
 | `/api/account-onboarding/{questions,rules,rules/coverage,rules/preview,simulate}` | GET/POST/PUT/DELETE | ADMIN/SECCHAMPION |
+| `/api/account-onboarding/settings` | GET/PUT | ADMIN/SECCHAMPION read; ADMIN write |
 | `/api/public/account-onboarding/{token}` | GET/POST | public (single-use token) |
 | `/oauth/{authorize,callback}` | GET | public |
 | `/mcp` | POST | MCP API key + delegation |
@@ -166,6 +168,7 @@ Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings):
 | [docs/GITHUB_REPOS.md](docs/GITHUB_REPOS.md) | GitHub App vulnerability import, Dependabot alerts, owner alerting |
 | [docs/AI_RISK_ASSESSMENT.md](docs/AI_RISK_ASSESSMENT.md) | AI-assisted risk-assessment answer pre-fill |
 | [docs/AWS_ACCOUNT_RISK_ASSESSMENT.md](docs/AWS_ACCOUNT_RISK_ASSESSMENT.md) | Auto risk assessment for newly discovered AWS accounts |
+| [docs/RISK_ASSESSMENT_SETUP.md](docs/RISK_ASSESSMENT_SETUP.md) | SaaS/COTS, external respondents, saved onboarding policy, one-email test script |
 | [docs/ACCOUNT_ONBOARDING.md](docs/ACCOUNT_ONBOARDING.md) | Welcome mail, direct and guided assessments, the owner questionnaire |
 | [docs/EOL.md](docs/EOL.md) | End-of-life catalogue, matching, owner mail, repository ranking |
 | [docs/RELAY.md](docs/RELAY.md) | Zero-trust mobile relay (Go, DMZ) and the iOS app |

@@ -117,4 +117,17 @@ class SimulateOnboardingCommandTest {
     fun `the CLI deadline cap matches the backend cap`() {
         assertThat(SimulateOnboardingCommand.MAX_RISK_DEADLINE_DAYS).isEqualTo(3650)
     }
+    @Test
+    fun `saved settings replace explicit simulation mode and reject overrides`() {
+        val command = cmd()
+        command.mode = null
+        assertThat(command.validateOptions()).contains("--mode or --use-default-settings")
+        command.useDefaultSettings = true
+        assertThat(command.validateOptions()).isNull()
+        command.mode = ImportCommand.OnboardingMode.WELCOME_ONLY
+        assertThat(command.validateOptions()).contains("--mode or --use-default-settings")
+        command.mode = null
+        command.welcomeEmail = false
+        assertThat(command.validateOptions()).contains("onboarding overrides")
+    }
 }

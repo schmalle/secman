@@ -36,6 +36,7 @@ open class RiskAssessmentAccessService(
     fun canView(assessment: RiskAssessment, authentication: Authentication): Boolean =
         canReview(assessment, authentication) || activeAssignments(assessment, authentication).isNotEmpty() ||
             when (assessment.assessmentBasisType) {
+                AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> false
                 AssessmentBasisType.AWS_ACCOUNT -> assessment.awsAccount?.awsAccountId?.let {
                     assets.canAccessAwsAccount(it, authentication)
                 } == true

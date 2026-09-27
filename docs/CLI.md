@@ -585,7 +585,7 @@ JSON:
 
 Validation: email `user@domain.tld` 3–255 chars; AWS account exactly 12 digits; domain alphanumeric `.`/`-`. At least one of `awsAccountId`/`domain` per entry. Output summarizes `Created (active|pending)`, `Skipped`, `Errors`.
 
-#### import --createnotify/--notify-address (Feature 086)
+#### import / import-s3 --createnotify (saved onboarding policy)
 
 Opt-in notification when the import introduces AWS account IDs not previously present in any mapping. Requires `ADMIN`.
 
@@ -598,15 +598,16 @@ Opt-in notification when the import introduces AWS account IDs not previously pr
 
 | Option | Default | Notes |
 |---|---|---|
-| `--createnotify` | false | opt-in; on a non-dry-run import, sends email if new AWS account IDs are introduced |
-| `--notify-address <email>` | — | **required when `--createnotify` is set**; operator recipient email address |
+| `--createnotify` / `--notify-new-accounts` | false | For new accounts, run the policy saved in AWS Account Onboarding: welcome email (default) or direct risk assessment. |
+| `--notify-address <email>` | — | Optional operator recipient for an additional import-summary email. |
 
 **Behavior:**
 
-- On a non-dry-run import with `--createnotify`, an email is sent to `--notify-address` **only if** the import introduces at least one AWS account ID that is not already present in any mapping in the database (brand-new DB-wide).
-- Email subject: `New AWS accounts imported into SecMan`. Auto-generated body lists each new account ID and the user email(s) it was mapped to.
+- `--createnotify` contacts the owners mapped to each brand-new account using the saved backend policy. An account is new only when its ID was absent from all existing mappings before the import. No flag means no automatic owner notification.
+- If supplied, `--notify-address` receives an additional summary only when new accounts were imported. Explicit `--onboarding-mode` or legacy `--start-risk-assessment` overrides the saved policy for that invocation.
+- The optional summary subject is `New AWS accounts imported into SecMan`. Owner welcome subject/body are configured in the web UI.
 - `--dry-run --createnotify` reports which accounts would trigger notification (if any) but sends no email.
-- Notification requires the bulk endpoint (`POST /api/user-mappings/bulk`); against an older backend without it, the CLI falls back to per-row creates and no email is sent.
+- Notification requires the bulk endpoint (`POST /api/user-mappings/bulk`); the CLI fails when it is unavailable rather than silently importing without the requested notification.
 
 **Exit codes:**
 
@@ -614,7 +615,7 @@ Opt-in notification when the import introduces AWS account IDs not previously pr
 |---|---|
 | 0 | OK (import succeeded, email sent if notification triggered, or dry-run) |
 | 1 | Partial failure (mappings saved, but email send failed) |
-| 2 | Invalid arguments (e.g., `--createnotify` without `--notify-address`; also used for other validation errors) |
+| 2 | Invalid arguments, such as an explicitly blank summary address. |
 
 #### import --start-risk-assessment (auto risk assessment for new AWS accounts)
 
@@ -777,7 +778,8 @@ turn up. Requires ADMIN or SECCHAMPION.
 |---|---|---|
 | `--aws-account-id <12 digits>` | — | Required. May be fictitious. |
 | `--owner-email <address>` | — | Required. Without `--dry-run` this address really receives mail. |
-| `--mode <WELCOME_ONLY\|DIRECT\|GUIDED>` | — | Required. |
+| `--mode <WELCOME_ONLY\|DIRECT\|GUIDED>` | — | Supply this or `--use-default-settings`. |
+| `--use-default-settings` | off | Use the mode, use case, deadline and welcome content saved in the UI. Cannot be combined with `--mode` or onboarding overrides. |
 | `--risk-usecase <name>` | — | Required for `DIRECT`, rejected otherwise. |
 | `--risk-deadline-days <n>` | 7 | 1..3650. |
 | `--questionnaire-expiry-days <n>` | 14 | 1..90. |
@@ -791,11 +793,16 @@ and the invite is stamped `simulated` so the rows are identifiable. Rate limited
 
 **Exit codes:** `0` OK (a skip is not a failure) · `1` onboarding failed · `2` invalid arguments.
 
+For a manual rehearsal requiring only an email address, run
+`./scripts/test-account-onboarding.sh you@example.com`. It builds the CLI, generates a
+simulated account ID, and sends using the saved backend policy. See
+[assessment and onboarding setup](RISK_ASSESSMENT_SETUP.md) for expected outcomes.
+
 #### S3 subcommands
 
 All three `*-s3` commands share AWS options: `--aws-region`, `--aws-profile`, `--aws-access-key-id`, `--aws-secret-access-key`, `--aws-session-token`, `--endpoint-url` (also `AWS_ENDPOINT_URL`, used for S3Mock/MinIO/LocalStack). 10 MB hard size limit. Default credential chain: env → `~/.aws/credentials` → IAM role → SSO.
 
-- **`import-s3`** — download AND POST to backend. Bucket/key from `--bucket`/`--key` or, when omitted, the `AWS_ACCOUNT_BUCKET_NAME` / `AWS_ACCOUNT_BUCKET_KEY_NAME` env vars (flags take priority). Needs `s3:GetObject` (+ `s3:HeadObject` for pre-download size check). Supports `--start-risk-assessment` / `--risk-usecase` / `--risk-deadline-days` and the `--onboarding-mode` / `--welcome-email` / `--questionnaire-expiry-days` set exactly like `import` (see above). Exit codes: `0` ok / `1` partial / `2` fatal S3/config / `3` unexpected. Detailed flags: `docs/S3_USER_MAPPING_IMPORT.md`.
+- **`import-s3`** — download AND POST to backend. Bucket/key from `--bucket`/`--key` or, when omitted, the `AWS_ACCOUNT_BUCKET_NAME` / `AWS_ACCOUNT_BUCKET_KEY_NAME` env vars (flags take priority). Needs `s3:GetObject` (+ `s3:HeadObject` for pre-download size check). Supports `--createnotify` / `--notify-new-accounts` / `--notify-address`, `--start-risk-assessment` / `--risk-usecase` / `--risk-deadline-days` and the `--onboarding-mode` / `--welcome-email` / `--questionnaire-expiry-days` set exactly like `import` (see above). Exit codes: `0` ok / `1` partial / `2` fatal S3/config / `3` unexpected. Detailed flags: `docs/S3_USER_MAPPING_IMPORT.md`.
 - **`download-s3`** — download only, no backend contact. `--bucket -b`, `--key -k`, `--output -o` required; `--force -f` to overwrite; `--quiet -q` (success/error stays on stderr). Parent dir must exist; verbatim copy.
 - **`print-s3`** — download + parse + print to stdout (temp file deleted). `--type AWS|DOMAIN|ALL` (default `AWS`); `--format TABLE|JSON|CSV`; `--file-format CSV|JSON|AUTO`; `--show-errors` to print parse errors to stderr; `--quiet` suppresses banner+summary (still on stderr). **stdout = mappings only**, safe to pipe through `diff`/`jq`/`awk`.
 

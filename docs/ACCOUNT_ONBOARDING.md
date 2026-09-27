@@ -10,6 +10,32 @@ the whole path against an account id and address you make up.
 
 ---
 
+## Saved default for new-account notifications
+
+In **Admin → Users & Access → Account Onboarding**, choose **Welcome email** (the default)
+or **Risk assessment**. ADMIN can save the policy and edit the welcome subject and
+HTML body with the same editor used for requirements. ADMIN and SECCHAMPION can
+read the settings. Direct assessments additionally need a configured use case,
+an ACTIVE requirements release containing that use case's requirements, and a
+SECCHAMPION assessor. Welcome-only mode does not need questionnaire rules or an
+ACTIVE release.
+
+`import` and `import-s3` apply this policy when `--createnotify` (alias
+`--notify-new-accounts`) is supplied. `--notify-address` is optional and adds an
+operator summary. REST/MCP imports use `notifyNewAccounts: true`.
+
+Precedence: explicit `onboardingMode`, then legacy `startRiskAssessment`, then the
+saved policy when notifications are requested; otherwise no owner onboarding.
+Existing GUIDED callers remain supported. Saved DIRECT policy starts the assessment
+and sends its questionnaire invitation; it does not add a welcome message.
+
+Welcome edits apply to future sends and explicit retries. They do not resend past
+SENT events or change the deduplication/delivery audit rules. HTML is sanitized;
+editable content is not evaluated as a server-side template.
+
+Use `./scripts/test-account-onboarding.sh you@example.com` for a manual delivery
+rehearsal of the saved policy. See [setup and testing](RISK_ASSESSMENT_SETUP.md).
+
 ## 1. The three modes
 
 | Mode | Welcome mail | Assessment | Who decides the scope |
@@ -32,10 +58,10 @@ mail**, which is byte-identical to the behaviour before this feature existed.
 ```kotlin
 // domain/AccountOnboardingMode.kt — the single place the two are reconciled
 fun resolve(explicit: AccountOnboardingMode?, startRiskAssessment: Boolean) =
-    explicit ?: if (startRiskAssessment) DIRECT else null   // null == do nothing
+    explicit ?: if (startRiskAssessment) DIRECT else null   // saved notification policy is resolved by the import service
 ```
 
-The welcome mail defaults on only when a mode is named explicitly. That asymmetry is the
+For explicit mode calls the welcome mail defaults on; a notification-only import uses the saved policy. That asymmetry is the
 compatibility contract, and `/account-onboarding` has a phase whose only job is to assert it.
 
 **The one incompatible combination is rejected, never guessed.** `--onboarding-mode

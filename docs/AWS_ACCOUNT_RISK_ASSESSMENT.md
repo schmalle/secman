@@ -4,7 +4,9 @@ When an AWS account-mapping import introduces an account ID SecMan has never see
 it can automatically start a risk assessment for that account's owner — measured
 against the **current version of the security requirements**, scoped to a use case.
 
-Opt-in. Nothing happens unless the caller asks for it.
+Opt-in. An explicit assessment flag starts the assessment directly. `--createnotify`
+uses the mode and scope saved in **Account Onboarding**, whose default is welcome
+email only. See [Account onboarding](ACCOUNT_ONBOARDING.md).
 
 | Surface | How | Mode |
 |---|---|---|

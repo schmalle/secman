@@ -56,7 +56,6 @@ open class RiskAssessmentController(
     private val requirementRepository: RequirementRepository,
     private val entityManager: EntityManager,
     private val eventPublisher: ApplicationEventPublisher<RiskAssessmentCreatedEvent>,
-    private val userResolutionService: UserResolutionService,
     private val assetFilterService: AssetFilterService,
     private val workflow: com.secman.service.AssessmentWorkflowService,
     private val reminders: com.secman.service.RiskAssessmentReminderNotificationService,
@@ -75,7 +74,7 @@ open class RiskAssessmentController(
     private fun linkedAssetId(assessment: RiskAssessment): Long? = when (assessment.assessmentBasisType) {
         AssessmentBasisType.ASSET -> assessment.asset?.id
         AssessmentBasisType.DEMAND -> assessment.demand?.existingAsset?.id
-        AssessmentBasisType.AWS_ACCOUNT -> null
+        AssessmentBasisType.AWS_ACCOUNT, AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> null
     }
 
     private fun canAccessAssessment(assessment: RiskAssessment, authentication: Authentication) =
@@ -83,6 +82,14 @@ open class RiskAssessmentController(
 
     private fun canManageAssessment(assessment: RiskAssessment, authentication: Authentication) =
         riskAssessmentAccessService.isGlobal(authentication)
+
+    @Get("/participants{?query}")
+    @Secured("ADMIN", "SECCHAMPION")
+    fun participants(@QueryValue(defaultValue = "") query: String): HttpResponse<*> {
+        if (query.length > 255) return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Search is too long"))
+        return HttpResponse.ok(userRepository.searchAssessmentParticipants(query.trim(), io.micronaut.data.model.Pageable.from(0, 100))
+            .map { mapOf("id" to it.id, "username" to it.username, "email" to it.email) })
+    }
 
     @Serdeable
     data class CreateRiskAssessmentRequest(
@@ -97,12 +104,17 @@ open class RiskAssessmentController(
         @Nullable val assetId: Long? = null,
         @Nullable val awsAccountId: String? = null,
         @Nullable val assessorRef: UserResolutionService.UserRef? = null,
-        @Nullable val respondentRef: UserResolutionService.UserRef? = null
+        @Nullable val respondentRef: UserResolutionService.UserRef? = null,
+        @Nullable val assessmentBasisType: AssessmentBasisType? = null,
+        @Nullable val solutionName: String? = null
     ) {
         fun validate(): String? {
-            val suppliedBases = listOf(demandId, assetId, awsAccountId?.takeIf { it.isNotBlank() }).count { it != null }
+            val solutionBasis = assessmentBasisType in setOf(AssessmentBasisType.SAAS, AssessmentBasisType.COTS)
+            val suppliedBases = listOf(demandId, assetId, awsAccountId?.takeIf { it.isNotBlank() }).count { it != null } + if (solutionBasis) 1 else 0
             return when {
-                suppliedBases != 1 -> "Exactly one of demandId, assetId or awsAccountId must be provided"
+                suppliedBases != 1 -> "Provide exactly one demand, asset, AWS account or SAAS/COTS solution basis"
+                solutionBasis && (solutionName.isNullOrBlank() || solutionName.trim().length > 255) -> "Solution name is required and must not exceed 255 characters"
+                !solutionBasis && solutionName != null -> "Solution name is only valid for SAAS or COTS"
                 awsAccountId != null && !awsAccountId.matches(Regex("^\\d{12}$")) ->
                     "awsAccountId must contain exactly 12 digits"
                 assessorId == null && assessorRef == null -> "Either assessorId or assessorRef must be provided"
@@ -111,6 +123,7 @@ open class RiskAssessmentController(
         }
         
         fun getBasisType(): AssessmentBasisType = when {
+            assessmentBasisType in setOf(AssessmentBasisType.SAAS, AssessmentBasisType.COTS) -> assessmentBasisType!!
             demandId != null -> AssessmentBasisType.DEMAND
             assetId != null -> AssessmentBasisType.ASSET
             awsAccountId != null -> AssessmentBasisType.AWS_ACCOUNT
@@ -340,6 +353,7 @@ open class RiskAssessmentController(
                         @Suppress("DEPRECATION")
                         assessment.asset?.name
                     }
+                    AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> assessment.solutionName
                     AssessmentBasisType.AWS_ACCOUNT -> assessment.awsAccount?.awsAccountId
                 }
                 assessment.assessor.username
@@ -379,6 +393,7 @@ open class RiskAssessmentController(
                         @Suppress("DEPRECATION")
                         assessment.asset?.name
                     }
+                    AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> assessment.solutionName
                     AssessmentBasisType.AWS_ACCOUNT -> assessment.awsAccount?.awsAccountId
                 }
                 assessment.assessor.username
@@ -416,9 +431,6 @@ open class RiskAssessmentController(
     @Transactional
     open fun createRiskAssessment(@Valid @Body request: CreateRiskAssessmentRequest, authentication: Authentication): HttpResponse<*> {
         if (!riskAssessmentAccessService.isGlobal(authentication)) return HttpResponse.status<Any>(HttpStatus.FORBIDDEN)
-        if (!authentication.roles.contains("ADMIN") && listOfNotNull(request.assessorRef, request.respondentRef).any {
-            it.id == null && !it.email.isNullOrBlank() && userRepository.findByEmailIgnoreCase(it.email!!.trim()).isEmpty
-        }) return HttpResponse.status<Any>(HttpStatus.FORBIDDEN)
         return try {
             // Validate request
             val validationError = request.validate()
@@ -431,13 +443,14 @@ open class RiskAssessmentController(
 
             log.debug("Creating risk assessment with basis type: {} and identifier: {}", basisType, suppliedBasis)
 
-            // 1. PRE-VALIDATE BASIS first so a missing basis doesn't orphan a lazy-created User row
+            // Validate the basis before creating the assessment and its assignments.
             // SECURITY (A01): basisId is caller-supplied. For an ASSET basis it names an asset
             // directly; for a DEMAND basis, a CHANGE demand's existingAsset is echoed back in the
             // response (title/description/asset name) once the assessment is created. Both must be
             // resolved through the unified asset-access boundary — never a bare findById() whose
             // result is returned — matching the fix already applied to DemandController.
             val resolvedBasis: Any? = when (basisType) {
+                AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> null
                 AssessmentBasisType.DEMAND -> {
                     val basisId = request.demandId!!
                     val demand = demandRepository.findById(basisId).orElse(null)
@@ -469,40 +482,32 @@ open class RiskAssessmentController(
                 }
             }
 
-            // 2. Resolve assessor (basis is known to exist — no orphan risk)
-            val assessor = try {
-                userResolutionService.resolveByIdOrEmail(
-                    userId = request.assessorRef?.id ?: request.assessorId,
-                    email = request.assessorRef?.email,
-                    context = "risk assessment assessor"
-                )
-            } catch (e: NoSuchElementException) {
-                return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Assessor not found"))
-            } catch (e: IllegalArgumentException) {
-                return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", e.message ?: "Invalid assessor"))
+            // Assessors must already be enabled users. External respondents remain email-only.
+            val assessorId = request.assessorRef?.id ?: request.assessorId
+            val assessor = (if (assessorId != null) userRepository.findById(assessorId).orElse(null)
+                else request.assessorRef?.email?.trim()?.let { userRepository.findByEmailIgnoreCase(it).orElse(null) })
+                ?.takeIf { it.enabled }
+                ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Select an existing enabled assessor"))
+            val requestor = userRepository.findByUsername(authentication.name).orElse(null)
+                ?: return HttpResponse.status<Any>(HttpStatus.FORBIDDEN)
+            val respondentId = request.respondentRef?.id ?: request.respondentId
+            val recipientEmail = request.respondentRef?.email?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+            if (recipientEmail != null && !com.secman.util.EmailAddressValidator.isValidRecipient(recipientEmail)) {
+                return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Enter a valid respondent email"))
             }
-
-            // Get requestor from current session (would need security context in real implementation)
-            // For now, assuming assessor is also requestor
-            val requestor = assessor
-
-            // 3. Resolve respondent if provided
-            val respondent: User? = if (request.respondentRef != null || request.respondentId != null) {
-                try {
-                    userResolutionService.resolveByIdOrEmail(
-                        userId = request.respondentRef?.id ?: request.respondentId,
-                        email = request.respondentRef?.email,
-                        context = "risk assessment respondent"
-                    )
-                } catch (e: NoSuchElementException) {
-                    return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Respondent not found"))
-                } catch (e: IllegalArgumentException) {
-                    return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", e.message ?: "Invalid respondent"))
-                }
-            } else null
+            val respondent = if (respondentId != null) userRepository.findById(respondentId).orElse(null)
+                else recipientEmail?.let { userRepository.findByEmailIgnoreCase(it).orElse(null) }
+            if ((respondentId != null && respondent == null) || respondent?.enabled == false) {
+                return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Select an existing enabled respondent"))
+            }
 
             // 4. Build risk assessment from pre-validated basis
             val riskAssessment = when (basisType) {
+                AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> RiskAssessment(
+                    startDate = request.startDate ?: LocalDate.now(), endDate = request.endDate,
+                    assessmentBasisType = basisType, assessmentBasisId = 0L,
+                    solutionName = request.solutionName!!.trim(), assessor = assessor, requestor = requestor
+                )
                 AssessmentBasisType.DEMAND -> {
                     @Suppress("UNCHECKED_CAST")
                     val demand = resolvedBasis as com.secman.domain.Demand
@@ -561,6 +566,7 @@ open class RiskAssessmentController(
             
             // Set common fields
             riskAssessment.respondent = respondent
+            riskAssessment.respondentEmail = respondent?.email ?: recipientEmail
             riskAssessment.notes = request.notes?.trim()?.takeIf { it.isNotBlank() }
             
             // Handle use case associations
@@ -591,6 +597,7 @@ open class RiskAssessmentController(
                     @Suppress("DEPRECATION")
                     savedAssessment.asset?.name
                 }
+                AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> savedAssessment.solutionName
                 AssessmentBasisType.AWS_ACCOUNT -> savedAssessment.awsAccount?.awsAccountId
             }
             savedAssessment.assessor.username
@@ -616,9 +623,7 @@ open class RiskAssessmentController(
             log.info("Created risk assessment with id: {} for {} basis: {}", savedAssessment.id, basisType, suppliedBasis)
             HttpResponse.status<RiskAssessment>(HttpStatus.CREATED).body(savedAssessment)
         } catch (e: Exception) {
-            // Rethrow so the @Transactional interceptor rolls back. Without this,
-            // a swallow + normal return would commit any User row already lazy-created
-            // by userResolutionService earlier in this method.
+            // Rethrow so the assessment and assignment transaction rolls back together.
             log.error("Error creating risk assessment", e)
             throw e
         }
@@ -665,9 +670,7 @@ open class RiskAssessmentController(
             log.info("Updated risk assessment with id: {}", id)
             HttpResponse.ok(updatedAssessment.taskView())
         } catch (e: Exception) {
-            // Rethrow so the @Transactional interceptor rolls back. Without this,
-            // a swallow + normal return would commit any User row already lazy-created
-            // by userResolutionService earlier in this method.
+            // Rethrow so the assessment and assignment transaction rolls back together.
             log.error("Error updating risk assessment with id: {}", id, e)
             throw e
         }
@@ -798,6 +801,7 @@ open class RiskAssessmentController(
     @Suppress("DEPRECATION")
     private fun createRiskAssessmentEvent(assessment: RiskAssessment): RiskAssessmentCreatedEvent {
         val title = when (assessment.assessmentBasisType) {
+            AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> "Risk Assessment for ${assessment.assessmentBasisType}: ${assessment.solutionName}"
             AssessmentBasisType.DEMAND -> assessment.demand?.title ?: "Risk Assessment for Demand"
             AssessmentBasisType.ASSET -> "Risk Assessment for Asset: ${assessment.asset?.name ?: "Unknown Asset"}"
             AssessmentBasisType.AWS_ACCOUNT ->
@@ -805,6 +809,7 @@ open class RiskAssessmentController(
         }
 
         val description = when (assessment.assessmentBasisType) {
+            AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> "Risk assessment for solution: ${assessment.solutionName}"
             AssessmentBasisType.DEMAND -> {
                 val demand = assessment.demand
                 buildString {
@@ -829,6 +834,7 @@ open class RiskAssessmentController(
         }
 
         val category = when (assessment.assessmentBasisType) {
+            AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> "${assessment.assessmentBasisType} Assessment"
             AssessmentBasisType.DEMAND -> "Demand Assessment"
             AssessmentBasisType.ASSET -> "Asset Assessment"
             AssessmentBasisType.AWS_ACCOUNT -> "AWS Account Assessment"
@@ -861,6 +867,7 @@ open class RiskAssessmentController(
         }
 
         when (assessment.assessmentBasisType) {
+            AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> assessment.solutionName?.let { metadata["solutionName"] = it }
             AssessmentBasisType.DEMAND -> {
                 assessment.demand?.let { demand ->
                     demand.id?.let { metadata["demandId"] = it }
@@ -923,7 +930,7 @@ open class RiskAssessmentController(
                     else -> "LOW"
                 }
             }
-            AssessmentBasisType.AWS_ACCOUNT -> if (assessment.useCases.size > 2) "MEDIUM" else "LOW"
+            AssessmentBasisType.AWS_ACCOUNT, AssessmentBasisType.SAAS, AssessmentBasisType.COTS -> if (assessment.useCases.size > 2) "MEDIUM" else "LOW"
         }
     }
 }

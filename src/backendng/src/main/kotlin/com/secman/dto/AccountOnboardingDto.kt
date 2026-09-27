@@ -251,7 +251,8 @@ data class OnboardingPreviewResponse(
 data class SimulateOnboardingRequest(
     @NotBlank val awsAccountId: String,
     @NotBlank val ownerEmail: String,
-    @NotNull val mode: AccountOnboardingMode,
+    @Nullable val mode: AccountOnboardingMode? = null,
+    val useDefaultSettings: Boolean = false,
     @Nullable val riskAssessmentUseCase: String? = null,
     @Nullable val riskAssessmentDeadlineDays: Int? = null,
     @Nullable val questionnaireExpiryDays: Int? = null,

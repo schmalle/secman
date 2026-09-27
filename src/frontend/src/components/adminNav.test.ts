@@ -61,7 +61,7 @@ test('filtering is case-insensitive and matches mid-label', () => {
 test('a group whose heading matches keeps all of its items', () => {
   const result = filterAdminNav(ADMIN_NAV, 'users & access');
   assert.equal(result.length, 1);
-  assert.equal(result[0].items.length, 4);
+  assert.equal(result[0].items.length, 5);
 });
 
 test('a query matching nothing yields no groups', () => {
@@ -91,4 +91,13 @@ test('query strings do not take part in the active match', () => {
   // Both export entries strip to /export; the first one listed takes the mark
   // rather than the row flickering between them.
   assert.equal(activeHrefForPath(ADMIN_NAV, '/export'), '/export');
+});
+
+test('onboarding is the only admin destination exposed to security champions', async () => {
+    const { adminNavForRoles } = await import('./adminNav');
+    assert.deepEqual(adminNavForRoles(['SECCHAMPION']).flatMap(group => group.items.map(item => item.href)), ['/admin/account-onboarding']);
+    assert.deepEqual(adminNavForRoles(['USER', 'RISK', 'REQ', 'VULN']), []);
+    assert.deepEqual(adminNavForRoles([]), []);
+    assert.ok(adminNavForRoles(['ADMIN']).flatMap(group => group.items).some(item => item.href === '/admin/account-onboarding'));
+    assert.ok(adminNavForRoles(['ADMIN']).flatMap(group => group.items).some(item => item.href === '/admin/user-management'));
 });

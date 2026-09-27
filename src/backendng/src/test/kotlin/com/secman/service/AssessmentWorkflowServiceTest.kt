@@ -56,6 +56,29 @@ class AssessmentWorkflowServiceTest {
         every { contributions.save(any()) } answers { firstArg() }
     }
 
+    @Test fun `initial external respondent is an email assignment without a user account`() {
+        assessment.respondentEmail = "external@example.test"
+        every { assignments.findByAssessmentId(10) } returns emptyList()
+        every { assignments.save(any<AssessmentAssignment>()) } answers { firstArg() }
+        service.initialize(assessment)
+        verify { assignments.save(match { it.role == "RESPONDENT" && it.userId == null && it.email == "external@example.test" }) }
+        verify(exactly = 0) { users.save(any()) }
+    }
+
+    @Test fun `external token remains bound to recipient assignment and revocation`() {
+        assignment.userId = null
+        assignment.email = "external@example.test"
+        val token = AssessmentToken(token = "capability", email = assignment.email,
+            expiresAt = LocalDateTime.now().plusDays(1), riskAssessment = assessment,
+            assignmentId = 3, assignmentVersion = assignment.version)
+        assertEquals(assignment, service.tokenAssignment(token))
+        token.email = "other@example.test"
+        assertThrows(HttpStatusException::class.java) { service.tokenAssignment(token) }
+        token.email = assignment.email
+        assignment.revoked = true
+        assertThrows(HttpStatusException::class.java) { service.tokenAssignment(token) }
+    }
+
     @Test fun `mixed authorized and unauthorized batch writes nothing`() {
         assertThrows(IllegalArgumentException::class.java) { service.save(10, auth, listOf(answer(), answer(12))) }
         verify(exactly = 0) { responses.save(any()); contributions.save(any()) }

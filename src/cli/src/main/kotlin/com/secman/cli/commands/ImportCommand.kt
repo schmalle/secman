@@ -102,14 +102,14 @@ class ImportCommand(
     var dryRun: Boolean = false
 
     @Option(
-        names = ["--createnotify"],
-        description = ["Send an email to --notify-address when the import introduces brand-new AWS account(s)"]
+        names = ["--createnotify", "--notify-new-accounts"],
+        description = ["Notify new account owners using the saved backend onboarding settings; optionally send a summary to --notify-address"]
     )
     var createnotify: Boolean = false
 
     @Option(
         names = ["--notify-address"],
-        description = ["Recipient email for new-account notifications (required when --createnotify is set)"]
+        description = ["Optional recipient for the import summary when --createnotify is set"]
     )
     var notifyAddress: String? = null
 
@@ -146,7 +146,7 @@ class ImportCommand(
                 "immediately for --risk-usecase (what --start-risk-assessment does). " +
                 "GUIDED mails the owner a one-time link; the assessment is created from the " +
                 "use cases their answers resolve to. " +
-                "Valid values: \${COMPLETION-CANDIDATES}. Default: none, nothing is sent."
+                "Valid values: \${COMPLETION-CANDIDATES}. Default: saved backend settings with --createnotify, otherwise none."
         ]
     )
     var onboardingMode: OnboardingMode? = null
@@ -183,11 +183,11 @@ class ImportCommand(
 
     /**
      * Validate the notification options. Returns an error message if invalid,
-     * or null if OK. --createnotify requires a non-blank --notify-address.
+     * or null if OK. The optional summary address is validated by the backend.
      */
     fun validateNotifyOptions(): String? {
-        if (createnotify && notifyAddress.isNullOrBlank()) {
-            return "--notify-address is required when --createnotify is set"
+        if (createnotify && notifyAddress != null && notifyAddress!!.isBlank()) {
+            return "--notify-address must not be blank when supplied"
         }
         return null
     }
@@ -339,7 +339,7 @@ class ImportCommand(
                     println("  Deadline:    $riskDeadlineDays day(s) after the owner submits")
                     println("  Welcome:     ${if (welcomeEmail ?: true) "yes" else "no"}")
                 }
-                null -> {}
+                null -> if (createnotify) println("Onboarding: saved backend settings")
             }
             if (dryRun) {
                 println("Mode: DRY-RUN (validation only, no changes will be made)")
@@ -400,7 +400,7 @@ class ImportCommand(
                 }
             }
 
-            if (createnotify && result.newAccounts.isNotEmpty()) {
+            if (createnotify && !notifyAddress.isNullOrBlank() && result.newAccounts.isNotEmpty()) {
                 println()
                 if (dryRun) {
                     println("Would notify ${notifyAddress} about ${result.newAccounts.size} new AWS account(s):")
@@ -418,7 +418,7 @@ class ImportCommand(
                             println("✅ Notification email sent to ${result.notificationRecipient ?: notifyAddress}")
                     }
                 }
-            } else if (createnotify && !dryRun) {
+            } else if (createnotify && !dryRun && result.newAccounts.isEmpty()) {
                 println()
                 println("No brand-new AWS accounts in this import — no notification sent.")
             }
@@ -426,14 +426,14 @@ class ImportCommand(
             // Onboarding block. Printed for every mode including DIRECT, where it carries the
             // welcome-mail outcome that the risk-assessment block below does not cover.
             var onboardingFailures = 0
-            if (effectiveMode() != null) {
+            if (effectiveMode() != null || createnotify) {
                 println()
                 if (result.onboarding.isEmpty()) {
                     println("No brand-new AWS accounts in this import — nothing to onboard.")
                 } else {
                     if (dryRun) {
                         println("DRY-RUN — nothing persisted, nothing sent, no invite token minted.")
-                        println("Would onboard ${result.onboarding.size} account/owner pair(s) in ${effectiveMode()} mode:")
+                        println("Would onboard ${result.onboarding.size} account/owner pair(s) using ${effectiveMode()?.name ?: "saved backend settings"}:")
                     } else {
                         println("Onboarding (${result.onboarding.size}):")
                     }
@@ -469,7 +469,7 @@ class ImportCommand(
             }
 
             var riskAssessmentFailures = 0
-            if (startRiskAssessment || onboardingMode == OnboardingMode.DIRECT) {
+            if (startRiskAssessment || onboardingMode == OnboardingMode.DIRECT || result.riskAssessments.isNotEmpty()) {
                 println()
                 if (dryRun) {
                     if (result.newAccounts.isNotEmpty()) {

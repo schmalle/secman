@@ -31,18 +31,18 @@ dependencies {
     implementation("io.micronaut.cache:micronaut-cache-caffeine")
 
     // Database
-    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.1.4")
-    implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.1.2")
-    implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.1.2")
+    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.2.0")
+    implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.2.0")
+    implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.2.0")
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.10")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:8.1.1")
-	runtimeOnly("org.flywaydb:flyway-core:13.6.0")
-	runtimeOnly("org.flywaydb:flyway-mysql:13.6.0")
+	runtimeOnly("org.flywaydb:flyway-core:13.8.0")
+	runtimeOnly("org.flywaydb:flyway-mysql:13.8.0")
 
     // Security
-    implementation("io.micronaut.security:micronaut-security-jwt:5.3.2")
-    implementation("io.micronaut.security:micronaut-security-oauth2:5.3.2")
+    implementation("io.micronaut.security:micronaut-security-jwt:5.4.0")
+    implementation("io.micronaut.security:micronaut-security-oauth2:5.4.0")
 
     // WebAuthn/Passkey support
     implementation("com.webauthn4j:webauthn4j-core:0.31.10.RELEASE")
@@ -53,7 +53,7 @@ dependencies {
     implementation("jakarta.validation:jakarta.validation-api")
 
     // XSS Prevention - Feature 047
-    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20260313.1")
+    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20260924.2")
 
     // Email
     implementation("io.micronaut.email:micronaut-email-javamail:3.2.0")
@@ -64,7 +64,7 @@ dependencies {
     implementation("org.thymeleaf:thymeleaf:3.1.5.RELEASE")
 
     // Serialization
-    implementation("io.micronaut.serde:micronaut-serde-jackson:3.1.1")
+    implementation("io.micronaut.serde:micronaut-serde-jackson:3.2.2")
     
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-reflect:${kotlinVersion}")
@@ -77,17 +77,17 @@ dependencies {
     // Explicit version: the Micronaut platform BOM manages the Jackson 3 coordinate
     // (tools.jackson.module), not this Jackson 2 one. It previously resolved only via a
     // transitive jackson-bom that micronaut-micrometer-bom 6.0.1 dropped.
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.2")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.3")
     // Same story as the Kotlin module above: the dropped jackson-bom took the Java 8
     // time module with it, so every plain ObjectMapper lost Instant support. Without it
     // findAndRegisterModules() finds nothing and Instant fields fail to serialize.
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.22.2")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.22.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation("io.micronaut.reactor:micronaut-reactor")
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.6.3")
+    runtimeOnly("ch.qos.logback:logback-classic:1.6.4")
     // Bridge Log4j to Logback (required for Apache POI)
     runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.26.1")
     // Logstash encoder for JSON logging (Feature 046)
@@ -99,8 +99,8 @@ dependencies {
     runtimeOnly("org.yaml:snakeyaml:2.7")
     
     // Password encoding
-    implementation("org.springframework.security:spring-security-crypto:7.1.0")
-    implementation("org.springframework:spring-core:7.0.8")
+    implementation("org.springframework.security:spring-security-crypto:7.1.1")
+    implementation("org.springframework:spring-core:7.0.9")
     implementation("commons-logging:commons-logging:1.4.0")
     
     // Document generation (Apache POI)
@@ -127,7 +127,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.3")
     testImplementation("org.junit.jupiter:junit-jupiter-params:6.1.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.3")
-    testImplementation("io.micronaut.test:micronaut-test-junit5:5.1.1")
+    testImplementation("io.micronaut.test:micronaut-test-junit5:5.2.0")
     testImplementation("io.mockk:mockk:1.14.11")
     // Tests assert on log output via Logback's ListAppender; main code stays
     // slf4j-only (logback-classic is runtimeOnly above).

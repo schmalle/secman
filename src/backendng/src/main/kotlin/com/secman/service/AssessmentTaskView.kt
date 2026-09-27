@@ -7,6 +7,7 @@ import com.secman.domain.RiskAssessment
 fun RiskAssessment.taskView(): Map<String, Any?> = mapOf(
     "id" to id, "status" to status, "startDate" to startDate, "endDate" to endDate,
     "assessmentBasisType" to assessmentBasisType, "assessmentBasisId" to assessmentBasisId,
+    "solutionName" to solutionName, "respondentEmail" to respondentEmail,
     "answerRevision" to answerRevision, "authorshipComplete" to authorshipComplete,
     "asset" to asset?.let { mapOf("id" to it.id, "name" to it.name, "type" to it.type) },
     "awsAccount" to awsAccount?.let { mapOf("awsAccountId" to it.awsAccountId, "name" to it.name) },

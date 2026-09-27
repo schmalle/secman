@@ -38,6 +38,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         items: [
             { label: 'User Management', href: '/admin/user-management', icon: 'bi-people-fill' },
             { label: 'Workgroups', href: '/workgroups', icon: 'bi-diagram-2' },
+            { label: 'Account Onboarding', href: '/admin/account-onboarding', icon: 'bi-envelope-paper' },
             { label: 'User Mappings', href: '/admin/user-mappings', icon: 'bi-diagram-3-fill' },
             { label: 'Identity Providers', href: '/admin/identity-providers', icon: 'bi-shield-lock' },
         ],
@@ -162,4 +163,14 @@ export function activeHrefForPath(groups: AdminNavGroup[], path: string): string
 
 function stripTrailingSlash(path: string): string {
     return path.replace(/\/+$/, '') || '/';
+}
+
+/** Champions can configure onboarding without receiving unrelated admin links. */
+export function adminNavForRoles(roles: string[]): AdminNavGroup[] {
+    if (roles.includes('ADMIN')) return ADMIN_NAV;
+    if (!roles.includes('SECCHAMPION')) return [];
+    return ADMIN_NAV.map(group => ({
+        ...group,
+        items: group.items.filter(item => item.href === '/admin/account-onboarding'),
+    })).filter(group => group.items.length > 0);
 }

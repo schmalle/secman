@@ -15,6 +15,7 @@ import AccountOnboardingQuestionList from './AccountOnboardingQuestionList';
 import AccountOnboardingRuleEditor from './AccountOnboardingRuleEditor';
 import AccountOnboardingCoverageMatrix from './AccountOnboardingCoverageMatrix';
 import AccountOnboardingSimulator from './AccountOnboardingSimulator';
+import AccountOnboardingSettings from './AccountOnboardingSettings';
 import OwnerMailNotifications from './OwnerMailNotifications';
 
 /**
@@ -120,6 +121,9 @@ const AccountOnboardingManager: React.FC = () => {
 
     return (
         <div>
+            <AccountOnboardingSettings admin={admin} useCases={useCases} />
+            <details>
+            <summary className="h5 mb-3">Advanced: guided onboarding questionnaire</summary>
             <p className="text-muted">
                 When a mapping import discovers an AWS account SecMan has never seen, the owner can be sent a
                 one-time link asking how they use it. Their answers resolve through the rules below into the
@@ -168,6 +172,7 @@ const AccountOnboardingManager: React.FC = () => {
 
             <hr className="my-4" />
 
+            </details>
             <AccountOnboardingSimulator />
         {admin && <OwnerMailNotifications />}
         </div>

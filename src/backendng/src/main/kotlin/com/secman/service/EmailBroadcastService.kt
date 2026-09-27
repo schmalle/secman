@@ -14,7 +14,6 @@ import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
 import org.jsoup.Jsoup
-import org.jsoup.safety.Safelist
 import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
 import java.util.concurrent.CompletableFuture
@@ -35,15 +34,6 @@ open class EmailBroadcastService(
     private val eolFindingTableRenderer: EolFindingTableRenderer
 ) {
     private val log = LoggerFactory.getLogger(EmailBroadcastService::class.java)
-    private val broadcastHtmlSafelist = Safelist()
-        .addTags(
-            "p", "br", "strong", "b", "em", "i", "u",
-            "h1", "h2", "h3", "h4", "h5", "h6",
-            "ul", "ol", "li", "blockquote", "code", "pre",
-            "table", "thead", "tbody", "tr", "th", "td", "a"
-        )
-        .addAttributes("a", "href", "title")
-        .addProtocols("a", "href", "http", "https", "mailto")
 
     @Transactional
     open fun createJob(
@@ -354,7 +344,7 @@ open class EmailBroadcastService(
     private data class RenderedTable(val html: String, val text: String)
 
     internal fun sanitizeBroadcastHtml(html: String): String =
-        Jsoup.clean(html, broadcastHtmlSafelist)
+        com.secman.util.EmailHtmlSanitizer.sanitize(html)
 
     /**
      * Manually-added CC addresses are stored comma-joined on the job row (already

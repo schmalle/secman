@@ -22,7 +22,8 @@ open class OwnerMailDeliveryService(
     private val templates: EmailTemplateRenderer,
     private val releases: ReleaseRequirementScopeService,
     private val appConfig: AppConfig,
-    @Value("\${secman.account-onboarding.welcome-template:account-welcome}") private val welcomeTemplate: String
+    @Value("\${secman.account-onboarding.welcome-template:account-welcome}") private val welcomeTemplate: String,
+    private val settings: AccountOnboardingSettingsService? = null
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -80,6 +81,11 @@ open class OwnerMailDeliveryService(
         val values = mapOf("awsAccountId" to row.awsAccountId!!, "ownerEmail" to row.ownerEmail!!,
             "portalUrl" to appConfig.backend.baseUrl.trimEnd('/') + "/",
             "requirementsVersion" to (release?.let { "${it.version} (${it.name})" } ?: ""), "simulatedBy" to "")
+        if (settings != null) {
+            val mail = settings.renderWelcome(values)
+            return email.sendTrackedEmailWithInlineImages(row.ownerEmail!!, mail.subject, mail.text, mail.html,
+                templates.loadLogoInlineImage())
+        }
         val template = templates.requireAllowed(welcomeTemplate)
         fun prepare(raw: String) = templates.renderConditionalBlock(
             templates.renderConditionalBlock(raw, "ifVersion", release != null), "ifSimulated", false)

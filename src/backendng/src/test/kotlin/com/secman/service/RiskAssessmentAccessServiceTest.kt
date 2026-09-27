@@ -18,6 +18,18 @@ class RiskAssessmentAccessServiceTest {
         awsAccount = AwsAccount(id = 20, awsAccountId = "123456789012"), assessor = user, requestor = user)
     private fun auth(role: String = "USER", id: Long = 1) = Authentication.build("renamed", listOf(role), mapOf("userId" to id))
 
+    @Test fun `solution assessments grant no resource based or email based access`() {
+        assessment.assessmentBasisType = AssessmentBasisType.SAAS
+        assessment.solutionName = "Example SaaS"
+        assessment.assessmentBasisId = 0
+        every { assignments.findByAssessmentId(10) } returns listOf(AssessmentAssignment(
+            assessmentId = 10, userId = null, email = user.email, role = "RESPONDENT"))
+        every { assets.canAccessAsset(any(), any()) } returns true
+        every { assets.canAccessAwsAccount(any(), any()) } returns true
+        assertFalse(service.canView(assessment, auth()))
+        assertTrue(service.canView(assessment, auth("ADMIN")))
+    }
+
     @Test fun `legacy requestor and assessor fields do not grant access`() {
         assertFalse(service.canView(assessment, auth()))
         assertFalse(service.canAnswer(assessment, auth()))
