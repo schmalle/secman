@@ -22,6 +22,33 @@ Every tool is listed in [Tool reference](#tool-reference) below — that section
 
 `Origin` is validated per spec — non-browser clients without `Origin` are allowed; localhost always allowed; configure others under `secman.mcp.transport.allowed-origins` in `application.yml`.
 
+## Query vulnerabilities from a shell
+
+[`tests/mcp/query-vulnerabilities.sh`](../tests/mcp/query-vulnerabilities.sh) calls
+`get_vulnerabilities` through the Streamable HTTP endpoint and prints its JSON
+result. It takes the SecMan URL, an MCP API key and a delegated user email. The
+email is required: SecMan requires identity delegation for every `tools/list` and
+`tools/call` request. The key must have `VULNERABILITIES_READ`, and delegation
+must be enabled and permitted for that user.
+
+```bash
+export SECMAN_MCP_KEY='sk-…'
+./tests/mcp/query-vulnerabilities.sh \
+  --url 'https://secman.example.com' \
+  --user-email 'analyst@example.com'
+```
+
+Pass either the server base URL or its full `/mcp` endpoint. The script performs
+MCP initialization, confirms that `get_vulnerabilities` is available to the key,
+then executes the query. Filter options include `--cve-id`, repeatable `--severity`,
+`--asset-id`, `--start-date`, `--end-date`, `--page`, and `--page-size`. Findings
+covered by exceptions and installer artifacts remain excluded by default; use
+`--include-excepted` or `--include-installers` to include them. Use `--help` for
+the complete option list. Requires `curl` and `jq`.
+
+For a server with a self-signed certificate, add `--insecure`. This passes
+`--insecure` to curl and disables certificate verification for that request.
+
 ## Effective permissions
 
 ```
