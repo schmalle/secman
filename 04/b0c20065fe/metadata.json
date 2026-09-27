@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "04b0c20065fe",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/MCP.md",
+    "src/backendng/src/main/kotlin/com/secman/controller/McpAdminController.kt",
+    "src/frontend/src/components/McpApiKeyManagement.tsx",
+    "src/frontend/src/components/mcpDelegateSelection.test.ts",
+    "src/frontend/src/components/mcpDelegateSelection.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/04/b0c20065fe/0/metadata.json",
+      "transcript": "/04/b0c20065fe/0/full.jsonl",
+      "compact_transcript": "/04/b0c20065fe/0/transcript.jsonl",
+      "content_hash": "/04/b0c20065fe/0/content_hash.txt",
+      "prompt": "/04/b0c20065fe/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 297544,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1465472,
+    "output_tokens": 4966,
+    "api_call_count": 20,
+    "subagent_tokens_complete": true
+  }
+}
