@@ -153,6 +153,30 @@ open class CSVUserMappingParser(
         )
     }
 
+    /** Decode and validate rows only; the bulk service owns all database and mail effects. */
+    fun readMappings(file: File): com.secman.dto.ParsedUserMappings = openParser(file).use { parser ->
+        val headers = parser.headerMap
+        validateHeaders(headers)?.let { throw IllegalArgumentException(it) }
+        val mappings = mutableListOf<com.secman.dto.BulkUserMappingEntry>()
+        val errors = mutableListOf<String>()
+        val seen = mutableSetOf<String>()
+        var row = 1
+        var skipped = 0
+        for (record in parser) {
+            row++
+            require(row <= UserMappingService.MAX_BULK_ENTRIES + 1) { "Too many mapping rows" }
+            try {
+                val mapping = parseRecord(record, headers, row, seen)
+                if (mapping == null) skipped++
+                else mappings += com.secman.dto.BulkUserMappingEntry(mapping.email, mapping.awsAccountId, mapping.domain, mapping.awsAccountName)
+            } catch (e: IllegalArgumentException) {
+                errors += "Row $row: invalid mapping"
+                skipped++
+            }
+        }
+        com.secman.dto.ParsedUserMappings(mappings, errors, skipped)
+    }
+
     /**
      * What [parse] accumulates while reading rows.
      *

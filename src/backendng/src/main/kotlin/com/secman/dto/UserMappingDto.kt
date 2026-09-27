@@ -207,6 +207,7 @@ data class AccountOnboardingInfo(
     val ownerEmail: String,
     val mode: String,
     val welcomeEmailSent: Boolean = false,
+    val welcomeEmail: OwnerMailDelivery = OwnerMailDelivery(),
     val questionnaireInviteId: Long? = null,
     val questionnaireExpiresAt: String? = null,
     val riskAssessmentId: Long? = null,

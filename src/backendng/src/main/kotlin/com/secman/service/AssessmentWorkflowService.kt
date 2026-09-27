@@ -37,6 +37,16 @@ open class AssessmentWorkflowService(
         else useCases.flatMap(requirements::findByUsecaseId).distinctBy { it.id }
     }
 
+    /** Acquire the lock before any snapshot read, so revision and answers share one database view. */
+    fun findForRecommendation(id: Long): RiskAssessment? =
+        entityManager.find(RiskAssessment::class.java, id, LockModeType.PESSIMISTIC_READ)
+            ?.also { entityManager.refresh(it, LockModeType.PESSIMISTIC_READ) }
+
+    /** Hold the same row lock used by answer writers until the read transaction ends. */
+    fun lockRecommendation(assessment: RiskAssessment) {
+        entityManager.refresh(assessment, LockModeType.PESSIMISTIC_READ)
+    }
+
     private fun locked(id: Long): RiskAssessment =
         entityManager.find(RiskAssessment::class.java, id, LockModeType.PESSIMISTIC_WRITE)
             ?.also { entityManager.refresh(it, LockModeType.PESSIMISTIC_WRITE) }

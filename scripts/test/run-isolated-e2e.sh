@@ -135,11 +135,14 @@ CREATED_DB=true
 db_admin -e "CREATE TABLE \`$DB_NAME\`.\`$MARKER_TABLE\` (owner_label VARCHAR(64) NOT NULL, owner_token CHAR(32) NOT NULL, owner_pid BIGINT NOT NULL); INSERT INTO \`$DB_NAME\`.\`$MARKER_TABLE\` VALUES ('$OWNER_LABEL', '$OWNER_TOKEN', $$)"
 db_admin -e "CREATE USER '$DB_NAME'@'localhost' IDENTIFIED BY '$DB_PASSWORD'; CREATE USER '$DB_NAME'@'127.0.0.1' IDENTIFIED BY '$DB_PASSWORD'; GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$DB_NAME'@'localhost', '$DB_NAME'@'127.0.0.1'"
 
-# Copy structure and migration metadata only. No application rows are copied.
-# This also avoids Flyway's empty-schema inspection on MariaDB installations
-# whose system routine tables have not yet been upgraded.
-mariadb-dump --no-data --skip-triggers --skip-routines secman | db_admin "$DB_NAME"
-mariadb-dump --no-create-info --skip-triggers secman flyway_schema_history | db_admin "$DB_NAME"
+# Hibernate owns database-only test schemas and must be able to drop every table.
+# Legacy foreign keys copied from the normal schema would prevent clean teardown.
+if [[ "$DB_ONLY" == false ]]; then
+    # Full-stack runs need structure and migration metadata, never application rows.
+    # This avoids Flyway's empty-schema inspection on older MariaDB system tables.
+    mariadb-dump --no-data --skip-triggers --skip-routines secman | db_admin "$DB_NAME"
+    mariadb-dump --no-create-info --skip-triggers secman flyway_schema_history | db_admin "$DB_NAME"
+fi
 
 export DB_CONNECT="jdbc:mariadb://127.0.0.1:3306/$DB_NAME"
 export DB_USERNAME="$DB_NAME" DB_PASSWORD

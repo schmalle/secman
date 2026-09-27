@@ -173,6 +173,7 @@ class SimulateAccountOnboardingTool(
                             "ownerEmail" to ob.ownerEmail,
                             "mode" to ob.mode,
                             "welcomeEmailSent" to ob.welcomeEmailSent,
+                            "welcomeEmail" to ob.welcomeEmail,
                             // The invite id, never the token: an MCP result travels into an
                             // agent transcript, which is not a place for a live credential.
                             "questionnaireInviteId" to ob.questionnaireInviteId,

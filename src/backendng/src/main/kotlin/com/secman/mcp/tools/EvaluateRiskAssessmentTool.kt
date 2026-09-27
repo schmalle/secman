@@ -9,7 +9,7 @@ import jakarta.inject.Singleton
 class EvaluateRiskAssessmentTool(private val service: RiskAssessmentMcpService) : McpTool {
     override val name = "evaluate_risk_assessment"
     override val description =
-        "Evaluate a completed questionnaire and return compliance counts plus non-compliant findings"
+        "Evaluate a completed questionnaire and return compliance counts, findings and an advisory recommendation (OK, NOT_OK or NEEDS_REVIEW)"
     override val operation = McpOperation.READ
     override val inputSchema = mapOf(
         "type" to "object",

@@ -2,6 +2,7 @@ import AssessmentAccessManager from './AssessmentAccessManager';
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import AssessmentPerformance from './AssessmentPerformance';
+import AssessmentRecommendationModal from './AssessmentRecommendationModal';
 import AiPrefillModal from './AiPrefillModal';
 import { getAiFeatureStatus } from '../services/aiSuggestions';
 import { formatServerDate } from '../utils/dateUtils';
@@ -65,6 +66,8 @@ interface Demand {
 }
 
 interface RiskAssessment {
+  canAnalyze?: boolean;
+  answerRevision?: number;
   id?: number;
   // New unified approach
   assessmentBasisType: 'DEMAND' | 'ASSET' | 'AWS_ACCOUNT';
@@ -111,6 +114,8 @@ const RiskAssessmentManagement: React.FC = () => {
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<number | null>(null);
   // Feature 088 — AI pre-fill modal state + master-switch status.
   const [aiPrefillAssessment, setAiPrefillAssessment] = useState<RiskAssessment | null>(null);
+  const [focusedRequirementId, setFocusedRequirementId] = useState<number | undefined>();
+  const [recommendationAssessment, setRecommendationAssessment] = useState<RiskAssessment | null>(null);
   const [aiFeatureEnabled, setAiFeatureEnabled] = useState(false);
   const [assessorRefValue, setAssessorRefValue] = useState<string>('');
   const [respondentRefValue, setRespondentRefValue] = useState<string>('');
@@ -136,6 +141,7 @@ const RiskAssessmentManagement: React.FC = () => {
   // Check if user is authenticated
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const managesAssessments = currentUser?.roles?.some(role => role === 'ADMIN' || role === 'SECCHAMPION') ?? false;
+
 
   useEffect(() => {
     // Check authentication
@@ -383,7 +389,8 @@ const RiskAssessmentManagement: React.FC = () => {
     setShowAssessmentModal(true);
   };
 
-  const handleCheckAnswers = (assessment: RiskAssessment) => {
+  const handleCheckAnswers = (assessment: RiskAssessment, requirementId?: number) => {
+    setFocusedRequirementId(requirementId);
     if (!assessment.id) {
       setError('Invalid assessment ID');
       return;
@@ -957,6 +964,15 @@ const RiskAssessmentManagement: React.FC = () => {
                               >
                                 Check Answers
                               </button>
+                              {assessment.canAnalyze && (
+                                <button
+                                  onClick={() => setRecommendationAssessment(assessment)}
+                                  className="btn btn-outline-secondary mb-1"
+                                  title="Analyze the submitted answers and show an advisory recommendation"
+                                >
+                                  Analyze answers
+                                </button>
+                              )}
                               {managesAssessments && assessment.status === 'STARTED' && (
                                 <button 
                                   onClick={() => handleSendNotification(assessment)} 
@@ -1001,6 +1017,7 @@ const RiskAssessmentManagement: React.FC = () => {
       {/* Assessment Performance Modal */}
       {showAssessmentModal && selectedAssessmentId && (
         <AssessmentPerformance
+          focusedRequirementId={focusedRequirementId}
           assessmentId={selectedAssessmentId}
           mode={assessmentModalMode}
           onClose={handleAssessmentModalClose}
@@ -1018,6 +1035,19 @@ const RiskAssessmentManagement: React.FC = () => {
           onCompleted={() => {
             setAiPrefillAssessment(null);
             fetchAssessments();
+          }}
+        />
+      )}
+
+      {recommendationAssessment && recommendationAssessment.id && (
+        <AssessmentRecommendationModal
+          assessmentId={recommendationAssessment.id}
+          assessmentLabel={recommendationAssessment.notes || `Assessment #${recommendationAssessment.id}`}
+          onClose={() => setRecommendationAssessment(null)}
+          onReviewAnswers={(requirementId) => {
+            const assessment = recommendationAssessment;
+            setRecommendationAssessment(null);
+            handleCheckAnswers(assessment, requirementId);
           }}
         />
       )}

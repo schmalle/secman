@@ -1133,3 +1133,22 @@ EPOCH=$(date -d "$LAST" +%s 2>/dev/null || echo 0)
 ```
 
 CLI command-specific reference docs: `src/cli/src/main/resources/cli-docs/{USER_MAPPING,WORKGROUP,ADD_VULNERABILITY}_COMMANDS.md`.
+
+### AWS owner welcome-mail outcomes
+
+Mapping imports preserve `--onboarding-mode`, `--welcome-email`,
+`--start-risk-assessment`, and their existing defaults. Explicit onboarding modes
+request welcome mail by default; `--welcome-email=false` suppresses it in
+all modes, including WELCOME_ONLY. Legacy assessment-start alone sends no
+additional welcome message. Dry run shows `WOULD_SEND` without contacting SMTP.
+
+JSON output adds `onboarding[].welcomeEmail` with `requested`, `status`,
+`notificationId`, `retryable`, and sanitized `errorCode`. Text output names the
+status and notification id for each owner. `SENT` indicates SMTP acceptance;
+`FAILED` does not undo a successful mapping import. `PENDING` may mean delivery
+is uncertain and is deliberately not automatically retried. Created assessments
+and welcome delivery are separate outcomes.
+
+For a retained FAILED record, an ADMIN can retry in Account onboarding or with
+MCP `retry_owner_mail_notification`. There is no new CLI retry switch. Records
+older than 90 days lose recipient metadata and are no longer retryable.

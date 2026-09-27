@@ -1,6 +1,7 @@
 package com.secman.service
 
 import com.secman.repository.VulnerabilityRepository
+import io.micronaut.core.propagation.PropagatedContext
 import io.micronaut.data.model.Pageable
 import io.micronaut.scheduling.annotation.Async
 import jakarta.inject.Inject
@@ -71,15 +72,19 @@ open class AsyncExceptionRecompute(
      */
     @Async
     open fun recomputeAll() {
-        val start = System.currentTimeMillis()
-        try {
-            val updated = recomputeAllChunked("async full excepted recompute")
-            log.info(
-                "Async full excepted recompute complete: {} rows in {} ms",
-                updated, System.currentTimeMillis() - start
-            )
-        } catch (e: Exception) {
-            log.error("Async full excepted recompute failed (non-fatal; standing sweeps will retry): {}", e.message, e)
+        // @Async propagates the caller's transaction too. Even the boundary SELECT
+        // must use its own session rather than sharing a request's Hibernate session.
+        PropagatedContext.empty().propagate().use {
+            val start = System.currentTimeMillis()
+            try {
+                val updated = recomputeAllChunked("async full excepted recompute")
+                log.info(
+                    "Async full excepted recompute complete: {} rows in {} ms",
+                    updated, System.currentTimeMillis() - start
+                )
+            } catch (e: Exception) {
+                log.error("Async full excepted recompute failed (non-fatal; standing sweeps will retry): {}", e.message, e)
+            }
         }
     }
 

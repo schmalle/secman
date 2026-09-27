@@ -432,6 +432,9 @@ class ImportS3Command(
                     }
                     result.onboarding.forEach { ob ->
                         val where = "${ob.awsAccountId}  ${ob.ownerEmail}"
+                        if (ob.welcomeEmail.isNotEmpty()) {
+                            println("  MAIL    $where -> ${ob.welcomeEmail["status"]}${if (ob.welcomeEmailSent) " — welcome mail sent" else ""} (notification=${ob.welcomeEmail["notificationId"] ?: "-"}, retryable=${ob.welcomeEmail["retryable"] ?: false})")
+                        }
                         when {
                             ob.error != null -> {
                                 onboardingFailures++

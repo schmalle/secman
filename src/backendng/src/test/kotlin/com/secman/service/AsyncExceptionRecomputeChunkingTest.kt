@@ -1,6 +1,8 @@
 package com.secman.service
 
 import com.secman.repository.VulnerabilityRepository
+import io.micronaut.core.propagation.PropagatedContext
+import io.micronaut.core.propagation.PropagatedContextElement
 import io.micronaut.data.model.Pageable
 import io.mockk.every
 import io.mockk.mockk
@@ -139,4 +141,21 @@ class AsyncExceptionRecomputeChunkingTest {
             assertThat(ids.count { it > from && it <= to }).isEqualTo(ids.size)
         }
     }
+    @Test
+    fun `async entry never queries with the caller persistence context`() {
+        val (service, _) = serviceOver(emptyList())
+        val callerContext = object : PropagatedContextElement {}
+        var queried = false
+        every { repository.findIdsAfter(any(), any()) } answers {
+            assertThat(PropagatedContext.getOrEmpty().allElements).isEmpty()
+            queried = true
+            emptyList()
+        }
+        PropagatedContext.empty().plus(callerContext).propagate().use {
+            service.recomputeAll()
+            assertThat(PropagatedContext.getOrEmpty().allElements).containsExactly(callerContext)
+        }
+        assertThat(queried).isTrue()
+    }
+
 }

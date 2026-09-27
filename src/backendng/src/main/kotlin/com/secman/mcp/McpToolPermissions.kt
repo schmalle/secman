@@ -70,6 +70,7 @@ object McpToolPermissions {
             // ADMIN role checked in execute() for all of these
             "list_users", "add_user", "delete_user",
             "import_user_mappings", "list_user_mappings",
+            "list_owner_mail_notifications", "retry_owner_mail_notification",
             // Same group as import_user_mappings because it has the same side effect: it
             // onboards an account owner, mail included. ADMIN/SECCHAMPION checked in execute().
             "simulate_account_onboarding",
@@ -229,6 +230,7 @@ object McpToolPermissions {
             setOf(USER_ACTIVITY) to listOf(
                 "list_users", "add_user", "delete_user",
                 "import_user_mappings", "list_user_mappings",
+                "list_owner_mail_notifications", "retry_owner_mail_notification",
                 "simulate_account_onboarding",
             ),
             setOf(ASSESSMENTS_READ) to listOf(

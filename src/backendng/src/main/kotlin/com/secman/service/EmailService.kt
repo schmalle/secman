@@ -112,6 +112,28 @@ open class EmailService(
         }
     }
 
+    data class TrackedDelivery(val status: String, val errorCode: String? = null, val messageId: String? = null)
+
+    /** A transport failure may follow SMTP acceptance: never automatically retry that ambiguity. */
+    fun sendTrackedEmailWithInlineImages(
+        to: String, subject: String, textContent: String, htmlContent: String,
+        inlineImages: Map<String, Pair<ByteArray, String>>
+    ): TrackedDelivery {
+        val config = getActiveEmailConfig() ?: return TrackedDelivery("FAILED", "NO_ACTIVE_PROVIDER")
+        var attempted = false
+        var messageId: String? = null
+        var failure: Exception? = null
+        val sent = sendEmailWithConfigAndImages(config, to, subject, textContent, htmlContent, inlineImages,
+            onTransportStart = { attempted = true }, onAccepted = { messageId = it }, onFailure = { failure = it })
+        return when {
+            sent -> TrackedDelivery("SENT", messageId = messageId)
+            failure is AuthenticationFailedException || generateSequence(failure as Throwable?) { it.cause }.any { it is java.net.ConnectException } ->
+                TrackedDelivery("FAILED", "PROVIDER_UNAVAILABLE")
+            attempted -> TrackedDelivery("PENDING", "DELIVERY_UNCERTAIN")
+            else -> TrackedDelivery("FAILED", "MESSAGE_PREPARATION_FAILED")
+        }
+    }
+
     /**
      * Send email using specific configuration with inline image support.
      * MIME structure: multipart/related [ multipart/alternative [ text, html ], image1, image2, ... ]
@@ -123,7 +145,10 @@ open class EmailService(
         textContent: String,
         htmlContent: String,
         inlineImages: Map<String, Pair<ByteArray, String>>,
-        cc: List<String> = emptyList()
+        cc: List<String> = emptyList(),
+        onTransportStart: (() -> Unit)? = null,
+        onAccepted: ((String?) -> Unit)? = null,
+        onFailure: ((Exception) -> Unit)? = null
     ): Boolean {
         return try {
             log.debug("Sending email with {} inline image(s) to {}", inlineImages.size, to)
@@ -173,11 +198,14 @@ open class EmailService(
                 sentDate = Date()
             }
 
+            onTransportStart?.invoke()
             Transport.send(message)
+            onAccepted?.invoke(message.messageID)
             log.info("Successfully sent email with inline images to {} with subject: {}", to, subject)
             true
 
         } catch (e: Exception) {
+            onFailure?.invoke(e)
             log.error("Failed to send email with inline images to {}: {} - {}", to, e.javaClass.simpleName, e.message, e)
             false
         }

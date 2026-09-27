@@ -281,6 +281,13 @@ EOF
 expect_silent A03-sql-interp "bound :name parameter"
 expect_silent A03-html       "DOMPurify.sanitize at the assignment site"
 
+setup_repo
+plant src/frontend/src/components/HtmlSafety.test.ts <<'EOF'
+assert.doesNotMatch(source, /dangerouslySetInnerHTML/);
+EOF
+expect_silent A03-html "negative source assertion is not an HTML sink"
+
+
 # ============================================================================
 # A05 / A06
 # ============================================================================

@@ -47,8 +47,10 @@ class RiskAssessmentMcpServiceTest {
     private val keys = mockk<com.secman.repository.McpApiKeyRepository>(relaxed = true)
     private val workflow = AssessmentWorkflowService(entityManager, assessments, assignments, mockk(relaxed = true), mockk(relaxed = true),
         responses, users, keys, requirements, releaseScope, access)
+    private val recommendationService = RiskAssessmentRecommendationService(responses, workflow)
     private val service = RiskAssessmentMcpService(
-        assessments, responses, requirements, useCases, awsAccounts, assets, users, filter, workflow, access, releaseScope
+        assessments, responses, requirements, useCases, awsAccounts, assets, users, filter, workflow, access, releaseScope,
+        recommendationService
     )
 
     private val assessor = user(1, "champ", "champ@example.test", User.Role.SECCHAMPION)
@@ -102,6 +104,7 @@ class RiskAssessmentMcpServiceTest {
         assessment.status = "STARTED"
         every { users.findById(any()) } answers { Optional.ofNullable(listOf(assessor, respondent, outsider).find { it.id == firstArg<Long>() }) }
         every { entityManager.find(RiskAssessment::class.java, assessment.id!!, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE) } returns assessment
+        every { entityManager.find(RiskAssessment::class.java, assessment.id!!, jakarta.persistence.LockModeType.PESSIMISTIC_READ) } returns assessment
         every { assignments.findByAssessmentId(assessment.id!!) } returns listOf(
             com.secman.domain.AssessmentAssignment(id = 4, assessmentId = assessment.id!!, userId = assessor.id, email = assessor.email, role = "ASSESSOR"),
             com.secman.domain.AssessmentAssignment(id = 5, assessmentId = assessment.id!!, userId = respondent.id, email = respondent.email, role = "RESPONDENT"))
@@ -483,6 +486,7 @@ class RiskAssessmentMcpServiceTest {
     @Test
     fun `assessor evaluates completed answers and receives non-compliant finding`() {
         assessment.status = "COMPLETED"
+        assessment.answerRevision = 5
         val response = Response(
             answerType = AnswerType.NO,
             comment = "Gap confirmed",
@@ -495,9 +499,101 @@ class RiskAssessmentMcpServiceTest {
         val result = service.evaluate(context(assessor), assessment.id!!)
 
         assertThat(result["verdict"]).isEqualTo("NON_COMPLIANT")
+        assertThat(result["recommendation"]).isEqualTo("NOT_OK")
+        assertThat(result["answerRevision"]).isEqualTo(5L)
+        assertThat(result["missingAnswerCount"]).isEqualTo(0)
+        assertThat(result["summary"]).isEqualTo("1 requirement is not met.")
+        assertThat(result["advisory"]).isEqualTo(true)
+        assertThat(result["policyVersion"]).isEqualTo(RiskAssessmentRecommendationService.POLICY_VERSION)
+        java.time.Instant.parse(result["generatedAt"] as String)
         @Suppress("UNCHECKED_CAST")
-        assertThat(result["findings"] as List<Map<String, Any?>>).singleElement()
-            .extracting("requirementId").isEqualTo(requirement.id)
+        val findings = result["findings"] as List<Map<String, Any?>>
+        val finding = findings.single()
+        assertThat(finding["requirementId"]).isEqualTo(requirement.id)
+        assertThat(finding["internalId"]).isEqualTo(requirement.internalId)
+        assertThat(finding["shortreq"]).isEqualTo(requirement.shortreq)
+        assertThat(finding["answerType"]).isEqualTo("NO")
+        assertThat(finding["reason"]).isEqualTo("Requirement is explicitly not met.")
+        assertThat(finding["comment"]).isEqualTo("Gap confirmed")
+    }
+
+    @Test
+    fun `evaluation keeps every legacy key and adds the recommendation metadata`() {
+        assessment.status = "COMPLETED"
+        val response = Response(
+            answerType = AnswerType.YES,
+            respondentEmail = respondent.email,
+            riskAssessment = assessment,
+            requirement = requirement
+        )
+        every { responses.findByRiskAssessmentId(assessment.id!!) } returns listOf(response)
+
+        val result = service.evaluate(context(assessor), assessment.id!!)
+
+        assertThat(result.keys).containsExactlyInAnyOrder(
+            "assessment", "verdict", "answerCounts", "requirementCount", "findings",
+            "recommendation", "answerRevision", "summary", "missingAnswerCount", "generatedAt",
+            "advisory", "policyVersion", "assessmentId"
+        )
+        assertThat(result["verdict"]).isEqualTo("COMPLIANT")
+        assertThat(result["recommendation"]).isEqualTo("OK")
+        assertThat(result["answerCounts"]).isEqualTo(mapOf("YES" to 1, "NO" to 0, "N_A" to 0))
+        assertThat(result["requirementCount"]).isEqualTo(1)
+        assertThat(result["findings"]).isEqualTo(emptyList<Map<String, Any?>>())
+    }
+
+    @Test
+    fun `evaluation rejects an unsubmitted assessment`() {
+        assertThatThrownBy { service.evaluate(context(assessor), assessment.id!!) }
+            .isInstanceOf(IllegalStateException::class.java)
+            .hasMessageContaining("completed")
+    }
+
+    @Test
+    fun `completed assessment with a blank answer is NEEDS_REVIEW and lists the missing answer`() {
+        assessment.status = "COMPLETED"
+
+        val result = service.evaluate(context(assessor), assessment.id!!)
+
+        assertThat(result["verdict"]).isEqualTo("COMPLIANT")
+        assertThat(result["recommendation"]).isEqualTo("NEEDS_REVIEW")
+        assertThat(result["missingAnswerCount"]).isEqualTo(1)
+        @Suppress("UNCHECKED_CAST")
+        val findings = result["findings"] as List<Map<String, Any?>>
+        val finding = findings.single()
+        assertThat(finding["requirementId"]).isEqualTo(requirement.id)
+        assertThat(finding["answerType"]).isNull()
+        assertThat(finding["reason"]).isEqualTo("No answer submitted.")
+    }
+
+    @Test
+    fun `MCP evaluation matches the shared recommendation service`() {
+        assessment.status = "COMPLETED"
+        assessment.answerRevision = 9
+        val response = Response(
+            answerType = AnswerType.N_A,
+            comment = "Out of scope",
+            respondentEmail = respondent.email,
+            riskAssessment = assessment,
+            requirement = requirement
+        )
+        every { responses.findByRiskAssessmentId(assessment.id!!) } returns listOf(response)
+
+        val viaMcp = service.evaluate(context(assessor), assessment.id!!)
+        val direct = recommendationService.recommend(assessment)
+
+        assertThat(viaMcp["recommendation"]).isEqualTo(direct.recommendation.name)
+        assertThat(viaMcp["verdict"]).isEqualTo(direct.verdict)
+        assertThat(viaMcp["answerCounts"]).isEqualTo(direct.answerCounts)
+        assertThat(viaMcp["requirementCount"]).isEqualTo(direct.requirementCount)
+        assertThat(viaMcp["answerRevision"]).isEqualTo(direct.answerRevision)
+        assertThat(viaMcp["missingAnswerCount"]).isEqualTo(direct.missingAnswerCount)
+        @Suppress("UNCHECKED_CAST")
+        val mcpFindings = viaMcp["findings"] as List<Map<String, Any?>>
+        assertThat(mcpFindings.map { it["requirementId"] }).isEqualTo(direct.findings.map { it.requirementId })
+        assertThat(mcpFindings.map { it["answerType"] }).isEqualTo(direct.findings.map { it.answerType })
+        assertThat(mcpFindings.map { it["reason"] }).isEqualTo(direct.findings.map { it.reason })
+        assertThat(mcpFindings.map { it["comment"] }).isEqualTo(direct.findings.map { it.comment })
     }
 
     @Test

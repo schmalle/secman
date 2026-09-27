@@ -766,6 +766,7 @@ class UserMappingCliService(
                             ownerEmail = it["ownerEmail"]?.toString() ?: "",
                             mode = it["mode"]?.toString() ?: "",
                             welcomeEmailSent = (it["welcomeEmailSent"] as? Boolean) ?: false,
+                            welcomeEmail = (it["welcomeEmail"] as? Map<String, Any?>) ?: emptyMap(),
                             // The invite id, never the token — the CLI prints this and the
                             // printout is routinely pasted into tickets and CI logs.
                             questionnaireInviteId = (it["questionnaireInviteId"] as? Number)?.toLong(),
@@ -1275,6 +1276,7 @@ data class CliAccountOnboarding(
     val ownerEmail: String,
     val mode: String,
     val welcomeEmailSent: Boolean = false,
+    val welcomeEmail: Map<String, Any?> = emptyMap(),
     val questionnaireInviteId: Long? = null,
     val questionnaireExpiresAt: String? = null,
     val riskAssessmentId: Long? = null,

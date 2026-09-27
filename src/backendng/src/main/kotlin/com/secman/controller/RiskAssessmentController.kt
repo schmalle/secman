@@ -5,6 +5,7 @@ import com.secman.service.taskView
 import com.secman.event.RiskAssessmentCreatedEvent
 import com.secman.repository.*
 import com.secman.service.RiskAssessmentAccessService
+import com.secman.service.RiskAssessmentRecommendationService
 import com.secman.service.AssetFilterService
 import com.secman.service.UserResolutionService
 import io.micronaut.context.event.ApplicationEventPublisher
@@ -59,7 +60,8 @@ open class RiskAssessmentController(
     private val assetFilterService: AssetFilterService,
     private val workflow: com.secman.service.AssessmentWorkflowService,
     private val reminders: com.secman.service.RiskAssessmentReminderNotificationService,
-    private val riskAssessmentAccessService: RiskAssessmentAccessService
+    private val riskAssessmentAccessService: RiskAssessmentAccessService,
+    private val recommendationService: RiskAssessmentRecommendationService
 ) {
 
     private val log = LoggerFactory.getLogger(RiskAssessmentController::class.java)
@@ -202,7 +204,7 @@ open class RiskAssessmentController(
             val visibleAssessments = assessments.filter { canAccessAssessment(it, authentication) }
 
             log.debug("Found {} risk assessments ({} visible) for user {}", assessments.size, visibleAssessments.size, authentication.name)
-            HttpResponse.ok(visibleAssessments.filter { canAccessAssessment(it, authentication) }.map { it.taskView() })
+            HttpResponse.ok(visibleAssessments.filter { canAccessAssessment(it, authentication) }.map { it.taskView() + ("canAnalyze" to riskAssessmentAccessService.canAnalyze(it, authentication)) })
         } catch (e: Exception) {
             log.error("Error fetching risk assessments", e)
             HttpResponse.serverError<List<RiskAssessment>>()
@@ -252,6 +254,31 @@ open class RiskAssessmentController(
         }
     }
 
+    /**
+     * Advisory deterministic recommendation for the assessment. Readable in any
+     * status (STARTED yields NEEDS_REVIEW with completeness details).
+     *
+     * SECURITY (A01): invisible assessments are indistinguishable from missing
+     * ones (404); visible assessments the caller may not review get 403.
+     */
+    @Get("/{id}/recommendation")
+    @Transactional(readOnly = true)
+    open fun getRiskAssessmentRecommendation(id: Long, authentication: Authentication): HttpResponse<*> {
+        val assessment = workflow.findForRecommendation(id)
+        if (assessment == null || !riskAssessmentAccessService.canView(assessment, authentication)) {
+            return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
+        }
+        if (!riskAssessmentAccessService.canAnalyze(assessment, authentication)) {
+            log.warn("User {} denied recommendation review for risk assessment {}", authentication.name, id)
+            return HttpResponse.status<ErrorResponse>(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse("FORBIDDEN", "Only an authorized requestor, assigned assessor, ADMIN or SECCHAMPION may view the recommendation"))
+        }
+        val recommendation = recommendationService.recommend(assessment)
+        log.info("AUDIT operation=ASSESSMENT_ANALYSIS actorId={} assessmentId={} revision={} outcome={}",
+            riskAssessmentAccessService.actorId(authentication), id, recommendation.answerRevision, recommendation.recommendation)
+        return HttpResponse.ok(recommendation)
+    }
+
     @Get("/demand/{demandId}")
     @Transactional(readOnly = true)
     open fun getRiskAssessmentsByDemand(demandId: Long, authentication: Authentication): HttpResponse<*> {
@@ -275,7 +302,7 @@ open class RiskAssessmentController(
             }
 
             log.debug("Found {} risk assessments for demand {}", assessments.size, demandId)
-            HttpResponse.ok(assessments.filter { canAccessAssessment(it, authentication) }.map { it.taskView() })
+            HttpResponse.ok(assessments.filter { canAccessAssessment(it, authentication) }.map { it.taskView() + ("canAnalyze" to riskAssessmentAccessService.canAnalyze(it, authentication)) })
         } catch (e: Exception) {
             log.error("Error fetching risk assessments for demand: {}", demandId, e)
             HttpResponse.serverError<Any>()
@@ -322,7 +349,7 @@ open class RiskAssessmentController(
             }
             
             log.debug("Found {} risk assessments for asset {}", allAssessments.size, assetId)
-            HttpResponse.ok(allAssessments.filter { canAccessAssessment(it, authentication) }.map { it.taskView() })
+            HttpResponse.ok(allAssessments.filter { canAccessAssessment(it, authentication) }.map { it.taskView() + ("canAnalyze" to riskAssessmentAccessService.canAnalyze(it, authentication)) })
         } catch (e: Exception) {
             log.error("Error fetching risk assessments for asset: {}", assetId, e)
             HttpResponse.serverError<Any>()
@@ -361,7 +388,7 @@ open class RiskAssessmentController(
             }
             
             log.debug("Found {} risk assessments for basis type {} with ID {}", assessments.size, basisType, basisId)
-            HttpResponse.ok(assessments.filter { canAccessAssessment(it, authentication) }.map { it.taskView() })
+            HttpResponse.ok(assessments.filter { canAccessAssessment(it, authentication) }.map { it.taskView() + ("canAnalyze" to riskAssessmentAccessService.canAnalyze(it, authentication)) })
         } catch (e: Exception) {
             log.error("Error fetching risk assessments for basis type: {} and ID: {}", basisType, basisId, e)
             HttpResponse.serverError<Any>()
@@ -382,7 +409,7 @@ open class RiskAssessmentController(
         val assessments = riskAssessmentRepository
             .findByAssessmentBasisTypeAndAssessmentBasisId(AssessmentBasisType.AWS_ACCOUNT, account.id!!)
             .filter { canAccessAssessment(it, authentication) }
-        return HttpResponse.ok(assessments.filter { canAccessAssessment(it, authentication) }.map { it.taskView() })
+        return HttpResponse.ok(assessments.filter { canAccessAssessment(it, authentication) }.map { it.taskView() + ("canAnalyze" to riskAssessmentAccessService.canAnalyze(it, authentication)) })
     }
 
     @Post

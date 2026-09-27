@@ -604,3 +604,71 @@ secman:
 | Connection refused | backend down; firewall; wrong path (must end in `/mcp`) |
 
 Enable debug headers (logs all `/mcp/**` and `/api/**` headers + decoded JWT claims): `SECMAN_DEBUG=true`. Do not use in production.
+
+### Assessment recommendation policy (version 2.0)
+
+`evaluate_risk_assessment` remains a completed-only READ operation requiring
+`ASSESSMENTS_READ` and delegation. Analysis is permitted for ADMIN, SECCHAMPION,
+an active assigned assessor, or the requestor **provided the requestor can still
+view the assessment**. Requestor metadata alone grants no access. Acceptance
+permissions are unchanged. Missing and inaccessible assessments both return
+`NOT_FOUND`; a visible assessment without analysis authority returns `FORBIDDEN`.
+
+```json
+{"jsonrpc":"2.0","id":"open-cloud","method":"tools/call","params":{"name":"list_risk_assessments","arguments":{"openOnly":true,"assessmentType":"AWS_ACCOUNT","page":0,"pageSize":20}}}
+```
+
+```json
+{"jsonrpc":"2.0","id":"analyze","method":"tools/call","params":{"name":"evaluate_risk_assessment","arguments":{"assessmentId":9001}}}
+```
+
+The existing `assessment`, `verdict`, `answerCounts`, `requirementCount`, and
+`findings` fields remain. Additional fields are `assessmentId`, `answerRevision`,
+`recommendation`, `summary`, `missingAnswerCount`, `generatedAt`, `advisory: true`,
+and `policyVersion: "2.0"`. Only requirements in the pinned questionnaire affect
+the recommendation. `N_A` now yields `NEEDS_REVIEW`; the legacy `verdict` still
+means “no explicit NO” and can remain `COMPLIANT` while review is needed. Never
+use that compatibility field as approval. Missing/null answers require review;
+there is no persisted `UNKNOWN` answer enum.
+
+Representative policy fields for one submitted N/A answer:
+
+```json
+{"assessmentId":9001,"answerRevision":12,"recommendation":"NEEDS_REVIEW","verdict":"COMPLIANT","answerCounts":{"YES":0,"NO":0,"N_A":1},"missingAnswerCount":0,"requirementCount":1,"summary":"1 not-applicable answer requires reviewer confirmation.","advisory":true,"policyVersion":"2.0"}
+```
+
+Invalid filters return tool error `VALIDATION_ERROR`, for example
+`openOnly: true` with `status: "COMPLETED"`. An unsubmitted evaluation returns
+`CONFLICT`. Recommendations never submit, accept, change answers, or call an LLM.
+
+### Owner welcome-mail delivery tools
+
+Both tools require `USER_ACTIVITY` and an **ADMIN delegated user**, in addition
+to the normal verified MCP key. An admin key cannot override a non-admin delegate.
+
+- `list_owner_mail_notifications`: READ, optional `page` (default 0) and
+  `pageSize` (default 20, maximum 100). Returns `notifications`, `totalElements`,
+  `page`, and `pageSize`; each row contains account, owner, timestamps, and
+  `welcomeEmail` delivery status. Expired recipient metadata is not returned.
+- `retry_owner_mail_notification`: WRITE, required positive `notificationId`.
+  Only retained `FAILED` records may be retried. Sent, pending/uncertain, and
+  expired records return `CONFLICT`; missing ids return `NOT_FOUND`.
+
+```json
+{"jsonrpc":"2.0","id":"deliveries","method":"tools/call","params":{"name":"list_owner_mail_notifications","arguments":{"page":0,"pageSize":20}}}
+```
+
+```json
+{"jsonrpc":"2.0","id":"retry","method":"tools/call","params":{"name":"retry_owner_mail_notification","arguments":{"notificationId":42}}}
+```
+
+A disabled/unconfigured provider is independent of mapping success:
+
+```json
+{"requested":true,"status":"FAILED","notificationId":42,"retryable":true,"errorCode":"NO_ACTIVE_PROVIDER"}
+```
+
+`FORBIDDEN` is returned for a non-admin delegate. SMTP acceptance produces `SENT`,
+not proof of inbox delivery. A transport failure after sending began leaves
+`PENDING` with `DELIVERY_UNCERTAIN` and `retryable: false`, preventing blind
+resends. See [Account onboarding](ACCOUNT_ONBOARDING.md) for retention and retry.

@@ -65,6 +65,15 @@ class ListRiskAssessmentsToolTest {
         verify(exactly = 0) { service.list(any(), any(), any(), any(), any(), any(), any()) }
     }
 
+    @Test
+    fun `malformed filter types and fractional or overflowing pages are rejected`() = runBlocking<Unit> {
+        for (arguments in listOf(mapOf("openOnly" to "true"), mapOf("assessmentType" to 3),
+            mapOf("page" to 0.5), mapOf("page" to Long.MIN_VALUE), mapOf("page" to Long.MAX_VALUE))) {
+            assertThat(tool.execute(arguments, context())).isInstanceOf(McpToolResult.Error::class.java)
+        }
+        verify(exactly = 0) { service.list(any(), any(), any(), any(), any(), any(), any()) }
+    }
+
     private fun context(): McpExecutionContext = mockk {
         every { hasDelegation() } returns true
         every { delegatedUserRoles } returns setOf("SECCHAMPION")

@@ -56,6 +56,10 @@ class PublicStandardExportIntegrationTest : BaseIntegrationTest() {
     @Inject
     lateinit var scopeService: com.secman.service.StandardExportScopeService
 
+    @Inject
+    lateinit var userRepository: com.secman.repository.UserRepository
+
+    private lateinit var releaseCreator: com.secman.domain.User
     private lateinit var standardName: String
     private lateinit var useCase: UseCase
     private lateinit var standard: Standard
@@ -70,6 +74,8 @@ class PublicStandardExportIntegrationTest : BaseIntegrationTest() {
         useCaseRepository.deleteAll()
 
         val suffix = System.nanoTime()
+        releaseCreator = userRepository.save(com.secman.testutil.TestDataFactory.createAdminUser(
+            username = "public-export-$suffix", email = "public-export-$suffix@example.test"))
         // A slash in the name is the case the whole query-parameter design exists for.
         standardName = "IT/OT Security $suffix"
         useCase = useCaseRepository.save(UseCase(name = "IT Security $suffix"))
@@ -109,7 +115,7 @@ class PublicStandardExportIntegrationTest : BaseIntegrationTest() {
 
     private fun activeRelease(version: String): Release {
         val release = releaseRepository.save(
-            Release(version = version, name = "public export test", status = Release.ReleaseStatus.ACTIVE)
+            Release(version = version, name = "public export test", status = Release.ReleaseStatus.ACTIVE, createdBy = releaseCreator)
         )
         // Only the in-scope requirement is frozen, tagged with the standard's use case.
         snapshotRepository.save(
@@ -210,6 +216,8 @@ class PublicStandardExportIntegrationTest : BaseIntegrationTest() {
     @Test
     fun `an all-requirements standard exports rows no use case reaches`() {
         val suffix = System.nanoTime()
+        releaseCreator = userRepository.save(com.secman.testutil.TestDataFactory.createAdminUser(
+            username = "public-export-$suffix", email = "public-export-$suffix@example.test"))
         val orphan = requirementRepository.save(
             Requirement(
                 internalId = "PSE-C-${suffix % 1_000_000_000L}",
@@ -295,7 +303,7 @@ class PublicStandardExportIntegrationTest : BaseIntegrationTest() {
     fun `releaseId disagreeing with release is a 400, not a silent winner`() {
         val active = activeRelease("4.1.${System.nanoTime() % 1000}")
         val other = releaseRepository.save(
-            Release(version = "4.0.${System.nanoTime() % 1000}", name = "older", status = Release.ReleaseStatus.ARCHIVED)
+            Release(version = "4.0.${System.nanoTime() % 1000}", name = "older", status = Release.ReleaseStatus.ARCHIVED, createdBy = releaseCreator)
         )
         assertThat(other.id).isNotEqualTo(active.id)
 

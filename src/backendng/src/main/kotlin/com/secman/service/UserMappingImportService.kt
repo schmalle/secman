@@ -132,6 +132,29 @@ open class UserMappingImportService(
         )
     }
 
+    /** Parse without writes so uploads use the same import/onboarding transaction as REST and MCP. */
+    fun readMappings(inputStream: InputStream): com.secman.dto.ParsedUserMappings = XSSFWorkbook(inputStream).use { workbook ->
+        require(workbook.numberOfSheets > 0) { "Excel file has no sheets" }
+        val sheet = workbook.getSheetAt(0)
+        validateHeaders(sheet)?.let { throw IllegalArgumentException(it) }
+        require(sheet.lastRowNum <= UserMappingService.MAX_BULK_ENTRIES) { "Too many mapping rows" }
+        val headers = getHeaderMapping(sheet)
+        val mappings = mutableListOf<com.secman.dto.BulkUserMappingEntry>()
+        val errors = mutableListOf<String>()
+        for (index in 1..sheet.lastRowNum) {
+            val row = sheet.getRow(index) ?: continue
+            if (isRowEmpty(row)) continue
+            try {
+                parseRowToUserMapping(row, headers, index + 1)?.let {
+                    mappings += com.secman.dto.BulkUserMappingEntry(it.email, it.awsAccountId, it.domain)
+                }
+            } catch (e: IllegalArgumentException) {
+                errors += "Row ${index + 1}: invalid mapping"
+            }
+        }
+        com.secman.dto.ParsedUserMappings(mappings, errors)
+    }
+
     /**
      * Validate that all required headers are present
      */

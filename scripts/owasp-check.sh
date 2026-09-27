@@ -358,7 +358,7 @@ added_rule_and A03-sql-concat BLOCK A03 "$DATA_RE" \
     'String concatenation into a query — bind with :params instead'
 
 added_rule A03-html BLOCK A03 "$WEB_RE" \
-    '(dangerouslySetInnerHTML|\.innerHTML[ \t]*=|insertAdjacentHTML\()' 'DOMPurify\.sanitize' \
+    '(dangerouslySetInnerHTML|\.innerHTML[ \t]*=|insertAdjacentHTML\()' 'DOMPurify\.sanitize|^[[:space:]]*assert\.doesNotMatch\(source, /dangerouslySetInnerHTML/\);[[:space:]]*$' \
     'Unsanitized HTML sink — call DOMPurify.sanitize at the assignment site (see RichContent.tsx)'
 
 added_rule A03-excel REVIEW A03 "$KT_RE" \

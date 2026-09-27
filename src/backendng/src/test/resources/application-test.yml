@@ -37,6 +37,7 @@ jpa:
       hibernate:
         hbm2ddl:
           auto: create-drop
+          import_files: test-sequences.sql
         show_sql: false
         format_sql: false
 

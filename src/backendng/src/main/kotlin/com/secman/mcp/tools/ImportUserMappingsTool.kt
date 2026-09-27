@@ -283,6 +283,7 @@ class ImportUserMappingsTool(
                             "ownerEmail" to ob.ownerEmail,
                             "mode" to ob.mode,
                             "welcomeEmailSent" to ob.welcomeEmailSent,
+                            "welcomeEmail" to ob.welcomeEmail,
                             "questionnaireInviteId" to ob.questionnaireInviteId,
                             "questionnaireExpiresAt" to ob.questionnaireExpiresAt,
                             "riskAssessmentId" to ob.riskAssessmentId,

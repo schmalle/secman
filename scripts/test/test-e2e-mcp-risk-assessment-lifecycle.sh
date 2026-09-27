@@ -18,6 +18,7 @@ CHAMPION_USER="${E2E_PREFIX}champion"
 CHAMPION_EMAIL=""
 USECASE_NAME="${E2E_PREFIX}usecase"
 REQUIREMENT_NAME="${E2E_PREFIX}requirement"
+RELEASE_NAME="${E2E_PREFIX}release"
 ASSET_NAME="${E2E_PREFIX}aws-account"
 ASSESSMENT_MARKER="${E2E_PREFIX}holistic-lifecycle"
 STAMP="$(date +%s)"
@@ -150,6 +151,13 @@ cleanup_fixture() {
         [[ -z "$id" ]] || api DELETE "/api/assets/${id}" >/dev/null || true
     done <<< "$ids"
 
+    body="$(api GET '/api/releases' || echo '[]')"
+    ids="$(echo "$body" | jq -r --arg name "$RELEASE_NAME" \
+        '(if type == "array" then . else (.content // []) end)[]? | select(.name == $name) | .id')"
+    while IFS= read -r id; do
+        [[ -z "$id" ]] || api DELETE "/api/releases/${id}?force=true" >/dev/null || true
+    done <<< "$ids"
+
     body="$(api GET '/api/requirements' || echo '[]')"
     ids="$(echo "$body" | jq -r --arg name "$REQUIREMENT_NAME" \
         '(if type == "array" then . else (.content // []) end)[]?
@@ -201,10 +209,21 @@ fi
 response="$(mcp_call add_user "$(jq -nc --arg u "$CHAMPION_USER" --arg e "$CHAMPION_EMAIL" --arg p "$TEST_PASSWORD" \
     '{username:$u,email:$e,password:$p,roles:["USER","SECCHAMPION"]}')" "$SECMAN_ADMIN_EMAIL")"
 require_mcp_success "Created assessor through MCP" "$response"
+CHAMPION_ID="$(mcp_payload "$response" | jq -er '.user.id')"
 
 response="$(mcp_call add_user "$(jq -nc --arg u "$OWNER_USER" --arg e "$USER_EMAIL" --arg p "$TEST_PASSWORD" \
     '{username:$u,email:$e,password:$p,roles:["USER","RISK"]}')" "$SECMAN_ADMIN_EMAIL")"
 require_mcp_success "Created respondent with manually supplied email through MCP" "$response"
+OWNER_ID="$(mcp_payload "$response" | jq -er '.user.id')"
+# Bind only the two fixture identities; a domain allowlist is not a delegation grant.
+SECMAN_MCP_KEY="$(api POST "/api/mcp/admin/api-keys" "$(jq -nc \
+    --argjson champion "$CHAMPION_ID" --argjson owner "$OWNER_ID" \
+    --arg domains "@${USER_EMAIL##*@},@${CHAMPION_EMAIL##*@},@${SECMAN_ADMIN_EMAIL##*@}" \
+    '{name:"e2e-mcp-ra-bound-key",delegationEnabled:true,allowedDelegationDomains:$domains,
+      allowedDelegateUserIds:[$champion,$owner],permissions:["USER_ACTIVITY","REQUIREMENTS_READ",
+      "REQUIREMENTS_WRITE","REQUIREMENTS_DELETE","ASSESSMENTS_READ","ASSESSMENTS_WRITE",
+      "ASSESSMENTS_EXECUTE","NOTIFICATIONS_SEND"]}')" | jq -er '.apiKey')"
+
 
 response="$(mcp_call create_use_case "$(jq -nc --arg name "$USECASE_NAME" '{name:$name}')" "$SECMAN_ADMIN_EMAIL")"
 require_mcp_success "Created dedicated use case through MCP" "$response"
@@ -214,6 +233,14 @@ response="$(mcp_call add_requirement "$(jq -nc --arg short "$REQUIREMENT_NAME" -
     '{shortreq:$short,details:"Holistic MCP risk assessment requirement",chapter:"E2E",useCaseIds:[$id]}')" "$SECMAN_ADMIN_EMAIL")"
 require_mcp_success "Created and linked the single requirement through MCP" "$response"
 REQUIREMENT_ID="$(mcp_payload "$response" | jq -r '.id')"
+
+# The disposable database has no requirements baseline until this fixture creates one.
+release="$(api POST '/api/releases' "$(jq -nc --arg name "$RELEASE_NAME" --arg version "99.${STAMP}.0" \
+    '{name:$name,version:$version,description:"Holistic MCP lifecycle baseline"}')")"
+RELEASE_ID="$(echo "$release" | jq -er '.id')"
+api PUT "/api/releases/${RELEASE_ID}/status" '{"status":"ACTIVE"}' >/dev/null
+[[ "$API_STATUS" =~ ^20 ]] || { log_fail "Could not activate fixture release"; exit 1; }
+log_pass "Created ACTIVE requirements baseline for the isolated assessment"
 
 response="$(mcp_call import_user_mappings "$(jq -nc --arg email "$USER_EMAIL" --arg account "$AWS_ACCOUNT_ID" \
     '{mappings:[{email:$email,awsAccountId:$account}],startRiskAssessment:false}')" "$SECMAN_ADMIN_EMAIL")"
@@ -250,13 +277,16 @@ questionnaire="$(mcp_payload "$response")"
 
 response="$(mcp_call save_risk_assessment_answers "$(jq -nc --argjson id "$ASSESSMENT_ID" --argjson req "$REQUIREMENT_ID" \
     '{assessmentId:$id,answers:[{requirementId:$req,answerType:"NO",comment:"Holistic MCP answer"}]}')" "$SECMAN_ADMIN_EMAIL")"
-if echo "$response" | jq -e \
-    '((.error.message // "") | contains("Only the assigned respondent")) or
-     (.result.isError == true and ((.result.content[0].text // "") | contains("Only the assigned respondent")))' >/dev/null; then
-    log_pass "Inner respondent boundary denies a privileged non-respondent"
+if echo "$response" | jq -e '.error != null or .result.isError == true' >/dev/null; then
+    log_pass "Answer write rejected for a privileged non-respondent"
 else
     log_fail "Privileged non-respondent was not denied by the respondent boundary"
 fi
+response="$(mcp_call get_risk_assessment_answers "$(jq -nc --argjson id "$ASSESSMENT_ID" '{assessmentId:$id}')" "$USER_EMAIL")"
+require_mcp_success "Respondent can verify answers after the denied write" "$response"
+[[ "$(mcp_payload "$response" | jq '.answers | length')" == 0 ]] \
+    && log_pass "Rejected non-respondent write persisted no answer" \
+    || log_fail "Non-respondent write changed the questionnaire"
 
 response="$(mcp_call save_risk_assessment_answers "$(jq -nc --argjson id "$ASSESSMENT_ID" --argjson req "$REQUIREMENT_ID" \
     '{assessmentId:$id,answers:[{requirementId:$req,answerType:"NO",comment:"Holistic MCP answer"}]}')" "$USER_EMAIL")"
@@ -279,6 +309,17 @@ evaluation="$(mcp_payload "$response")"
 [[ "$(echo "$evaluation" | jq -r '.verdict')" == NON_COMPLIANT && "$(echo "$evaluation" | jq '.findings | length')" == 1 ]] \
     && log_pass "Evaluation reports the one non-compliant answer" \
     || log_fail "Evaluation summary does not match the submitted answer"
+
+recommendation="$(api GET "/api/risk-assessments/$ASSESSMENT_ID/recommendation")"
+policy_fields='{assessmentId,answerRevision,recommendation,verdict,summary,answerCounts,requirementCount,missingAnswerCount,findings,advisory,policyVersion}'
+[[ "$(echo "$recommendation" | jq -Sc "$policy_fields")" == "$(echo "$evaluation" | jq -Sc "$policy_fields")" ]] \
+    && log_pass "REST and MCP recommendation policy fields are identical" \
+    || log_fail "REST and MCP recommendation policy differs"
+RA_ASSESSMENT_ID="$ASSESSMENT_ID" RA_REQUIREMENT_ID="$REQUIREMENT_ID" \
+    npx --prefix "$REPO_ROOT/tests/e2e" playwright test --config "$REPO_ROOT/tests/e2e/playwright.config.ts" \
+        risk-assessment-recommendation.spec.ts --project=chrome \
+    && log_pass "UI recommendation and keyboard navigation match the submitted answers" \
+    || log_fail "UI recommendation validation failed"
 
 response="$(mcp_call list_risk_assessments "$(jq -nc --arg usecase "$USECASE_NAME" '{status:"COMPLETED",useCaseName:$usecase}')" "$SECMAN_ADMIN_EMAIL")"
 require_mcp_success "Evaluator listed completed assessments by use case" "$response"

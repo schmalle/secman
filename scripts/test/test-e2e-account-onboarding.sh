@@ -229,6 +229,7 @@ public_api() {
         args+=(-H 'Content-Type: application/json' --data "$body")
     fi
     PUBLIC_STATUS="$(curl "${args[@]}")"
+    printf '%s' "$PUBLIC_STATUS" > "$WORK_DIR/public-status"
     cat "$out"
     rm -f "$out"
 }
@@ -498,22 +499,16 @@ write_mapping_file() {
     printf 'email,type,value\n%s,AWS_ACCOUNT,%s\n' "$OWNER_EMAIL" "$account" > "$WORK_DIR/mappings.csv"
 }
 
-BACKEND_LOG="${SECMAN_BACKEND_LOG:-$REPO_ROOT/.e2e-logs/backend.log}"
-
-# capture_token <account> -> the full invite token, or empty.
-#
-# There is deliberately no API that returns one: an invite token is a credential, so no admin
-# endpoint, CLI printout or MCP result ever carries it — several assertions above check exactly
-# that. The only place the full value legitimately appears is the questionnaire URL inside the
-# rendered mail, which in a dev/test environment lands in the backend log.
-#
-# When the log is not reachable (a remote backend, say) the owner-flow phases report a WARN and
-# are skipped rather than silently passing. A skipped assertion that says so is honest; one that
-# quietly counts as a pass is not.
+# Read only the exact fixture's token using the runner's restricted database user.
+# Keep it out of logs and API responses; SMTP capture deliberately discards message bodies.
 capture_token() {
     local account="$1"
-    [[ -f "$BACKEND_LOG" ]] || { echo ""; return; }
-    grep -o "/onboarding/[a-f0-9]\{64\}" "$BACKEND_LOG" 2>/dev/null | tail -1 | sed 's|/onboarding/||'
+    # This driver has already verified the runner-owned disposable database.
+    # Read only its exact fixture capability; never log the result or retain mail bodies.
+    [[ "$account" =~ ^[0-9]{12}$ ]] || return 1
+    MYSQL_PWD="$DB_PASS" mariadb -h "$DB_HOST" -u "$DB_USER" "$DB_NAME" -N -B \
+        -e "SELECT token FROM account_onboarding_invite WHERE aws_account_id='$account' ORDER BY id DESC LIMIT 1"
+
 }
 
 count_assessments_for() {
@@ -614,15 +609,15 @@ phase_owner_flow() {
 
     local token; token=$(capture_token "$GUIDED_ACCOUNT")
     if [[ -z "$token" ]]; then
-        log_warn "Could not recover an invite token (backend log not available) — owner-flow phases skipped"
+        log_fail "Could not recover the isolated fixture invite token — owner flow not verified"
         return 0
     fi
     log_dbg "Using invite token $(redact_token "$token")"
 
     local body
     body=$(public_api GET "/api/public/account-onboarding/${token}")
-    [[ "$PUBLIC_STATUS" == "200" ]] && log_pass "questionnaire GET returned 200" \
-        || { log_fail "questionnaire GET returned $PUBLIC_STATUS"; return 0; }
+    [[ "$(cat "$WORK_DIR/public-status")" == "200" ]] && log_pass "questionnaire GET returned 200" \
+        || { log_fail "questionnaire GET returned $(cat "$WORK_DIR/public-status")"; return 0; }
 
     local masked
     masked=$(echo "$body" | jq -r '.maskedAccountId // empty')
@@ -648,14 +643,14 @@ phase_owner_flow() {
     # assessment must be scoped to the UNION of their use cases.
     local answers
     answers=$(jq -nc --arg qe "$Q_ENV" --arg ce "$C_PROD" --arg qd "$Q_DATA" --arg cd "$C_YES" \
-        --arg qt "$Q_TYPES" \
-        '{answers:[{questionKey:$qe, choiceKeys:[$ce]}, {questionKey:$qd, choiceKeys:[$cd]}, {questionKey:$qt, choiceKeys:[]}]}')
+        --arg qt "$Q_TYPES" --arg ct "$C_FIN" \
+        '{answers:[{questionKey:$qe, choiceKeys:[$ce]}, {questionKey:$qd, choiceKeys:[$cd]}, {questionKey:$qt, choiceKeys:[$ct]}]}')
     local submit
     submit=$(public_api POST "/api/public/account-onboarding/${token}" "$answers")
     log_dbg "$submit"
 
-    [[ "$PUBLIC_STATUS" == "200" ]] && log_pass "submission accepted" \
-        || { log_fail "submission returned $PUBLIC_STATUS: $submit"; return 0; }
+    [[ "$(cat "$WORK_DIR/public-status")" == "200" ]] && log_pass "submission accepted" \
+        || { log_fail "submission returned $(cat "$WORK_DIR/public-status"): $submit"; return 0; }
 
     local use_cases
     use_cases=$(echo "$submit" | jq -r '.useCases | sort | join(",")')
@@ -678,33 +673,39 @@ phase_owner_flow() {
 
     local replay
     replay=$(public_api POST "/api/public/account-onboarding/${token}" "$answers")
-    [[ "$PUBLIC_STATUS" == "404" ]] && log_pass "replay refused (404)" \
-        || log_fail "replay returned $PUBLIC_STATUS, expected 404"
+    [[ "$(cat "$WORK_DIR/public-status")" == "404" ]] && log_pass "replay refused (404)" \
+        || log_fail "replay returned $(cat "$WORK_DIR/public-status"), expected 404"
 
     local unknown_token="a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
     local unknown
     unknown=$(public_api GET "/api/public/account-onboarding/${unknown_token}")
-    local unknown_status="$PUBLIC_STATUS"
+    local unknown_status="$(cat "$WORK_DIR/public-status")"
     local used
     used=$(public_api GET "/api/public/account-onboarding/${token}")
 
-    [[ "$unknown_status" == "404" && "$PUBLIC_STATUS" == "404" ]] \
+    [[ "$unknown_status" == "404" && "$(cat "$WORK_DIR/public-status")" == "404" ]] \
         && log_pass "unknown and used tokens both return 404" \
-        || log_fail "unknown=$unknown_status used=$PUBLIC_STATUS, expected 404 for both"
+        || log_fail "unknown=$unknown_status used=$(cat "$WORK_DIR/public-status"), expected 404 for both"
     [[ "$unknown" == "$used" ]] \
         && log_pass "the two bodies are byte-identical — no enumeration oracle" \
         || log_fail "bodies differ: '$unknown' vs '$used'"
 
     local malformed
     malformed=$(public_api GET "/api/public/account-onboarding/not-a-token")
-    [[ "$PUBLIC_STATUS" == "404" && "$malformed" == "$unknown" ]] \
+    [[ "$(cat "$WORK_DIR/public-status")" == "404" && "$malformed" == "$unknown" ]] \
         && log_pass "a malformed token is indistinguishable from an unknown one" \
-        || log_fail "malformed returned $PUBLIC_STATUS with a different body"
+        || log_fail "malformed returned $(cat "$WORK_DIR/public-status") with a different body"
 
+
+}
+
+phase_rate_limit() {
+    phase "Public: lookup bursts are rate limited after all owner flows"
+    local unknown_token="a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
     local limited=0 i
     for i in $(seq 1 30); do
         public_api GET "/api/public/account-onboarding/${unknown_token}" >/dev/null
-        [[ "$PUBLIC_STATUS" == "429" ]] && { limited=1; break; }
+        [[ "$(cat "$WORK_DIR/public-status")" == "429" ]] && { limited=1; break; }
     done
     [[ $limited -eq 1 ]] && log_pass "a burst of lookups is rate limited (429)" \
         || log_fail "30 rapid lookups were never rate limited"
@@ -729,17 +730,18 @@ phase_no_match() {
 
     local token; token=$(capture_token "$NOMATCH_ACCOUNT")
     if [[ -z "$token" ]]; then
-        log_warn "Could not recover an invite token — no-match phase skipped"
+        log_fail "Could not recover the isolated fixture invite token — no-match flow not verified"
     else
         local answers
         answers=$(jq -nc --arg qe "$Q_ENV" --arg ce "$C_TEST" --arg qd "$Q_DATA" --arg cd "$C_NO" \
-            '{answers:[{questionKey:$qe, choiceKeys:[$ce]}, {questionKey:$qd, choiceKeys:[$cd]}]}')
+            --arg qt "$Q_TYPES" --arg ct "$C_FIN" \
+            '{answers:[{questionKey:$qe, choiceKeys:[$ce]}, {questionKey:$qd, choiceKeys:[$cd]}, {questionKey:$qt, choiceKeys:[$ct]}]}')
         local resp
         resp=$(public_api POST "/api/public/account-onboarding/${token}" "$answers")
         log_dbg "$resp"
 
-        [[ "$PUBLIC_STATUS" == "409" ]] && log_pass "unmatched answers return 409" \
-            || log_fail "expected 409, got $PUBLIC_STATUS"
+        [[ "$(cat "$WORK_DIR/public-status")" == "409" ]] && log_pass "unmatched answers return 409" \
+            || log_fail "expected 409, got $(cat "$WORK_DIR/public-status")"
         echo "$resp" | jq -e '.error == "NO_RULE_MATCHED"' >/dev/null 2>&1 \
             && log_pass "the failure is named NO_RULE_MATCHED" || log_fail "unexpected error code: $resp"
 
@@ -750,7 +752,7 @@ phase_no_match() {
         # The invite must still work: the answers were recorded, not spent.
         local retry
         retry=$(public_api GET "/api/public/account-onboarding/${token}")
-        [[ "$PUBLIC_STATUS" == "200" ]] \
+        [[ "$(cat "$WORK_DIR/public-status")" == "200" ]] \
             && log_pass "the link still works — an unresolved submission does not consume it" \
             || log_fail "the link was consumed by a submission that resolved to nothing"
 
@@ -759,9 +761,9 @@ phase_no_match() {
             "$(jq -nc --arg n "${E2E_PREFIX}rule-default" --argjson u "[$UC_BASE_ID]" \
                 '{name:$n, choiceIds:[], useCaseIds:$u, isDefault:true, active:true}')" >/dev/null
         resp=$(public_api POST "/api/public/account-onboarding/${token}" "$answers")
-        [[ "$PUBLIC_STATUS" == "200" ]] \
+        [[ "$(cat "$WORK_DIR/public-status")" == "200" ]] \
             && log_pass "after adding the fallback, the original link resolves" \
-            || log_fail "resubmission after the fix returned $PUBLIC_STATUS: $resp"
+            || log_fail "resubmission after the fix returned $(cat "$WORK_DIR/public-status"): $resp"
     fi
 
     api PUT "/api/account-onboarding/rules/${RULE_DEFAULT_ID}" \
@@ -833,7 +835,7 @@ phase_mcp() {
             '{awsAccountId:$a, ownerEmail:$e, mode:"GUIDED", dryRun:true}')")
     payload=$(mcp_payload "$resp")
     log_dbg "$payload"
-    echo "$payload" | jq -e '.onboarding[0].dryRun == true' >/dev/null 2>&1 \
+    echo "$payload" | jq -e '.onboarding[0].dryRun == true and .onboarding[0].welcomeEmail.status == "WOULD_SEND"' >/dev/null 2>&1 \
         && log_pass "simulate dry run reports dryRun" || log_fail "simulate dry run did not report dryRun: $payload"
     echo "$payload" | jq -e '.onboarding[0].questionnaireInviteId == null' >/dev/null 2>&1 \
         && log_pass "simulate dry run minted no invite" || log_fail "simulate dry run minted an invite"
@@ -843,7 +845,7 @@ phase_mcp() {
             '{awsAccountId:$a, ownerEmail:$e, mode:"WELCOME_ONLY", dryRun:false}')")
     payload=$(mcp_payload "$resp")
     log_dbg "$payload"
-    echo "$payload" | jq -e '.onboarding[0].welcomeEmailSent == true' >/dev/null 2>&1 \
+    echo "$payload" | jq -e '.onboarding[0].welcomeEmailSent == true and .onboarding[0].welcomeEmail.status == "SENT" and .onboarding[0].welcomeEmail.notificationId == null' >/dev/null 2>&1 \
         && log_pass "simulate WELCOME_ONLY sent the welcome mail" \
         || log_warn "simulate WELCOME_ONLY reported no mail (check the email configuration)"
 
@@ -853,6 +855,31 @@ phase_mcp() {
     else
         log_pass "no token in the MCP result"
     fi
+}
+
+phase_mcp_delivery() {
+    phase "MCP: imported owner-mail failure is durable and explicitly retryable"
+    local provider provider_id response payload notification_id
+    provider=$(api GET "/api/email-config/active")
+    provider_id=$(echo "$provider" | jq -er '.id')
+    api PUT "/api/email-config/$provider_id" '{"isActive":false}' >/dev/null
+    response=$(mcp_call "import_user_mappings" "$(jq -nc --arg account "$DRY_ACCOUNT" --arg email "$OWNER_EMAIL" \
+        '{mappings:[{email:$email,awsAccountId:$account}],onboardingMode:"WELCOME_ONLY"}')")
+    api PUT "/api/email-config/$provider_id" '{"isActive":true}' >/dev/null
+    payload=$(mcp_payload "$response")
+    echo "$payload" | jq -e '.onboarding[0].welcomeEmail | .requested == true and .status == "FAILED" and .retryable == true' >/dev/null \
+        && log_pass "MCP import reports durable mail failure separately from mapping creation" \
+        || { log_fail "MCP import did not report a retryable failure"; return; }
+    notification_id=$(echo "$payload" | jq -er '.onboarding[0].welcomeEmail.notificationId')
+    response=$(mcp_call "retry_owner_mail_notification" "$(jq -nc --argjson id "$notification_id" '{notificationId:$id}')")
+    mcp_payload "$response" | jq -e '.status == "SENT" and .retryable == false' >/dev/null \
+        && log_pass "MCP ADMIN retry sends the failed notification" || log_fail "MCP ADMIN retry failed"
+    response=$(mcp_call "list_owner_mail_notifications" '{"page":0,"pageSize":100}')
+    mcp_payload "$response" | jq -e --argjson id "$notification_id" '.notifications[] | select(.id == $id) | .welcomeEmail.status == "SENT"' >/dev/null \
+        && log_pass "MCP delivery list reports the persisted sent outcome" || log_fail "MCP delivery listing did not report SENT"
+    response=$(mcp_call "retry_owner_mail_notification" "$(jq -nc --argjson id "$notification_id" '{notificationId:$id}')")
+    echo "$response" | jq -e '.result.isError == true or .error != null' >/dev/null \
+        && log_pass "MCP refuses a second retry of SENT mail" || log_fail "MCP allowed retrying SENT mail"
 }
 
 phase_negatives() {
@@ -869,13 +896,21 @@ phase_negatives() {
     [[ "$API_STATUS" == "403" ]] && log_pass "plain USER cannot read the rules (403)" \
         || log_fail "expected 403 reading rules as a plain USER, got $API_STATUS"
 
+    # Bind an isolated key to the plain fixture so authorization is evaluated for that user's effective permissions.
+    local plain_id role_key
+    plain_id=$(api GET "/api/users" | jq -er --arg e "$PLAIN_EMAIL" \
+        '(if type == "array" then . else .content end)[] | select(.email == $e) | .id')
+    role_key=$(api POST "/api/mcp/admin/api-keys" "$(jq -nc --argjson id "$plain_id" \
+        '{name:"e2e-onb-role-check",delegationEnabled:true,allowedDelegationDomains:"@e2e.local",
+          allowedDelegateUserIds:[$id],permissions:["USER_ACTIVITY"]}')" | jq -er '.apiKey')
+    [[ -n "$role_key" ]] || { log_fail "Could not create isolated role-check key"; return; }
     # A non-admin delegated user must not reach the MCP tool.
     local resp
-    resp=$(mcp_call "simulate_account_onboarding" \
+    resp=$(SECMAN_MCP_KEY="$role_key" mcp_call "simulate_account_onboarding" \
         "$(jq -nc --arg a "$NEG_ACCOUNT" --arg e "$OWNER_EMAIL" \
             '{awsAccountId:$a, ownerEmail:$e, mode:"WELCOME_ONLY", dryRun:true}')" "$PLAIN_EMAIL")
     log_dbg "$resp"
-    if echo "$resp" | grep -qi "FORBIDDEN\|role required"; then
+    if echo "$resp" | grep -qi "FORBIDDEN\|role required\|No permission for tool"; then
         log_pass "non-privileged MCP delegation is refused"
     else
         log_fail "expected a role refusal for $PLAIN_EMAIL, got: $resp"
@@ -947,6 +982,7 @@ main() {
         phase_guided_invite
         phase_owner_flow
         phase_no_match
+        phase_rate_limit
         phase_dry_run
     else
         log_warn "SKIP_CLI=true — CLI phases skipped"
@@ -954,11 +990,17 @@ main() {
 
     if [[ "$SKIP_MCP" != "true" ]]; then
         phase_mcp
+        phase_mcp_delivery
     else
         log_warn "SKIP_MCP=true — MCP phases skipped"
     fi
 
     phase_negatives
+
+    npx --prefix "$REPO_ROOT/tests/e2e" playwright test --config "$REPO_ROOT/tests/e2e/playwright.config.ts" \
+        owner-mail-delivery.spec.ts --project=chrome \
+        && log_pass "Welcome delivery replay, opt-out, CSV dry-run and ADMIN UI verified" \
+        || log_fail "Welcome delivery E2E failed"
 
     phase "Summary"
     echo -e "${GREEN}Passed: ${PASS_COUNT}${NC}" >&2

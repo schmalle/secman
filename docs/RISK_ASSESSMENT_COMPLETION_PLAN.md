@@ -406,15 +406,18 @@ tests.
 - The diff passes `./scripts/owasp-check.sh` and the required semantic/security review
   with no HIGH-or-above findings.
 
-## Open decisions to resolve before coding
+## Approved implementation decisions (2026-09-27)
 
-1. Does `N_A` mean `OK`, or does it require reviewer attention?
-2. Should requestors retain evaluation authority, or only assigned assessors and global
-   assessment managers?
-3. Is a deterministic recommendation sufficient, or is a feature-gated AI remediation
-   narrative also required?
-4. What retention period and redaction policy applies to owner-mail delivery records?
-5. Should failed-mail retry be UI-only, MCP-accessible for ADMIN automation, or both?
+1. `N_A` requires `NEEDS_REVIEW` in recommendation policy 2.0. Preserve the legacy
+   `verdict` field; it is not approval.
+2. Requestors may analyze an assessment they can still view; analysis does not
+   grant resource visibility or independent acceptance authority.
+3. Ship deterministic recommendations. Optional AI narrative remains a later,
+   separately requested feature.
+4. Retain delivery recipient and sanitized metadata for 90 days; permanently retain
+   only the one-way event fingerprint and delivery state needed for deduplication.
+5. Failed-mail retry is an explicit ADMIN action through both UI and MCP.
 
-None of these decisions blocks the discovery slice. They do block finalizing the
-recommendation truth table or durable mail schema.
+SMTP cannot guarantee exactly-once inbox delivery. Atomic claims prevent concurrent
+or replayed sends; ambiguous transport outcomes remain PENDING and cannot be retried
+through this API. SENT means SMTP acceptance, not inbox delivery.

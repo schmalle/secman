@@ -79,7 +79,8 @@ open class RiskController(
                 """
                 SELECT DISTINCT r FROM Risk r
                 LEFT JOIN FETCH r.owner
-                LEFT JOIN FETCH r.asset
+                LEFT JOIN FETCH r.asset a
+                LEFT JOIN FETCH a.ipAddresses
                 ORDER BY r.riskLevel DESC, r.createdAt DESC
                 """,
                 Risk::class.java
@@ -114,7 +115,8 @@ open class RiskController(
                 """
                 SELECT r FROM Risk r
                 LEFT JOIN FETCH r.owner
-                LEFT JOIN FETCH r.asset
+                LEFT JOIN FETCH r.asset a
+                LEFT JOIN FETCH a.ipAddresses
                 WHERE r.id = :id
                 """,
                 Risk::class.java
@@ -160,6 +162,7 @@ open class RiskController(
             risks.forEach { risk ->
                 risk.owner?.username // Force loading
                 risk.asset?.name // Force loading
+                risk.asset?.ipAddresses?.size
             }
 
             log.debug("Found {} risks for asset {}", risks.size, assetId)

@@ -363,3 +363,25 @@ names whose mapping is meant. Covered by `UserMappingServiceDeleteTest`.)*
 | Onboarding modes and the guided questionnaire | `service/AccountOnboardingService.kt`, `docs/ACCOUNT_ONBOARDING.md`, skill `/account-onboarding` |
 
 See also: `docs/ACCOUNT_ONBOARDING.md`, `docs/CLI.md`, `docs/MCP.md`.
+
+## Welcome delivery versus assessment-start notification
+
+DIRECT assessment-start mail tells the respondent to answer the assessment.
+The optional onboarding welcome message confirms account registration and links
+to the portal. They are separate notifications. Legacy `startRiskAssessment`
+alone sends no additional welcome message; set `sendWelcomeEmail: false` with
+explicit DIRECT mode to suppress the welcome while retaining assessment behavior.
+
+Welcome delivery is now audited per normalized owner after mapping commit.
+Check `onboarding[].welcomeEmail`, not the import success count or the presence
+of a created assessment. `SENT` means SMTP accepted, `FAILED` with
+`NO_ACTIVE_PROVIDER` is safe for ADMIN retry after configuring a provider, and
+`PENDING` with `DELIVERY_UNCERTAIN` requires investigation and cannot be blindly
+retried. `SKIPPED` and `WOULD_SEND` mean no mail was sent.
+
+ADMIN retry is available in Account onboarding and through MCP
+`retry_owner_mail_notification` or POST
+`/api/admin/owner-mail-notifications/{id}/retry`. Repeated imports do not retry
+failed mail. Metadata is retained for 90 days, then redacted while a permanent
+deduplication fingerprint prevents resending the original welcome event.
+See [Account onboarding](ACCOUNT_ONBOARDING.md) for the complete contract.

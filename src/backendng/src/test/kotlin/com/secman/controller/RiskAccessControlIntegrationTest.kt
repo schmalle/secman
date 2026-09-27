@@ -130,7 +130,9 @@ class RiskAccessControlIntegrationTest : BaseIntegrationTest() {
     fun `RISK user can list and read a risk linked to a workgroup-accessible asset`() {
         val suffix = System.nanoTime()
         val workgroup = workgroupRepository.save(Workgroup(name = "Risk WG $suffix"))
-        val accessibleAsset = assetRepository.save(TestDataFactory.createAsset(name = "risk-visible-asset-$suffix"))
+        val accessibleAsset = assetRepository.save(TestDataFactory.createAsset(name = "risk-visible-asset-$suffix").apply {
+            ipAddresses.add("192.0.2.10")
+        })
         assignUserToWorkgroup(riskUser.id!!, workgroup.id!!)
         assignAssetToWorkgroup(accessibleAsset.id!!, workgroup.id!!)
         val visibleRisk = riskRepository.save(
@@ -143,6 +145,7 @@ class RiskAccessControlIntegrationTest : BaseIntegrationTest() {
             Argument.listOf(Risk::class.java)
         )
         assertThat(risks.map { it.id }).contains(visibleRisk.id)
+        assertThat(risks.single { it.id == visibleRisk.id }.asset!!.ipAddresses).contains("192.0.2.10")
 
         val getResponse = client.toBlocking().exchange(
             HttpRequest.GET<Any>("/api/risks/${visibleRisk.id}").bearerAuth(token),
@@ -150,6 +153,7 @@ class RiskAccessControlIntegrationTest : BaseIntegrationTest() {
         )
         assertThat(getResponse.status).isEqualTo(HttpStatus.OK)
         assertThat(getResponse.body()!!.id).isEqualTo(visibleRisk.id)
+        assertThat(getResponse.body()!!.asset!!.ipAddresses).contains("192.0.2.10")
     }
 
     @Test

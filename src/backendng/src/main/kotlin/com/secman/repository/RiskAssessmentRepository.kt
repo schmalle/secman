@@ -88,6 +88,7 @@ interface RiskAssessmentRepository : JpaRepository<RiskAssessment, Long> {
             SELECT DISTINCT ra FROM RiskAssessment ra
             LEFT JOIN ra.useCases uc
             LEFT JOIN ra.awsAccount account
+            LEFT JOIN ra.demand demand
             WHERE (:status IS NULL OR ra.status = :status)
               AND (:useCaseName IS NULL OR LOWER(uc.name) = LOWER(:useCaseName))
               AND (:basisType IS NULL OR ra.assessmentBasisType = :basisType)
@@ -96,14 +97,16 @@ interface RiskAssessmentRepository : JpaRepository<RiskAssessment, Long> {
                     OR EXISTS (SELECT aa.id FROM AssessmentAssignment aa
                         WHERE aa.assessmentId = ra.id AND aa.userId = :viewerId AND aa.revoked = false)
                     OR (ra.assessmentBasisType = com.secman.domain.AssessmentBasisType.ASSET AND ra.assessmentBasisId IN (:assetIds))
+                    OR (ra.assessmentBasisType = com.secman.domain.AssessmentBasisType.DEMAND AND demand.existingAsset.id IN (:assetIds))
                     OR (ra.assessmentBasisType = com.secman.domain.AssessmentBasisType.AWS_ACCOUNT AND account.awsAccountId IN (:accountIds))
               )
-            ORDER BY ra.createdAt DESC
+            ORDER BY ra.createdAt DESC, ra.id DESC
         """,
         countQuery = """
             SELECT COUNT(DISTINCT ra.id) FROM RiskAssessment ra
             LEFT JOIN ra.useCases uc
             LEFT JOIN ra.awsAccount account
+            LEFT JOIN ra.demand demand
             WHERE (:status IS NULL OR ra.status = :status)
               AND (:useCaseName IS NULL OR LOWER(uc.name) = LOWER(:useCaseName))
               AND (:basisType IS NULL OR ra.assessmentBasisType = :basisType)
@@ -112,6 +115,7 @@ interface RiskAssessmentRepository : JpaRepository<RiskAssessment, Long> {
                     OR EXISTS (SELECT aa.id FROM AssessmentAssignment aa
                         WHERE aa.assessmentId = ra.id AND aa.userId = :viewerId AND aa.revoked = false)
                     OR (ra.assessmentBasisType = com.secman.domain.AssessmentBasisType.ASSET AND ra.assessmentBasisId IN (:assetIds))
+                    OR (ra.assessmentBasisType = com.secman.domain.AssessmentBasisType.DEMAND AND demand.existingAsset.id IN (:assetIds))
                     OR (ra.assessmentBasisType = com.secman.domain.AssessmentBasisType.AWS_ACCOUNT AND account.awsAccountId IN (:accountIds))
               )
         """
