@@ -1,9 +1,12 @@
 {
   "cli_version": "0.11.2",
   "checkpoint_id": "a9ba7e8c1f60",
+  "session_id": "01a0e233-7f24-7e42-aed8-760e5db622fc",
   "strategy": "manual-commit",
+  "created_at": "2026-09-27T12:44:58.713504Z",
   "branch": "dev",
-  "checkpoints_count": 18,
+  "checkpoints_count": 7,
+  "save_step_count": 7,
   "files_touched": [
     "README.md",
     "docs/ACCOUNT_ONBOARDING.md",
@@ -78,27 +81,88 @@
     "src/frontend/src/pages/admin/account-onboarding.astro",
     "src/shared/build.gradle.kts"
   ],
-  "sessions": [
+  "agent": "Codex",
+  "model": "gpt-6-sol",
+  "turn_id": "6a283f59ef9c",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 454741,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 22096768,
+    "output_tokens": 43311,
+    "api_call_count": 192,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 7
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-27T12:44:58.600727Z",
+    "agent_lines": 1562,
+    "agent_removed": 476,
+    "human_added": 26,
+    "human_modified": 2,
+    "human_removed": 0,
+    "total_committed": 1589,
+    "total_lines_changed": 2066,
+    "agent_percentage": 98.64472410454985,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
     {
-      "metadata": "/a9/ba7e8c1f60/0/metadata.json",
-      "transcript": "/a9/ba7e8c1f60/0/full.jsonl",
-      "compact_transcript": "/a9/ba7e8c1f60/0/transcript.jsonl",
-      "content_hash": "/a9/ba7e8c1f60/0/content_hash.txt",
-      "prompt": "/a9/ba7e8c1f60/0/prompt.txt"
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
     },
     {
-      "metadata": "/a9/ba7e8c1f60/1/metadata.json",
-      "transcript": "/a9/ba7e8c1f60/1/full.jsonl",
-      "compact_transcript": "/a9/ba7e8c1f60/1/transcript.jsonl",
-      "content_hash": "/a9/ba7e8c1f60/1/content_hash.txt",
-      "prompt": "/a9/ba7e8c1f60/1/prompt.txt"
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 280,
+      "agent_lines_removed": 188
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 280,
+      "agent_lines_removed": 188
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 280,
+      "agent_lines_removed": 188
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 280,
+      "agent_lines_removed": 188
+    },
+    {
+      "checkpoint_number": 6,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1468,
+      "agent_lines_removed": 435
+    },
+    {
+      "checkpoint_number": 7,
+      "user_lines_added": 5,
+      "user_lines_removed": 1,
+      "agent_lines_added": 1520,
+      "agent_lines_removed": 477,
+      "user_added_per_file": {
+        "docs/RISK_ASSESSMENT_SETUP.md": 5
+      },
+      "user_removed_per_file": {
+        "docs/RISK_ASSESSMENT_SETUP.md": 1
+      }
     }
-  ],
-  "token_usage": {
-    "input_tokens": 1757824,
-    "cache_creation_tokens": 0,
-    "cache_read_tokens": 91620736,
-    "output_tokens": 193011,
-    "api_call_count": 682
-  }
+  ]
 }
