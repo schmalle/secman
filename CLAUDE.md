@@ -313,14 +313,14 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-09-26*
+*Last updated: 2026-09-28*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
-- **External web exposure and software-component inventory (2026-09-19)** — `secman_web_check` passively inventories JavaScript/CSS libraries, web servers, and scanner-vantage reachability from its own targets or SecMan-bound subjects, then prints, stores, or uploads atomic snapshots. SecMan provides asset-scoped REST/MCP reads and **Analytics → External exposure**; inventory stays separate from vulnerabilities and installed products. See `docs/INTEGRATION_RESULTS.md` and `docs/CHANGELOG.md`.
+- **MCP vulnerability query E2E regression (2026-09-27)** — the automatically discovered Playwright suite now verifies MCP discovery, severity-array schema, filtering, pagination, hydrated asset names, and delegated non-admin authorization on both HTTP transports. It uses only disposable-runner data and generated API keys. See `docs/CHANGELOG.md`.
 
-- **Catch-all workgroup safety and direct workgroup links (2026-09-17)** — a configurable direct-user threshold now disables oversized catch-all workgroups without auto-re-enabling them; automatic disables invalidate access caches and are audited. User workgroup badges deep-link to the existing detail panel, and the workgroup table has Safari-safe sticky headers. See `docs/CHANGELOG.md`.
+- **Guest invitation E2E regression (2026-09-27)** — `assessment-guest-invitation.spec.ts` now proves loopback delivery plus anonymous questionnaire load, save, reload, and submit. The public page uses the current token-bound response contract and does not mount the login-only attachment widget. See `docs/CHANGELOG.md`.
 
-- **CrowdStrike imports include domain controllers (2026-09-17)** — shared CrowdStrike scopes now include `DOMAIN_CONTROLLER` and composite `SERVER_FAMILY`; production vulnerability and product scripts use the composite scope and store discovered domain controllers as SecMan `SERVER` assets. See `docs/CROWDSTRIKE_IMPORT.md` and `docs/CHANGELOG.md`.
+- **Respondent invitation compatibility (2026-09-27)** — `/respond/:token` uses the public layout while expiry, revocation, and assignment-scope checks remain server-enforced; the numeric assessment-response route is constrained to avoid token collisions. Migration V282 preserves legacy values while allowing current token creation to deliver external respondent notifications. See `docs/CHANGELOG.md`.
