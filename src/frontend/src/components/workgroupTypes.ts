@@ -54,6 +54,7 @@ export interface AssignedAsset {
     name: string;
     type: string | null;
     ip: string | null;
+    ipAddresses?: string[];
     owner: string | null;
 }
 

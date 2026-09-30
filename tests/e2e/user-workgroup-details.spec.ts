@@ -17,7 +17,7 @@ async function prepare(page: Page, empty = false) {
     if (url.pathname === '/api/workgroups') body = [group];
     if (url.pathname === '/api/workgroups/42') body = group;
     if (url.pathname === '/api/workgroups/42/users') body = empty ? [] : [{ id: 2, username: 'member', email: 'member@example.com' }];
-    if (url.pathname === '/api/workgroups/42/assets') body = empty ? [] : [{ id: 3, name: 'app-server', type: 'SERVER', ip: '192.0.2.10', owner: 'Example owner' }];
+    if (url.pathname === '/api/workgroups/42/assets') body = empty ? [] : [{ id: 3, name: 'app-server', type: 'SERVER', ip: '192.0.2.10', ipAddresses: ['192.0.2.10', '2001:db8::10'], owner: 'Example owner' }];
     if (url.pathname === '/api/workgroups/42/aws-accounts') body = empty ? [] : [{ id: 4, awsAccountId: '123456789012' }];
     if (url.pathname === '/api/workgroups/42/ad-domains') body = empty ? [] : [{ id: 5, adDomain: 'corp.example.com' }];
     if (body === undefined) return route.continue();
@@ -38,6 +38,7 @@ test('workgroup badge opens all assigned details in place and restores focus on 
   const assets = dialog.getByRole('region', { name: 'Assets (1)' });
   await expect(assets).toContainText('app-server');
   await expect(assets).toContainText('192.0.2.10');
+  await expect(assets).toContainText('2001:db8::10');
   await expect(assets).toContainText('Example owner');
   await expect(dialog.getByRole('region', { name: 'AWS Accounts (1)' })).toContainText('123456789012');
   await expect(dialog.getByRole('region', { name: 'AD Domains (1)' })).toContainText('corp.example.com');

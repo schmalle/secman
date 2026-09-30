@@ -108,9 +108,9 @@ export default function WorkgroupDetailsModal({ workgroupId, workgroupName, onCl
                 {details.assets.length === 0 ? <p className="text-muted">No assets directly assigned.</p> : (
                   <div className="table-responsive">
                     <table className="table table-sm">
-                      <thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">IP</th><th scope="col">Owner</th></tr></thead>
+                      <thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Reported IP Addresses</th><th scope="col">Owner</th></tr></thead>
                       <tbody>{details.assets.map(asset => (
-                        <tr key={asset.id}><td>{asset.name}</td><td>{asset.type || '—'}</td><td>{asset.ip || '—'}</td><td>{asset.owner || '—'}</td></tr>
+                        <tr key={asset.id}><td>{asset.name}</td><td>{asset.type || '—'}</td><td>{asset.ipAddresses?.length ? asset.ipAddresses.join(', ') : asset.ip || '—'}</td><td>{asset.owner || '—'}</td></tr>
                       ))}</tbody>
                     </table>
                   </div>

@@ -1,5 +1,6 @@
 package com.secman.controller
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.secman.constants.AssetOwners
 import com.secman.domain.Asset
 import com.secman.domain.Criticality
@@ -130,6 +131,7 @@ open class AssetController(
 
     /** One bounded page returned to the interactive inventory. */
     @Serdeable
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     data class AssetOverviewResponse(
         val items: List<AssetOverviewRow>,
         val matchingCount: Long,
@@ -140,10 +142,12 @@ open class AssetController(
 
     /** Narrow inventory projection; detail-only relations are intentionally omitted. */
     @Serdeable
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     data class AssetOverviewRow(
         val assetId: Long,
         val name: String,
         val ipAddress: String?,
+        val ipAddresses: List<String>,
         val uri: String?,
         val owner: String,
         val cloudAccountId: String?,
@@ -152,10 +156,11 @@ open class AssetController(
         val osVersion: String?
     ) {
         companion object {
-            fun from(asset: Asset) = AssetOverviewRow(
+            fun from(asset: Asset, addresses: List<String>) = AssetOverviewRow(
                 assetId = requireNotNull(asset.id),
                 name = asset.name,
                 ipAddress = asset.ip,
+                ipAddresses = (addresses + listOfNotNull(asset.ip)).distinct().sorted(),
                 uri = asset.uri,
                 owner = asset.owner,
                 cloudAccountId = CloudIdentifierDisplay.accountId(asset.cloudAccountId),
@@ -352,7 +357,7 @@ open class AssetController(
 
         return HttpResponse.ok(
             AssetOverviewResponse(
-                items = result.assets.map(AssetOverviewRow::from),
+                items = result.assets.map { AssetOverviewRow.from(it, result.ipAddresses[it.id].orEmpty()) },
                 matchingCount = result.total,
                 page = page,
                 pageSize = pageSize,
@@ -646,8 +651,8 @@ open class AssetController(
             }
             
             request.ip?.let { newIp ->
+                asset.ip?.let(asset.ipAddresses::add)
                 asset.ip = newIp.trim().takeIf { it.isNotBlank() }
-                asset.ipAddresses.clear()
                 asset.ip?.let(asset.ipAddresses::add)
             }
 

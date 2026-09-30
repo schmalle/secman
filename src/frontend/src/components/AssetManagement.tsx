@@ -187,7 +187,7 @@ const AssetManagement: React.FC = () => {
       const response = await authenticatedGet(`/api/assets/search?${params}`, { signal });
       if (response.ok) {
         const data: AssetOverviewResponse = await response.json();
-        setAssets(data.items.map(item => ({ ...item, id: item.assetId, ip: item.ipAddress })));
+        setAssets((data.items ?? []).map(item => ({ ...item, id: item.assetId, ip: item.ipAddress })));
         setMatchingCount(data.matchingCount);
         setTotalPages(data.totalPages);
         setError(null);
@@ -744,6 +744,9 @@ const AssetManagement: React.FC = () => {
                       required
                     >
                       <option value="">Select Type</option>
+                      {formData.type && !['Server', 'Workstation', 'Network Device', 'Mobile Device', 'IoT Device', 'Database', 'Application', 'SaaS', 'URI', 'Other'].includes(formData.type) && (
+                        <option value={formData.type}>{formData.type}</option>
+                      )}
                       <option value="Server">Server</option>
                       <option value="Workstation">Workstation</option>
                       <option value="Network Device">Network Device</option>
@@ -757,7 +760,7 @@ const AssetManagement: React.FC = () => {
                     </select>
                   </div>
                   <div className="mb-3">
-                    <label htmlFor="ip" className="form-label">IP Address</label>
+                    <label htmlFor="ip" className="form-label">Primary IP Address</label>
                     <input
                       type="text"
                       className="form-control"
@@ -1045,7 +1048,7 @@ const AssetManagement: React.FC = () => {
                     <thead className="table-light">
                       <tr>
                         <th style={stickyHeaderCellStyle}>Name</th>
-                        <th style={stickyHeaderCellStyle}>IP Addresses</th>
+                        <th style={stickyHeaderCellStyle} title="Reported addresses include local, external and historical addresses.">Reported IP Addresses</th>
                         <th style={stickyHeaderCellStyle}>URI</th>
                         <th style={stickyHeaderCellStyle}>Instance ID</th>
                         <th style={stickyHeaderCellStyle}>Account ID</th>

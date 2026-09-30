@@ -189,6 +189,13 @@ class CrowdStrikeApiClientImplHostInfoFacetTest {
         assertThat(rows.resolveHostIps()).containsExactly("10.0.0.1", "10.0.0.2", "203.0.113.1")
     }
 
+    @Test
+    fun `primary resolver prefers the reported local IP over sorted address history`() {
+        val row = vulnerabilityDto(ip = " 10.8.0.10 ").copy(ipAddresses = setOf("10.4.0.10", "203.0.113.1"))
+        assertThat(listOf(row).resolveHostIp()).isEqualTo("10.8.0.10")
+        assertThat(listOf(row.copy(ip = null)).resolveHostIp()).isEqualTo("10.4.0.10")
+    }
+
     private fun vulnerabilityDto(ip: String?) = CrowdStrikeVulnerabilityDto(
         id = "vuln-1",
         hostname = "server01",
