@@ -275,7 +275,7 @@ No persistent `secman_test` setup is needed. Existing application rows are never
 
 ## Extension Clients (`extensions/`)
 
-`secman_ai_github`, `secman_web_check`, and `secman_intra_mon` are independent Python repositories with their own remotes, **gitignored here** — root `git status` never shows them. Normal builds do not cover them. The first two share the version-1 result contract covered by `/integration-contract-test` and `scripts/check-integration-contract.sh --run`; `secman_intra_mon` uses the legacy REST surface and needs the same manual five-dimension contract check described below.
+`secman_ai_github`, `secman_web_check`, and `secman_intra_mon` are independent Python repositories with their own remotes, **gitignored here** — root `git status` never shows them. Normal builds do not cover them. The first two share the version-1 result contract covered by `/integration-contract-test` and `scripts/check-integration-contract.sh --run`; `secman_intra_mon` uses the legacy REST surface and needs the same manual five-dimension contract check described below. `secman_source` is a separate local source-review CLI with its own remote; it calls neither SecMan nor the relay, so it has no backend or relay contract to check here.
 
 `secman_app_ios` (iOS/iPadOS status app, Swift) is a **relay client, not a backend client**: it never calls `/api/…` and holds no secman credential. A change to a secman endpoint cannot break it. What *can* is the relay contract — `com.secman.relay.RelayDtos`, the section names and `SECTION_POLICIES` in `RelaySnapshotBuilder`, or `src/relay/internal/api`. Both envelopes carry a `schemaVersion` for that reason; bump it on a breaking change and update `relaySupportedSnapshotSchemaVersion` in the app. Sweep its surface with `grep -rnE '/api/v1/|/ingest/v1/' extensions/secman_app_ios --include='*.swift'`.
 
@@ -283,7 +283,7 @@ Always rediscover the surface; a written list means a newly added call gets chec
 ```bash
 grep -rnE '/api/|"/mcp"|X-MCP-User-Email' extensions --include='*.py' --exclude-dir=.venv
 ```
-As of 2026-09-25: legacy calls remain `POST /api/auth/login`, `POST /api/vulnerabilities/cli-add`, `PUT /api/assets/import`, and `POST /api/scan/upload-nmap`. Version 1 uses `GET /api/integrations/v1/scanners/{id}/subjects` and `POST /api/integrations/v1/runs`; see `docs/INTEGRATION_RESULTS.md`.
+As of 2026-09-30: legacy calls remain `POST /api/auth/login`, `POST /api/vulnerabilities/cli-add`, `PUT /api/assets/import`, and `POST /api/scan/upload-nmap`. Version 1 uses `GET /api/integrations/v1/scanners/{id}/subjects` and `POST /api/integrations/v1/runs`; see `docs/INTEGRATION_RESULTS.md`.
 
 When you change any of those endpoints, verify all five dimensions against the client: **path, HTTP method, request field names, response fields the client reads, and `@Secured` roles / required headers**. Field names matter most — Jackson drops unknown keys without error, so a rename makes the client "succeed" while sending nothing. Update the client's `tests/` too; a test asserting the old shape is drift.
 
@@ -313,7 +313,7 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-09-29*
+*Last updated: 2026-09-30*
 
 ## Recent Changes
 
