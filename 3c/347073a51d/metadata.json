@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "3c347073a51d",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/frontend/src/components/UserManagement.test.ts",
+    "src/frontend/src/components/UserManagement.tsx",
+    "src/frontend/src/components/WorkgroupDetailsModal.tsx",
+    "tests/e2e/user-workgroup-details.spec.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/3c/347073a51d/0/metadata.json",
+      "transcript": "/3c/347073a51d/0/full.jsonl",
+      "compact_transcript": "/3c/347073a51d/0/transcript.jsonl",
+      "content_hash": "/3c/347073a51d/0/content_hash.txt",
+      "prompt": "/3c/347073a51d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 165169,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 7849600,
+    "output_tokens": 19960,
+    "api_call_count": 62
+  }
+}
