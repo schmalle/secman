@@ -1,0 +1,74 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "0d17977d6423",
+  "session_id": "01a0f2c7-cba3-7373-8786-9dafe4bba3e9",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-30T19:55:10.601586Z",
+  "branch": "dev",
+  "checkpoints_count": 4,
+  "save_step_count": 2,
+  "files_touched": [
+    "docs/CROWDSTRIKE_IMPORT.md",
+    "src/backendng/src/main/kotlin/com/secman/controller/AssetController.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/WorkgroupController.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/Asset.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/AssetOverviewQueryService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/DomainVulnsService.kt",
+    "src/backendng/src/test/kotlin/com/secman/controller/AssetOverviewControllerTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportServiceTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/DomainVulnsServiceTest.kt",
+    "src/frontend/src/components/AssetManagement.tsx",
+    "src/frontend/src/components/WorkgroupDetailsModal.tsx",
+    "src/frontend/src/components/workgroupTypes.ts",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/dto/CrowdStrikeVulnerabilityDto.kt",
+    "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplHostInfoFacetTest.kt",
+    "tests/e2e/asset-ip-addresses.spec.ts",
+    "tests/e2e/user-workgroup-details.spec.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "45568d6ff995",
+  "checkpoint_transcript_start": 465,
+  "transcript_lines_at_start": 465,
+  "compact_transcript_start": 62,
+  "token_usage": {
+    "input_tokens": 914856,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 29609600,
+    "output_tokens": 94373,
+    "api_call_count": 218,
+    "subagent_tokens_complete": false
+  },
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-30T19:55:10.356539Z",
+    "agent_lines": 364,
+    "agent_removed": 28,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 364,
+    "total_lines_changed": 392,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 364,
+      "agent_lines_removed": 28
+    }
+  ]
+}

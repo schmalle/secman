@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "0d17977d6423",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "docs/CROWDSTRIKE_IMPORT.md",
+    "src/backendng/src/main/kotlin/com/secman/controller/AssetController.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/WorkgroupController.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/Asset.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/AssetOverviewQueryService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/DomainVulnsService.kt",
+    "src/backendng/src/test/kotlin/com/secman/controller/AssetOverviewControllerTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportServiceTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/DomainVulnsServiceTest.kt",
+    "src/frontend/src/components/AssetManagement.tsx",
+    "src/frontend/src/components/WorkgroupDetailsModal.tsx",
+    "src/frontend/src/components/workgroupTypes.ts",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/dto/CrowdStrikeVulnerabilityDto.kt",
+    "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplHostInfoFacetTest.kt",
+    "tests/e2e/asset-ip-addresses.spec.ts",
+    "tests/e2e/user-workgroup-details.spec.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0d/17977d6423/0/metadata.json",
+      "transcript": "/0d/17977d6423/0/full.jsonl",
+      "compact_transcript": "/0d/17977d6423/0/transcript.jsonl",
+      "content_hash": "/0d/17977d6423/0/content_hash.txt",
+      "prompt": "/0d/17977d6423/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 914856,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 29609600,
+    "output_tokens": 94373,
+    "api_call_count": 218,
+    "subagent_tokens_complete": false
+  }
+}
