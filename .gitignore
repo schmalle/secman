@@ -132,3 +132,4 @@ extensions/secman_web_check/
 gradle/wrapper/gradle-wrapper.jar
 gradle/wrapper/gradle-wrapper.jar
 /extensions/secman_intra_mon
+extensions/secman_source/
