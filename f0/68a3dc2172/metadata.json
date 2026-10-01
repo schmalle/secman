@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "f068a3dc2172",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "CLAUDE.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/f0/68a3dc2172/0/metadata.json",
+      "transcript": "/f0/68a3dc2172/0/full.jsonl",
+      "compact_transcript": "/f0/68a3dc2172/0/transcript.jsonl",
+      "content_hash": "/f0/68a3dc2172/0/content_hash.txt",
+      "prompt": "/f0/68a3dc2172/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 141779,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 2670336,
+    "output_tokens": 7114,
+    "api_call_count": 29
+  }
+}
