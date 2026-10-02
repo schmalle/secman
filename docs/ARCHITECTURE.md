@@ -105,21 +105,18 @@ Roles: `USER`, `ADMIN`, `VULN`, `RELEASE_MANAGER`, `REQ`, `REQADMIN`, `RISK`, `S
 
 Asset access (any of):
 1. ADMIN **or SECCHAMPION** role (universal access)
-2. Asset in user's workgroup
-3. `manualCreator == user`
-4. `scanUploader == user`
-5. `cloudAccountId` ∈ user's AWS UserMapping
-6. `adDomain` ∈ user's domain UserMapping (case-insensitive)
-7. `owner == username`
-8. `cloudAccountId` ∈ AwsAccountSharing rule (directional, non-transitive; per-rule account selection — empty selection = share all of source's accounts)
-9. `cloudAccountId` ∈ workgroup's `WorkgroupAwsAccount` (direct membership only)
-10. `adDomain` ∈ workgroup's `WorkgroupAdDomain` (direct membership only)
+2. Explicit asset assignment to an enabled workgroup with direct user membership
+3. AWS-account or AD-domain grant on an enabled workgroup with direct user membership
+4. Personal AWS-account or AD-domain mapping
+5. Received AWS-account sharing (directional and non-transitive; an empty account selection shares all of the source user's accounts)
 
-Authoritative implementation: `AssetFilterService.getAccessibleAssets()` — the numbered list above is its contract, kept in sync with the Javadoc on that method. Do not re-derive the predicate elsewhere; SQL pre-filters in materialized views are performance hints, never the auth boundary.
+Creator, uploader, and owner remain metadata and grant no access. Workgroup hierarchy does not propagate membership.
+
+Authoritative implementation: `AssetFilterService`. The entity and ID query paths share the live-grant predicates in `AssetAccessSql`; SQL pre-filters in materialized views are performance hints, never the auth boundary.
 
 One asymmetry is deliberate and easy to miss: `getAccessibleAssets()` and `getAccessibleAssetIds()` short-circuit for **ADMIN or SECCHAMPION**, but `getScopedAccessibleAssetIds()` short-circuits for **ADMIN only** — a SECCHAMPION falls through to the scoped path there. Check which one you are calling before assuming a role sees everything.
 
-Feature 073: when `memoryConfig.lazyLoadingEnabled` is set, the scoped path runs as one unified query instead of the multi-query fallback. Both must implement the same ten rules.
+Feature 073: when `memoryConfig.lazyLoadingEnabled` is set, the scoped path runs as one unified query instead of the multi-query fallback. Both must implement the same five rules.
 
 Authentication methods:
 | Method | Carrier | Use |
