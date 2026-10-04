@@ -2,9 +2,8 @@
 
 Independent repositories that extend the SecMan toolset. Each one has its own
 git remote, its own review process and its own release cycle. They are cloned
-into this directory for convenience; the backend and relay clients are
-**gitignored by the secman repo**, while the standalone `secman_source` checkout
-is not. The normal root build does not compile or exercise them; the opt-in
+into this directory for convenience and are **gitignored by the secman repo**.
+The normal root build does not compile or exercise them; the opt-in
 integration-contract script runs focused tests in the shared-contract clients.
 
 | Folder | Repository | What it is |
