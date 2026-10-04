@@ -594,6 +594,7 @@ open class WorkgroupController(
                     name = it.name,
                     type = it.type,
                     ip = it.ip,
+                    ipAddresses = (it.ipAddresses + listOfNotNull(it.ip)).distinct().sorted(),
                     owner = it.owner
                 )
             }
@@ -1338,6 +1339,7 @@ data class AssignedAssetDto(
     val name: String,
     val type: String?,
     val ip: String?,
+    val ipAddresses: List<String>,
     val owner: String?
 )
 

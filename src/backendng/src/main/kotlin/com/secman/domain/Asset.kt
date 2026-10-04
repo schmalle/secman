@@ -73,7 +73,7 @@ data class Asset(
     @Column
     var ip: String? = null,
 
-    /** All current addresses reported for this asset; [ip] remains the compatibility primary address. */
+    /** Reported addresses, including address history; [ip] remains the compatibility primary address. */
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "asset_ip_address", joinColumns = [JoinColumn(name = "asset_id")])
     @Column(name = "ip_address", nullable = false, length = 45)

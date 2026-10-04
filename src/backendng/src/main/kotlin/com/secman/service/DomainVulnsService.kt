@@ -2,6 +2,8 @@ package com.secman.service
 
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
 import com.secman.crowdstrike.dto.FalconConfigDto
+import com.secman.crowdstrike.dto.resolveHostIp
+import com.secman.crowdstrike.dto.resolveHostIps
 import com.secman.dto.CrowdStrikeVulnerabilityBatchDto
 import com.secman.dto.DeviceVulnCountDto
 import com.secman.dto.DomainGroupDto
@@ -344,11 +346,10 @@ class DomainVulnsService(
         val byHostname = vulnerabilities.groupBy { it.hostname }
 
         return byHostname.map { (hostname, vulns) ->
-            val firstVuln = vulns.first()
-
             CrowdStrikeVulnerabilityBatchDto(
                 hostname = hostname,
-                ip = firstVuln.ip,
+                ip = vulns.resolveHostIp(),
+                ipAddresses = vulns.resolveHostIps(),
                 groups = null,  // Not available from API
                 cloudAccountId = null,  // Not in this query
                 cloudInstanceId = null,  // Not in this query

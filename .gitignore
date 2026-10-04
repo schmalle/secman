@@ -12,6 +12,7 @@ mcp/package-lock.json
 build/
 dist/
 out/
+output/
 .kotlin/
 
 # Gradle
@@ -132,3 +133,7 @@ extensions/secman_web_check/
 gradle/wrapper/gradle-wrapper.jar
 gradle/wrapper/gradle-wrapper.jar
 /extensions/secman_intra_mon
+extensions/secman_source/
+.ori/state.sqlite
+.ori/state.sqlite-shm
+.ori/state.sqlite-wal

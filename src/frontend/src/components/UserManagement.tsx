@@ -4,6 +4,7 @@ import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDel
 import { getUserMappings, createMapping, updateMapping, deleteMapping, type UserMapping, type CreateMappingRequest, type UpdateMappingRequest } from '../api/userMappings';
 import { formatServerDate, formatServerDateTime, parseServerDateMs } from '../utils/dateUtils';
 import { downloadResponse } from '../utils/download';
+import WorkgroupDetailsModal from './WorkgroupDetailsModal';
 
 type SortField = 'username' | 'email' | 'roles' | 'lastLogin' | 'workgroups';
 type SortDirection = 'asc' | 'desc';
@@ -41,6 +42,7 @@ const UserManagement = () => {
     const [isLoading, setIsLoading] = useState(true); // Start loading
     const [users, setUsers] = useState<User[]>([]);
     const [workgroups, setWorkgroups] = useState<Workgroup[]>([]);
+    const [detailWorkgroup, setDetailWorkgroup] = useState<WorkgroupSummary | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     // State for Add User Modal
@@ -718,6 +720,14 @@ const UserManagement = () => {
         <div>
             <h2>User Management</h2>
             <p>Manage application users.</p>
+            {detailWorkgroup && (
+                <WorkgroupDetailsModal
+                    key={detailWorkgroup.id}
+                    workgroupId={detailWorkgroup.id}
+                    workgroupName={detailWorkgroup.name}
+                    onClose={() => setDetailWorkgroup(null)}
+                />
+            )}
 
             {/* Display non-permission errors here */}
             {error && !error.includes("Access Denied") && (
@@ -1312,14 +1322,16 @@ const UserManagement = () => {
                                     {user.workgroups && user.workgroups.length > 0 ? (
                                         <div>
                                             {user.workgroups.map(wg => (
-                                                <a
+                                                <button
                                                     key={wg.id}
-                                                    className="badge bg-info me-1 text-decoration-none"
-                                                    href={`/workgroups?workgroupId=${encodeURIComponent(wg.id)}`}
+                                                    type="button"
+                                                    className="badge bg-info me-1 border-0"
+                                                    onClick={() => setDetailWorkgroup(wg)}
                                                     title={`View ${wg.name} workgroup details`}
+                                                    aria-haspopup="dialog"
                                                 >
                                                     {wg.name}
-                                                </a>
+                                                </button>
                                             ))}
                                         </div>
                                     ) : (

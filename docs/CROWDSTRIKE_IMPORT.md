@@ -6,14 +6,24 @@ CrowdStrike's official Hosts API exposes the current `local_ip`, `external_ip`,
 and `connection_ip` fields on a device entity. It also defines
 `POST /devices/combined/devices/network-address-history/v1`, whose per-device
 `history` entries carry `ip_address`. The import queries both structures in
-bounded 100-device chunks, unions and deduplicates their addresses, and stores
-up to 100 addresses per asset. See CrowdStrike's official SDK definitions for
+bounded 100-device chunks and unions and deduplicates up to 100 addresses per
+device response. See CrowdStrike's official SDK definitions for
 the [Hosts operations](https://github.com/CrowdStrike/falconpy/blob/main/src/falconpy/_endpoint/_hosts.py)
 and [network-address history response](https://github.com/CrowdStrike/gofalcon/blob/main/falcon/models/deviceapi_network_address_history_v1.go).
 
-`Asset.ip` remains the compatibility primary address. The complete set is held
-in `asset_ip_address` and returned as `ipAddresses`; the asset inventory renders
-and filters on that complete set.
+`Asset.ip` remains the compatibility primary address, preferring the reported
+local IP over the sorted address history. The complete set is held in
+`asset_ip_address` and returned as `ipAddresses` by both the detail and paginated
+inventory APIs. Inventory filtering searches both primary and secondary addresses
+and counts each matching asset once.
+
+These are **reported addresses**, including external and historical addresses,
+rather than a verified list of currently configured network interfaces. Imports
+merge newly reported addresses into the stored set. Missing addresses in a partial
+response or an unavailable history lookup do not delete previously reported
+addresses; an import without a primary IP preserves the existing primary.
+Editing or clearing the primary IP also preserves reported addresses. Existing
+stored addresses appear immediately without a reimport or database migration.
 
 Service: `CrowdStrikeVulnerabilityImportService` (`src/backendng/src/main/kotlin/com/secman/service/`).
 Spec: `specs/048-prevent-duplicate-vulnerabilities/`.

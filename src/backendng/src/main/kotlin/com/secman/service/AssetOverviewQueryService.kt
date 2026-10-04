@@ -18,7 +18,7 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
     )
 
     /** A page of assets plus the exact matching row count. */
-    data class Result(val assets: List<Asset>, val total: Long)
+    data class Result(val assets: List<Asset>, val total: Long, val ipAddresses: Map<Long, List<String>> = emptyMap())
 
     /** Applies access IDs before database pagination; null IDs mean a globally authorized caller. */
     @Suppress("UNCHECKED_CAST")
@@ -31,7 +31,15 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
         bind(count, ids, filters)
         rows.firstResult = page * pageSize
         rows.maxResults = pageSize
-        return Result(rows.resultList as List<Asset>, (count.singleResult as Number).toLong())
+        val assets = rows.resultList as List<Asset>
+        // Fetch addresses only for this authorized page, without joining collections into pagination.
+        val addresses = if (assets.isEmpty()) emptyMap() else {
+            val addressRows = entityManager.createNativeQuery(
+                "SELECT asset_id, ip_address FROM asset_ip_address WHERE asset_id IN (:ids)"
+            ).setParameter("ids", assets.map { requireNotNull(it.id) }).resultList as List<Array<Any>>
+            addressRows.groupBy({ (it[0] as Number).toLong() }, { it[1] as String })
+        }
+        return Result(assets, (count.singleResult as Number).toLong(), addresses)
     }
 
     private fun bind(query: jakarta.persistence.Query, ids: Set<Long>?, filters: Filters) {
@@ -50,7 +58,10 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
             SELECT a.* FROM asset a
             WHERE (:restrictIds = FALSE OR a.id IN (:ids))
               AND (:name IS NULL OR LOCATE(LOWER(:name), LOWER(a.name)) > 0)
-              AND (:ip IS NULL OR LOCATE(LOWER(:ip), LOWER(a.ip)) > 0)
+              AND (:ip IS NULL OR LOCATE(LOWER(:ip), LOWER(a.ip)) > 0 OR EXISTS (
+                  SELECT 1 FROM asset_ip_address ai
+                  WHERE ai.asset_id = a.id AND LOCATE(LOWER(:ip), LOWER(ai.ip_address)) > 0
+              ))
               AND (:owner IS NULL OR LOCATE(LOWER(:owner), LOWER(a.owner)) > 0)
               AND (:adDomain IS NULL OR LOCATE(LOWER(:adDomain), LOWER(a.ad_domain)) > 0)
               AND (:accountId IS NULL OR LOCATE(:accountId, a.cloud_account_id) > 0)
@@ -65,7 +76,10 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
             SELECT COUNT(*) FROM asset a
             WHERE (:restrictIds = FALSE OR a.id IN (:ids))
               AND (:name IS NULL OR LOCATE(LOWER(:name), LOWER(a.name)) > 0)
-              AND (:ip IS NULL OR LOCATE(LOWER(:ip), LOWER(a.ip)) > 0)
+              AND (:ip IS NULL OR LOCATE(LOWER(:ip), LOWER(a.ip)) > 0 OR EXISTS (
+                  SELECT 1 FROM asset_ip_address ai
+                  WHERE ai.asset_id = a.id AND LOCATE(LOWER(:ip), LOWER(ai.ip_address)) > 0
+              ))
               AND (:owner IS NULL OR LOCATE(LOWER(:owner), LOWER(a.owner)) > 0)
               AND (:adDomain IS NULL OR LOCATE(LOWER(:adDomain), LOWER(a.ad_domain)) > 0)
               AND (:accountId IS NULL OR LOCATE(:accountId, a.cloud_account_id) > 0)

@@ -1,10 +1,10 @@
 # secman extensions
 
-Independent client repositories that build on the secman backend. Each one has
-its own git remote, its own review process and its own release cycle. They are
-cloned into this directory for convenience and are **gitignored by the secman
-repo** — `git status` at the repo root never shows them, and no build or test
-in this repository compiles or exercises them.
+Independent repositories that extend the SecMan toolset. Each one has its own
+git remote, its own review process and its own release cycle. They are cloned
+into this directory for convenience and are **gitignored by the secman repo**.
+The normal root build does not compile or exercise them; the opt-in
+integration-contract script runs focused tests in the shared-contract clients.
 
 | Folder | Repository | What it is |
 |---|---|---|
@@ -12,15 +12,16 @@ in this repository compiles or exercises them.
 | `secman_app_ios/` | https://github.com/schmalle/secman_app_ios | iOS/iPadOS status app. Talks **only** to the relay, never to secman. |
 | `secman_web_check/` | https://github.com/schmalle/secman_web_check | web security checker for secman. |
 | `secman_intra_mon/` | https://github.com/schmalle/secman_intranet_mon | intranet discovery tool for secman. |
+| `secman_source/` | https://github.com/schmalle/secman_source | Local multi-engine source-code security review CLI. Calls neither SecMan nor the relay. |
 
-## Two different kinds of client
+## Client and tool categories
 
 The distinction matters for security review, so it is worth stating plainly.
 
 **Backend clients** (`secman_ai_github`, `secman_web_check`, `secman_intra_mon`)
 authenticate to secman itself and **write** data — vulnerabilities, assets,
 findings and scan results. They hold
-secman credentials and reach `/api/…` and `/mcp` directly. Changing a backend
+secman credentials and reach `/api/…` directly. Changing a backend
 endpoint can break them silently, which is why `CLAUDE.md` §Extension Clients
 requires re-verifying their five contract dimensions (path, method, request
 field names, response fields read, `@Secured` roles / required headers) whenever
@@ -34,6 +35,11 @@ endpoint cannot break the iOS app — but a change to the **relay snapshot
 contract** (`src/backendng/…/com/secman/relay/RelayDtos.kt`, the section names
 in `RelaySnapshotBuilder`, or the relay's own API under `src/relay/`) can, and
 that contract is versioned with `schemaVersion` for exactly that reason.
+
+**Standalone tools** (`secman_source`) operate on local source trees and call
+AI scanner CLIs or configured model APIs. They do not authenticate to SecMan,
+call its `/api/…` or `/mcp` surfaces, or consume the relay contract, so the
+backend and relay compatibility sweeps below do not apply to them.
 
 ## Rediscovering the backend surface
 
