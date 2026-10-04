@@ -134,3 +134,6 @@ gradle/wrapper/gradle-wrapper.jar
 gradle/wrapper/gradle-wrapper.jar
 /extensions/secman_intra_mon
 extensions/secman_source/
+.ori/state.sqlite
+.ori/state.sqlite-shm
+.ori/state.sqlite-wal
