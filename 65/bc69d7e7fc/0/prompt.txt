@@ -1,0 +1,11 @@
+please extend / correct my prompt from viewpoints of an implementer and product designer "extend CLI and create dedicated startscripts (for AWS usage and also for OSX usage with Proton Pass on OSX and Secrets manager on AWS) to get an overview for a given email adress, which assets and domains and accounts the user can see in the vulnerability context"
+
+---
+
+implement the change
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"i am now logged into proton pass","question":"Proton Pass CLI reports “No active session,” which blocks the disposable database and required E2E tests. Please restore the local pass-cli session and let me know when it is ready; no credentials need to be sent here.","questionItemId":"[\"request_user_input_async\",\"call_A0pBNBrTdHAl8c9z3IeWPza2\",0]"}]
+</send_user_message_question_reply>
