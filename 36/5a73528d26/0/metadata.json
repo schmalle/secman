@@ -1,0 +1,88 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "365a73528d26",
+  "session_id": "01a106ff-6960-7433-b2b8-57c5dee7979c",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-05T11:09:23.802729Z",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/CLI.md",
+    "docs/USER_ACCESS_OVERVIEW.md",
+    "scripts/lib/aws-secrets.sh",
+    "scripts/test/user-access-overview-wrapper-test.sh",
+    "scripts/user-access-overview-aws.sh",
+    "scripts/user-access-overview-macos.sh",
+    "src/backendng/src/main/kotlin/com/secman/controller/UserAccessOverviewController.kt",
+    "src/backendng/src/main/kotlin/com/secman/dto/UserAccessOverview.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/AssetAccessSql.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/AssetRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/AssetFilterService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/UserAccessOverviewService.kt",
+    "src/backendng/src/test/kotlin/com/secman/controller/RiskAssessmentRequestTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/controller/UserAccessOverviewControllerTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/UserAccessOverviewIntegrationTest.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/commands/UserAccessOverviewCommand.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/service/UserAccessOverviewCliService.kt",
+    "src/cli/src/main/resources/logback.xml",
+    "src/cli/src/test/kotlin/com/secman/cli/service/UserAccessOverviewCliServiceTest.kt"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "6db2f7e77465",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 256762,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 13937152,
+    "output_tokens": 74295,
+    "api_call_count": 92
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-05T11:09:23.740081Z",
+    "agent_lines": 80,
+    "agent_removed": 3,
+    "human_added": 88,
+    "human_modified": 4,
+    "human_removed": 0,
+    "total_committed": 172,
+    "total_lines_changed": 188,
+    "agent_percentage": 44.148936170212764,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 859,
+      "user_lines_removed": 4,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "docs/USER_ACCESS_OVERVIEW.md": 84,
+        "scripts/secmancli": 4,
+        "scripts/test/user-access-overview-wrapper-test.sh": 31,
+        "scripts/user-access-overview-aws.sh": 5,
+        "scripts/user-access-overview-macos.sh": 8,
+        "src/backendng/src/main/kotlin/com/secman/controller/UserAccessOverviewController.kt": 27,
+        "src/backendng/src/main/kotlin/com/secman/dto/UserAccessOverview.kt": 42,
+        "src/backendng/src/main/kotlin/com/secman/repository/AssetRepository.kt": 7,
+        "src/backendng/src/main/kotlin/com/secman/service/AssetFilterService.kt": 13,
+        "src/backendng/src/main/kotlin/com/secman/service/UserAccessOverviewService.kt": 145,
+        "src/backendng/src/test/kotlin/com/secman/controller/UserAccessOverviewControllerTest.kt": 45,
+        "src/backendng/src/test/kotlin/com/secman/service/UserAccessOverviewIntegrationTest.kt": 136,
+        "src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt": 6,
+        "src/cli/src/main/kotlin/com/secman/cli/commands/UserAccessOverviewCommand.kt": 115,
+        "src/cli/src/main/kotlin/com/secman/cli/service/UserAccessOverviewCliService.kt": 76,
+        "src/cli/src/main/resources/logback.xml": 1,
+        "src/cli/src/test/kotlin/com/secman/cli/service/UserAccessOverviewCliServiceTest.kt": 114
+      },
+      "user_removed_per_file": {
+        "scripts/secmancli": 4
+      }
+    }
+  ]
+}
