@@ -1,0 +1,96 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "365a73528d26",
+  "session_id": "01a10a99-c537-7291-b4e7-343cabadefb4",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-05T11:09:25.66697Z",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "docs/CLI.md",
+    "scripts/lib/aws-secrets.sh",
+    "scripts/secmancli",
+    "scripts/test/isolated-e2e-runner-test.sh",
+    "scripts/test/run-isolated-e2e.sh",
+    "src/backendng/build.gradle.kts",
+    "src/backendng/src/main/kotlin/com/secman/controller/ResponseController.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/AssetAccessSql.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/AssetRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/AssetFilterService.kt",
+    "src/backendng/src/test/kotlin/com/secman/controller/RiskAssessmentRequestTest.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt",
+    "src/cli/src/main/resources/logback.xml",
+    "src/frontend/src/components/ResponseInterface.tsx",
+    "tests/e2e/assessment-guest-invitation.spec.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "4f3509ea3b82",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 138726,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 9889536,
+    "output_tokens": 20054,
+    "api_call_count": 121,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-05T11:09:25.620548Z",
+    "agent_lines": 36,
+    "agent_removed": 6,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 10,
+    "total_committed": 36,
+    "total_lines_changed": 52,
+    "agent_percentage": 80.76923076923077,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 989,
+      "user_lines_removed": 10,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "docs/CLI.md": 14,
+        "docs/USER_ACCESS_OVERVIEW.md": 92,
+        "scripts/lib/aws-secrets.sh": 2,
+        "scripts/secmancli": 4,
+        "scripts/test/user-access-overview-wrapper-test.sh": 52,
+        "scripts/user-access-overview-aws.sh": 5,
+        "scripts/user-access-overview-macos.sh": 8,
+        "src/backendng/src/main/kotlin/com/secman/controller/ResponseController.kt": 4,
+        "src/backendng/src/main/kotlin/com/secman/controller/UserAccessOverviewController.kt": 27,
+        "src/backendng/src/main/kotlin/com/secman/dto/UserAccessOverview.kt": 44,
+        "src/backendng/src/main/kotlin/com/secman/repository/AssetAccessSql.kt": 11,
+        "src/backendng/src/main/kotlin/com/secman/repository/AssetRepository.kt": 7,
+        "src/backendng/src/main/kotlin/com/secman/service/AssetFilterService.kt": 13,
+        "src/backendng/src/main/kotlin/com/secman/service/UserAccessOverviewService.kt": 145,
+        "src/backendng/src/test/kotlin/com/secman/controller/ResponseControllerSerializationTest.kt": 25,
+        "src/backendng/src/test/kotlin/com/secman/controller/RiskAssessmentRequestTest.kt": 1,
+        "src/backendng/src/test/kotlin/com/secman/controller/UserAccessOverviewControllerTest.kt": 48,
+        "src/backendng/src/test/kotlin/com/secman/service/UserAccessOverviewIntegrationTest.kt": 142,
+        "src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt": 6,
+        "src/cli/src/main/kotlin/com/secman/cli/commands/UserAccessOverviewCommand.kt": 115,
+        "src/cli/src/main/kotlin/com/secman/cli/service/UserAccessOverviewCliService.kt": 76,
+        "src/cli/src/main/resources/logback.xml": 1,
+        "src/cli/src/test/kotlin/com/secman/cli/service/UserAccessOverviewCliServiceTest.kt": 130,
+        "src/frontend/src/components/ResponseInterface.tsx": 3,
+        "tests/e2e/assessment-guest-invitation.spec.ts": 14
+      },
+      "user_removed_per_file": {
+        "scripts/lib/aws-secrets.sh": 2,
+        "scripts/secmancli": 4,
+        "src/backendng/src/test/kotlin/com/secman/controller/RiskAssessmentRequestTest.kt": 1,
+        "src/frontend/src/components/ResponseInterface.tsx": 3
+      }
+    }
+  ]
+}

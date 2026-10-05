@@ -3,15 +3,18 @@
   "checkpoint_id": "365a73528d26",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 3,
+  "checkpoints_count": 4,
   "files_touched": [
     "docs/CLI.md",
     "docs/USER_ACCESS_OVERVIEW.md",
     "scripts/lib/aws-secrets.sh",
     "scripts/secmancli",
+    "scripts/test/isolated-e2e-runner-test.sh",
+    "scripts/test/run-isolated-e2e.sh",
     "scripts/test/user-access-overview-wrapper-test.sh",
     "scripts/user-access-overview-aws.sh",
     "scripts/user-access-overview-macos.sh",
+    "src/backendng/build.gradle.kts",
     "src/backendng/src/main/kotlin/com/secman/controller/ResponseController.kt",
     "src/backendng/src/main/kotlin/com/secman/controller/UserAccessOverviewController.kt",
     "src/backendng/src/main/kotlin/com/secman/dto/UserAccessOverview.kt",
@@ -52,13 +55,20 @@
       "compact_transcript": "/36/5a73528d26/2/transcript.jsonl",
       "content_hash": "/36/5a73528d26/2/content_hash.txt",
       "prompt": "/36/5a73528d26/2/prompt.txt"
+    },
+    {
+      "metadata": "/36/5a73528d26/3/metadata.json",
+      "transcript": "/36/5a73528d26/3/full.jsonl",
+      "compact_transcript": "/36/5a73528d26/3/transcript.jsonl",
+      "content_hash": "/36/5a73528d26/3/content_hash.txt",
+      "prompt": "/36/5a73528d26/3/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 385638,
+    "input_tokens": 524364,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 18994944,
-    "output_tokens": 81427,
-    "api_call_count": 155
+    "cache_read_tokens": 28884480,
+    "output_tokens": 101481,
+    "api_call_count": 276
   }
 }
