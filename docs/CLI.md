@@ -88,6 +88,20 @@ Full env reference: `docs/ENVIRONMENT.md`.
 
 ## Commands
 
+### `user-access-overview` — explain effective access for an email address
+
+```bash
+./scripts/user-access-overview-macos.sh --email user@example.com
+./scripts/user-access-overview-aws.sh --email user@example.com --format json
+```
+
+Requires an ADMIN caller. Reports the target user's visible assets, AWS accounts,
+AD domains and grant reasons, including grants with no matching assets. The
+command retrieves all asset pages and separates asset visibility from permission
+to open the current vulnerability list. See [options, output fields, secret
+providers and exit codes](USER_ACCESS_OVERVIEW.md). This command always verifies
+TLS and ignores the insecure setting described above.
+
 ### `query` — single-host CrowdStrike query
 
 ```bash

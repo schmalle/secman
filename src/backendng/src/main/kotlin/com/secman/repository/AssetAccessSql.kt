@@ -50,4 +50,15 @@ object AssetAccessSql {
                     WHERE uw.user_id = :userId AND w.enabled = TRUE
                 )
     """
+
+    const val PAGE = """
+        SELECT a.* FROM asset a
+        WHERE a.id IN ($IDS)
+        ORDER BY a.id
+    """
+
+    const val COUNT = """
+        SELECT COUNT(*) FROM asset a
+        WHERE a.id IN ($IDS)
+    """
 }

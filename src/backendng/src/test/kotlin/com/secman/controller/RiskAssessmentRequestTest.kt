@@ -28,6 +28,6 @@ class RiskAssessmentRequestTest {
         val twoBases = invalidId.copy(awsAccountId = "123456789012", assetId = 9)
 
         assertThat(invalidId.validate()).contains("12 digits")
-        assertThat(twoBases.validate()).contains("Exactly one")
+        assertThat(twoBases.validate()).contains("Provide exactly one")
     }
 }

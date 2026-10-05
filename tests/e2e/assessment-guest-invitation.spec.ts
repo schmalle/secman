@@ -71,10 +71,23 @@ test('external respondent invitation opens questions without login', async ({ pa
     const response = await apiResponse;
     expect(response.status(), 'Anonymous questionnaire API must succeed').toBe(200);
     const body = await response.json();
+    expect(body.responses, 'Unanswered questionnaire must include an empty array').toEqual([]);
     expect(body.requirements.map((row: { id: number }) => row.id)).toContain(requirement.id);
     await expect(guestPage.getByRole('heading', { name: 'Risk Assessment Response', exact: true })).toBeVisible();
     await expect(guestPage.getByRole('heading', { name: `1. ${title}`, exact: true })).toBeVisible();
     await expect(guestPage.locator('#username, #password')).toHaveCount(0);
+    await expect(guestPage.getByRole('alert').filter({ hasText: 'data.responses.find' })).toHaveCount(0);
+    // Older API deployments omitted empty responses; loading them must also work.
+    await guestPage.route(`**/api/responses/assessment/${token}`, async route => {
+      const response = await route.fetch();
+      const data = await response.json();
+      delete data.responses;
+      await route.fulfill({ response, json: data });
+    });
+    await guestPage.reload();
+    await expect(guestPage.getByRole('heading', { name: 'Risk Assessment Response', exact: true })).toBeVisible();
+    await expect(guestPage.getByRole('alert').filter({ hasText: 'data.responses.find' })).toHaveCount(0);
+    await guestPage.unroute(`**/api/responses/assessment/${token}`);
     // A real save demonstrates that hydration completed and a late login
     // redirect cannot be mistaken for a successful server-rendered page.
     await guestPage.locator(`label[for="yes-${requirement.id}"]`).click();
@@ -86,6 +99,7 @@ test('external respondent invitation opens questions without login', async ({ pa
     expect((await saved).status(), 'Guest answer save must succeed').toBe(200);
     await guestPage.reload();
     await expect(guestPage.locator(`#yes-${requirement.id}`)).toBeChecked();
+    await expect(guestPage.locator('textarea').first()).toHaveValue('Guest can answer without a SecMan account.');
     await guestPage.getByRole('button', { name: /Submit Assessment/ }).click();
     await expect(guestPage.getByText('✓ Assessment Submitted Successfully')).toBeVisible();
     expect(loginVisits, 'Guest must never be sent to login').toHaveLength(0);

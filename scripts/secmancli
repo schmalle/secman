@@ -29,10 +29,10 @@ export DB_CONNECT="pass://test/secman/DB_CONNECT"
 
 
 if [ ! -f "$JAR_PATH" ]; then
-    echo "Error: CLI JAR not found at $JAR_PATH"
-    echo ""
-    echo "Build it first with:"
-    echo "  ./gradlew :cli:shadowJar"
+    echo "Error: CLI JAR not found at $JAR_PATH" >&2
+    echo "" >&2
+    echo "Build it first with:" >&2
+    echo "  ./gradlew :cli:shadowJar" >&2
     exit 1
 fi
 

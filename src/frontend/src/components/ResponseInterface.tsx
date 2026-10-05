@@ -31,7 +31,7 @@ interface ExistingResponse {
 interface AssessmentData {
   assessment: RiskAssessment;
   requirements: Requirement[];
-  responses: ExistingResponse[];
+  responses?: ExistingResponse[];
   recipientEmail: string;
 }
 
@@ -90,17 +90,17 @@ const ResponseInterface: React.FC<ResponseInterfaceProps> = ({ token }) => {
       }
       
       const data: AssessmentData = await response.json();
-      setAssessmentData(data);
       
       // Initialize responses with existing data
       const initialResponses: ResponseFormData = {};
       data.requirements.forEach(req => {
-        const existingResponse = data.responses.find(resp => resp.requirement.id === req.id);
+        const existingResponse = (data.responses ?? []).find(resp => resp.requirement.id === req.id);
         initialResponses[req.id] = {
           answer: existingResponse?.answerType || '',
           comment: existingResponse?.comment || ''
         };
       });
+      setAssessmentData(data);
       setResponses(initialResponses);
       
     } catch (err) {
