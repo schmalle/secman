@@ -3,20 +3,23 @@
   "checkpoint_id": "365a73528d26",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "docs/CLI.md",
     "docs/USER_ACCESS_OVERVIEW.md",
     "scripts/lib/aws-secrets.sh",
+    "scripts/secmancli",
     "scripts/test/user-access-overview-wrapper-test.sh",
     "scripts/user-access-overview-aws.sh",
     "scripts/user-access-overview-macos.sh",
+    "src/backendng/src/main/kotlin/com/secman/controller/ResponseController.kt",
     "src/backendng/src/main/kotlin/com/secman/controller/UserAccessOverviewController.kt",
     "src/backendng/src/main/kotlin/com/secman/dto/UserAccessOverview.kt",
     "src/backendng/src/main/kotlin/com/secman/repository/AssetAccessSql.kt",
     "src/backendng/src/main/kotlin/com/secman/repository/AssetRepository.kt",
     "src/backendng/src/main/kotlin/com/secman/service/AssetFilterService.kt",
     "src/backendng/src/main/kotlin/com/secman/service/UserAccessOverviewService.kt",
+    "src/backendng/src/test/kotlin/com/secman/controller/ResponseControllerSerializationTest.kt",
     "src/backendng/src/test/kotlin/com/secman/controller/RiskAssessmentRequestTest.kt",
     "src/backendng/src/test/kotlin/com/secman/controller/UserAccessOverviewControllerTest.kt",
     "src/backendng/src/test/kotlin/com/secman/service/UserAccessOverviewIntegrationTest.kt",
@@ -24,7 +27,9 @@
     "src/cli/src/main/kotlin/com/secman/cli/commands/UserAccessOverviewCommand.kt",
     "src/cli/src/main/kotlin/com/secman/cli/service/UserAccessOverviewCliService.kt",
     "src/cli/src/main/resources/logback.xml",
-    "src/cli/src/test/kotlin/com/secman/cli/service/UserAccessOverviewCliServiceTest.kt"
+    "src/cli/src/test/kotlin/com/secman/cli/service/UserAccessOverviewCliServiceTest.kt",
+    "src/frontend/src/components/ResponseInterface.tsx",
+    "tests/e2e/assessment-guest-invitation.spec.ts"
   ],
   "sessions": [
     {
@@ -33,13 +38,20 @@
       "compact_transcript": "/36/5a73528d26/0/transcript.jsonl",
       "content_hash": "/36/5a73528d26/0/content_hash.txt",
       "prompt": "/36/5a73528d26/0/prompt.txt"
+    },
+    {
+      "metadata": "/36/5a73528d26/1/metadata.json",
+      "transcript": "/36/5a73528d26/1/full.jsonl",
+      "compact_transcript": "/36/5a73528d26/1/transcript.jsonl",
+      "content_hash": "/36/5a73528d26/1/content_hash.txt",
+      "prompt": "/36/5a73528d26/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 256762,
+    "input_tokens": 344559,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 13937152,
-    "output_tokens": 74295,
-    "api_call_count": 92
+    "cache_read_tokens": 18994944,
+    "output_tokens": 81273,
+    "api_call_count": 154
   }
 }

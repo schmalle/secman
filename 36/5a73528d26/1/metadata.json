@@ -1,0 +1,89 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "365a73528d26",
+  "session_id": "01a10763-92e6-72d1-ba61-1ed2b76dfd49",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-05T11:09:24.767942Z",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "docs/CLI.md",
+    "scripts/lib/aws-secrets.sh",
+    "scripts/secmancli",
+    "src/backendng/src/main/kotlin/com/secman/controller/ResponseController.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/AssetAccessSql.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/AssetRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/AssetFilterService.kt",
+    "src/backendng/src/test/kotlin/com/secman/controller/ResponseControllerSerializationTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/controller/RiskAssessmentRequestTest.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt",
+    "src/cli/src/main/resources/logback.xml",
+    "src/frontend/src/components/ResponseInterface.tsx",
+    "tests/e2e/assessment-guest-invitation.spec.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "89ea3787a95c",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 87797,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 5057792,
+    "output_tokens": 6978,
+    "api_call_count": 62,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-05T11:09:24.729137Z",
+    "agent_lines": 39,
+    "agent_removed": 3,
+    "human_added": 39,
+    "human_modified": 7,
+    "human_removed": 0,
+    "total_committed": 85,
+    "total_lines_changed": 94,
+    "agent_percentage": 44.680851063829785,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 943,
+      "user_lines_removed": 7,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "docs/CLI.md": 14,
+        "docs/USER_ACCESS_OVERVIEW.md": 92,
+        "scripts/lib/aws-secrets.sh": 2,
+        "scripts/secmancli": 4,
+        "scripts/test/user-access-overview-wrapper-test.sh": 52,
+        "scripts/user-access-overview-aws.sh": 5,
+        "scripts/user-access-overview-macos.sh": 8,
+        "src/backendng/src/main/kotlin/com/secman/controller/UserAccessOverviewController.kt": 27,
+        "src/backendng/src/main/kotlin/com/secman/dto/UserAccessOverview.kt": 44,
+        "src/backendng/src/main/kotlin/com/secman/repository/AssetAccessSql.kt": 11,
+        "src/backendng/src/main/kotlin/com/secman/repository/AssetRepository.kt": 7,
+        "src/backendng/src/main/kotlin/com/secman/service/AssetFilterService.kt": 13,
+        "src/backendng/src/main/kotlin/com/secman/service/UserAccessOverviewService.kt": 145,
+        "src/backendng/src/test/kotlin/com/secman/controller/RiskAssessmentRequestTest.kt": 1,
+        "src/backendng/src/test/kotlin/com/secman/controller/UserAccessOverviewControllerTest.kt": 48,
+        "src/backendng/src/test/kotlin/com/secman/service/UserAccessOverviewIntegrationTest.kt": 142,
+        "src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt": 6,
+        "src/cli/src/main/kotlin/com/secman/cli/commands/UserAccessOverviewCommand.kt": 115,
+        "src/cli/src/main/kotlin/com/secman/cli/service/UserAccessOverviewCliService.kt": 76,
+        "src/cli/src/main/resources/logback.xml": 1,
+        "src/cli/src/test/kotlin/com/secman/cli/service/UserAccessOverviewCliServiceTest.kt": 130
+      },
+      "user_removed_per_file": {
+        "scripts/lib/aws-secrets.sh": 2,
+        "scripts/secmancli": 4,
+        "src/backendng/src/test/kotlin/com/secman/controller/RiskAssessmentRequestTest.kt": 1
+      }
+    }
+  ]
+}
