@@ -84,8 +84,8 @@ SECMAN_AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-eu-central-1}}"
 SECMAN_AWS_SECRET_JSON=""
 
 secman_aws_require_tools() {
-  command -v aws >/dev/null 2>&1 || { echo "ERROR: aws CLI is required. See docs/AWS.md."; return 1; }
-  command -v jq  >/dev/null 2>&1 || { echo "ERROR: jq is required. See docs/AWS.md.";       return 1; }
+  command -v aws >/dev/null 2>&1 || { echo "ERROR: aws CLI is required. See docs/AWS.md." >&2; return 1; }
+  command -v jq  >/dev/null 2>&1 || { echo "ERROR: jq is required. See docs/AWS.md." >&2;       return 1; }
 }
 
 secman_aws_load_secret() {

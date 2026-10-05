@@ -192,6 +192,10 @@ micronaut {
 
 // Configure test task to use JUnit 5 platform - Feature 056
 tasks.test {
+    notCompatibleWithConfigurationCache("Isolated database credentials change on every test run")
+    maxHeapSize = "1g"
+    // Bound retained Micronaut/Hibernate and mocking state across the full suite.
+    forkEvery = 25
     useJUnitPlatform()
     doFirst {
         val schema = System.getenv("SECMAN_TEST_ISOLATED_DB").orEmpty()

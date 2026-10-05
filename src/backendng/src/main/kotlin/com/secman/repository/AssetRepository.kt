@@ -74,6 +74,13 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     )
     fun findAccessibleAssetIds(userId: Long, userEmail: String): List<Long>
 
+    @io.micronaut.data.annotation.Query(
+        value = AssetAccessSql.PAGE,
+        countQuery = AssetAccessSql.COUNT,
+        nativeQuery = true
+    )
+    fun findAccessibleAssetPage(userId: Long, userEmail: String, pageable: Pageable): Page<Asset>
+
     /** Read-only migration preview, keyset paginated; these metadata fields no longer grant access. */
     @io.micronaut.data.annotation.Query(value = """
         SELECT a.id FROM asset a WHERE a.id > :afterId

@@ -1,5 +1,6 @@
 package com.secman.controller
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.secman.domain.*
 import com.secman.repository.*
 import com.secman.service.taskView
@@ -67,7 +68,10 @@ open class ResponseController(
     @Serdeable
     data class AssessmentData(
         val assessment: Map<String, Any?>,
+        // Empty collections are part of the questionnaire wire contract.
+        @field:JsonInclude(JsonInclude.Include.ALWAYS)
         val requirements: List<Requirement>,
+        @field:JsonInclude(JsonInclude.Include.ALWAYS)
         val responses: List<Response>,
         val isComplete: Boolean,
         val completionPercentage: Int,

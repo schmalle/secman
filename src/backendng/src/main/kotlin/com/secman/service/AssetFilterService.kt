@@ -13,6 +13,9 @@ import com.secman.repository.WorkgroupAdDomainRepository
 import com.secman.repository.WorkgroupAwsAccountRepository
 import com.secman.security.hasRole
 import io.micronaut.security.authentication.Authentication
+import io.micronaut.data.model.Page
+import io.micronaut.data.model.Pageable
+import io.micronaut.data.model.Sort
 import jakarta.inject.Singleton
 
 /** Shared asset visibility policy for REST, MCP and derived resources. */
@@ -28,6 +31,16 @@ open class AssetFilterService(
     private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository,
     private val workgroupAdDomainRepository: WorkgroupAdDomainRepository
 ) {
+
+    /** Database pagination using the same live predicates as the ID-based policy. */
+    fun getAccessibleAssetPage(authentication: Authentication, page: Int, size: Int): Page<Asset> {
+        return if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
+            assetRepository.findAll(Pageable.from(page, size, Sort.of(Sort.Order.asc("id"))))
+        } else {
+            // The native query supplies its own stable ordering; adding a sort duplicates ORDER BY.
+            assetRepository.findAccessibleAssetPage(getUserId(authentication), requireNotNull(getUserEmail(authentication)), Pageable.from(page, size))
+        }
+    }
 
     /** Global roles see all assets; other users need an explicit current grant. */
     fun getAccessibleAssets(authentication: Authentication): List<Asset> {

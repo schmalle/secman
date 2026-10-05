@@ -159,18 +159,19 @@ export SECMAN_BASE_URL="$BACKEND_URL" SECMAN_HOST="$BACKEND_URL"
 export SECMAN_BACKEND_URL="$BACKEND_URL"
 export SECMAN_INSECURE=false
 export BACKEND_LOG="$LOG_DIR/backend.log"
+# Database-only Micronaut tests also instantiate the isolated admin bootstrapper.
+: "${SECMAN_ADMIN_NAME:?isolated stack needs an admin username from pass-cli}"
+: "${SECMAN_ADMIN_PASS:?isolated stack needs an admin password from pass-cli}"
+: "${SECMAN_ADMIN_EMAIL:?isolated stack needs an admin email from pass-cli}"
+export SECMAN_E2E_ADMIN_NAME="$SECMAN_ADMIN_NAME"
+export SECMAN_E2E_ADMIN_EMAIL="$SECMAN_ADMIN_EMAIL"
+export SECMAN_E2E_ADMIN_PASS="$SECMAN_ADMIN_PASS"
 if [[ "$DB_ONLY" == false ]]; then
     db_admin "$DB_NAME" -e "INSERT INTO email_configs
         (created_at, updated_at, from_email, from_name, imap_enabled, is_active,
          name, smtp_host, smtp_port, smtp_ssl, smtp_tls, provider)
         VALUES (NOW(), NOW(), 'noreply@e2e.test', 'SecMan E2E', b'0', b'1',
                 'isolated loopback sink', '127.0.0.1', $SMTP_PORT, b'0', b'0', 'SMTP')"
-    : "${SECMAN_ADMIN_NAME:?isolated stack needs an admin username from pass-cli}"
-    : "${SECMAN_ADMIN_PASS:?isolated stack needs an admin password from pass-cli}"
-    : "${SECMAN_ADMIN_EMAIL:?isolated stack needs an admin email from pass-cli}"
-    export SECMAN_E2E_ADMIN_NAME="$SECMAN_ADMIN_NAME"
-    export SECMAN_E2E_ADMIN_EMAIL="$SECMAN_ADMIN_EMAIL"
-    export SECMAN_E2E_ADMIN_PASS="$SECMAN_ADMIN_PASS"
     FRONTEND_COPY="$(mktemp -d "${TMPDIR:-/tmp}/secman-frontend-e2e.XXXXXXXX")"
     FRONTEND_COPY="$(cd "$FRONTEND_COPY" && pwd -P)"
     rsync -a --exclude node_modules --exclude .astro --exclude dist \
