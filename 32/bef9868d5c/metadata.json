@@ -3,7 +3,7 @@
   "checkpoint_id": "32bef9868d5c",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 2,
+  "checkpoints_count": 8,
   "files_touched": [
     "CLAUDE.md",
     "README.md",
@@ -16,10 +16,15 @@
     "src/backendng/gradle.properties",
     "src/backendng/src/main/kotlin/com/secman/repository/AssetRepository.kt",
     "src/backendng/src/main/kotlin/com/secman/repository/OutdatedAssetMaterializedViewRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/projection/ReconcileScopeCounts.kt",
     "src/backendng/src/main/kotlin/com/secman/service/AssetFilterService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt",
     "src/backendng/src/main/kotlin/com/secman/service/OutdatedAssetService.kt",
     "src/backendng/src/main/kotlin/com/secman/service/VulnerabilityStatisticsService.kt",
+    "src/backendng/src/test/kotlin/com/secman/integration/CrowdStrikeStaleVulnerabilityIntegrationTest.kt",
     "src/backendng/src/test/kotlin/com/secman/integration/ReportingQueryScopeIntegrationTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportServiceTest.kt",
     "src/backendng/src/test/kotlin/com/secman/service/TopEolProductsScopingTest.kt",
     "src/cli/gradle.properties",
     "src/frontend/astro.config.mjs",
@@ -49,14 +54,21 @@
       "compact_transcript": "/32/bef9868d5c/1/transcript.jsonl",
       "content_hash": "/32/bef9868d5c/1/content_hash.txt",
       "prompt": "/32/bef9868d5c/1/prompt.txt"
+    },
+    {
+      "metadata": "/32/bef9868d5c/2/metadata.json",
+      "transcript": "/32/bef9868d5c/2/full.jsonl",
+      "compact_transcript": "/32/bef9868d5c/2/transcript.jsonl",
+      "content_hash": "/32/bef9868d5c/2/content_hash.txt",
+      "prompt": "/32/bef9868d5c/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 422378,
+    "input_tokens": 794245,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 32708480,
-    "output_tokens": 74034,
-    "api_call_count": 244,
+    "cache_read_tokens": 68664064,
+    "output_tokens": 128626,
+    "api_call_count": 506,
     "subagent_tokens_complete": true
   }
 }

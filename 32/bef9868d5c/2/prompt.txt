@@ -1,0 +1,21 @@
+please help me write a perfect prompt, basic prompt is "Analyze database access and evalute using a key value store for speeding up certain operations"
+
+---
+
+cotinue
+
+---
+
+&#32;**run this analysis on the SecMan codebase now**
+
+---
+
+implement
+
+---
+
+evalute if the reconciliation can be meaningful optimized
+
+---
+
+do a focused SQL optimization, without introducing a key-value store**
