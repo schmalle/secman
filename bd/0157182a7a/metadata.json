@@ -1,0 +1,57 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "bd0157182a7a",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "CLAUDE.md",
+    "README.md",
+    "build.gradle.kts",
+    "docs/ARCHITECTURE.md",
+    "gradle/wrapper/gradle-wrapper.jar",
+    "gradle/wrapper/gradle-wrapper.properties",
+    "gradlew.bat",
+    "src/backendng/build.gradle.kts",
+    "src/backendng/gradle.properties",
+    "src/backendng/src/main/kotlin/com/secman/repository/AssetRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/OutdatedAssetMaterializedViewRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/AssetFilterService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/OutdatedAssetService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/VulnerabilityStatisticsService.kt",
+    "src/backendng/src/test/kotlin/com/secman/integration/CrowdStrikeStaleVulnerabilityIntegrationTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportServiceTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/TopEolProductsScopingTest.kt",
+    "src/cli/gradle.properties",
+    "src/frontend/astro.config.mjs",
+    "src/frontend/package-lock.json",
+    "src/frontend/package.json",
+    "src/frontend/src/components/UserManagement.tsx",
+    "src/frontend/src/components/WorkgroupDetailsModal.tsx",
+    "src/frontend/src/components/WorkgroupManagement.tsx",
+    "src/frontend/src/components/WorkgroupManagementWithHierarchy.tsx",
+    "src/frontend/src/components/WorkgroupTree.tsx",
+    "src/shared/build.gradle.kts",
+    "src/shared/gradle.properties",
+    "tests/e2e/user-workgroup-details.spec.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/bd/0157182a7a/0/metadata.json",
+      "transcript": "/bd/0157182a7a/0/full.jsonl",
+      "compact_transcript": "/bd/0157182a7a/0/transcript.jsonl",
+      "content_hash": "/bd/0157182a7a/0/content_hash.txt",
+      "prompt": "/bd/0157182a7a/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 167387,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 3804416,
+    "output_tokens": 15398,
+    "api_call_count": 34,
+    "subagent_tokens_complete": true
+  }
+}
