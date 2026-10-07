@@ -3,7 +3,7 @@
   "checkpoint_id": "32bef9868d5c",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 9,
+  "checkpoints_count": 10,
   "files_touched": [
     "CLAUDE.md",
     "README.md",
@@ -68,6 +68,13 @@
       "compact_transcript": "/32/bef9868d5c/3/transcript.jsonl",
       "content_hash": "/32/bef9868d5c/3/content_hash.txt",
       "prompt": "/32/bef9868d5c/3/prompt.txt"
+    },
+    {
+      "metadata": "/32/bef9868d5c/4/metadata.json",
+      "transcript": "/32/bef9868d5c/4/full.jsonl",
+      "compact_transcript": "/32/bef9868d5c/4/transcript.jsonl",
+      "content_hash": "/32/bef9868d5c/4/content_hash.txt",
+      "prompt": "/32/bef9868d5c/4/prompt.txt"
     }
   ],
   "token_usage": {
