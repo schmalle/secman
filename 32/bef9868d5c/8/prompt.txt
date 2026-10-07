@@ -1,0 +1,1 @@
+run "./scripts/import.sh" and fix bugs as the import is now broken
