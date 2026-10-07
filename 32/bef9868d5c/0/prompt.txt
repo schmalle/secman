@@ -1,0 +1,5 @@
+update frontend and backend dependencies to the latest versions and ensure both are still compiling and starting
+
+---
+
+[Image #1] validate that here are really all workrgoups shown , which are created in secman

@@ -1,0 +1,55 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "32bef9868d5c",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "CLAUDE.md",
+    "README.md",
+    "build.gradle.kts",
+    "docs/ARCHITECTURE.md",
+    "gradle/wrapper/gradle-wrapper.jar",
+    "gradle/wrapper/gradle-wrapper.properties",
+    "gradlew.bat",
+    "src/backendng/build.gradle.kts",
+    "src/backendng/gradle.properties",
+    "src/backendng/src/main/kotlin/com/secman/repository/AssetRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/OutdatedAssetMaterializedViewRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/AssetFilterService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/OutdatedAssetService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/VulnerabilityStatisticsService.kt",
+    "src/backendng/src/test/kotlin/com/secman/integration/ReportingQueryScopeIntegrationTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/TopEolProductsScopingTest.kt",
+    "src/cli/gradle.properties",
+    "src/frontend/astro.config.mjs",
+    "src/frontend/package-lock.json",
+    "src/frontend/package.json",
+    "src/frontend/src/components/UserManagement.tsx",
+    "src/frontend/src/components/WorkgroupDetailsModal.tsx",
+    "src/frontend/src/components/WorkgroupManagement.tsx",
+    "src/frontend/src/components/WorkgroupManagementWithHierarchy.tsx",
+    "src/frontend/src/components/WorkgroupTree.tsx",
+    "src/shared/build.gradle.kts",
+    "src/shared/gradle.properties",
+    "tests/e2e/user-workgroup-details.spec.ts",
+    "tests/e2e/workgroup-search.spec.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/32/bef9868d5c/0/metadata.json",
+      "transcript": "/32/bef9868d5c/0/full.jsonl",
+      "compact_transcript": "/32/bef9868d5c/0/transcript.jsonl",
+      "content_hash": "/32/bef9868d5c/0/content_hash.txt",
+      "prompt": "/32/bef9868d5c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 254614,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 21752320,
+    "output_tokens": 51859,
+    "api_call_count": 152,
+    "subagent_tokens_complete": true
+  }
+}
