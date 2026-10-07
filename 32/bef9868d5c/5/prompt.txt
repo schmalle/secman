@@ -1,0 +1,1 @@
+[Image #1] please evaluate if the refreshes of views during an import process are really needed or if we can meaningful optimize. Please only make the holistic plan
