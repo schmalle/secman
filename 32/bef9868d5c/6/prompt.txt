@@ -1,0 +1,5 @@
+run "./scripts/startbackenddev.sh" then run "./scripts/import.sh" and evaluate also using the backend logs, where to optimize and plan fixes / optimizations.
+
+---
+
+please implement this fixes, restart the backend and then run "./scripts/import.sh" again to identify performance and funtionality issue
