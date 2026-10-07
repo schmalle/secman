@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "40813ca0dadf",
+  "strategy": "manual-commit",
+  "branch": "dev",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "docs/CROWDSTRIKE_IMPORT.md",
+    "src/backendng/src/main/kotlin/com/secman/domain/Asset.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityService.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportServiceTest.kt",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt",
+    "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplHostInfoFacetTest.kt",
+    "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplPaginationLoopTest.kt"
+  ],
+  "sessions": [
+    {
+      "metadata": "/40/813ca0dadf/0/metadata.json",
+      "transcript": "/40/813ca0dadf/0/full.jsonl",
+      "compact_transcript": "/40/813ca0dadf/0/transcript.jsonl",
+      "content_hash": "/40/813ca0dadf/0/content_hash.txt",
+      "prompt": "/40/813ca0dadf/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 153076,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 11042816,
+    "output_tokens": 21799,
+    "api_call_count": 103,
+    "subagent_tokens_complete": true
+  }
+}

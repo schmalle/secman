@@ -1,0 +1,17 @@
+please optiize this prompt for me, "when importing crowdstrike scans and IP adresses of hosts, i want to ensure, that only IP are stored in the asset, which came from the last scan and not historic ip adresses. Means if i have an asset A with ip adress IP1 in the asset register, in the new crowdstrike scan i see asset A again but with ip address IP2, i want after the import to have an asset A with ip adress IP2 stored."
+
+---
+
+execute this prompt
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"Keep existing addresses when no IP data is supplied (Recommended)","question":"When CrowdStrike reports no IP addresses for a matched host, should the import keep the existing addresses or clear them?","questionItemId":"[\"request_user_input_async\",\"call_5c6d041a5eb743e99241fca5790a676f\",0]"}]
+</send_user_message_question_reply>
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"Replace the entire set with the current CrowdStrike addresses (Recommended)","question":"The asset register stores one shared IP set without source ownership. Should a non-empty CrowdStrike result replace that entire set, including addresses entered manually or by other importers?","questionItemId":"[\"request_user_input_async\",\"call_5c6d041a5eb743e99241fca5790a676f\",1]"}]
+</send_user_message_question_reply>

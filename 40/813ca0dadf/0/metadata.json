@@ -1,0 +1,77 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "40813ca0dadf",
+  "session_id": "01a11574-1bf7-7f03-9754-0aec5278431d",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-07T21:04:33.056447Z",
+  "branch": "dev",
+  "checkpoints_count": 2,
+  "save_step_count": 1,
+  "files_touched": [
+    "docs/CROWDSTRIKE_IMPORT.md",
+    "src/backendng/src/main/kotlin/com/secman/domain/Asset.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityService.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportServiceTest.kt",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt",
+    "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplHostInfoFacetTest.kt",
+    "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplPaginationLoopTest.kt"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "5ebcc19e52fc",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 153076,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 11042816,
+    "output_tokens": 21799,
+    "api_call_count": 103,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-07T21:04:33.01748Z",
+    "agent_lines": 484,
+    "agent_removed": 923,
+    "human_added": 666,
+    "human_modified": 95,
+    "human_removed": 0,
+    "total_committed": 1240,
+    "total_lines_changed": 2202,
+    "agent_percentage": 63.89645776566758,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 153,
+      "user_lines_removed": 90,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "docs/CROWDSTRIKE_IMPORT.md": 22,
+        "src/backendng/src/main/kotlin/com/secman/domain/Asset.kt": 1,
+        "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt": 13,
+        "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityService.kt": 12,
+        "src/backendng/src/test/kotlin/com/secman/integration/CrowdStrikeIpImportIntegrationTest.kt": 70,
+        "src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportServiceTest.kt": 16,
+        "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt": 8,
+        "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplHostInfoFacetTest.kt": 5,
+        "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplPaginationLoopTest.kt": 6
+      },
+      "user_removed_per_file": {
+        "docs/CROWDSTRIKE_IMPORT.md": 21,
+        "src/backendng/src/main/kotlin/com/secman/domain/Asset.kt": 1,
+        "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt": 12,
+        "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityService.kt": 3,
+        "src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportServiceTest.kt": 8,
+        "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt": 36,
+        "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplHostInfoFacetTest.kt": 3,
+        "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplPaginationLoopTest.kt": 6
+      }
+    }
+  ]
+}
