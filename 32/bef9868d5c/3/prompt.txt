@@ -1,0 +1,1 @@
+run "gradle :backendng:clean :backendng:build" and fix bugs until it builds
