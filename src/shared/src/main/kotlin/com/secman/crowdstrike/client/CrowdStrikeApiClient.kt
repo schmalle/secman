@@ -33,7 +33,8 @@ data class QueriedHost(
     val adDomain: String? = null,
     val osVersion: String? = null,
     val ip: String? = null,
-    val lastSeen: Instant? = null
+    val lastSeen: Instant? = null,
+    val deviceSelection: com.secman.crowdstrike.dto.CrowdStrikeDeviceSelection? = null
 )
 
 /** Complete device identities travel independently of deduplicated finding rows. */

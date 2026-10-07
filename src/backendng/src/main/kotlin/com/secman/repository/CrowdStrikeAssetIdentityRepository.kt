@@ -8,4 +8,5 @@ import io.micronaut.data.jpa.repository.JpaRepository
 /** Resolves CrowdStrike agent IDs to their persistent SecMan assets. */
 interface CrowdStrikeAssetIdentityRepository : JpaRepository<CrowdStrikeAssetIdentity, Long> {
     fun findByCrowdStrikeAidIn(crowdStrikeAids: Collection<String>): List<CrowdStrikeAssetIdentity>
+    fun findByAssetIdIn(assetIds: Collection<Long>): List<CrowdStrikeAssetIdentity>
 }

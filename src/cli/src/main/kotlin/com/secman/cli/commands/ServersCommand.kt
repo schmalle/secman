@@ -466,7 +466,7 @@ class ServersCommand {
                 return 1
             }
 
-            if (response.vulnerabilities.isEmpty()) {
+            if (response.vulnerabilities.isEmpty() && response.devices.isEmpty()) {
                 System.out.println("No vulnerabilities found matching criteria")
                 return if (response.failedAids.isEmpty()) 0 else 2
             }

@@ -89,16 +89,25 @@ class CrowdStrikeApiClientImplHostInfoFacetTest {
         val requests = mutableListOf<HttpRequest<Any>>()
         every {
             blockingClient.exchange(capture(requests), Map::class.java)
-        } returns HttpResponse.ok(page(vulnerabilityResource("10.4.5.6")))
+        } answers {
+            val uri = firstArg<HttpRequest<Any>>().uri.toString()
+            when {
+                uri.contains("/devices/queries/") -> HttpResponse.ok(mapOf("resources" to listOf("device-1")))
+                uri.contains("/devices/entities/") -> HttpResponse.ok(mapOf("resources" to listOf(mapOf(
+                    "device_id" to "device-1", "hostname" to "server01", "first_seen" to "2026-01-01T00:00:00Z"
+                ))))
+                else -> HttpResponse.ok(page(vulnerabilityResource("10.4.5.6")))
+            }
+        }
 
         val response = client.queryAllVulnerabilitiesBulk(
             severity = "HIGH",
             minDaysOpen = 0,
-            deviceType = "ALL",
+            deviceType = "SERVER",
             config = config
         )
 
-        val uri = requests.single().uri.toString()
+        val uri = requests.single { it.uri.path.contains("/spotlight/") }.uri.toString()
         assertThat(uri).contains("facet=cve")
         assertThat(uri).contains("facet=host_info")
         assertThat(response.vulnerabilities.single().ip).isEqualTo("10.4.5.6")
@@ -132,6 +141,7 @@ class CrowdStrikeApiClientImplHostInfoFacetTest {
                             mapOf(
                                 "device_id" to "device-1",
                                 "hostname" to "server01",
+                                "first_seen" to "2026-01-01T00:00:00Z",
                                 "local_ip" to "10.7.8.9",
                                 "external_ip" to "203.0.113.9",
                                 "connection_ip" to "192.0.2.9",
@@ -141,7 +151,7 @@ class CrowdStrikeApiClientImplHostInfoFacetTest {
                     )
                 )
             } else {
-                HttpResponse.ok(page(vulnerabilityResource(null)))
+                HttpResponse.ok(page(vulnerabilityResource("10.7.8.12")))
             }
         }
 
@@ -158,10 +168,12 @@ class CrowdStrikeApiClientImplHostInfoFacetTest {
         assertThat(spotlightUri).contains("facet=cve")
         assertThat(spotlightUri).contains("facet=host_info")
 
-        // Device metadata still wins when the vulnerability row itself carries no local_ip.
+        assertThat(requests.none { it.uri.toString().contains("network-address-history") }).isTrue()
+
+        // Current device metadata wins over the older vulnerability snapshot.
         assertThat(vulns.single().ip).isEqualTo("10.7.8.9")
         assertThat(vulns.single().ipAddresses).containsExactly(
-            "10.7.8.10", "10.7.8.11", "10.7.8.12", "10.7.8.13", "10.7.8.9", "192.0.2.9", "203.0.113.9"
+            "10.7.8.10", "10.7.8.11", "10.7.8.9", "192.0.2.9", "203.0.113.9"
         )
     }
 

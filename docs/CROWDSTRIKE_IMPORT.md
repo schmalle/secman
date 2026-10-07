@@ -1,29 +1,82 @@
 # CrowdStrike Vulnerability Import
 
+## Latest Falcon device per hostname
+
+Vulnerability lookups and imports keep the most recently enrolled Falcon device:
+maximum Falcon `first_seen`, then maximum `last_seen` for an enrollment-time tie.
+AID order and SecMan observation timestamps are not ranking inputs. Equal ranking
+timestamps, missing enrollment timestamps, incomplete discovery or missing device
+metadata abort selection before replacement. No fallback to an older device is made
+when the winner's Spotlight query fails.
+
+Full hostnames are compared without case sensitivity, within the same AD-domain
+and cloud-account scope. Short names in different FQDNs stay separate. Aliases for
+the same cloud instance and account are ranked together even across AD-domain
+changes during enrollment. Bulk vulnerability
+imports enumerate the requested device types without an activity filter, select the
+winner, then apply `--last-seen-days` to that winner. This retains older AIDs as
+cleanup evidence without querying their vulnerabilities.
+Records without a cloud account join the sole known account for their full hostname
+and AD domain. They never bridge two conflicting known accounts.
+
+If Falcon omits a cloud device's hostname, its instance ID supplies the asset name
+and it still participates in selection with named aliases of that instance.
+Devices lacking both names and instance IDs are excluded only after Falcon confirms
+they have no open findings; otherwise the import stops before replacement.
+
+The CLI sends one active AID and a separate bounded `deviceSelection` containing
+Falcon enrollment/check-in timestamps and superseded records. Zero-finding winners
+are sent too. These payloads require an ADMIN account. After a successful fetch,
+the backend validates the selection and performs import and cleanup in one per-host
+transaction. It removes old bindings on the canonical asset and deletes proven
+superseded duplicate assets using audited cascade deletion. It preserves the
+canonical asset's display-name override, owner and workgroups; it does not copy
+access grants from duplicates. Cross-account/domain conflicts, unknown bindings,
+ambiguous legacy assets, manually created/uploaded duplicates and integration-bound
+duplicates stop that host's replacement for review. Legacy duplicate assets without
+AID bindings require a matching retired cloud instance and CrowdStrike import ownership.
+
+On a device transition, the canonical asset's old CrowdStrike snapshot is cleared
+across all severities before importing the winner's queried slice. Other vulnerability
+sources on the canonical asset are preserved. Its old installed-product snapshot
+is invalidated on the transition and repopulated by the product importer, which
+rejects retired AIDs even when their hostname matches the surviving asset. A CRITICAL/HIGH-only import still has
+only CRITICAL/HIGH coverage; invalidating old LOW/MEDIUM rows is not evidence of
+remediation. Subsequent imports of the same selected device retain severity-scoped
+replacement. Old clients cannot reattach a retired AID to an already selected asset.
+Non-admin domain synchronization queries selected devices but does not retire assets.
+
+Migration `V283__falcon_device_enrollment_timestamps.sql` adds nullable Falcon
+`first_seen`/`last_seen` columns to the identity table. Existing `first_seen_at` and
+`last_seen_at` remain SecMan observation times. The next successful ADMIN import
+populates the Falcon timestamps and performs evidence-backed cleanup; the migration
+itself deletes nothing. Deploy the backend migration before the rebuilt CLI.
+
 ## Asset IP addresses
 
-CrowdStrike's official Hosts API exposes the current `local_ip`, `external_ip`,
-and `connection_ip` fields on a device entity. It also defines
-`POST /devices/combined/devices/network-address-history/v1`, whose per-device
-`history` entries carry `ip_address`. The import queries both structures in
-bounded 100-device chunks and unions and deduplicates up to 100 addresses per
-device response. See CrowdStrike's official SDK definitions for
-the [Hosts operations](https://github.com/CrowdStrike/falconpy/blob/main/src/falconpy/_endpoint/_hosts.py)
-and [network-address history response](https://github.com/CrowdStrike/gofalcon/blob/main/falcon/models/deviceapi_network_address_history_v1.go).
+The import reads the current `local_ip`, `external_ip`, `connection_ip`, and
+`ip` fields from CrowdStrike device entities in bounded 100-device chunks,
+deduplicating up to 100 addresses per device. It does not query network-address
+history. Current device addresses take precedence over older Spotlight host
+snapshots; Spotlight addresses are a fallback when device addresses are missing.
 
-`Asset.ip` remains the compatibility primary address, preferring the reported
-local IP over the sorted address history. The complete set is held in
-`asset_ip_address` and returned as `ipAddresses` by both the detail and paginated
-inventory APIs. Inventory filtering searches both primary and secondary addresses
-and counts each matching asset once.
+When a matched asset has a non-empty set of reported addresses, the import
+**replaces** its stored `asset_ip_address` set and updates `Asset.ip` to the
+reported local IP (or the first sorted current address). For example, an asset
+previously reporting IP1 that now reports only IP2 will contain only IP2 after
+import. Repeating the same import leaves the same addresses.
 
-These are **reported addresses**, including external and historical addresses,
-rather than a verified list of currently configured network interfaces. Imports
-merge newly reported addresses into the stored set. Missing addresses in a partial
-response or an unavailable history lookup do not delete previously reported
-addresses; an import without a primary IP preserves the existing primary.
-Editing or clearing the primary IP also preserves reported addresses. Existing
-stored addresses appear immediately without a reimport or database migration.
+Missing or blank IP data preserves the existing primary and address set. The
+asset register has no per-address source ownership: a non-empty CrowdStrike
+result replaces the entire set, including addresses entered manually or by other
+importers. Other importers retain their existing behavior.
+
+The set is returned as `ipAddresses` by the detail and paginated inventory APIs.
+Inventory filtering searches primary and secondary addresses and counts each
+matching asset once. These are addresses reported in the latest imported data,
+including external addresses; they are not a verified interface inventory.
+Existing historical addresses are removed on the next import that supplies IP
+data; no database migration or bulk cleanup is required.
 
 Service: `CrowdStrikeVulnerabilityImportService` (`src/backendng/src/main/kotlin/com/secman/service/`).
 Spec: `specs/048-prevent-duplicate-vulnerabilities/`.
@@ -70,8 +123,8 @@ reconciliation matching. This prevents a user rename from making the next import
 a second asset under the source hostname.
 
 The import resolves an existing asset by Falcon agent ID (AID), then cloud instance ID,
-then by the source hostname (short name or FQDN). Several AIDs can point to one SecMan
-asset, which covers reimaged Falcon hosts. Conflicting AID or cloud-instance mappings fail
+then by the source hostname (short name or FQDN) for legacy payloads. Latest-device
+payloads retain one active AID per asset and retire proven superseded enrollments. Conflicting AID or cloud-instance mappings fail
 the host transaction instead of silently merging assets. The importer falls back to `Asset.name` only for legacy rows whose
 source hostname has not yet been adopted. When that legacy row is found by cloud instance
 ID and its display name differs, SecMan conservatively records it as a legacy user override.
@@ -479,7 +532,7 @@ a backend restart invalidates an active run and the CLI must rerun.
 
 ## Performance
 
-The streaming importer resolves device metadata and address history once per run,
+The streaming importer resolves current device metadata once per run,
 in 100-device chunks with four concurrent workers, and reuses the result during
 Spotlight fetching. Logs include metadata duration, fetch duration per outer batch,
 and storage duration. Backend DEBUG logs include per-asset resolution, prior-date

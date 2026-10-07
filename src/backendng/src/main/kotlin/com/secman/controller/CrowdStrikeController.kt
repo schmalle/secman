@@ -351,7 +351,13 @@ open class CrowdStrikeController(
 
         return try {
             // T023: Call import service
-            val statistics = importService.importServerVulnerabilities(batches, username)
+            if (batches.any { it.deviceSelection != null } && !authentication.roles.contains("ADMIN")) {
+                log.warn("Falcon device replacement denied: user={} outcome=forbidden", username)
+                return HttpResponse.status<Map<String, String>>(HttpStatus.FORBIDDEN)
+                    .body(mapOf("error" to "Falcon device replacement requires ADMIN"))
+            }
+            val statistics = importService.importServerVulnerabilities(batches, username,
+                allowDeviceReplacement = authentication.roles.contains("ADMIN"))
 
             log.info("Batch import completed: servers processed={}, created={}, updated={}, vulnerabilities imported={}, skipped={}, errors={}, user={}",
                 statistics.serversProcessed, statistics.serversCreated, statistics.serversUpdated,

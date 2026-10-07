@@ -267,7 +267,8 @@ class DomainVulnsService(
         log.info("CrowdStrike query returned {} vulnerabilities for domain {}",
             response.vulnerabilities.size, domain)
 
-        if (response.vulnerabilities.isEmpty()) {
+        check(response.failedAids.isEmpty()) { "Incomplete Falcon domain lookup; existing findings preserved" }
+        if (response.vulnerabilities.isEmpty() && response.devices.isEmpty()) {
             log.warn("No vulnerabilities found in CrowdStrike for domain {}", domain)
             return DomainSyncResultDto(
                 domain = domain,
@@ -280,7 +281,20 @@ class DomainVulnsService(
         }
 
         // Group vulnerabilities by hostname to create batch DTOs
-        val batches = groupVulnerabilitiesByHostname(response.vulnerabilities, domain)
+        val batches = if (response.devices.isEmpty()) {
+            groupVulnerabilitiesByHostname(response.vulnerabilities, domain)
+        } else {
+            val byAid = response.vulnerabilities.groupBy { it.crowdStrikeAid }
+            response.devices.map { device ->
+                val rows = byAid[device.crowdStrikeAid].orEmpty()
+                val hostname = requireNotNull(device.hostname)
+                val base = groupVulnerabilitiesByHostname(rows, domain).singleOrNull()
+                    ?: CrowdStrikeVulnerabilityBatchDto(hostname, null, null, null, domain, null, null, vulnerabilities = emptyList())
+                base.copy(hostname = hostname, cloudAccountId = device.cloudAccountId, cloudInstanceId = device.instanceId,
+                    adDomain = device.adDomain, osVersion = device.osVersion, ip = device.ip ?: base.ip,
+                    crowdStrikeAids = setOf(requireNotNull(device.crowdStrikeAid)))
+            }
+        }
 
         log.info("Grouped vulnerabilities into {} device batches for domain {}", batches.size, domain)
 

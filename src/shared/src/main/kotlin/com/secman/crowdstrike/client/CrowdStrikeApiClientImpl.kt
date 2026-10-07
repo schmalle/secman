@@ -6,6 +6,9 @@ import com.secman.crowdstrike.dto.CrowdStrikeVulnerabilityDto
 import com.secman.crowdstrike.dto.DeviceType
 import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.crowdstrike.dto.InstalledProductDto
+import com.secman.crowdstrike.dto.CrowdStrikeDeviceRecord
+import com.secman.crowdstrike.dto.CrowdStrikeDeviceSelection
+import com.secman.crowdstrike.dto.selectLatestCrowdStrikeDevices
 import com.secman.crowdstrike.exception.CrowdStrikeException
 import com.secman.crowdstrike.exception.NotFoundException
 import com.secman.crowdstrike.exception.RateLimitException
@@ -78,21 +81,20 @@ open class CrowdStrikeApiClientImpl(
             // Authenticate
             val token = getAuthToken(config)
 
-            // Get ALL device IDs for the hostname: a re-imaged/re-enrolled host has
-            // several aids and its open vulnerabilities are spread across them, so
-            // querying only the first aid under-reports (observed: 0 rows while a
-            // sibling aid held thousands). Same per-device loop as
-            // queryVulnerabilitiesByInstanceId — one dead aid must not sink the host.
-            val deviceIds = getDeviceIdsByHostname(hostname, token)
-            if (deviceIds.isEmpty()) {
-                throw NotFoundException("Hostname not found in CrowdStrike: $hostname")
+            val discoveredIds = getDeviceIdsByHostname(hostname, token)
+            if (discoveredIds.isEmpty()) throw NotFoundException("Hostname not found in CrowdStrike: $hostname")
+            val metadata = selectImportDevices(discoveredIds, resolveImportMetadata(discoveredIds, config))
+            val matching = metadata.filterValues { md ->
+                md.hostname.equals(hostname, ignoreCase = true) ||
+                    (!hostname.contains('.') && md.hostname?.substringBefore(".").equals(hostname, ignoreCase = true))
             }
-
-            log.info("Hostname '{}' resolved to {} device id(s): {}", hostname, deviceIds.size, deviceIds)
+            if (matching.size != 1) throw CrowdStrikeException("Hostname does not resolve to one unambiguous Falcon device")
+            val deviceIds = matching.keys.toList()
+            log.info("Selected latest device for hostname={}: aid={}, ignored={}", hostname,
+                deviceIds.single(), matching.values.single().selection?.superseded?.size ?: 0)
 
             val vulnerabilityDtos = mutableListOf<CrowdStrikeVulnerabilityDto>()
             val failedAids = mutableSetOf<String>()
-            val metadata = resolveImportMetadata(deviceIds, config)
             failedAids.addAll(deviceIds.filter { metadata[it]?.hostname.isNullOrBlank() && metadata[it]?.cloudInstanceId.isNullOrBlank() })
             deviceIds.forEach { deviceId ->
                 try {
@@ -145,9 +147,7 @@ open class CrowdStrikeApiClientImpl(
     }
 
     /**
-     * Query all vulnerabilities in bulk using server-side FQL filters
-     *
-     * Optimization: Single API call instead of N device queries
+     * Query the selected current devices using bounded Spotlight batches.
      *
      * @param severity Severity filter (e.g., "HIGH,CRITICAL")
      * @param minDaysOpen Minimum days open filter (e.g., 30)
@@ -170,187 +170,7 @@ open class CrowdStrikeApiClientImpl(
         config: FalconConfigDto,
         limit: Int = 1000  // Reduced from 5000 for better stability
     ): CrowdStrikeQueryResponse {
-        log.info("Bulk querying vulnerabilities: severity={}, minDaysOpen={}, deviceType={}",
-            severity, minDaysOpen, deviceType)
-
-        val token = getAuthToken(config)
-        val allVulnerabilities = mutableListOf<CrowdStrikeVulnerabilityDto>()
-        var afterToken: String? = null
-        var hasMore = true
-        var pageCount = 0
-        // Anti-loop guard: every cursor followed so far (see queryBatchVulnerabilities).
-        val seenAfterTokens = mutableSetOf<String>()
-
-        // Build FQL filter - SIMPLIFIED for maximum compatibility
-        // Only use status and severity filters (most reliable)
-        // All other filtering (days open, device type) done client-side
-        val severityFilter = buildSeverityFilter(severity)
-
-        // Build complete FQL filter - MINIMAL for reliability
-        val fqlFilter = "status:'open'+$severityFilter"
-
-        log.info("FQL Filter: {} (days open and device type filtering: client-side)", fqlFilter)
-
-        while (hasMore) {
-            try {
-                pageCount++
-                log.debug("Bulk query page {}: limit={}, afterToken={}", pageCount, limit, afterToken ?: "null")
-
-                val uri = UriBuilder.of("/spotlight/combined/vulnerabilities/v1")
-                    .queryParam("filter", fqlFilter)
-                    .queryParam("limit", limit.coerceAtMost(5000))
-                    // Request CVE facet so severity/CVSS fields are present in the response,
-                    // and host_info so local_ip / machine_domain / instance_id /
-                    // service_provider_account_id / os_version are present at all. Spotlight omits
-                    // the whole host_info object unless the facet is asked for, so dropping it
-                    // silently NULLs the asset IP (and the domain / cloud metadata) instead of
-                    // failing - the same failure mode as the Discover install_usage facet.
-                    .queryParam("facet", "cve", "host_info")
-                    .apply {
-                        if (afterToken != null) {
-                            queryParam("after", afterToken)
-                        }
-                    }
-                    .build()
-
-                val request = HttpRequest.GET<Any>(uri.toString())
-                    .header("Authorization", "Bearer ${token.accessToken}")
-                    .header("Accept", "application/json")
-
-                val response = httpClient.toBlocking().exchange(request, Map::class.java)
-
-                when (response.status.code) {
-                    200 -> {
-                        @Suppress("UNCHECKED_CAST")
-                        val responseBody = response.body() as? Map<String, Any>
-                            ?: throw CrowdStrikeException("Empty response from Spotlight API")
-
-                        val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
-                        val vulns = mapResponseToDtos(resources)
-
-                        // Apply client-side filtering (days open + device type)
-                        val filtered = vulns.filter { vuln ->
-                            // Filter by days open
-                            val daysOpenValue = vuln.daysOpen?.split(" ")?.firstOrNull()?.toIntOrNull() ?: 0
-                            val meetsMinDaysOpen = daysOpenValue >= minDaysOpen
-
-                            // Filter by device type (only if SERVER specified)
-                            val meetsDeviceType = if (deviceType.equals("SERVER", ignoreCase = true)) {
-                                val hostname = vuln.hostname.lowercase()
-                                val isWorkstation = hostname.contains("laptop") ||
-                                    hostname.contains("desktop") ||
-                                    hostname.contains("workstation") ||
-                                    hostname.contains("-pc") ||
-                                    hostname.contains("client")
-                                !isWorkstation  // Include if NOT a workstation
-                            } else {
-                                true  // No device type filtering
-                            }
-
-                            meetsMinDaysOpen && meetsDeviceType
-                        }
-
-                        allVulnerabilities.addAll(filtered)
-
-                        log.info("Bulk query page {}: retrieved {} vulnerabilities, {} after filtering (total: {})",
-                            pageCount, vulns.size, filtered.size, allVulnerabilities.size)
-
-                        // Check for pagination
-                        val meta = responseBody["meta"] as? Map<*, *>
-                        val pagination = meta?.get("pagination") as? Map<*, *>
-                        afterToken = pagination?.get("after")?.toString()
-
-                        // Stop when: no token, empty page, short page (< requested = last page),
-                        // or a cursor we have already followed (Falcon has been observed
-                        // ping-ponging between two cursors, which a consecutive-repeat check
-                        // cannot see — see queryBatchVulnerabilities).
-                        hasMore = afterToken != null &&
-                                  vulns.isNotEmpty() &&
-                                  vulns.size >= limit.coerceAtMost(5000) &&
-                                  seenAfterTokens.add(afterToken!!)
-
-                        if (hasMore) {
-                            log.debug("More results available, fetching next page...")
-                        }
-                    }
-                    404 -> {
-                        log.info("Spotlight API returned 404. No vulnerabilities found.")
-                        hasMore = false
-                    }
-                    429 -> {
-                        val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                        throw RateLimitException("Rate limit exceeded on bulk query", retryAfter)
-                    }
-                    in 500..599 -> throw CrowdStrikeException("Spotlight API server error: ${response.status}")
-                    else -> throw CrowdStrikeException("Unexpected Spotlight API response: ${response.status}")
-                }
-            } catch (e: java.net.SocketTimeoutException) {
-                log.error("Socket timeout during bulk query on page {}", pageCount)
-                log.error("  FQL Filter: {}", fqlFilter)
-                log.error("  Current limit: {}, afterToken: {}", limit, afterToken ?: "null")
-                log.error("  Consider reducing page size or increasing HTTP client timeout")
-                throw CrowdStrikeException("Timeout during bulk query (page $pageCount): ${e.message}", e)
-            } catch (e: io.netty.channel.ChannelException) {
-                log.error("Netty channel error during bulk query on page {}", pageCount)
-                log.error("  FQL filter that caused error: {}", fqlFilter)
-                log.error("  Page: {}, limit: {}, afterToken: {}", pageCount, limit, afterToken ?: "null")
-                log.error("  The connection was closed unexpectedly by the server")
-                throw CrowdStrikeException("Channel error during bulk query: ${e.message}", e)
-            } catch (e: io.micronaut.http.client.exceptions.HttpClientException) {
-                // Handle "Channel closed while aggregating message" errors
-                if (e.message?.contains("Channel closed") == true ||
-                    e.message?.contains("aggregating") == true) {
-                    log.error("HTTP client channel error during bulk query on page {}", pageCount)
-                    log.error("  Error message: {}", e.message)
-                    log.error("  FQL filter: {}", fqlFilter)
-                    log.error("  Page: {}, limit: {}, afterToken: {}", pageCount, limit, afterToken ?: "null")
-
-                    // Retry with smaller page size if this is the first page
-                    if (pageCount == 1 && limit > 100) {
-                        log.warn("First page failed with limit={}. Retrying with limit=100", limit)
-                        return queryAllVulnerabilitiesBulk(
-                            severity = severity,
-                            minDaysOpen = minDaysOpen,
-                            deviceType = deviceType,
-                            config = config,
-                            limit = 100  // Retry with much smaller page size
-                        )
-                    }
-                    throw CrowdStrikeException("Channel closed during bulk query: ${e.message}", e)
-                }
-                throw e
-            } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
-                when (e.status.code) {
-                    404 -> {
-                        log.info("Spotlight API returned 404. No vulnerabilities found.")
-                        hasMore = false
-                    }
-                    429 -> {
-                        val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                        throw RateLimitException("Rate limit exceeded", retryAfter, e)
-                    }
-                    in 500..599 -> throw CrowdStrikeException("Server error: ${e.status}", e)
-                    else -> throw CrowdStrikeException("API error: ${e.message}", e)
-                }
-            } catch (e: RateLimitException) {
-                throw e
-            } catch (e: Exception) {
-                log.error("Unexpected error during bulk query on page {}", pageCount, e)
-                log.error("  FQL Filter: {}", fqlFilter)
-                log.error("  Limit: {}, afterToken: {}", limit, afterToken ?: "null")
-                throw CrowdStrikeException("Failed to execute bulk query: ${e.message}", e)
-            }
-        }
-
-        log.info("Bulk query completed: {} total vulnerabilities retrieved in {} pages",
-            allVulnerabilities.size, pageCount)
-
-        return CrowdStrikeQueryResponse(
-            hostname = "BULK_QUERY",
-            vulnerabilities = allVulnerabilities,
-            totalCount = allVulnerabilities.size,
-            queriedAt = LocalDateTime.now()
-        )
+        return queryServersWithFilters(null, deviceType, severity, minDaysOpen, config, limit)
     }
 
     /**
@@ -434,7 +254,9 @@ open class CrowdStrikeApiClientImpl(
             log.info(">>> Stage 1: Getting authentication token")
             val token = getAuthToken(config)
             log.info(">>> Stage 1: Querying {} devices with product_type_desc filter", parsedDeviceType.name)
-            val serverDeviceIds = getDeviceIdsFiltered(token, parsedDeviceType, limit, lastSeenDays)
+            val discoveredIds = getDeviceIdsFiltered(token, parsedDeviceType, limit, 0)
+            val selectedMetadata = selectImportDevices(discoveredIds, resolveImportMetadata(discoveredIds, config), lastSeenDays)
+            val serverDeviceIds = selectedMetadata.keys.toList()
 
             if (serverDeviceIds.isEmpty()) {
                 log.info(">>> Stage 1: No {} devices found in CrowdStrike", parsedDeviceType.name)
@@ -451,18 +273,14 @@ open class CrowdStrikeApiClientImpl(
 
             // Stage 2: Query vulnerabilities for those specific devices
             log.info(">>> Stage 2: Starting vulnerability query for {} devices", serverDeviceIds.size)
-            val vulnerabilities = queryVulnerabilitiesByDeviceIds(
-                deviceIds = serverDeviceIds,
-                severity = severity,
-                minDaysOpen = minDaysOpen,
-                config = config,  // Pass config instead of token so fresh token can be obtained
-                limit = limit
-            )
-
-            allVulnerabilities.addAll(vulnerabilities)
+            val outcome = queryVulnerabilitiesWithMetadata(serverDeviceIds, severity, minDaysOpen,
+                config, limit, selectedMetadata)
+            allVulnerabilities.addAll(outcome.vulnerabilities)
+            failedAids.addAll(outcome.failedDeviceIds)
+            queriedDevices.addAll(selectedMetadata.map { (id, md) -> md.toQueriedHost(id) })
 
             log.info("Stage 2 complete: {} vulnerabilities found across {} servers",
-                vulnerabilities.size, serverDeviceIds.size)
+                outcome.vulnerabilities.size, serverDeviceIds.size)
         }
 
         return CrowdStrikeQueryResponse(
@@ -501,7 +319,7 @@ open class CrowdStrikeApiClientImpl(
 
         // Stage 1: Get all device IDs
         val token = getAuthToken(config)
-        var serverDeviceIds = getDeviceIdsFiltered(token, parsedDeviceType, limit, lastSeenDays)
+        var serverDeviceIds = getDeviceIdsFiltered(token, parsedDeviceType, limit, 0)
 
         if (serverDeviceIds.isEmpty()) {
             log.info("No {} devices found in CrowdStrike", parsedDeviceType.name)
@@ -517,7 +335,7 @@ open class CrowdStrikeApiClientImpl(
         // The deviceId keys are kept so failed Stage-2 batches can be mapped back to their
         // QueriedHosts and reported in failedHosts.
         val metadataStarted = System.nanoTime()
-        val metadataByDeviceId = resolveImportMetadata(serverDeviceIds, config)
+        var metadataByDeviceId = resolveImportMetadata(serverDeviceIds, config)
         if (serverDeviceIds.any { it !in metadataByDeviceId }) {
             // Without metadata an unresolved AID could be a sibling of any resolved host.
             throw CrowdStrikeException("Incomplete device metadata; import stopped before replacement")
@@ -537,6 +355,8 @@ open class CrowdStrikeApiClientImpl(
             log.warn("Excluded {} nameless Falcon devices with confirmed zero open findings from import and reconciliation",
                 namelessDevices.size)
         }
+        metadataByDeviceId = selectImportDevices(serverDeviceIds, metadataByDeviceId, lastSeenDays)
+        serverDeviceIds = metadataByDeviceId.keys.toList()
         log.info("Import metadata completed: devices={}, resolved={}, durationMs={}",
             serverDeviceIds.size, metadataByDeviceId.size, (System.nanoTime() - metadataStarted) / 1_000_000)
         fun toQueriedHost(deviceId: String, md: DeviceMetadata): QueriedHost? {
@@ -552,34 +372,8 @@ open class CrowdStrikeApiClientImpl(
 
         log.info("Found {} {} devices, processing in batches of {}", serverDeviceIds.size, parsedDeviceType.name, deviceBatchSize)
 
-        // Stage 2: Process device IDs in streaming batches
-        // Keep sibling AIDs in one payload: a later partial replace would erase the first.
-        val deviceChunks = mutableListOf<List<String>>()
-        var pending = mutableListOf<String>()
-        val identityGroups = groupImportIdentities(serverDeviceIds, metadataByDeviceId)
-        val importMetadata = metadataByDeviceId.toMutableMap()
-        // Canonicalize cloud aliases separately from other instances sharing a short name.
-        identityGroups.flatMap { siblings ->
-            siblings.groupBy { id ->
-                val md = metadataByDeviceId[id]
-                md?.cloudInstanceId?.trim()?.takeIf { it.isNotBlank() }?.lowercase()?.let { "instance:$it" }
-                    ?: md?.hostname?.trim()?.lowercase()?.let { "host:$it:${md.adDomain?.lowercase().orEmpty()}" } ?: id
-            }.values
-        }.forEach { siblings ->
-            val canonicalName = siblings.mapNotNull { metadataByDeviceId[it]?.hostname }
-                .firstOrNull { it.isNotBlank() }
-            if (canonicalName != null) siblings.forEach { id ->
-                metadataByDeviceId[id]?.let { importMetadata[id] = it.copy(hostname = canonicalName) }
-            }
-        }
-        identityGroups.forEach { siblings ->
-                if (pending.isNotEmpty() && pending.size + siblings.size > deviceBatchSize) {
-                    deviceChunks.add(pending)
-                    pending = mutableListOf()
-                }
-                pending.addAll(siblings)
-            }
-        if (pending.isNotEmpty()) deviceChunks.add(pending)
+        // Selection has already reduced each host/instance group to one AID.
+        val deviceChunks = serverDeviceIds.chunked(deviceBatchSize)
         var totalVulnerabilities = 0
         val failedDeviceIds = (serverDeviceIds - metadataByDeviceId.keys).toMutableSet()
 
@@ -594,7 +388,7 @@ open class CrowdStrikeApiClientImpl(
                 minDaysOpen = minDaysOpen,
                 config = config,
                 limit = limit,
-                metadataByDeviceId = importMetadata
+                metadataByDeviceId = metadataByDeviceId
             )
             failedDeviceIds.addAll(outcome.failedDeviceIds)
             val batchVulns = outcome.vulnerabilities
@@ -602,7 +396,7 @@ open class CrowdStrikeApiClientImpl(
                 index + 1, deviceChunks.size, chunk.size, batchVulns.size, outcome.failedDeviceIds.size,
                 (System.nanoTime() - fetchStarted) / 1_000_000)
 
-            if (batchVulns.isNotEmpty()) {
+            if (chunk.any { it !in outcome.failedDeviceIds }) {
                 totalVulnerabilities += batchVulns.size
                 batchProcessor(StreamingVulnerabilityBatch(batchVulns, chunk.filterNot { it in outcome.failedDeviceIds }
                     .mapNotNull { id -> metadataByDeviceId[id]?.toQueriedHost(id) }.toSet()))
@@ -1161,27 +955,38 @@ open class CrowdStrikeApiClientImpl(
                         val responseBody = response.body() as? Map<String, Any>
                             ?: throw CrowdStrikeException("Empty response from CrowdStrike Hosts API")
 
-                        val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
+                        if (!(responseBody["errors"] as? List<*>).isNullOrEmpty()) throw CrowdStrikeException("Incomplete Falcon device enumeration")
+                        val resources = responseBody["resources"] as? List<*>
+                            ?: throw CrowdStrikeException("Missing Falcon device IDs")
                         val deviceIds = resources.mapNotNull { it?.toString() }
 
+                        if (deviceIds.isEmpty() && offset > 0) throw CrowdStrikeException("Incomplete Falcon device enumeration")
+                        if (deviceIds.any { it in allDeviceIds } || deviceIds.distinct().size != deviceIds.size) {
+                            throw CrowdStrikeException("Repeated Falcon device enumeration page")
+                        }
                         allDeviceIds.addAll(deviceIds)
 
                         // Check if there are more pages
                         val meta = responseBody["meta"] as? Map<*, *>
                         val pagination = meta?.get("pagination") as? Map<*, *>
-                        val total = (pagination?.get("total") as? Number)?.toInt() ?: deviceIds.size
+                        val total = (pagination?.get("total") as? Number)?.toInt()
+                        if (total != null && (allDeviceIds.size > total || (allDeviceIds.size < total && deviceIds.isEmpty()))) {
+                            throw CrowdStrikeException("Incomplete Falcon device enumeration")
+                        }
 
                         log.info(">>> Stage 1 (page {}): Retrieved {} device IDs (total so far: {}, total available: {})",
                             (offset / limit) + 1, deviceIds.size, allDeviceIds.size, total)
 
-                        hasMore = allDeviceIds.size < total && deviceIds.isNotEmpty()
+                        hasMore = if (total != null) allDeviceIds.size < total else deviceIds.size >= limit.coerceAtMost(5000)
                         offset += deviceIds.size
+                        if (hasMore && offset >= 1000000) throw CrowdStrikeException("Falcon device enumeration exceeded safety limit")
 
                         if (hasMore) {
                             log.info(">>> Stage 1: More devices available, continuing pagination (offset: {})", offset)
                         }
                     }
                     404 -> {
+                        if (offset > 0) throw CrowdStrikeException("Incomplete Falcon device enumeration")
                         log.info("No {} devices found", deviceType.name)
                         hasMore = false
                     }
@@ -1195,6 +1000,7 @@ open class CrowdStrikeApiClientImpl(
             } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
                 when (e.status.code) {
                     404 -> {
+                        if (offset > 0) throw CrowdStrikeException("Incomplete Falcon device enumeration")
                         log.info("No {} devices found", deviceType.name)
                         hasMore = false
                     }
@@ -1218,7 +1024,7 @@ open class CrowdStrikeApiClientImpl(
             log.info("Deduplicated device IDs: {} -> {} unique (removed {} duplicates from pagination overlap)",
                 allDeviceIds.size, uniqueDeviceIds.size, allDeviceIds.size - uniqueDeviceIds.size)
         }
-        log.info(">>> Stage 1 complete: {} active {} devices found (last seen within 24 hours)", uniqueDeviceIds.size, deviceType.name)
+        log.info(">>> Stage 1 complete: {} {} devices found (lastSeenDays={})", uniqueDeviceIds.size, deviceType.name, lastSeenDays)
         return uniqueDeviceIds
     }
 
@@ -1259,7 +1065,8 @@ open class CrowdStrikeApiClientImpl(
      */
     data class DeviceVulnerabilityQueryResult(
         val vulnerabilities: List<CrowdStrikeVulnerabilityDto>,
-        val failedDeviceIds: Set<String>
+        val failedDeviceIds: Set<String>,
+        val devices: Set<QueriedHost> = emptySet()
     )
 
     open fun queryVulnerabilitiesByDeviceIdsDetailed(
@@ -1268,10 +1075,10 @@ open class CrowdStrikeApiClientImpl(
         minDaysOpen: Int,
         config: FalconConfigDto,
         limit: Int = 1000
-    ): DeviceVulnerabilityQueryResult = queryVulnerabilitiesWithMetadata(
-        deviceIds, severity, minDaysOpen, config, limit,
-        resolveDeviceMetadata(deviceIds, getAuthToken(config))
-    )
+    ): DeviceVulnerabilityQueryResult {
+        val metadata = selectImportDevices(deviceIds, resolveImportMetadata(deviceIds, config))
+        return queryVulnerabilitiesWithMetadata(metadata.keys.toList(), severity, minDaysOpen, config, limit, metadata)
+    }
 
     private fun queryVulnerabilitiesWithMetadata(
         deviceIds: List<String>,
@@ -1381,29 +1188,11 @@ open class CrowdStrikeApiClientImpl(
             }
         }
 
-        // A successful sibling's partial set is unsafe too: storage replaces the whole host.
-        groupImportIdentities(deviceIds, metadataByDeviceId).forEach { siblings ->
-            if (siblings.any { it in failedDeviceIds }) failedDeviceIds.addAll(siblings)
-        }
-        val failedNames = failedDeviceIds.mapNotNull {
-            metadataByDeviceId[it]?.hostname?.substringBefore(".")?.lowercase()
-        }.toSet()
-        val failedInstances = failedDeviceIds.mapNotNull {
-            metadataByDeviceId[it]?.cloudInstanceId?.trim()?.takeIf(String::isNotBlank)?.lowercase()
-        }.toSet()
-        deviceIds.filterTo(failedDeviceIds) { id ->
-            val metadata = metadataByDeviceId[id]
-            metadata?.hostname?.substringBefore(".")?.lowercase() in failedNames ||
-                metadata?.cloudInstanceId?.lowercase() in failedInstances
-        }
-        val completeRows = allVulnerabilities.filterNot {
-            it.crowdStrikeAid in failedDeviceIds ||
-                it.hostname.substringBefore(".").lowercase() in failedNames ||
-                it.cloudInstanceId?.lowercase() in failedInstances
-        }
+        val completeRows = allVulnerabilities.filterNot { it.crowdStrikeAid in failedDeviceIds }
         log.info(">>> Stage 2 complete: {} complete vulnerabilities across {} batches ({} excluded device(s))",
             completeRows.size, batches.size, failedDeviceIds.size)
-        return DeviceVulnerabilityQueryResult(completeRows, failedDeviceIds)
+        return DeviceVulnerabilityQueryResult(completeRows, failedDeviceIds,
+            deviceIds.mapNotNull { id -> metadataByDeviceId[id]?.toQueriedHost(id) }.toSet())
     }
 
     /**
@@ -1545,8 +1334,12 @@ open class CrowdStrikeApiClientImpl(
                         val responseBody = response.body() as? Map<String, Any>
                             ?: throw CrowdStrikeException("Empty response from Spotlight API")
 
-                        val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
+                        if (!(responseBody["errors"] as? List<*>).isNullOrEmpty()) throw CrowdStrikeException("Incomplete Falcon findings page")
+                        val resources = responseBody["resources"] as? List<*> ?: throw CrowdStrikeException("Missing Falcon findings")
                         val vulns = mapResponseToDtos(resources, metadataByDeviceId)
+                        if (vulns.size != resources.size || vulns.any { it.crowdStrikeAid !in deviceIds }) {
+                            throw CrowdStrikeException("Falcon findings do not match the selected devices")
+                        }
 
                         val filtered = vulns.filter { vuln ->
                             val daysOpenValue = vuln.daysOpen?.split(" ")?.firstOrNull()?.toIntOrNull() ?: 0
@@ -1752,124 +1545,58 @@ open class CrowdStrikeApiClientImpl(
         multiplier = "2.0",
         maxDelay = "60s"
     )
-    open fun getDeviceIdByHostname(hostname: String, token: AuthToken): String? =
-        // API-stability wrapper: single-aid callers keep working, but per-host flows
-        // should use getDeviceIdsByHostname — one hostname can map to several aids.
-        getDeviceIdsByHostname(hostname, token).firstOrNull()
+    open fun getDeviceIdByHostname(hostname: String, token: AuthToken): String? {
+        val ids = getDeviceIdsByHostname(hostname, token)
+        if (ids.isEmpty()) return null
+        val metadata = selectImportDevices(ids, resolveDeviceMetadata(ids, token))
+        val matching = metadata.filterValues { it.hostname.equals(hostname, ignoreCase = true) ||
+            (!hostname.contains('.') && it.hostname?.substringBefore(".").equals(hostname, ignoreCase = true)) }
+        if (matching.size != 1) throw CrowdStrikeException("Ambiguous Falcon hostname")
+        return matching.keys.single()
+    }
 
-    /**
-     * Resolve ALL device IDs (aids) for a hostname.
-     *
-     * Same 5-strategy cascade as before, but the first strategy that matches returns
-     * its complete deduped result list instead of only `resources[0]`. Strategies are
-     * NOT unioned: later ones (prefix/contains) are progressively looser, and merging
-     * a loose match into an exact one would over-attribute; first-non-empty preserves
-     * the historical precedence exactly.
-     *
-     * A re-imaged or re-enrolled host keeps its hostname but gets a new aid; Falcon
-     * then holds several device records whose open vulnerabilities are spread across
-     * aids. The bulk import naturally aggregates across all of them (it enumerates
-     * devices, not hostnames), so the per-host path must do the same or it reports
-     * 0 rows whenever the first-returned aid is the stale one (observed 2026-08-25:
-     * five hosts with 0 rows on resources[0] while a sibling aid held thousands).
-     */
+    /** Discover all exact matches before considering a short-name/FQDN fallback. */
     open fun getDeviceIdsByHostname(hostname: String, token: AuthToken): List<String> {
-        log.debug("Looking up device IDs for hostname: {}", hostname)
-
-        val strategies = listOf(
-            "exact match" to "hostname:'$hostname'",
-            "stemmed search" to "hostname:'$hostname*'",
-            "contains search" to "hostname:'*$hostname*'",
-            "lowercase exact match" to "hostname:'${hostname.lowercase()}'",
-            "uppercase exact match" to "hostname:'${hostname.uppercase()}'"
-        )
-
-        strategies.forEachIndexed { index, (name, filter) ->
-            log.debug("Strategy {}: Trying {}", index + 1, name)
-            val deviceIds = tryHostnameFilter(hostname, filter, token)
-            if (deviceIds.isNotEmpty()) {
-                log.info("Found {} device ID(s) for hostname '{}' using {}: {}",
-                    deviceIds.size, hostname, name, deviceIds)
-                return deviceIds
-            }
+        require(hostname.matches(Regex("[A-Za-z0-9_.-]{1,255}"))) { "Invalid hostname" }
+        val strategies = listOf(hostname, hostname.lowercase(), hostname.uppercase()).distinct()
+            .map { "hostname:'$it'" } + listOf("hostname:'$hostname*'", "hostname:'*$hostname*'")
+        for (filter in strategies) {
+            val ids = queryAllMatchingDeviceIds(filter, token)
+            if (ids.isNotEmpty()) return ids
         }
-
-        log.warn("All hostname strategies exhausted. No device found for: {}", hostname)
         return emptyList()
     }
 
-    /**
-     * Try a single hostname filter strategy
-     *
-     * Returns every matching device id, not just the first: one hostname can map to
-     * several agent records (re-imaged / re-enrolled hosts — the bulk import observed
-     * ~2.4 aids per hostname), and taking only `resources[0]` made the per-host query
-     * report 0 rows for hosts whose vulnerabilities live on a sibling aid.
-     *
-     * @param hostname Original hostname (for logging)
-     * @param filter FQL filter string
-     * @param token OAuth2 access token
-     * @return Matching device IDs, deduped; empty if the strategy found nothing
-     * @throws RateLimitException if rate limit hit
-     */
-    private fun tryHostnameFilter(hostname: String, filter: String, token: AuthToken): List<String> = try {
-        log.info("Trying filter for hostname '{}': {}", hostname, filter)
-        val uri = UriBuilder.of("/devices/queries/devices/v1")
-            .queryParam("filter", filter)
-            .queryParam("limit", "100")
-            .build()
-
-        val request = HttpRequest.GET<Any>(uri.toString())
-            .header("Authorization", "Bearer ${token.accessToken}")
-            .header("Accept", "application/json")
-
-        log.info("Making request to: {}", uri)
-        val response = httpClient.toBlocking().exchange(request, Map::class.java)
-        log.info("Response status: {}", response.status)
-
-        when (response.status.code) {
-            200 -> {
-                @Suppress("UNCHECKED_CAST")
-                val responseBody = response.body() as? Map<String, Any>
-                    ?: throw CrowdStrikeException("Empty response from CrowdStrike Hosts API")
-
-                val resources = responseBody["resources"] as? List<*>
-                if (resources.isNullOrEmpty()) {
-                    log.debug("Filter returned no results: {}", filter)
-                    emptyList()
-                } else {
-                    val deviceIds = resources.mapNotNull { it?.toString() }.distinct()
-                    log.debug("Filter returned {} result(s): {}", deviceIds.size, deviceIds)
-                    deviceIds
-                }
+    private fun queryAllMatchingDeviceIds(filter: String, token: AuthToken, pageLimit: Int = 100): List<String> {
+        val ids = linkedSetOf<String>()
+        var offset = 0
+        while (true) {
+            val uri = UriBuilder.of("/devices/queries/devices/v1")
+                .queryParam("filter", filter).queryParam("limit", pageLimit).queryParam("offset", offset).build()
+            val request = HttpRequest.GET<Any>(uri.toString())
+                .header("Authorization", "Bearer ${token.accessToken}").header("Accept", "application/json")
+            val response = try {
+                httpClient.toBlocking().exchange(request, Map::class.java)
+            } catch (e: HttpClientResponseException) {
+                if (e.status.code == 404 && offset == 0) return emptyList()
+                if (e.status.code == 429) throw RateLimitException("Rate limit during device lookup",
+                    e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L, e)
+                throw CrowdStrikeException("Falcon device lookup failed", e)
             }
-            429 -> {
-                val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                throw RateLimitException("Rate limit during hostname lookup", retryAfter)
-            }
-            in 500..599 -> throw CrowdStrikeException("CrowdStrike server error: ${response.status}")
-            else -> {
-                log.debug("Filter failed: status={}, filter={}", response.status, filter)
-                emptyList()
-            }
+            if (response.status.code != 200) throw CrowdStrikeException("Falcon device lookup failed")
+            val body = response.body() as? Map<*, *> ?: throw CrowdStrikeException("Empty Falcon device lookup")
+            if (!(body["errors"] as? List<*>).isNullOrEmpty()) throw CrowdStrikeException("Incomplete Falcon device lookup")
+            val resources = body["resources"] as? List<*> ?: throw CrowdStrikeException("Missing Falcon device IDs")
+            val page = resources.map { it?.toString() ?: throw CrowdStrikeException("Invalid Falcon device ID") }
+            val pagination = (body["meta"] as? Map<*, *>)?.get("pagination") as? Map<*, *>
+            val total = (pagination?.get("total") as? Number)?.toLong()
+            if (page.any { !ids.add(it) }) throw CrowdStrikeException("Repeated Falcon device lookup page")
+            offset += page.size
+            if (total != null && offset.toLong() == total) return ids.toList()
+            if (total != null && (offset > total || page.isEmpty())) throw CrowdStrikeException("Incomplete Falcon device enumeration")
+            if (total == null && page.size < pageLimit) return ids.toList()
+            if (offset >= 1000000) throw CrowdStrikeException("Falcon device enumeration exceeded safety limit")
         }
-    } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
-        when (e.status.code) {
-            429 -> {
-                val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                throw RateLimitException("Rate limit during hostname lookup", retryAfter, e)
-            }
-            in 500..599 -> throw CrowdStrikeException("CrowdStrike server error: ${e.status}", e)
-            else -> {
-                log.debug("Filter failed: status={}", e.status)
-                emptyList()
-            }
-        }
-    } catch (e: RateLimitException) {
-        throw e
-    } catch (e: Exception) {
-        log.error("Error querying hostname filter: {}", filter, e)
-        emptyList()
     }
 
     /**
@@ -1901,6 +1628,9 @@ open class CrowdStrikeApiClientImpl(
         val maxPages = 100  // Safety limit to prevent infinite loops
         // Anti-loop guard: every cursor followed so far (see queryBatchVulnerabilities).
         val seenAfterTokens = mutableSetOf<String>()
+        val seenResourceIds = mutableSetOf<String>()
+        var expectedTotal: Long? = null
+        val logDeviceId = deviceId.replace("\r", "").replace("\n", "")
 
         // Pagination configuration - start with smaller page size for reliability
         var currentLimit = 500  // Start conservative, can handle most systems without pagination
@@ -1935,7 +1665,7 @@ open class CrowdStrikeApiClientImpl(
                         .header("Accept", "application/json")
 
                     log.debug("Spotlight API request: page={}, limit={}, filter={}, afterToken={}",
-                        pageCount, currentLimit, filter, afterToken ?: "null")
+                        pageCount, currentLimit, filter, if (afterToken != null) "present" else "absent")
 
                     val response = httpClient.toBlocking().exchange(request, Map::class.java)
 
@@ -1945,27 +1675,57 @@ open class CrowdStrikeApiClientImpl(
                             val responseBody = response.body() as? Map<String, Any>
                                 ?: throw CrowdStrikeException("Empty response from Spotlight API")
 
-                            val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
-                            val vulns = mapResponseToDtos(resources, hostname, deviceId)
-                            allVulnerabilities.addAll(vulns)
-
-                            // Check for pagination
+                            val resources = responseBody["resources"] as? List<*>
+                                ?: throw CrowdStrikeException("Invalid Spotlight resources")
                             val meta = responseBody["meta"] as? Map<*, *>
                             val pagination = meta?.get("pagination") as? Map<*, *>
-                            val newAfterToken = pagination?.get("after")?.toString()
-
-                            log.info("Spotlight API page {}: retrieved {} vulnerabilities (total: {})",
-                                pageCount, vulns.size, allVulnerabilities.size)
-
-                            // Check if there are more results
-                            // Stop when: no token, empty page, short page (< requested = last page),
-                            // or a cursor we have already followed (Falcon has been observed
-                            // ping-ponging between two cursors, which a consecutive-repeat check
-                            // cannot see — see queryBatchVulnerabilities).
-                            if (newAfterToken != null && (!seenAfterTokens.add(newAfterToken) || resources.isEmpty())) {
-                                throw CrowdStrikeException("Incomplete Spotlight pagination for device")
+                            if (expectedTotal == null) {
+                                expectedTotal = (pagination?.get("total") as? Number)?.toLong()
+                                if (expectedTotal != null && expectedTotal!! < 0) {
+                                    throw CrowdStrikeException("Invalid Spotlight pagination total")
+                                }
                             }
-                            hasMore = newAfterToken != null
+                            val newAfterToken = pagination?.get("after")?.toString()?.takeIf { it.isNotBlank() }
+                            val resourceIds = resources.map { resource ->
+                                (resource as? Map<*, *>)?.get("id")?.toString()?.takeIf { it.isNotBlank() }
+                                    ?: throw CrowdStrikeException("Missing Spotlight resource identity")
+                            }
+                            if (resources.any { resource ->
+                                val record = resource as? Map<*, *> ?: return@any true
+                                val aid = record["aid"]?.toString() ?: record["device_id"]?.toString()
+                                aid != null && aid != deviceId
+                            }) throw CrowdStrikeException("Falcon findings belong to a different device")
+                            val vulns = mapResponseToDtos(resources, hostname, deviceId)
+                            if (vulns.size != resources.size) throw CrowdStrikeException("Incomplete Falcon findings mapping")
+                            if (vulns.size != resources.size) {
+                                throw CrowdStrikeException("Incomplete Spotlight resource mapping")
+                            }
+                            allVulnerabilities.addAll(vulns.filterIndexed { index, _ ->
+                                seenResourceIds.add(resourceIds[index])
+                            })
+
+                            log.info("Spotlight device={} page={}: retrieved={}, unique={}, reportedTotal={}, cursor={}",
+                                logDeviceId, pageCount, resources.size, seenResourceIds.size, expectedTotal,
+                                if (newAfterToken != null) "present" else "absent")
+
+                            val total = expectedTotal
+                            // Falcon can leave a live cursor after the final page. Only proven
+                            // completeness overrides the cursor guard; short pages can still continue.
+                            val failure = when {
+                                total != null && seenResourceIds.size > total -> "rows exceed reported total"
+                                total != null && seenResourceIds.size.toLong() == total -> null
+                                newAfterToken == null && total != null -> "cursor ended before reported total"
+                                newAfterToken != null && resources.isEmpty() -> "empty page before completion"
+                                newAfterToken != null && !seenAfterTokens.add(newAfterToken) -> "repeated cursor before completion"
+                                else -> null
+                            }
+                            if (failure != null) {
+                                log.warn("Incomplete Spotlight pagination: device={}, page={}, unique={}, reportedTotal={}, reason={}",
+                                    logDeviceId, pageCount, seenResourceIds.size, total, failure)
+                                throw CrowdStrikeException("Incomplete Spotlight pagination: $failure")
+                            }
+                            hasMore = newAfterToken != null &&
+                                (total == null || seenResourceIds.size.toLong() < total)
                             afterToken = newAfterToken
                             pageSuccess = true
                         }
@@ -1997,26 +1757,6 @@ open class CrowdStrikeApiClientImpl(
                             maxRetries, pageCount, allVulnerabilities.size)
                         throw CrowdStrikeException("Incomplete Spotlight query after timeout retries")
                     }
-                } catch (e: io.micronaut.http.client.exceptions.HttpClientException) {
-                    val isTimeout = e.message?.contains("Read Timeout", ignoreCase = true) == true ||
-                        e.message?.contains("timeout", ignoreCase = true) == true ||
-                        e.message?.contains("Channel closed", ignoreCase = true) == true
-
-                    if (isTimeout) {
-                        retryCount++
-                        if (retryCount <= maxRetries) {
-                            val newLimit = (currentLimit / 2).coerceAtLeast(minLimit)
-                            val backoffMs = retryCount * 2000L
-                            log.warn("Spotlight API HTTP client timeout on page {} (limit={}). Retry {}/{} with limit={} after {}ms. Error: {}",
-                                pageCount, currentLimit, retryCount, maxRetries, newLimit, backoffMs, e.message)
-                            currentLimit = newLimit
-                            Thread.sleep(backoffMs)
-                        } else {
-                            throw CrowdStrikeException("Incomplete Spotlight query after HTTP timeout retries", e)
-                        }
-                    } else {
-                        throw CrowdStrikeException("HTTP client error: ${e.message}", e)
-                    }
                 } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
                     when (e.status.code) {
                         404 -> {
@@ -2041,6 +1781,26 @@ open class CrowdStrikeApiClientImpl(
                             }
                         }
                         else -> throw CrowdStrikeException("API error: ${e.message}", e)
+                    }
+                } catch (e: io.micronaut.http.client.exceptions.HttpClientException) {
+                    val isTimeout = e.message?.contains("Read Timeout", ignoreCase = true) == true ||
+                        e.message?.contains("timeout", ignoreCase = true) == true ||
+                        e.message?.contains("Channel closed", ignoreCase = true) == true
+
+                    if (isTimeout) {
+                        retryCount++
+                        if (retryCount <= maxRetries) {
+                            val newLimit = (currentLimit / 2).coerceAtLeast(minLimit)
+                            val backoffMs = retryCount * 2000L
+                            log.warn("Spotlight API HTTP client timeout on page {} (limit={}). Retry {}/{} with limit={} after {}ms. Error: {}",
+                                pageCount, currentLimit, retryCount, maxRetries, newLimit, backoffMs, e.message)
+                            currentLimit = newLimit
+                            Thread.sleep(backoffMs)
+                        } else {
+                            throw CrowdStrikeException("Incomplete Spotlight query after HTTP timeout retries", e)
+                        }
+                    } else {
+                        throw CrowdStrikeException("HTTP client error: ${e.message}", e)
                     }
                 } catch (e: RateLimitException) {
                     throw e
@@ -2268,38 +2028,37 @@ open class CrowdStrikeApiClientImpl(
         val cloudAccountId: String?,
         val cloudInstanceId: String?,
         val osVersion: String?,  // Operating system reported by the device entity
-        val lastSeen: Instant? = null
+        val lastSeen: Instant? = null,
+        val firstSeen: Instant? = null,
+        val selection: CrowdStrikeDeviceSelection? = null
     ) {
         fun toQueriedHost(aid: String) = QueriedHost(hostname, cloudInstanceId, aid,
-            cloudAccountId, adDomain, osVersion, ip, lastSeen)
+            cloudAccountId, adDomain, osVersion, ip, lastSeen, selection)
     }
 
-    private fun groupImportIdentities(ids: List<String>, metadata: Map<String, DeviceMetadata>): List<List<String>> {
-        val parent = ids.associateWith { it }.toMutableMap()
-        fun root(id: String): String {
-            var current = id
-            while (parent.getValue(current) != current) current = parent.getValue(current)
-            var child = id
-            while (parent.getValue(child) != current) {
-                val next = parent.getValue(child)
-                parent[child] = current
-                child = next
-            }
-            return current
+    private fun selectImportDevices(
+        ids: List<String>, metadata: Map<String, DeviceMetadata>, lastSeenDays: Int = 0
+    ): Map<String, DeviceMetadata> {
+        if (ids.any { it !in metadata }) throw CrowdStrikeException("Incomplete Falcon device metadata")
+        val selections = try {
+            selectLatestCrowdStrikeDevices(ids.distinct().map { id ->
+                val md = metadata.getValue(id)
+                // Falcon can omit a cloud device's hostname while retaining its instance identity.
+                CrowdStrikeDeviceRecord(id, firstNonBlank(md.hostname, md.cloudInstanceId).orEmpty(), md.cloudInstanceId,
+                    md.cloudAccountId, md.adDomain, md.firstSeen, md.lastSeen)
+            })
+        } catch (e: IllegalArgumentException) {
+            log.warn("Latest Falcon device selection rejected: {}", e.message)
+            throw CrowdStrikeException("Cannot select the latest Falcon device safely", e)
         }
-        val identityOwners = mutableMapOf<String, String>()
-        ids.forEach { id ->
-            val md = metadata[id]
-            val keys = listOfNotNull(
-                md?.hostname?.trim()?.takeIf { it.isNotBlank() }?.substringBefore(".")?.lowercase()?.let { "host:$it" },
-                md?.cloudInstanceId?.trim()?.takeIf { it.isNotBlank() }?.lowercase()?.let { "instance:$it" }
-            )
-            keys.forEach { key ->
-                val previous = identityOwners.putIfAbsent(key, id)
-                if (previous != null) parent[root(id)] = root(previous)
+        val cutoff = Instant.now().minusSeconds(lastSeenDays.toLong() * 86400)
+        return selections.filter { lastSeenDays <= 0 || it.selected.lastSeen?.isAfter(cutoff) == true }
+            .associate { selection ->
+                val id = selection.selected.aid
+                log.info("Latest Falcon device: aid={}, firstSeen={}, lastSeen={}, ignored={}", id,
+                    selection.selected.firstSeen, selection.selected.lastSeen, selection.superseded.size)
+                id to metadata.getValue(id).copy(hostname = selection.selected.hostname, selection = selection)
             }
-        }
-        return ids.groupBy { root(it) }.values.toList()
     }
 
     private fun hasNoOpenFindings(deviceId: String, token: AuthToken): Boolean {
@@ -2350,7 +2109,6 @@ open class CrowdStrikeApiClientImpl(
 
         deviceIds.chunked(chunkSize).forEach { chunk ->
             try {
-                val addressHistory = resolveNetworkAddressHistory(chunk, token)
                 var uriBuilder = UriBuilder.of("/devices/entities/devices/v2")
                 chunk.forEach { id ->
                     uriBuilder = uriBuilder.queryParam("ids", id)
@@ -2370,7 +2128,8 @@ open class CrowdStrikeApiClientImpl(
 
                 @Suppress("UNCHECKED_CAST")
                 val responseBody = response.body() as? Map<String, Any> ?: return@forEach
-                val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
+                if (!(responseBody["errors"] as? List<*>).isNullOrEmpty()) throw CrowdStrikeException("Incomplete Falcon device metadata")
+                val resources = responseBody["resources"] as? List<*> ?: throw CrowdStrikeException("Missing Falcon device metadata")
 
                 resources.forEach { resource ->
                     val device = resource as? Map<*, *> ?: return@forEach
@@ -2383,8 +2142,8 @@ open class CrowdStrikeApiClientImpl(
                         device["aid"]?.toString()
                     )
 
-                    if (deviceId.isNullOrBlank()) {
-                        return@forEach
+                    if (deviceId.isNullOrBlank() || deviceId !in chunk || deviceId in metadataByDeviceId) {
+                        throw CrowdStrikeException("Invalid or repeated Falcon device metadata")
                     }
 
                     val hostname = firstNonBlank(
@@ -2394,7 +2153,7 @@ open class CrowdStrikeApiClientImpl(
                         (device["system"] as? Map<*, *>)?.get("hostname")?.toString()
                     )
 
-                    val ipAddresses = (collectIpAddresses(device, nestedDevice) + addressHistory[deviceId].orEmpty())
+                    val ipAddresses = collectIpAddresses(device, nestedDevice)
                         .take(MAX_IP_ADDRESSES_PER_DEVICE)
                         .toSortedSet()
                     val ip = firstNonBlank(
@@ -2436,7 +2195,8 @@ open class CrowdStrikeApiClientImpl(
                         cloudAccountId = cloudAccountId,
                         cloudInstanceId = cloudInstanceId,
                         osVersion = osVersion,
-                        lastSeen = device["last_seen"]?.toString()?.let { runCatching { Instant.parse(it) }.getOrNull() }
+                        lastSeen = device["last_seen"]?.toString()?.let { runCatching { Instant.parse(it) }.getOrNull() },
+                        firstSeen = device["first_seen"]?.toString()?.let { runCatching { Instant.parse(it) }.getOrNull() }
                     )
                 }
             } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
@@ -2449,6 +2209,8 @@ open class CrowdStrikeApiClientImpl(
                     in 500..599 -> log.warn("CrowdStrike metadata endpoint server error {} for {} device IDs", e.status.code, chunk.size)
                     else -> log.warn("CrowdStrike metadata endpoint error {} retrieving device metadata: {}", e.status.code, e.message)
                 }
+            } catch (e: CrowdStrikeException) {
+                throw e
             } catch (e: Exception) {
                 log.warn("Unexpected error retrieving device metadata for {} device IDs: {}", chunk.size, e.message)
             }
@@ -2461,37 +2223,6 @@ open class CrowdStrikeApiClientImpl(
         }
 
         return metadataByDeviceId
-    }
-
-    /** Retrieve the authoritative Falcon IP history in the same bounded chunks as device details. */
-    private fun resolveNetworkAddressHistory(deviceIds: List<String>, token: AuthToken): Map<String, Set<String>> {
-        return try {
-            val request = HttpRequest.POST(
-                "/devices/combined/devices/network-address-history/v1",
-                mapOf("ids" to deviceIds)
-            )
-                .header("Authorization", "Bearer ${token.accessToken}")
-                .header("Accept", "application/json")
-            @Suppress("UNCHECKED_CAST")
-            val body = httpClient.toBlocking().exchange(request, Map::class.java).body() as? Map<String, Any>
-                ?: return emptyMap()
-            val resources = body["resources"] as? List<*> ?: return emptyMap()
-            resources.mapNotNull { resource ->
-                val row = resource as? Map<*, *> ?: return@mapNotNull null
-                val deviceId = row["device_id"]?.toString()?.takeIf(String::isNotBlank)
-                    ?: return@mapNotNull null
-                val addresses = (row["history"] as? List<*>).orEmpty()
-                    .mapNotNull { (it as? Map<*, *>)?.get("ip_address")?.toString() }
-                    .map(String::trim)
-                    .filter(String::isNotBlank)
-                    .take(MAX_IP_ADDRESSES_PER_DEVICE)
-                    .toSet()
-                deviceId to addresses
-            }.toMap()
-        } catch (e: Exception) {
-            log.warn("Unable to retrieve CrowdStrike network address history for {} devices: {}", deviceIds.size, e.message)
-            emptyMap()
-        }
     }
 
     private fun firstNonBlank(vararg values: String?): String? {
@@ -2561,9 +2292,13 @@ open class CrowdStrikeApiClientImpl(
                     deviceInfo?.get("local_ip")?.toString()
                 )
                 val ipAddresses = buildSet {
-                    metadata?.ipAddresses?.let(::addAll)
-                    listOf(vuln, hostInfo, deviceInfo).filterNotNull().forEach { source ->
-                        addAll(collectIpAddresses(source))
+                    // Current device metadata takes precedence over older Spotlight host snapshots.
+                    if (!metadata?.ipAddresses.isNullOrEmpty()) {
+                        addAll(metadata!!.ipAddresses)
+                    } else {
+                        listOf(vuln, hostInfo, deviceInfo).filterNotNull().forEach { source ->
+                            addAll(collectIpAddresses(source))
+                        }
                     }
                     ip?.let(::add)
                 }
@@ -2697,22 +2432,18 @@ open class CrowdStrikeApiClientImpl(
 
             log.info("Found {} device(s) with instance ID '{}'", deviceIds.size, instanceId)
 
-            // Step 3: Get device details to extract hostnames
-            val deviceDetails = getDeviceDetailsByIds(deviceIds, token)
-
-            val hostnames = deviceDetails.mapNotNull { it["hostname"]?.toString() }
-            val primaryHostname = hostnames.firstOrNull() ?: instanceId
-
-            log.info("Device hostnames: {}", hostnames.joinToString(", "))
+            val metadata = selectImportDevices(deviceIds, resolveImportMetadata(deviceIds, config))
+            if (metadata.size != 1) throw CrowdStrikeException("Instance does not resolve to one unambiguous Falcon hostname")
+            val selectedIds = metadata.keys.toList()
+            val primaryHostname = metadata.values.single().hostname ?: instanceId
 
             // Step 4: Query vulnerabilities for each device
             val allVulnerabilities = mutableListOf<CrowdStrikeVulnerabilityDto>()
             val failedAids = mutableSetOf<String>()
 
-            deviceIds.forEach { deviceId ->
+            selectedIds.forEach { deviceId ->
                 try {
-                    val hostname = deviceDetails.find { it["device_id"] == deviceId }
-                        ?.get("hostname")?.toString() ?: instanceId
+                    val hostname = primaryHostname
 
                     val vulns = querySpotlightApi(deviceId, hostname, token)
                     allVulnerabilities.addAll(vulns)
@@ -2723,14 +2454,14 @@ open class CrowdStrikeApiClientImpl(
             }
 
             log.info("Successfully queried CrowdStrike: instanceId={}, devices={}, vulnerabilities={}",
-                instanceId, deviceIds.size, allVulnerabilities.size)
+                instanceId, selectedIds.size, allVulnerabilities.size)
 
             CrowdStrikeQueryResponse(
-                hostname = if (hostnames.size > 1) hostnames.joinToString(", ") else primaryHostname,
+                hostname = primaryHostname,
                 instanceId = instanceId,
                 failedAids = failedAids,
-                devices = deviceIds.map { id -> QueriedHost(deviceDetails.find { it["device_id"] == id }?.get("hostname")?.toString(), instanceId, id) }.toSet(),
-                deviceCount = deviceIds.size,
+                devices = metadata.map { (id, md) -> md.toQueriedHost(id) }.toSet(),
+                deviceCount = selectedIds.size,
                 vulnerabilities = allVulnerabilities,
                 totalCount = allVulnerabilities.size,
                 queriedAt = LocalDateTime.now()
@@ -2752,64 +2483,8 @@ open class CrowdStrikeApiClientImpl(
      * @return List of device IDs (AIDs) with this instance ID
      */
     private fun queryDeviceIdsByInstanceId(instanceId: String, token: AuthToken): List<String> {
-        log.debug("Querying devices by instance ID: {}", instanceId)
-
-        // Use FQL filter: instance_id:'i-xxx'
-        val filter = "instance_id:'$instanceId'"
-
-        val uri = UriBuilder.of("/devices/queries/devices/v1")
-            .queryParam("filter", filter)
-            .queryParam("limit", "100")
-            .build()
-
-        val request = HttpRequest.GET<Any>(uri.toString())
-            .header("Authorization", "Bearer ${token.accessToken}")
-            .header("Accept", "application/json")
-
-        log.debug("Querying devices: filter={}", filter)
-
-        return try {
-            val response = httpClient.toBlocking().exchange(request, Map::class.java)
-
-            when (response.status.code) {
-                200 -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val responseBody = response.body() as? Map<String, Any>
-                        ?: throw CrowdStrikeException("Empty response from CrowdStrike Hosts API")
-
-                    val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
-                    val deviceIds = resources.mapNotNull { it?.toString() }
-
-                    log.info("Found {} device(s) with instance ID '{}'", deviceIds.size, instanceId)
-                    deviceIds
-                }
-                404 -> {
-                    log.debug("No devices found with instance ID: {}", instanceId)
-                    emptyList()
-                }
-                429 -> {
-                    val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                    throw RateLimitException("Rate limit during instance ID lookup", retryAfter)
-                }
-                in 500..599 -> throw CrowdStrikeException("CrowdStrike server error: ${response.status}")
-                else -> {
-                    log.warn("Unexpected response for instance ID query: status={}", response.status)
-                    emptyList()
-                }
-            }
-        } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
-            when (e.status.code) {
-                429 -> {
-                    val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                    throw RateLimitException("Rate limit during instance ID lookup", retryAfter, e)
-                }
-                404 -> {
-                    log.debug("No devices found with instance ID: {}", instanceId)
-                    emptyList()
-                }
-                else -> throw CrowdStrikeException("Failed to query devices by instance ID: ${e.message}", e)
-            }
-        }
+        require(instanceId.matches(Regex("i-[A-Za-z0-9]+"))) { "Invalid instance ID" }
+        return queryAllMatchingDeviceIds("instance_id:'$instanceId'", token)
     }
 
     /**
@@ -2819,56 +2494,6 @@ open class CrowdStrikeApiClientImpl(
      * @param token OAuth2 access token
      * @return List of device detail maps with hostname, instance_id, etc.
      */
-    private fun getDeviceDetailsByIds(deviceIds: List<String>, token: AuthToken): List<Map<String, Any>> {
-        if (deviceIds.isEmpty()) {
-            return emptyList()
-        }
-
-        log.debug("Getting device details for {} device(s)", deviceIds.size)
-
-        val uri = UriBuilder.of("/devices/entities/devices/v1")
-            .queryParam("ids", deviceIds.joinToString(","))
-            .build()
-
-        val request = HttpRequest.GET<Any>(uri.toString())
-            .header("Authorization", "Bearer ${token.accessToken}")
-            .header("Accept", "application/json")
-
-        return try {
-            val response = httpClient.toBlocking().exchange(request, Map::class.java)
-
-            when (response.status.code) {
-                200 -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val responseBody = response.body() as? Map<String, Any>
-                        ?: throw CrowdStrikeException("Empty response from CrowdStrike Device Details API")
-
-                    val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
-
-                    @Suppress("UNCHECKED_CAST")
-                    resources.mapNotNull { it as? Map<String, Any> }
-                }
-                429 -> {
-                    val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                    throw RateLimitException("Rate limit during device details lookup", retryAfter)
-                }
-                in 500..599 -> throw CrowdStrikeException("CrowdStrike server error: ${response.status}")
-                else -> {
-                    log.warn("Unexpected response for device details: status={}", response.status)
-                    emptyList()
-                }
-            }
-        } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
-            when (e.status.code) {
-                429 -> {
-                    val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                    throw RateLimitException("Rate limit during device details lookup", retryAfter, e)
-                }
-                else -> throw CrowdStrikeException("Failed to get device details: ${e.message}", e)
-            }
-        }
-    }
-
     /**
      * Query vulnerabilities by Active Directory domains
      *
@@ -2921,23 +2546,14 @@ open class CrowdStrikeApiClientImpl(
 
             log.info("Found {} total device(s) across {} domain(s)", deviceIds.size, domains.size)
 
-            // Step 3: Query vulnerabilities for all devices
-            val vulnerabilities = queryVulnerabilitiesByDeviceIds(
-                deviceIds = deviceIds.toList(),
-                severity = severity,
-                minDaysOpen = minDaysOpen,
-                config = config,
-                limit = limit
-            )
-
-            log.info("Successfully queried CrowdStrike: domains={}, devices={}, vulnerabilities={}",
-                domains.joinToString(","), deviceIds.size, vulnerabilities.size)
-
-            CrowdStrikeQueryResponse(
+            val outcome = queryVulnerabilitiesByDeviceIdsDetailed(deviceIds.toList(), severity, minDaysOpen, config, limit)
+            return CrowdStrikeQueryResponse(
                 hostname = "DOMAINS: ${domains.joinToString(", ")}",
-                deviceCount = deviceIds.size,
-                vulnerabilities = vulnerabilities,
-                totalCount = vulnerabilities.size,
+                deviceCount = outcome.devices.size,
+                devices = outcome.devices,
+                failedAids = outcome.failedDeviceIds,
+                vulnerabilities = outcome.vulnerabilities,
+                totalCount = outcome.vulnerabilities.size,
                 queriedAt = LocalDateTime.now()
             )
         } catch (e: CrowdStrikeException) {
@@ -2966,95 +2582,7 @@ open class CrowdStrikeApiClientImpl(
         maxDelay = "60s"
     )
     open fun queryDeviceIdsByDomain(domain: String, token: AuthToken): List<String> {
-        log.debug("Querying devices by AD domain: {}", domain)
-
-        val allDeviceIds = mutableListOf<String>()
-        var offset = 0
-        val pageLimit = 5000
-        var hasMore = true
-
-        while (hasMore) {
-            try {
-                // Use FQL filter: machine_domain:'DOMAIN'
-                // Note: machine_domain is case-insensitive in CrowdStrike
-                val filter = "machine_domain:'$domain'"
-
-                val uri = UriBuilder.of("/devices/queries/devices/v1")
-                    .queryParam("filter", filter)
-                    .queryParam("limit", pageLimit)
-                    .queryParam("offset", offset)
-                    .build()
-
-                val request = HttpRequest.GET<Any>(uri.toString())
-                    .header("Authorization", "Bearer ${token.accessToken}")
-                    .header("Accept", "application/json")
-
-                log.debug("Querying devices: filter={}, offset={}", filter, offset)
-
-                val response = httpClient.toBlocking().exchange(request, Map::class.java)
-
-                when (response.status.code) {
-                    200 -> {
-                        @Suppress("UNCHECKED_CAST")
-                        val responseBody = response.body() as? Map<String, Any>
-                            ?: throw CrowdStrikeException("Empty response from CrowdStrike Hosts API")
-
-                        val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
-                        val deviceIds = resources.mapNotNull { it?.toString() }
-
-                        allDeviceIds.addAll(deviceIds)
-
-                        // Check if there are more pages
-                        val meta = responseBody["meta"] as? Map<*, *>
-                        val pagination = meta?.get("pagination") as? Map<*, *>
-                        val total = (pagination?.get("total") as? Number)?.toInt() ?: deviceIds.size
-
-                        hasMore = allDeviceIds.size < total && deviceIds.isNotEmpty()
-                        offset += deviceIds.size
-
-                        log.debug("Retrieved {} device IDs for domain '{}' (total: {})",
-                            deviceIds.size, domain, allDeviceIds.size)
-
-                        if (hasMore) {
-                            log.debug("More devices available for domain '{}', continuing pagination (offset: {})",
-                                domain, offset)
-                        }
-                    }
-                    404 -> {
-                        log.debug("No devices found for domain: {}", domain)
-                        hasMore = false
-                    }
-                    429 -> {
-                        val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                        throw RateLimitException("Rate limit during domain lookup", retryAfter)
-                    }
-                    in 500..599 -> throw CrowdStrikeException("CrowdStrike server error: ${response.status}")
-                    else -> {
-                        log.warn("Unexpected response for domain query: status={}", response.status)
-                        hasMore = false
-                    }
-                }
-            } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
-                when (e.status.code) {
-                    429 -> {
-                        val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                        throw RateLimitException("Rate limit during domain lookup", retryAfter, e)
-                    }
-                    404 -> {
-                        log.debug("No devices found for domain: {}", domain)
-                        hasMore = false
-                    }
-                    else -> throw CrowdStrikeException("Failed to query devices by domain: ${e.message}", e)
-                }
-            } catch (e: RateLimitException) {
-                throw e
-            } catch (e: Exception) {
-                log.error("Unexpected error querying devices by domain", e)
-                throw CrowdStrikeException("Failed to query devices by domain: ${e.message}", e)
-            }
-        }
-
-        log.info("Found {} total device(s) in domain '{}'", allDeviceIds.size, domain)
-        return allDeviceIds
+        require(domain.matches(Regex("[A-Za-z0-9_.-]{1,255}"))) { "Invalid AD domain" }
+        return queryAllMatchingDeviceIds("machine_domain:'$domain'", token, 4000)
     }
 }

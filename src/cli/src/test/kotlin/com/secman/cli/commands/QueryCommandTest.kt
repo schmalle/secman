@@ -13,6 +13,8 @@ import io.mockk.mockk
 import io.mockk.verify
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -77,4 +79,51 @@ class QueryCommandTest {
         verify(exactly = 0) { api.queryAllVulnerabilities(any(), any()) }
         verify(exactly = 0) { storage.storeServerVulnerabilities(any(), any(), any(), any(), any()) }
     }
+    private fun outputOf(cmd: QueryCommand): Pair<Int, String> {
+        val original = System.out
+        val output = ByteArrayOutputStream()
+        return try {
+            System.setOut(PrintStream(output))
+            cmd.execute() to output.toString(Charsets.UTF_8)
+        } finally {
+            System.setOut(original)
+        }
+    }
+
+    @Test
+    fun `all failed devices report unavailable count and refuse saving`() {
+        val cmd = command()
+        every { api.queryAllVulnerabilities(any(), any()) } returns response(setOf("aid-one")).copy(
+            vulnerabilities = emptyList(), totalCount = 0, deviceCount = 1)
+        val (exit, output) = outputOf(cmd)
+        assertThat(exit).isEqualTo(2)
+        assertThat(output).contains("Vulnerability count unavailable: all 1 device queries failed")
+            .doesNotContain("Total vulnerabilities found", "No vulnerabilities to save")
+        verify(exactly = 0) { auth.authenticate(any(), any(), any()) }
+        verify(exactly = 0) { storage.storeServerVulnerabilities(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `mixed device results label the count partial and exit two without save`() {
+        val cmd = command().apply { save = false }
+        every { api.queryAllVulnerabilities(any(), any()) } returns response(setOf("aid-failed")).copy(
+            devices = setOf(QueriedHost("server-1", null, "aid-one"), QueriedHost("server-1", null, "aid-failed")),
+            deviceCount = 2)
+        val (exit, output) = outputOf(cmd)
+        assertThat(exit).isEqualTo(2)
+        assertThat(output).contains("Partial vulnerabilities found: 1 (1 device queries failed)")
+            .doesNotContain("Total vulnerabilities found", "count unavailable")
+    }
+
+    @Test
+    fun `complete zero result still reports valid zero`() {
+        val cmd = command().apply { save = false }
+        every { api.queryAllVulnerabilities(any(), any()) } returns response().copy(
+            vulnerabilities = emptyList(), totalCount = 0, deviceCount = 1)
+        val (exit, output) = outputOf(cmd)
+        assertThat(exit).isZero()
+        assertThat(output).contains("Total vulnerabilities found: 0")
+            .doesNotContain("Partial", "unavailable")
+    }
+
 }

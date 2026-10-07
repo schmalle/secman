@@ -104,7 +104,15 @@ class QueryCommand(
 
             val finalResponse = filteredByProduct
 
-            System.out.println("Total vulnerabilities found: ${finalResponse.vulnerabilities.size}")
+            val failedDevices = finalResponse.failedAids.size
+            val allDevicesFailed = failedDevices > 0 && finalResponse.devices.all {
+                it.crowdStrikeAid in finalResponse.failedAids
+            }
+            when {
+                allDevicesFailed -> System.out.println("Vulnerability count unavailable: all $failedDevices device queries failed")
+                failedDevices > 0 -> System.out.println("Partial vulnerabilities found: ${finalResponse.vulnerabilities.size} ($failedDevices device queries failed)")
+                else -> System.out.println("Total vulnerabilities found: ${finalResponse.vulnerabilities.size}")
+            }
 
             if (verbose && finalResponse.vulnerabilities.isNotEmpty()) {
                 val severityCount = finalResponse.vulnerabilities
@@ -125,7 +133,7 @@ class QueryCommand(
                 if (save) return 2
             }
 
-            if (save && finalResponse.vulnerabilities.isNotEmpty()) {
+            if (save && (finalResponse.vulnerabilities.isNotEmpty() || finalResponse.devices.isNotEmpty())) {
                 // Authenticate with backend before import
                 val backendUrl = getenv("SECMAN_BACKEND_URL")
                     ?: getenv("SECMAN_HOST")

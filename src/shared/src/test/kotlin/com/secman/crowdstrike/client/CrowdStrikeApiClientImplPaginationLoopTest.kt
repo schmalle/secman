@@ -59,9 +59,11 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         )
     )
 
-    private fun metadataResponse(vararg deviceIds: String) = mapOf(
-        "resources" to deviceIds.map {
-            mapOf("device_id" to it, "hostname" to "server01", "local_ip" to "10.1.2.3")
+    private fun metadataResponse(vararg deviceIds: String, sameHostname: Boolean = false) = mapOf(
+        "resources" to deviceIds.mapIndexed { index, id ->
+            mapOf("device_id" to id, "hostname" to if (sameHostname || deviceIds.size == 1) "server01" else "host-$id",
+                "local_ip" to "10.1.2.3", "first_seen" to Instant.parse("2026-01-01T00:00:00Z").plusSeconds(index.toLong()).toString(),
+                "last_seen" to Instant.now().toString())
         }
     )
 
@@ -237,7 +239,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
     }
 
     @Test
-    fun `failed device batch also discards successful sibling host findings`() {
+    fun `failed device batch preserves the independently selected successful host`() {
         val parallelClient = object : CrowdStrikeApiClientImpl(httpClient, authService) {
             init { configuredBatchSize = 5 }
         }
@@ -255,21 +257,21 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         val result = parallelClient.queryVulnerabilitiesByDeviceIdsDetailed(
             (1..6).map { "aid-$it" }, "HIGH", 0, config, limit = 2
         )
-        assertThat(result.vulnerabilities).isEmpty()
-        assertThat(result.failedDeviceIds).containsExactlyInAnyOrderElementsOf((1..6).map { "aid-$it" })
+        assertThat(result.vulnerabilities.map { it.id }).containsExactly("good")
+        assertThat(result.failedDeviceIds).containsExactlyInAnyOrderElementsOf((1..5).map { "aid-$it" })
     }
 
     @Test
-    fun `streaming reuses metadata and keeps sibling aids in one storage payload`() {
+    fun `streaming reuses metadata and sends only the latest sibling`() {
         val requests = java.util.concurrent.CopyOnWriteArrayList<HttpRequest<Any>>()
         val ids = (1..6).map { "aid-$it" }
         every { blockingClient.exchange(capture(requests), Map::class.java) } answers {
             val uri = firstArg<HttpRequest<Any>>().uri.toString()
             when {
                 uri.contains("/devices/queries/devices/v1") -> HttpResponse.ok(deviceQueryResponse(*ids.toTypedArray()))
-                uri.contains("/devices/entities/devices/v2") -> HttpResponse.ok(metadataResponse(*ids.toTypedArray()))
+                uri.contains("/devices/entities/devices/v2") -> HttpResponse.ok(metadataResponse(*ids.toTypedArray(), sameHostname = true))
                 uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
-                uri.contains("/spotlight/") -> HttpResponse.ok(spotlightPage(ids.map { vulnResource(it, it) }, null, 6))
+                uri.contains("/spotlight/") -> HttpResponse.ok(spotlightPage(listOf(vulnResource("aid-6", "aid-6")), null, 1))
                 else -> error("Unexpected request: $uri")
             }
         }
@@ -278,11 +280,11 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
             stored.add(it.vulnerabilities)
         }
         assertThat(stored).hasSize(1)
-        assertThat(stored.single()).hasSize(6)
+        assertThat(stored.single()).hasSize(1)
         assertThat(result.failedDeviceCount).isZero()
-        assertThat(result.queriedHosts).hasSize(6)
+        assertThat(result.queriedHosts).hasSize(1)
         assertThat(requests.count { it.uri.toString().contains("/devices/entities/devices/v2") }).isEqualTo(1)
-        assertThat(requests.count { it.uri.toString().contains("/network-address-history/") }).isEqualTo(1)
+        assertThat(requests.count { it.uri.toString().contains("/network-address-history/") }).isZero()
     }
 
     @Test
@@ -293,18 +295,18 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
             when {
                 uri.contains("/devices/queries/devices/v1") -> HttpResponse.ok(deviceQueryResponse(*ids.toTypedArray()))
                 uri.contains("/devices/entities/devices/v2") -> HttpResponse.ok(mapOf("resources" to ids.mapIndexed { i, id ->
-                    mapOf("device_id" to id, "hostname" to "alias-$i", "instance_id" to "i-shared")
+                    mapOf("device_id" to id, "hostname" to "alias-$i", "instance_id" to "i-shared", "first_seen" to Instant.parse("2026-01-01T00:00:00Z").plusSeconds(i.toLong()).toString(), "last_seen" to Instant.now().toString())
                 }))
                 uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
-                uri.contains("/spotlight/") -> HttpResponse.ok(spotlightPage(ids.map { vulnResource(it, it) }, null, 2))
+                uri.contains("/spotlight/") -> HttpResponse.ok(spotlightPage(listOf(vulnResource("winner", "aid-2")), null, 1))
                 else -> error("Unexpected request: $uri")
             }
         }
         val stored = mutableListOf<List<com.secman.crowdstrike.dto.CrowdStrikeVulnerabilityDto>>()
         client.queryServersWithFiltersStreaming("SERVER", "HIGH", 0, config, 100, 30, 1) { stored.add(it.vulnerabilities) }
         assertThat(stored).hasSize(1)
-        assertThat(stored.single().map { it.hostname }.toSet()).containsExactly("alias-0")
-        assertThat(stored.single()).hasSize(2)
+        assertThat(stored.single().map { it.hostname }.toSet()).containsExactly("alias-1")
+        assertThat(stored.single()).hasSize(1)
     }
 
     @Test
@@ -315,17 +317,21 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
             when {
                 uri.contains("/devices/queries/devices/v1") -> HttpResponse.ok(deviceQueryResponse(*ids.toTypedArray()))
                 uri.contains("/devices/entities/devices/v2") -> HttpResponse.ok(mapOf("resources" to ids.mapIndexed { i, id ->
-                    mapOf("device_id" to id, "hostname" to "server.domain-$i", "instance_id" to "i-$id")
+                    mapOf("device_id" to id, "hostname" to "server.domain-$i", "instance_id" to "i-$id", "first_seen" to "2026-01-01T00:00:00Z", "last_seen" to Instant.now().toString())
                 }))
                 uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
-                uri.contains("/spotlight/") -> HttpResponse.ok(spotlightPage(ids.map { vulnResource(it, it) }, null, 2))
+                uri.contains("/spotlight/") -> {
+                    val filter = firstArg<HttpRequest<Any>>().parameters.get("filter").orEmpty()
+                    val aid = ids.single { filter.contains(it) }
+                    HttpResponse.ok(spotlightPage(listOf(vulnResource(aid, aid)), null, 1))
+                }
                 else -> error("Unexpected request: $uri")
             }
         }
         val stored = mutableListOf<List<com.secman.crowdstrike.dto.CrowdStrikeVulnerabilityDto>>()
         client.queryServersWithFiltersStreaming("SERVER", "HIGH", 0, config, 100, 30, 1) { stored.add(it.vulnerabilities) }
-        assertThat(stored).hasSize(1)
-        assertThat(stored.single().map { it.hostname }.toSet()).containsExactlyInAnyOrder("server.domain-0", "server.domain-1")
+        assertThat(stored).hasSize(2)
+        assertThat(stored.flatten().map { it.hostname }.toSet()).containsExactlyInAnyOrder("server.domain-0", "server.domain-1")
     }
 
     @Test
@@ -364,27 +370,27 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
                 uri.path.contains("/devices/queries/devices/v1") -> HttpResponse.ok(deviceQueryResponse(*ids.toTypedArray()))
                 uri.path.contains("/network-address-history/") -> {
                     historyCalls.incrementAndGet()
-                    peak.accumulateAndGet(active.incrementAndGet(), ::maxOf)
-                    waveStarted.countDown()
-                    check(waveStarted.await(5, java.util.concurrent.TimeUnit.SECONDS))
-                    active.decrementAndGet()
                     HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
                 }
                 uri.path.contains("/devices/entities/devices/v2") -> {
                     detailsCalls.incrementAndGet()
+                    peak.accumulateAndGet(active.incrementAndGet(), ::maxOf)
+                    waveStarted.countDown()
+                    check(waveStarted.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                    active.decrementAndGet()
                     val chunk = io.micronaut.http.uri.UriBuilder.of(uri).build().query.split("&")
                         .filter { it.startsWith("ids=") }.map { it.substringAfter("=") }
-                    HttpResponse.ok(mapOf("resources" to chunk.map { mapOf("device_id" to it, "hostname" to it) }))
+                    HttpResponse.ok(mapOf("resources" to chunk.map { mapOf("device_id" to it, "hostname" to it, "first_seen" to "2026-01-01T00:00:00Z", "last_seen" to Instant.now().toString()) }))
                 }
                 uri.path.contains("/spotlight/") -> HttpResponse.ok(spotlightPage(emptyList(), null, 0))
                 else -> error("Unexpected request: $uri")
             }
         }
         val result = client.queryServersWithFiltersStreaming("SERVER", "HIGH", 0, config, 500, 30, 200) {
-            error("No findings should reach storage")
+            assertThat(it.vulnerabilities).isEmpty()
         }
         assertThat(peak.get()).isEqualTo(3)
-        assertThat(historyCalls.get()).isEqualTo(3)
+        assertThat(historyCalls.get()).isZero()
         assertThat(detailsCalls.get()).isEqualTo(3)
         assertThat(result.queriedHosts).hasSize(201)
         assertThat(result.failedDeviceCount).isZero()
@@ -409,15 +415,126 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         assertThat(requests).hasSize(3)
     }
 
+    @Test
+    fun `per-host completed total stops despite a lingering cursor`() {
+        val requests = stubSpotlightPages(listOf(
+            spotlightPage(listOf(vulnResource("one")), "terminal", 1)
+        ))
+        assertThat(client.querySpotlightApi("device-1", "server01", token).map { it.id }).containsExactly("one")
+        assertThat(spotlightCalls(requests)).isEqualTo(1)
+    }
+
+    @Test
+    fun `per-host blank cursor ends pagination without a reported total`() {
+        val requests = stubSpotlightPages(listOf(mapOf(
+            "resources" to listOf(vulnResource("one")),
+            "meta" to mapOf("pagination" to mapOf("after" to ""))
+        )))
+        assertThat(client.querySpotlightApi("device-1", "server01", token).map { it.id }).containsExactly("one")
+        assertThat(spotlightCalls(requests)).isEqualTo(1)
+    }
+
+    @Test
+    fun `per-host confirmed zero accepts an empty page with a cursor`() {
+        val requests = stubSpotlightPages(listOf(spotlightPage(emptyList(), "terminal", 0)))
+        assertThat(client.querySpotlightApi("device-1", "server01", token)).isEmpty()
+        assertThat(spotlightCalls(requests)).isEqualTo(1)
+    }
+
+    @Test
+    fun `per-host duplicate rows cannot satisfy reported total`() {
+        stubSpotlightPages(listOf(
+            spotlightPage(listOf(vulnResource("one")), "A", 2),
+            spotlightPage(listOf(vulnResource("one")), "A", 2)
+        ))
+        assertThatThrownBy { client.querySpotlightApi("device-1", "server01", token) }
+            .hasMessageContaining("repeated cursor before completion")
+    }
+
+    @Test
+    fun `per-host completed total overrides a repeated terminal cursor`() {
+        val requests = stubSpotlightPages(listOf(
+            spotlightPage(listOf(vulnResource("one")), "A", 2),
+            spotlightPage(listOf(vulnResource("one"), vulnResource("two")), "A", 2)
+        ))
+        assertThat(client.querySpotlightApi("device-1", "server01", token).map { it.id }).containsExactly("one", "two")
+        assertThat(spotlightCalls(requests)).isEqualTo(2)
+    }
+
+    @Test
+    fun `per-host missing rows fail even if cursor disappears`() {
+        val incompletePages = listOf(
+            spotlightPage(listOf(vulnResource("one")), null, 2),
+            spotlightPage(emptyList(), "terminal", 2),
+            mapOf("resources" to emptyList<Any>(), "meta" to mapOf("pagination" to mapOf("after" to "terminal")))
+        )
+        incompletePages.forEach { page ->
+            stubSpotlightPages(listOf(page))
+            assertThatThrownBy { client.querySpotlightApi("device-1", "server01", token) }
+                .isInstanceOf(com.secman.crowdstrike.exception.CrowdStrikeException::class.java)
+                .hasMessageContaining("Incomplete Spotlight pagination")
+        }
+    }
+
+    @Test
+    fun `per-host missing resource identity cannot satisfy reported total`() {
+        stubSpotlightPages(listOf(spotlightPage(listOf(mapOf("status" to "open")), "terminal", 1)))
+        assertThatThrownBy { client.querySpotlightApi("device-1", "server01", token) }
+            .hasMessageContaining("Missing Spotlight resource identity")
+    }
+
+    @Test
+    fun `per-host thrown 404 on first page returns no vulnerabilities`() {
+        every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } throws
+            io.micronaut.http.client.exceptions.HttpClientResponseException("not found", HttpResponse.notFound<Any>())
+        assertThat(client.querySpotlightApi("device-1", "server01", token)).isEmpty()
+    }
+
+    @Test
+    fun `per-host thrown 404 after cursor fails incomplete query`() {
+        var calls = 0
+        every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } answers {
+            if (++calls == 1) HttpResponse.ok(spotlightPage(listOf(vulnResource("one")), "A", 2))
+            else throw io.micronaut.http.client.exceptions.HttpClientResponseException("not found", HttpResponse.notFound<Any>())
+        }
+        assertThatThrownBy { client.querySpotlightApi("device-1", "server01", token) }
+            .hasMessageContaining("404 after cursor")
+    }
+
+    @Test
+    fun `per-host thrown 429 preserves retry-after`() {
+        every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } throws
+            io.micronaut.http.client.exceptions.HttpClientResponseException(
+                "rate limited", HttpResponse.status<Any>(io.micronaut.http.HttpStatus.TOO_MANY_REQUESTS).header("Retry-After", "7"))
+        val error = org.junit.jupiter.api.Assertions.assertThrows(com.secman.crowdstrike.exception.RateLimitException::class.java) {
+            client.querySpotlightApi("device-1", "server01", token)
+        }
+        assertThat(error.retryAfterSeconds).isEqualTo(7L)
+    }
+
+    @Test
+    fun `per-host thrown 503 retries the same page successfully`() {
+        val requests = mutableListOf<HttpRequest<Any>>()
+        var calls = 0
+        every { blockingClient.exchange(capture(requests), Map::class.java) } answers {
+            if (++calls == 1) throw io.micronaut.http.client.exceptions.HttpClientResponseException(
+                "unavailable", HttpResponse.status<Any>(io.micronaut.http.HttpStatus.SERVICE_UNAVAILABLE))
+            HttpResponse.ok(spotlightPage(listOf(vulnResource("one")), "terminal", 1))
+        }
+        assertThat(client.querySpotlightApi("device-1", "server01", token).map { it.id }).containsExactly("one")
+        assertThat(requests).hasSize(2)
+        assertThat(requests[0].uri).isEqualTo(requests[1].uri)
+    }
+
     // --- multi-aid hostname resolution ---
 
     @Test
-    fun `queryVulnerabilities merges rows from all aids of a hostname`() {
+    fun `queryVulnerabilities queries only the newest enrollment of a hostname`() {
         val requests = mutableListOf<HttpRequest<Any>>()
         every { blockingClient.exchange(capture(requests), Map::class.java) } answers {
             val uri = firstArg<HttpRequest<Any>>().uri.toString()
             when {
-                uri.contains("/devices/entities/devices/v2") -> HttpResponse.ok(metadataResponse("aid-1", "aid-2", "aid-3"))
+                uri.contains("/devices/entities/devices/v2") -> HttpResponse.ok(metadataResponse("aid-1", "aid-2", "aid-3", sameHostname = true))
                 uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
                 uri.contains("/devices/queries/devices/v1") ->
                     HttpResponse.ok(deviceQueryResponse("aid-1", "aid-2", "aid-3"))
@@ -430,11 +547,11 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
 
         val response = client.queryVulnerabilities("server01", config)
 
-        // One device lookup (first strategy matched), one Spotlight query per aid.
+        // Discovery retains old records as cleanup evidence, but only the winner reaches Spotlight.
         assertThat(requests.count { it.uri.toString().contains("/devices/queries/devices/v1") }).isEqualTo(1)
-        assertThat(spotlightCalls(requests)).isEqualTo(3)
-        assertThat(response.vulnerabilities.map { it.id }).containsExactlyInAnyOrder("v1", "v2")
-        assertThat(response.deviceCount).isEqualTo(3)
+        assertThat(spotlightCalls(requests)).isEqualTo(1)
+        assertThat(response.vulnerabilities.map { it.id }).containsExactly("v2")
+        assertThat(response.deviceCount).isEqualTo(1)
         assertThat(response.failedAids).isEmpty()
     }
 
@@ -449,7 +566,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
                     deviceQueries++
                     // Strategy 1 (exact) misses, strategy 2 (stemmed) matches.
                     if (deviceQueries == 1) HttpResponse.ok(deviceQueryResponse())
-                    else HttpResponse.ok(deviceQueryResponse("aid-2", "aid-2", "aid-9"))
+                    else HttpResponse.ok(deviceQueryResponse("aid-2", "aid-9"))
                 }
                 else -> error("Unexpected request: $uri")
             }
@@ -457,17 +574,17 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
 
         val deviceIds = client.getDeviceIdsByHostname("server01", token)
 
-        // Cascade stopped at the first non-empty strategy; duplicates removed.
+        // Cascade stops at the first non-empty strategy.
         assertThat(deviceQueries).isEqualTo(2)
         assertThat(deviceIds).containsExactly("aid-2", "aid-9")
     }
 
     @Test
-    fun `one failing aid does not sink the other aids of the hostname`() {
+    fun `retired aid is ignored even when its Spotlight lookup would fail`() {
         every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } answers {
             val uri = firstArg<HttpRequest<Any>>().uri.toString()
             when {
-                uri.contains("/devices/entities/devices/v2") -> HttpResponse.ok(metadataResponse("aid-1", "aid-2"))
+                uri.contains("/devices/entities/devices/v2") -> HttpResponse.ok(metadataResponse("aid-1", "aid-2", sameHostname = true))
                 uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
                 uri.contains("/devices/queries/devices/v1") -> HttpResponse.ok(deviceQueryResponse("aid-1", "aid-2"))
                 uri.contains("aid-1") ->
@@ -481,8 +598,8 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         val response = client.queryVulnerabilities("server01", config)
 
         assertThat(response.vulnerabilities.map { it.id }).containsExactly("v2")
-        assertThat(response.deviceCount).isEqualTo(2)
-        assertThat(response.failedAids).containsExactly("aid-1")
+        assertThat(response.deviceCount).isEqualTo(1)
+        assertThat(response.failedAids).isEmpty()
     }
 
     @Test
@@ -503,6 +620,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
                 // server01 resolves on the first.
                 uri.contains("ghost-host", ignoreCase = true) -> HttpResponse.ok(deviceQueryResponse())
                 uri.contains("/devices/queries/devices/v1") -> HttpResponse.ok(deviceQueryResponse("aid-1"))
+                uri.contains("/devices/entities/devices/v2") -> HttpResponse.ok(metadataResponse("aid-1"))
                 uri.contains("/spotlight/combined/vulnerabilities/v1") ->
                     HttpResponse.ok(spotlightPage(listOf(vulnResource("v1", "aid-1")), null, 1))
                 else -> error("Unexpected request: $uri")
@@ -523,23 +641,23 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         assertThat(response.vulnerabilities.map { it.id }).containsExactly("v1")
     }
     @Test
-    fun `streaming envelope retains zero finding sibling identity`() {
+    fun `streaming envelope retains the zero finding winner and retired evidence`() {
         val ids = listOf("aid-1", "aid-2")
         every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } answers {
             val uri = firstArg<HttpRequest<Any>>().uri.toString()
             when {
                 uri.contains("/devices/queries/") -> HttpResponse.ok(deviceQueryResponse(*ids.toTypedArray()))
-                uri.contains("/devices/entities/") -> HttpResponse.ok(metadataResponse(*ids.toTypedArray()))
+                uri.contains("/devices/entities/") -> HttpResponse.ok(metadataResponse(*ids.toTypedArray(), sameHostname = true))
                 uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
-                uri.contains("/spotlight/") -> HttpResponse.ok(spotlightPage(listOf(vulnResource("one", "aid-1")), null, 1))
+                uri.contains("/spotlight/") -> HttpResponse.ok(spotlightPage(emptyList(), null, 0))
                 else -> error("Unexpected request: $uri")
             }
         }
         val stored = mutableListOf<StreamingVulnerabilityBatch>()
         client.queryServersWithFiltersStreaming("SERVER", "HIGH", 0, config, 100, 0, 1) { stored.add(it) }
         assertThat(stored).hasSize(1)
-        assertThat(stored.single().devices.map { it.crowdStrikeAid }).containsExactlyInAnyOrderElementsOf(ids)
-        assertThat(stored.single().vulnerabilities).hasSize(1)
+        assertThat(stored.single().devices.map { it.crowdStrikeAid }).containsExactly("aid-2")
+        assertThat(stored.single().vulnerabilities).isEmpty()
     }
 
     @Test
@@ -555,6 +673,36 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
     }
 
     @Test
+    fun `nameless cloud winner uses its instance identity and retires its named sibling`() {
+        val requests = mutableListOf<HttpRequest<Any>>()
+        every { blockingClient.exchange(capture(requests), Map::class.java) } answers {
+            when {
+                firstArg<HttpRequest<Any>>().uri.toString().contains("/devices/queries/") ->
+                    HttpResponse.ok(deviceQueryResponse("old", "winner"))
+                firstArg<HttpRequest<Any>>().uri.toString().contains("/devices/entities/") ->
+                    HttpResponse.ok(mapOf("resources" to listOf(
+                        mapOf("device_id" to "old", "hostname" to "old-server", "instance_id" to "i-shared",
+                            "first_seen" to "2026-01-01T00:00:00Z"),
+                        mapOf("device_id" to "winner", "instance_id" to "i-shared",
+                            "first_seen" to "2026-02-01T00:00:00Z")
+                    )))
+                else -> HttpResponse.ok(spotlightPage(emptyList(), null, 0))
+            }
+        }
+        val devices = mutableListOf<QueriedHost>()
+        client.queryServersWithFiltersStreaming("SERVER", "HIGH", 0, config, 100, 0, 100) {
+            devices.addAll(it.devices)
+        }
+        val winner = devices.single()
+        assertThat(winner.hostname).isEqualTo("i-shared")
+        assertThat(winner.deviceSelection!!.selected.aid).isEqualTo("winner")
+        assertThat(winner.deviceSelection!!.superseded.single().aid).isEqualTo("old")
+        val spotlight = requests.filter { it.uri.path.contains("/spotlight/") }
+        assertThat(spotlight).hasSize(1)
+        assertThat(spotlight.single().parameters.get("filter")).contains("winner").doesNotContain("old")
+    }
+
+    @Test
     fun `nameless devices with confirmed zero open findings do not block streaming`() {
         val requests = java.util.Collections.synchronizedList(mutableListOf<HttpRequest<Any>>())
         every { blockingClient.exchange(capture(requests), Map::class.java) } answers {
@@ -562,7 +710,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
             when {
                 uri.contains("/devices/queries/") -> HttpResponse.ok(deviceQueryResponse("known", "nameless"))
                 uri.contains("/devices/entities/") -> HttpResponse.ok(mapOf("resources" to listOf(
-                    mapOf("device_id" to "known", "hostname" to "server01"),
+                    mapOf("device_id" to "known", "hostname" to "server01", "first_seen" to "2026-01-01T00:00:00Z"),
                     mapOf("device_id" to "nameless")
                 )))
                 uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
@@ -571,7 +719,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
             }
         }
         val result = client.queryServersWithFiltersStreaming("SERVER", "HIGH", 30, config, 100, 0, 200) {
-            error("No findings should reach storage")
+            assertThat(it.vulnerabilities).isEmpty()
         }
         assertThat(result.queriedHosts.map { it.crowdStrikeAid }).containsExactly("known")
         assertThat(result.failedDeviceCount).isZero()
@@ -597,7 +745,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
                 when {
                     uri.contains("/devices/queries/") -> HttpResponse.ok(deviceQueryResponse("known", "nameless"))
                     uri.contains("/devices/entities/") -> HttpResponse.ok(mapOf("resources" to listOf(
-                        mapOf("device_id" to "known", "hostname" to "server01"),
+                        mapOf("device_id" to "known", "hostname" to "server01", "first_seen" to "2026-01-01T00:00:00Z"),
                         mapOf("device_id" to "nameless", "hostname" to " ")
                     )))
                     uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
@@ -643,18 +791,47 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
             when {
                 uri.contains("/devices/queries/") -> HttpResponse.ok(deviceQueryResponse(*ids.toTypedArray()))
                 uri.contains("/devices/entities/") -> HttpResponse.ok(mapOf("resources" to ids.mapIndexed { index, id ->
-                    mapOf("device_id" to id, "hostname" to if (index == 0) "old-alias" else "new-alias", "instance_id" to "i-shared",
+                    mapOf("device_id" to id, "hostname" to if (index == 0) "old-alias" else "new-alias", "instance_id" to "i-shared", "first_seen" to Instant.parse("2026-01-01T00:00:00Z").plusSeconds(index.toLong()).toString(),
                         "last_seen" to if (index == 0) "2026-01-01T00:00:00Z" else "2026-02-01T00:00:00Z")
                 }))
                 uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
-                uri.contains("/spotlight/") -> HttpResponse.ok(spotlightPage(listOf(vulnResource("one", "aid-old")), null, 1))
+                uri.contains("/spotlight/") -> HttpResponse.ok(spotlightPage(listOf(vulnResource("one", "aid-new")), null, 1))
                 else -> error("Unexpected request: $uri")
             }
         }
         val batches = mutableListOf<StreamingVulnerabilityBatch>()
         client.queryServersWithFiltersStreaming("SERVER", "HIGH", 0, config, 100, 0, 1) { batches.add(it) }
-        assertThat(batches.single().devices.map { it.hostname }).containsExactlyInAnyOrder("old-alias", "new-alias")
+        assertThat(batches.single().devices.map { it.hostname }).containsExactly("new-alias")
         assertThat(batches.single().devices.maxBy { it.lastSeen!! }.hostname).isEqualTo("new-alias")
+    }
+
+    @Test
+    fun `hostname discovery follows pagination beyond one hundred device IDs`() {
+        val ids = (1..101).map { "aid-$it" }
+        val requests = mutableListOf<HttpRequest<Any>>()
+        every { blockingClient.exchange(capture(requests), Map::class.java) } answers {
+            val offset = firstArg<HttpRequest<Any>>().parameters.get("offset")!!.toInt()
+            HttpResponse.ok(mapOf("resources" to ids.drop(offset).take(100),
+                "meta" to mapOf("pagination" to mapOf("total" to 101))))
+        }
+        assertThat(client.getDeviceIdsByHostname("server01", token)).containsExactlyElementsOf(ids)
+        assertThat(requests.map { it.parameters.get("offset") }).containsExactly("0", "100")
+    }
+
+    @Test
+    fun `selected device fetch failure never falls back to a retired ID`() {
+        val selectingClient = io.mockk.spyk(client)
+        every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } answers {
+            val uri = firstArg<HttpRequest<Any>>().uri.toString()
+            if (uri.contains("/devices/entities/")) HttpResponse.ok(metadataResponse("aid-1", "aid-2", sameHostname = true))
+            else HttpResponse.ok(deviceQueryResponse("aid-1", "aid-2"))
+        }
+        every { selectingClient.querySpotlightApi("aid-2", any(), any()) } throws
+            com.secman.crowdstrike.exception.CrowdStrikeException("Incomplete selected-device fetch")
+        val response = selectingClient.queryVulnerabilities("server01", config)
+        assertThat(response.vulnerabilities).isEmpty()
+        assertThat(response.failedAids).containsExactly("aid-2")
+        io.mockk.verify(exactly = 0) { selectingClient.querySpotlightApi("aid-1", any(), any()) }
     }
 
 }
