@@ -1,0 +1,1 @@
+please show me an example show to correctly pass parameters to "./scripts/secmanng query" i just wanto to query one server

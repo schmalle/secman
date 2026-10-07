@@ -3,7 +3,7 @@
   "checkpoint_id": "40813ca0dadf",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "docs/CROWDSTRIKE_IMPORT.md",
     "src/backendng/src/main/kotlin/com/secman/domain/Asset.kt",
@@ -21,14 +21,21 @@
       "compact_transcript": "/40/813ca0dadf/0/transcript.jsonl",
       "content_hash": "/40/813ca0dadf/0/content_hash.txt",
       "prompt": "/40/813ca0dadf/0/prompt.txt"
+    },
+    {
+      "metadata": "/40/813ca0dadf/1/metadata.json",
+      "transcript": "/40/813ca0dadf/1/full.jsonl",
+      "compact_transcript": "/40/813ca0dadf/1/transcript.jsonl",
+      "content_hash": "/40/813ca0dadf/1/content_hash.txt",
+      "prompt": "/40/813ca0dadf/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 153076,
+    "input_tokens": 187655,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 11042816,
-    "output_tokens": 21799,
-    "api_call_count": 103,
+    "cache_read_tokens": 11101952,
+    "output_tokens": 22221,
+    "api_call_count": 106,
     "subagent_tokens_complete": true
   }
 }
