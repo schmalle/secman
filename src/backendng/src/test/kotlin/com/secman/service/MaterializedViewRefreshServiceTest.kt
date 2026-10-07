@@ -83,7 +83,8 @@ class MaterializedViewRefreshServiceTest {
         minRefreshIntervalSeconds: Long,
         // 0 = no quiet period, so most tests can sweep immediately. Tests that exercise the
         // import-coalescing behaviour pass a real value.
-        quietPeriodSeconds: Long = 0L
+        quietPeriodSeconds: Long = 0L,
+        importRunLease: CrowdStrikeImportRunLease = CrowdStrikeImportRunLease()
     ): MaterializedViewRefreshService {
         val built = MaterializedViewRefreshService(
             refreshJobRepository,
@@ -96,7 +97,8 @@ class MaterializedViewRefreshServiceTest {
             awsCleanServerKpiService,
             edrCoverageKpiService,
             minRefreshIntervalSeconds,
-            quietPeriodSeconds
+            quietPeriodSeconds,
+            importRunLease
         )
         // In production Micronaut injects the AOP self-proxy; in unit tests the plain
         // instance is fine (no transactionality to assert here). The field is private
@@ -106,6 +108,19 @@ class MaterializedViewRefreshServiceTest {
             set(built, jakarta.inject.Provider { built })
         }
         return built
+    }
+
+    @Test
+    fun `active import blocks deferred refresh even after quiet interval`() {
+        val lease = CrowdStrikeImportRunLease()
+        val id = lease.start("cli")
+        val target = buildService(minRefreshIntervalSeconds = 0, importRunLease = lease)
+        target.requestDeferredRefresh("import")
+        target.sweepPendingRefreshTrigger()
+        verify(exactly = 0) { refreshJobRepository.save(any()) }
+        lease.finish(id, "cli")
+        target.sweepPendingRefreshTrigger()
+        verify(exactly = 1) { refreshJobRepository.save(any()) }
     }
 
     /**

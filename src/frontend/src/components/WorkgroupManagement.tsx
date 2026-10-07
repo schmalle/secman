@@ -14,6 +14,7 @@ import type { Workgroup, WorkgroupAsset, WorkgroupUser } from './workgroupTypes'
 interface WorkgroupManagementProps {
   /** When false (default), workgroups named "AWS-…" are hidden from the table. */
   showAwsWorkgroups?: boolean;
+  searchTerm?: string;
 }
 
 /**
@@ -22,7 +23,7 @@ interface WorkgroupManagementProps {
  * AD domains) is its own component owning its modal-scoped state; this parent
  * fetches the shared lists, renders the table, and refetches after saves.
  */
-const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgroups = false }) => {
+const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgroups = false, searchTerm = '' }) => {
   const [workgroups, setWorkgroups] = useState<Workgroup[]>([]);
   const [users, setUsers] = useState<WorkgroupUser[]>([]);
   const [assets, setAssets] = useState<WorkgroupAsset[]>([]);
@@ -234,13 +235,16 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
           <tbody>
             {(() => {
               const visibleWorkgroups = workgroups.filter(
-                wg => showAwsWorkgroups || !isAwsWorkgroup(wg.name)
+                wg => (showAwsWorkgroups || !isAwsWorkgroup(wg.name))
+                  && wg.name.toLowerCase().includes(searchTerm.trim().toLowerCase())
               );
-              const hiddenAwsCount = workgroups.length - visibleWorkgroups.length;
+              const hiddenAwsCount = showAwsWorkgroups ? 0 : workgroups.filter(wg => isAwsWorkgroup(wg.name)).length;
               return visibleWorkgroups.length === 0 ? (
               <tr>
                 <td colSpan={10} className="text-center text-muted">
-                  {hiddenAwsCount > 0
+                  {searchTerm.trim()
+                    ? `No workgroups match your search.${hiddenAwsCount > 0 ? ' AWS- workgroups are hidden. Enable "Show AWS- workgroups" to include them.' : ''}`
+                    : hiddenAwsCount > 0
                     ? 'AWS- workgroups are hidden. Enable "Show AWS- workgroups" to see them.'
                     : 'No visible workgroups found.'}
                 </td>

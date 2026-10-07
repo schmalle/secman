@@ -33,23 +33,10 @@ class OutdatedAssetService(
 ) {
     private val log = LoggerFactory.getLogger(OutdatedAssetService::class.java)
 
-    /**
-     * Compute the unified-access-control set of asset IDs visible to the user.
-     *
-     * Returns null for ADMIN (universal access — no filtering).
-     * Otherwise delegates to AssetFilterService which applies:
-     *   workgroup membership, ownership, AWS account / domain mappings,
-     *   AWS account sharing, manual creation, scan upload.
-     *
-     * The materialized-view SQL only filters by workgroup_ids and treats
-     * blank workgroup_ids as "visible to everyone", so this post-filter is
-     * mandatory to enforce real access control on top of the view query.
-     */
+    /** Resolve current grants before querying the materialized data. */
     private fun accessibleAssetIds(authentication: Authentication): Set<Long>? {
         if (authentication.roles.contains("ADMIN")) return null
-        return assetFilterService.getAccessibleAssets(authentication)
-            .mapNotNull { it.id }
-            .toSet()
+        return assetFilterService.getAccessibleAssetIds(authentication)
     }
 
     /**
@@ -74,62 +61,20 @@ class OutdatedAssetService(
         adDomain: String? = null,
         pageable: Pageable
     ): Page<OutdatedAssetMaterializedView> {
-        // Extract user's workgroup IDs from authentication attributes
-        val workgroupIds = extractWorkgroupIds(authentication)
-
-        // Check if user has ADMIN role - if so, they see everything
-        val isAdmin = authentication.roles.contains("ADMIN")
-
-        // Build workgroup filter parameter — kept as a coarse SQL pre-filter
-        // for performance; the authoritative access decision is the unified
-        // post-filter below.
-        val workgroupFilter = if (isAdmin) {
-            null
-        } else {
-            workgroupIds?.joinToString(",")
-        }
-
-        // Query repository with filters
-        // Create pageable without sorting to avoid JPQL query issues
         val unsortedPageable = Pageable.from(pageable.number, pageable.size)
-
-        val rawPage = outdatedAssetRepository.findOutdatedAssets(
-            workgroupId = workgroupFilter,
-            searchTerm = searchTerm,
-            minSeverity = minSeverity,
-            adDomain = adDomain,
-            pageable = unsortedPageable
-        )
-
-        // Apply unified access control. The SQL filter alone is permissive
-        // (treats workgroup_ids="" / NULL as visible-to-all), which leaks
-        // unassigned assets across users. AssetFilterService implements
-        // owner / AWS-account / domain / sharing rules so the result here
-        // matches what the user can see via /api/assets and other endpoints.
-        val accessible = accessibleAssetIds(authentication) ?: return rawPage
-
-        val filteredContent = rawPage.content.filter { accessible.contains(it.assetId) }
-        if (filteredContent.size == rawPage.content.size) return rawPage
-        return io.micronaut.data.model.Page.of(filteredContent, unsortedPageable, filteredContent.size.toLong())
-    }
-
-    /**
-     * Extract workgroup IDs from authentication context
-     *
-     * Workgroup IDs are stored in authentication attributes as "workgroupIds"
-     * Expected format: List<Long>
-     *
-     * @param authentication User authentication context
-     * @return List of workgroup IDs or null if not present
-     */
-    private fun extractWorkgroupIds(authentication: Authentication): List<Long>? {
-        val workgroupIdsAttr = authentication.attributes["workgroupIds"] ?: return null
-
-        return when (workgroupIdsAttr) {
-            is List<*> -> workgroupIdsAttr.filterIsInstance<Long>()
-            is Collection<*> -> workgroupIdsAttr.filterIsInstance<Long>()
-            else -> null
+        val accessible = accessibleAssetIds(authentication)
+        if (accessible == null) {
+            return outdatedAssetRepository.findOutdatedAssets(
+                null, searchTerm, minSeverity, adDomain, unsortedPageable
+            )
         }
+        if (accessible.isEmpty()) return Page.of(emptyList(), unsortedPageable, 0)
+
+        // Filter by live grants before both pagination and COUNT; denormalized workgroups
+        // can be stale and cannot represent personal mappings or directional sharing.
+        return outdatedAssetRepository.findOutdatedAssetsForAssets(
+            accessible, searchTerm, minSeverity, adDomain, unsortedPageable
+        )
     }
 
     /**
@@ -160,30 +105,9 @@ class OutdatedAssetService(
      * @return Total count respecting workgroup access control
      */
     fun countOutdatedAssets(authentication: Authentication): Long {
-        val isAdmin = authentication.roles.contains("ADMIN")
-
-        if (isAdmin) {
-            return outdatedAssetRepository.count()
-        }
-
-        // Non-admin: count via the authoritative unified access set rather
-        // than the SQL workgroup filter (which incorrectly counts assets
-        // with no workgroups for users with no workgroups). Pull all view
-        // rows the user can see and count them — bounded by the size of
-        // the user's accessible asset set.
         val accessible = accessibleAssetIds(authentication) ?: return outdatedAssetRepository.count()
         if (accessible.isEmpty()) return 0L
-
-        val workgroupIds = extractWorkgroupIds(authentication)
-        val workgroupFilter = workgroupIds?.joinToString(",")
-        val candidatePage = outdatedAssetRepository.findOutdatedAssets(
-            workgroupId = workgroupFilter,
-            searchTerm = null,
-            minSeverity = null,
-            adDomain = null,
-            pageable = Pageable.from(0, 100_000)
-        )
-        return candidatePage.content.count { accessible.contains(it.assetId) }.toLong()
+        return outdatedAssetRepository.countByAssetIdIn(accessible)
     }
 
     /**

@@ -4,10 +4,9 @@ import com.secman.cli.config.ConfigLoader
 import com.secman.cli.export.ExportService
 import com.secman.cli.service.CliHttpClient
 import com.secman.cli.service.VulnerabilityStorageService
-import com.secman.cli.service.ServerVulnerabilityBatch
+import com.secman.cli.service.buildCrowdStrikeServerBatches
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
 import com.secman.crowdstrike.dto.FalconConfigDto
-import com.secman.crowdstrike.dto.resolveHostIp
 import com.secman.crowdstrike.exception.AuthenticationException
 import com.secman.crowdstrike.exception.CrowdStrikeException
 import com.secman.crowdstrike.exception.NotFoundException
@@ -29,11 +28,13 @@ import java.io.File
  * - Export to JSON or CSV
  * - Optionally save to database via backend HTTP API (--save flag)
  */
-class QueryCommand {
+class QueryCommand(
+    private val appContext: ApplicationContext = ApplicationContext.run(),
+    private val getenv: (String) -> String? = System::getenv
+) {
     private val log = LoggerFactory.getLogger(QueryCommand::class.java)
     private val configLoader = ConfigLoader()
     private val exportService = ExportService()
-    private val appContext = ApplicationContext.run()
     private val apiClient: CrowdStrikeApiClient = appContext.getBean(CrowdStrikeApiClient::class.java)
     private val storageService: VulnerabilityStorageService = appContext.getBean(VulnerabilityStorageService::class.java)
     private val cliHttpClient: CliHttpClient = appContext.getBean(CliHttpClient::class.java)
@@ -57,6 +58,11 @@ class QueryCommand {
             if (hostname.isBlank()) {
                 System.err.println("Error: Hostname cannot be blank")
                 return 1
+            }
+
+            if (save && product != null) {
+                System.err.println("Error: a product-filtered lookup cannot replace a complete host snapshot; omit --product when saving")
+                return 2
             }
 
             val config = if (clientId != null && clientSecret != null) {
@@ -114,13 +120,18 @@ class QueryCommand {
             }
 
             // Save to database via backend HTTP API if --save flag is specified
+            if (finalResponse.failedAids.isNotEmpty()) {
+                System.err.println("Incomplete lookup for ${finalResponse.failedAids.size} device(s)")
+                if (save) return 2
+            }
+
             if (save && finalResponse.vulnerabilities.isNotEmpty()) {
                 // Authenticate with backend before import
-                val backendUrl = System.getenv("SECMAN_BACKEND_URL")
-                    ?: System.getenv("SECMAN_HOST")
+                val backendUrl = getenv("SECMAN_BACKEND_URL")
+                    ?: getenv("SECMAN_HOST")
                     ?: "http://localhost:8080"
-                val username = System.getenv("SECMAN_ADMIN_NAME")
-                val password = System.getenv("SECMAN_ADMIN_PASS")
+                val username = getenv("SECMAN_ADMIN_NAME")
+                val password = getenv("SECMAN_ADMIN_PASS")
 
                 if (username.isNullOrBlank() || password.isNullOrBlank()) {
                     System.err.println("Error: SECMAN_ADMIN_NAME and SECMAN_ADMIN_PASS environment variables are required for --save")
@@ -135,29 +146,15 @@ class QueryCommand {
 
                 System.out.println("\nSaving to database via backend API...")
 
-                val firstVuln = finalResponse.vulnerabilities.firstOrNull()
-                val latestCloudInstanceId = finalResponse.vulnerabilities
-                    .filter { !it.cloudInstanceId.isNullOrBlank() }
-                    .maxByOrNull { it.detectedAt ?: java.time.LocalDateTime.MIN }
-                    ?.cloudInstanceId
-
-                val serverBatch = ServerVulnerabilityBatch(
-                    hostname = hostname,
-                    vulnerabilities = finalResponse.vulnerabilities,
-                    groups = null,
-                    cloudAccountId = firstVuln?.cloudAccountId,
-                    cloudInstanceId = latestCloudInstanceId ?: firstVuln?.cloudInstanceId,
-                    adDomain = firstVuln?.adDomain,
-                    osVersion = null,
-                    ip = finalResponse.vulnerabilities.resolveHostIp()
-                )
+                val serverBatches = buildCrowdStrikeServerBatches(finalResponse.vulnerabilities, finalResponse.devices)
 
                 val result = storageService.storeServerVulnerabilities(
-                    serverBatches = mapOf(hostname to serverBatch),
-                    authToken = authToken
+                    serverBatches = serverBatches,
+                    authToken = authToken,
+                    runSeverities = severity?.split(",")?.map(String::trim)?.filter(String::isNotBlank)
                 )
 
-                System.out.println("Save completed!")
+                System.out.println(if (result.errors.isEmpty()) "Save completed!" else "Save failed")
                 System.out.println("  - Asset: ${if (result.serversCreated > 0) "CREATED" else "UPDATED"}")
                 System.out.println("  - Vulnerabilities imported: ${result.vulnerabilitiesImported}")
                 System.out.println("  - Vulnerabilities skipped: ${result.vulnerabilitiesSkipped}")
@@ -167,6 +164,7 @@ class QueryCommand {
                     result.errors.forEach { error ->
                         System.err.println("    - $error")
                     }
+                    return 1
                 }
             } else if (save && finalResponse.vulnerabilities.isEmpty()) {
                 System.out.println("\nNo vulnerabilities to save")
@@ -187,7 +185,7 @@ class QueryCommand {
                 }
             }
 
-            0
+            if (finalResponse.failedAids.isEmpty()) 0 else 2
         } catch (e: NotFoundException) {
             System.err.println()
             System.err.println("Error: Hostname '$hostname' not found in CrowdStrike")

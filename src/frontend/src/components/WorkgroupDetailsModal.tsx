@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ApiError, getJson } from '../utils/apiJson';
+import { ApiError, getJson, putJson } from '../utils/apiJson';
+import { useClientHasRole } from '../utils/useClientAuth';
 import type { AssignedAsset, AssignedUser, Workgroup } from './workgroupTypes';
 
 interface Details {
@@ -14,13 +15,36 @@ interface Props {
   workgroupId: number;
   workgroupName: string;
   onClose: () => void;
+  onStatusChanged?: () => void;
 }
 
-export default function WorkgroupDetailsModal({ workgroupId, workgroupName, onClose }: Props) {
+export default function WorkgroupDetailsModal({ workgroupId, workgroupName, onClose, onStatusChanged }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [details, setDetails] = useState<Details | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const canChangeStatus = useClientHasRole(['ADMIN', 'SECCHAMPION']);
+
+  const handleStatusChange = async () => {
+    if (!details || saving || !canChangeStatus) return;
+    const enabled = details.workgroup.enabled === false;
+    if (!enabled && !window.confirm(
+      `Disable ${details.workgroup.name}? Its users, assets, accounts, and domains will remain stored but will no longer grant access.`
+    )) return;
+    setSaving(true);
+    setStatusError(null);
+    try {
+      const workgroup = await putJson<Workgroup>(`/api/workgroups/${workgroupId}`, { enabled }, 'Failed to update workgroup status');
+      setDetails({ ...details, workgroup });
+      onStatusChanged?.();
+    } catch (cause) {
+      setStatusError(cause instanceof Error ? cause.message : 'Failed to update workgroup status');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleClose = () => {
     dialog.current?.close();
@@ -83,12 +107,25 @@ export default function WorkgroupDetailsModal({ workgroupId, workgroupName, onCl
               {details.workgroup.description && <p>{details.workgroup.description}</p>}
               <dl className="row">
                 <dt className="col-sm-3">Status</dt>
-                <dd className="col-sm-9">{details.workgroup.enabled !== false ? 'Enabled' : 'Disabled'}</dd>
+                <dd className="col-sm-9">
+                  <span>{details.workgroup.enabled !== false ? 'Enabled' : 'Disabled'}</span>
+                  {canChangeStatus && (
+                    <button
+                      type="button"
+                      className={`btn btn-sm ms-3 ${details.workgroup.enabled !== false ? 'btn-outline-warning' : 'btn-outline-success'}`}
+                      disabled={saving}
+                      onClick={handleStatusChange}
+                    >
+                      {saving ? 'Saving…' : details.workgroup.enabled !== false ? 'Disable' : 'Enable'}
+                    </button>
+                  )}
+                </dd>
                 <dt className="col-sm-3">AD Owner</dt>
                 <dd className="col-sm-9 text-break">{details.workgroup.ownerEmail || 'Not assigned'}</dd>
                 <dt className="col-sm-3">Criticality</dt>
                 <dd className="col-sm-9">{details.workgroup.criticality}</dd>
               </dl>
+              {statusError && <div role="alert" className="alert alert-danger">{statusError}</div>}
               <section aria-labelledby="workgroup-users-title" className="mb-4">
                 <h6 id="workgroup-users-title">Users ({details.users.length})</h6>
                 {details.users.length === 0 ? <p className="text-muted">No users assigned.</p> : (

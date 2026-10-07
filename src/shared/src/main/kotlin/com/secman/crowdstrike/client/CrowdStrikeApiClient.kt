@@ -5,6 +5,8 @@ import com.secman.crowdstrike.dto.CrowdStrikeVulnerabilityDto
 import com.secman.crowdstrike.dto.InstalledProductDto
 import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.crowdstrike.model.AuthToken
+import io.micronaut.serde.annotation.Serdeable
+import java.time.Instant
 
 /**
  * Summary of a streaming vulnerability query, retaining only hostname→count statistics.
@@ -22,10 +24,22 @@ data class StreamingSummary(
  * returned zero matching vulnerabilities — those are exactly the fully-remediated hosts
  * the stale-reconcile sweep must clean up.
  */
+@Serdeable
 data class QueriedHost(
     val hostname: String?,
     val instanceId: String?,
-    val crowdStrikeAid: String? = null
+    val crowdStrikeAid: String? = null,
+    val cloudAccountId: String? = null,
+    val adDomain: String? = null,
+    val osVersion: String? = null,
+    val ip: String? = null,
+    val lastSeen: Instant? = null
+)
+
+/** Complete device identities travel independently of deduplicated finding rows. */
+data class StreamingVulnerabilityBatch(
+    val vulnerabilities: List<CrowdStrikeVulnerabilityDto>,
+    val devices: Set<QueriedHost>
 )
 
 /**
@@ -46,7 +60,9 @@ data class StreamingImportResult(
      * stale-reconcile sweep's scope — sweeping them deletes their entire population
      * with nothing reinserted. Empty on a fully healthy run.
      */
-    val failedHosts: Set<QueriedHost> = emptySet()
+    val failedHosts: Set<QueriedHost> = emptySet(),
+    /** Includes devices whose metadata could not be resolved to a host. */
+    val failedDeviceCount: Int = failedHosts.size
 )
 
 /**
@@ -162,7 +178,7 @@ interface CrowdStrikeApiClient {
         limit: Int = 100,
         lastSeenDays: Int = 0,
         deviceBatchSize: Int = 200,
-        batchProcessor: (List<CrowdStrikeVulnerabilityDto>) -> Unit
+        batchProcessor: (StreamingVulnerabilityBatch) -> Unit
     ): StreamingImportResult
 
     /**

@@ -1,6 +1,5 @@
 package com.secman.service
 
-import com.secman.domain.Asset
 import com.secman.repository.EolFindingRepository
 import io.micronaut.data.model.Pageable
 import io.micronaut.security.authentication.Authentication
@@ -42,15 +41,6 @@ class TopEolProductsScopingTest {
     private fun auth(vararg roles: String): Authentication =
         mockk<Authentication>().also { every { it.roles } returns roles.toList() }
 
-    private fun asset(id: Long, domain: String? = null, cloudAccountId: String? = null) =
-        Asset(
-            name = "asset-$id",
-            type = "SERVER",
-            owner = "owner-$id",
-            adDomain = domain,
-            cloudAccountId = cloudAccountId
-        ).also { it.id = id }
-
     /** `[componentName, eolAssets, approachingAssets, eolCycles]` as the query returns it. */
     private fun row(name: String, eol: Long, approaching: Long, cycles: Long): Array<Any> =
         arrayOf(name, eol, approaching, cycles)
@@ -71,7 +61,7 @@ class TopEolProductsScopingTest {
     @Test
     @DisplayName("TEP-002: a regular user is restricted to their own accessible asset ids")
     fun regularUserIsScoped() {
-        every { assetFilterService.getAccessibleAssets(any()) } returns listOf(asset(7), asset(9))
+        every { assetFilterService.getAccessibleAssetIds(any()) } returns setOf(7L, 9L)
         every { eolFindingRepository.topEolProductsForAssets(any(), any()) } returns
             listOf(row("SQL Server", 3L, 1L, 2L))
 
@@ -91,7 +81,7 @@ class TopEolProductsScopingTest {
     @DisplayName("TEP-003: a user with no accessible assets gets nothing — and never reaches a query")
     fun noAccessibleAssetsReturnsEmpty() {
         // The regression this pins: an empty id set must not be treated as "unfiltered".
-        every { assetFilterService.getAccessibleAssets(any()) } returns emptyList()
+        every { assetFilterService.getAccessibleAssetIds(any()) } returns emptySet()
 
         val result = service.getTopEolProducts(auth("USER"))
 
@@ -105,8 +95,7 @@ class TopEolProductsScopingTest {
     fun adminWithDomainFilterIsScoped() {
         // Filters are additional constraints, never a bypass — so a filtered ADMIN
         // must leave the global path even though they have universal access.
-        every { assetFilterService.getAccessibleAssets(any()) } returns
-            listOf(asset(1, domain = "corp.example"), asset(2, domain = "other.example"))
+        every { assetFilterService.getFilteredAccessibleAssetIds(any(), "CORP.EXAMPLE", false) } returns setOf(1L)
         every { eolFindingRepository.topEolProductsForAssets(any(), any()) } returns emptyList()
 
         service.getTopEolProducts(auth("ADMIN"), domain = "CORP.EXAMPLE")
@@ -120,13 +109,11 @@ class TopEolProductsScopingTest {
     @Test
     @DisplayName("TEP-005: awsHosted keeps only assets carrying a cloud account id")
     fun awsHostedFilterNarrows() {
-        every { assetFilterService.getAccessibleAssets(any()) } returns
-            listOf(asset(1, cloudAccountId = "123456789012"), asset(2), asset(3, cloudAccountId = " "))
+        every { assetFilterService.getFilteredAccessibleAssetIds(any(), null, true) } returns setOf(1L)
         every { eolFindingRepository.topEolProductsForAssets(any(), any()) } returns emptyList()
 
         service.getTopEolProducts(auth("USER"), awsHosted = true)
 
-        // asset 3's blank account id is not a cloud account.
         verify(exactly = 1) {
             eolFindingRepository.topEolProductsForAssets(match { it.toSet() == setOf(1L) }, any())
         }

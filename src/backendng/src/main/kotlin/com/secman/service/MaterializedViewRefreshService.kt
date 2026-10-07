@@ -45,7 +45,8 @@ open class MaterializedViewRefreshService(
     @Value("\${secman.materialized-view-refresh.min-interval-seconds:60}")
     private val minRefreshIntervalSeconds: Long,
     @Value("\${secman.materialized-view-refresh.quiet-period-seconds:120}")
-    private val quietPeriodSeconds: Long
+    private val quietPeriodSeconds: Long,
+    private val importRunLease: CrowdStrikeImportRunLease = CrowdStrikeImportRunLease()
 ) {
     private val log = LoggerFactory.getLogger(MaterializedViewRefreshService::class.java)
 
@@ -472,6 +473,7 @@ open class MaterializedViewRefreshService(
      */
     @Scheduled(fixedDelay = "15s")
     open fun sweepPendingRefreshTrigger() {
+        if (importRunLease.activeRunId() != null) return
         val reason = pendingTriggerReason.get() ?: return
         if (getCurrentRunningJob() != null) return
 

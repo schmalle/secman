@@ -3,11 +3,11 @@ package com.secman.cli.commands
 import com.secman.cli.config.ConfigLoader
 import com.secman.cli.service.CliHttpClient
 import com.secman.cli.service.VulnerabilityStorageService
-import com.secman.cli.service.ServerVulnerabilityBatch
+import com.secman.cli.service.buildCrowdStrikeServerBatches
+import com.secman.crowdstrike.client.StreamingVulnerabilityBatch
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
 import com.secman.crowdstrike.dto.DeviceType
 import com.secman.crowdstrike.dto.FalconConfigDto
-import com.secman.crowdstrike.dto.resolveHostIp
 import com.secman.crowdstrike.exception.AuthenticationException
 import com.secman.crowdstrike.exception.CrowdStrikeException
 import com.secman.crowdstrike.exception.NotFoundException
@@ -69,7 +69,7 @@ class ServersCommand {
     var verbose: Boolean = false
     var clientId: String? = null
     var clientSecret: String? = null
-    var limit: Int = 800
+    var limit: Int = 4000
     var lastSeenDays: Int = 0
     var overdueThreshold: Int = 30
     var backendUrl: String? = null
@@ -147,231 +147,233 @@ class ServersCommand {
 
             // When --save is specified and no specific hostnames, use streaming mode
             if (save && hostnames.isNullOrEmpty()) {
-                System.out.println("Querying and importing in streaming mode...")
+                return com.secman.cli.service.CrowdStrikeImportSession(cliHttpClient, resolvedBackendUrl,
+                    requireNotNull(authToken), refreshToken = {
+                        cliHttpClient.authenticate(System.getenv("SECMAN_ADMIN_NAME"),
+                            System.getenv("SECMAN_ADMIN_PASS"), resolvedBackendUrl)
+                            ?: error("Could not refresh backend authentication")
+                    }).use { importSession ->
+                    System.out.println("Querying and importing in streaming mode...")
 
-                // Captured BEFORE the Falcon query starts. Any vuln row whose
-                // importTimestamp is older than this when the run ends is by
-                // definition stale — its host disappeared from the import.
-                // Used as the staleness fence by the reconcile call at the end.
-                val runStartedAt = java.time.LocalDateTime.now()
+                    // Captured BEFORE the Falcon query starts. Any vuln row whose
+                    // importTimestamp is older than this when the run ends is by
+                    // definition stale — its host disappeared from the import.
+                    // Used as the staleness fence by the reconcile call at the end.
+                    val runStartedAt = java.time.LocalDateTime.now()
 
-                var totalServersProcessed = 0
-                var totalServersCreated = 0
-                var totalServersUpdated = 0
-                var totalVulnsImported = 0
-                var totalVulnsWithPatchDate = 0
-                var totalVulnsSkipped = 0
-                val allErrors = mutableListOf<String>()
-                // Hosts whose POST/persist failed: excluded from the reconcile sweep's scope
-                // below, or the sweep would delete their un-refreshed rows as "stale".
-                val allFailedHostnames = mutableSetOf<String>()
-                var totalErrorCount = 0
-                var streamBatchNum = 0
-                var totalSystemsWithOverdueVulns = 0
-                val runSeveritiesList = severity.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                    var totalServersProcessed = 0
+                    var totalServersCreated = 0
+                    var totalServersUpdated = 0
+                    var totalVulnsImported = 0
+                    var totalVulnsWithPatchDate = 0
+                    var totalVulnsSkipped = 0
+                    val allErrors = mutableListOf<String>()
+                    // Hosts whose POST/persist failed: excluded from the reconcile sweep's scope
+                    // below, or the sweep would delete their un-refreshed rows as "stale".
+                    val allFailedHostnames = mutableSetOf<String>()
+                    val allFailedAids = mutableSetOf<String>()
+                    var totalErrorCount = 0
+                    var streamBatchNum = 0
+                    var totalSystemsWithOverdueVulns = 0
+                    val runSeveritiesList = severity.split(",").map { it.trim() }.filter { it.isNotBlank() }
 
-                // Producer/consumer pipeline: Falcon fetch (producer) hands batches to a single
-                // consumer thread that does the backend POST. Bounded queue (capacity=2) caps
-                // memory and provides natural backpressure — if the backend is slow, Falcon
-                // pauses; if Falcon is slow, the consumer waits idle. Total wall-clock now
-                // approaches max(fetch_time, store_time) instead of fetch_time + store_time.
-                val workQueue: java.util.concurrent.BlockingQueue<List<com.secman.crowdstrike.dto.CrowdStrikeVulnerabilityDto>> =
-                    java.util.concurrent.ArrayBlockingQueue(2)
-                // Poison pill: an immutable empty list reference compared with === for end-of-stream
-                // signalling. The Falcon client only forwards non-empty batches (CrowdStrikeApiClientImpl.kt:508).
-                val poisonPill: List<com.secman.crowdstrike.dto.CrowdStrikeVulnerabilityDto> = java.util.Collections.emptyList()
-                val consumerError = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
+                    // Producer/consumer pipeline: Falcon fetch (producer) hands batches to a single
+                    // consumer thread that does the backend POST. Bounded queue (capacity=2) caps
+                    // memory and provides natural backpressure — if the backend is slow, Falcon
+                    // pauses; if Falcon is slow, the consumer waits idle. Total wall-clock now
+                    // approaches max(fetch_time, store_time) instead of fetch_time + store_time.
+                    val workQueue: java.util.concurrent.BlockingQueue<StreamingVulnerabilityBatch> =
+                        java.util.concurrent.ArrayBlockingQueue(2)
+                    val poisonPill = StreamingVulnerabilityBatch(emptyList(), emptySet())
+                    val consumerError = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
 
-                val consumer = Thread({
-                    try {
-                        while (true) {
-                            val batchVulns = workQueue.take()
-                            if (batchVulns === poisonPill) break
+                    val consumer = Thread({
+                        try {
+                            while (true) {
+                                val batchVulns = workQueue.take()
+                                if (batchVulns === poisonPill) break
 
-                            streamBatchNum++
-                            val byHostname = batchVulns.groupBy { it.hostname }
-                            System.out.println("  Stream batch $streamBatchNum: ${batchVulns.size} vulns across ${byHostname.size} hosts")
+                                streamBatchNum++
+                                val serverBatches = buildCrowdStrikeServerBatches(batchVulns.vulnerabilities, batchVulns.devices)
+                                System.out.println("  Stream batch $streamBatchNum: ${batchVulns.devices.size} devices, ${batchVulns.vulnerabilities.size} raw findings across ${serverBatches.size} resolved host groups")
 
-                            val serverBatches = byHostname.map { (hostname, vulns) ->
-                                val firstVuln = vulns.firstOrNull()
-                                val latestCloudInstanceId = vulns
-                                    .filter { !it.cloudInstanceId.isNullOrBlank() }
-                                    .maxByOrNull { it.detectedAt ?: java.time.LocalDateTime.MIN }
-                                    ?.cloudInstanceId
-                                val latestOsVersion = vulns
-                                    .filter { !it.osVersion.isNullOrBlank() }
-                                    .maxByOrNull { it.detectedAt ?: java.time.LocalDateTime.MIN }
-                                    ?.osVersion
-                                hostname to ServerVulnerabilityBatch(
-                                    hostname = hostname,
-                                    vulnerabilities = vulns,
-                                    groups = null,
-                                    cloudAccountId = firstVuln?.cloudAccountId,
-                                    cloudInstanceId = latestCloudInstanceId ?: firstVuln?.cloudInstanceId,
-                                    adDomain = firstVuln?.adDomain,
-                                    osVersion = latestOsVersion ?: firstVuln?.osVersion,
-                                    ip = vulns.resolveHostIp()
+                                totalSystemsWithOverdueVulns += serverBatches.count { (_, batch) ->
+                                    batch.vulnerabilities.any { parseDaysOpenToInt(it.daysOpen) > overdueThreshold }
+                                }
+
+                                val storeStarted = System.nanoTime()
+                                val result = storageService.storeServerVulnerabilities(
+                                    serverBatches, backendUrl = resolvedBackendUrl, authToken = importSession.authToken(),
+                                    runSeverities = runSeveritiesList
                                 )
-                            }.toMap()
-
-                            totalSystemsWithOverdueVulns += serverBatches.count { (_, batch) ->
-                                batch.vulnerabilities.any { parseDaysOpenToInt(it.daysOpen) > overdueThreshold }
+                                log.info("Import storage batch {}: hosts={}, rows={}, errors={}, durationMs={}",
+                                    streamBatchNum, serverBatches.size, result.vulnerabilitiesImported,
+                                    result.errors.size, (System.nanoTime() - storeStarted) / 1_000_000)
+                                totalServersProcessed += result.serversProcessed
+                                totalServersCreated += result.serversCreated
+                                totalServersUpdated += result.serversUpdated
+                                totalVulnsImported += result.vulnerabilitiesImported
+                                totalVulnsWithPatchDate += result.vulnerabilitiesWithPatchDate
+                                totalVulnsSkipped += result.vulnerabilitiesSkipped
+                                totalErrorCount += result.errors.size
+                                allFailedHostnames.addAll(result.failedHostnames)
+                                allFailedAids.addAll(result.failedAids)
+                                if (allErrors.size < MAX_RETAINED_ERRORS) {
+                                    val remaining = MAX_RETAINED_ERRORS - allErrors.size
+                                    allErrors.addAll(result.errors.take(remaining))
+                                }
+                                logMemoryUsage("after stream batch $streamBatchNum")
                             }
+                        } catch (ie: InterruptedException) {
+                            consumerError.set(ie)
+                            Thread.currentThread().interrupt()
+                        } catch (t: Throwable) {
+                            consumerError.set(t)
+                        }
+                    }, "crowdstrike-import-consumer").apply {
+                        isDaemon = false
+                        start()
+                    }
 
-                            val result = storageService.storeServerVulnerabilities(
-                                serverBatches, backendUrl = resolvedBackendUrl, authToken = authToken,
-                                runSeverities = runSeveritiesList
+                    val streamResult = try {
+                        apiClient.queryServersWithFiltersStreaming(
+                            deviceType = deviceType,
+                            severity = severity,
+                            minDaysOpen = minDaysOpen,
+                            config = config,
+                            limit = limit,
+                            lastSeenDays = lastSeenDays,
+                            deviceBatchSize = 200
+                        ) { batchVulns ->
+                            // Fail-fast if the consumer crashed: don't keep filling the queue.
+                            consumerError.get()?.let { throw RuntimeException("Backend storage consumer failed", it) }
+                            while (!workQueue.offer(batchVulns, 1, java.util.concurrent.TimeUnit.SECONDS)) {
+                                importSession.authToken()
+                                consumerError.get()?.let { throw RuntimeException("Backend storage consumer failed", it) }
+                            }
+                        }
+                    } finally {
+                        // Always signal end-of-stream so the consumer doesn't block forever on exceptions.
+                        while (consumer.isAlive && !workQueue.offer(poisonPill, 1, java.util.concurrent.TimeUnit.SECONDS)) {
+                            if (consumerError.get() != null) break
+                        }
+                        consumer.join()
+                    }
+                    // join() establishes happens-before for all counter writes in the consumer.
+                    consumerError.get()?.let { throw RuntimeException("Backend storage consumer failed", it) }
+
+                    importSession.authToken()
+                    val totalVulns = streamResult.totalVulnerabilities
+
+                    if (streamResult.failedDeviceCount > 0) {
+                        totalErrorCount += streamResult.failedDeviceCount
+                        allErrors.add("Incomplete fetch for ${streamResult.failedDeviceCount} device(s); existing findings preserved")
+                    }
+                    if (totalVulns == 0) {
+                        System.out.println("No complete vulnerability results found matching criteria")
+                    }
+
+                    logMemoryUsage("streaming complete")
+                    val deviceLabel = parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }
+                    System.out.println("\n--- Import Statistics ---")
+                    System.out.println("$deviceLabel processed: $totalServersProcessed")
+                    System.out.println("  - New $deviceLabel created: $totalServersCreated")
+                    System.out.println("  - Existing $deviceLabel updated: $totalServersUpdated")
+                    System.out.println("Vulnerabilities imported: $totalVulnsImported")
+                    System.out.println("  - With patch publication date: $totalVulnsWithPatchDate")
+                    System.out.println("Vulnerabilities skipped: $totalVulnsSkipped")
+
+                    if (totalServersProcessed > 0) {
+                        val totalWithoutOverdue = totalServersProcessed - totalSystemsWithOverdueVulns
+                        val percent = totalSystemsWithOverdueVulns * 100.0 / totalServersProcessed
+                        System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days) ---")
+                        System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $totalSystemsWithOverdueVulns of $totalServersProcessed (${String.format("%.1f", percent)}%)")
+                        System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of $totalServersProcessed")
+
+                        captureSnapshotViaHttp(resolvedBackendUrl, totalServersProcessed, totalSystemsWithOverdueVulns, overdueThreshold)
+                    }
+
+                    // Reconcile silent-remediation gap: hosts that had HIGH/CRITICAL findings in
+                    // earlier imports but no longer match this run's --severity filter never enter
+                    // the per-host delete-insert loop, so their old rows persist indefinitely.
+                    // The backend deletes any CrowdStrike-sourced row for this severity slice
+                    // (union'd with prior runs' severities, V214) whose importTimestamp predates
+                    // runStartedAt. A failure here is fatal — silently leaving stale rows defeats
+                    // the safeguard.
+                    val severitiesList = runSeveritiesList
+                    var reconcileFailed = false
+                    if (severitiesList.isNotEmpty()) {
+                        // Exclude every host whose fetch OR persist failed this run from the
+                        // sweep's scope: their rows were never re-stamped, so sweeping them
+                        // would delete their entire population with nothing reinserted.
+                        // Matching is by short name (case-insensitive), consistent with the
+                        // backend's findPotentialDuplicates resolution.
+                        val failedShortNames = allFailedHostnames
+                            .map { it.substringBefore(".").lowercase() }
+                            .toSet()
+                        val effectiveHosts = streamResult.queriedHosts
+                            .minus(streamResult.failedHosts)
+                            .filterNot { host ->
+                                val short = host.hostname?.substringBefore(".")?.lowercase()
+                                host.crowdStrikeAid in allFailedAids || (short != null && short in failedShortNames)
+                            }
+                            .toSet()
+                        val excludedCount = streamResult.queriedHosts.size - effectiveHosts.size
+                        if (excludedCount > 0) {
+                            System.out.println("Excluding $excludedCount host(s) with failed fetch/persist from reconcile scope " +
+                                "(${streamResult.failedHosts.size} fetch-side, ${allFailedHostnames.size} persist-side)")
+                        }
+                        try {
+                            val reconcileResult = storageService.reconcileStaleVulnerabilities(
+                                importStartedAt = runStartedAt,
+                                severities = severitiesList,
+                                queriedHosts = effectiveHosts,
+                                backendUrl = resolvedBackendUrl,
+                                authToken = importSession.authToken(),
+                                dryRun = reconcileDryRun,
+                                excludedFailedHostCount = excludedCount.takeIf { it > 0 }
                             )
-                            totalServersProcessed += result.serversProcessed
-                            totalServersCreated += result.serversCreated
-                            totalServersUpdated += result.serversUpdated
-                            totalVulnsImported += result.vulnerabilitiesImported
-                            totalVulnsWithPatchDate += result.vulnerabilitiesWithPatchDate
-                            totalVulnsSkipped += result.vulnerabilitiesSkipped
-                            totalErrorCount += result.errors.size
-                            allFailedHostnames.addAll(result.failedHostnames)
-                            if (allErrors.size < MAX_RETAINED_ERRORS) {
-                                val remaining = MAX_RETAINED_ERRORS - allErrors.size
-                                allErrors.addAll(result.errors.take(remaining))
-                            }
-                            logMemoryUsage("after stream batch $streamBatchNum")
-                        }
-                    } catch (ie: InterruptedException) {
-                        Thread.currentThread().interrupt()
-                    } catch (t: Throwable) {
-                        consumerError.set(t)
-                    }
-                }, "crowdstrike-import-consumer").apply {
-                    isDaemon = false
-                    start()
-                }
-
-                val streamResult = try {
-                    apiClient.queryServersWithFiltersStreaming(
-                        deviceType = deviceType,
-                        severity = severity,
-                        minDaysOpen = minDaysOpen,
-                        config = config,
-                        limit = limit,
-                        lastSeenDays = lastSeenDays,
-                        deviceBatchSize = 200
-                    ) { batchVulns ->
-                        // Fail-fast if the consumer crashed: don't keep filling the queue.
-                        consumerError.get()?.let { throw RuntimeException("Backend storage consumer failed", it) }
-                        workQueue.put(batchVulns)
-                    }
-                } finally {
-                    // Always signal end-of-stream so the consumer doesn't block forever on exceptions.
-                    workQueue.put(poisonPill)
-                    consumer.join()
-                }
-                // join() establishes happens-before for all counter writes in the consumer.
-                consumerError.get()?.let { throw RuntimeException("Backend storage consumer failed", it) }
-
-                val totalVulns = streamResult.totalVulnerabilities
-
-                if (totalVulns == 0) {
-                    System.out.println("No vulnerabilities found matching criteria")
-                    return 0
-                }
-
-                logMemoryUsage("streaming complete")
-                val deviceLabel = parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }
-                System.out.println("\n--- Import Statistics ---")
-                System.out.println("$deviceLabel processed: $totalServersProcessed")
-                System.out.println("  - New $deviceLabel created: $totalServersCreated")
-                System.out.println("  - Existing $deviceLabel updated: $totalServersUpdated")
-                System.out.println("Vulnerabilities imported: $totalVulnsImported")
-                System.out.println("  - With patch publication date: $totalVulnsWithPatchDate")
-                System.out.println("Vulnerabilities skipped: $totalVulnsSkipped")
-
-                if (totalServersProcessed > 0) {
-                    val totalWithoutOverdue = totalServersProcessed - totalSystemsWithOverdueVulns
-                    val percent = totalSystemsWithOverdueVulns * 100.0 / totalServersProcessed
-                    System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days) ---")
-                    System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $totalSystemsWithOverdueVulns of $totalServersProcessed (${String.format("%.1f", percent)}%)")
-                    System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of $totalServersProcessed")
-
-                    captureSnapshotViaHttp(resolvedBackendUrl, totalServersProcessed, totalSystemsWithOverdueVulns, overdueThreshold)
-                }
-
-                // Reconcile silent-remediation gap: hosts that had HIGH/CRITICAL findings in
-                // earlier imports but no longer match this run's --severity filter never enter
-                // the per-host delete-insert loop, so their old rows persist indefinitely.
-                // The backend deletes any CrowdStrike-sourced row for this severity slice
-                // (union'd with prior runs' severities, V214) whose importTimestamp predates
-                // runStartedAt. A failure here is fatal — silently leaving stale rows defeats
-                // the safeguard.
-                val severitiesList = runSeveritiesList
-                var reconcileFailed = false
-                if (severitiesList.isNotEmpty() && authToken != null) {
-                    // Exclude every host whose fetch OR persist failed this run from the
-                    // sweep's scope: their rows were never re-stamped, so sweeping them
-                    // would delete their entire population with nothing reinserted.
-                    // Matching is by short name (case-insensitive), consistent with the
-                    // backend's findPotentialDuplicates resolution.
-                    val failedShortNames = allFailedHostnames
-                        .map { it.substringBefore(".").lowercase() }
-                        .toSet()
-                    val effectiveHosts = streamResult.queriedHosts
-                        .minus(streamResult.failedHosts)
-                        .filterNot { host ->
-                            val short = host.hostname?.substringBefore(".")?.lowercase()
-                            short != null && short in failedShortNames
-                        }
-                        .toSet()
-                    val excludedCount = streamResult.queriedHosts.size - effectiveHosts.size
-                    if (excludedCount > 0) {
-                        System.out.println("Excluding $excludedCount host(s) with failed fetch/persist from reconcile scope " +
-                            "(${streamResult.failedHosts.size} fetch-side, ${allFailedHostnames.size} persist-side)")
-                    }
-                    try {
-                        val reconcileResult = storageService.reconcileStaleVulnerabilities(
-                            importStartedAt = runStartedAt,
-                            severities = severitiesList,
-                            queriedHosts = effectiveHosts,
-                            backendUrl = resolvedBackendUrl,
-                            authToken = authToken,
-                            dryRun = reconcileDryRun,
-                            excludedFailedHostCount = excludedCount.takeIf { it > 0 }
-                        )
-                        System.out.println("\n--- Reconciliation ---")
-                        if (reconcileResult != null) {
-                            if (reconcileResult.aborted) {
-                                System.err.println("WARNING: reconcile ABORTED by safety brake — ${reconcileResult.abortReason ?: "run refreshed 0 rows"}.")
-                                System.err.println("No stale rows were deleted. Investigate the import run before trusting query results.")
-                            } else if (reconcileResult.dryRun) {
-                                System.out.println("[DRY-RUN] Reconcile would clear ${reconcileResult.wouldDelete ?: 0} stale row(s) " +
-                                    "(severities=${severitiesList.joinToString(",")}, cutoff=$runStartedAt). Nothing was deleted.")
+                            System.out.println("\n--- Reconciliation ---")
+                            if (reconcileResult != null) {
+                                if (reconcileResult.aborted) {
+                                    reconcileFailed = true
+                                    System.err.println("WARNING: reconcile ABORTED by safety brake — ${reconcileResult.abortReason ?: "run refreshed 0 rows"}.")
+                                    System.err.println("No stale rows were deleted. Investigate the import run before trusting query results.")
+                                } else if (reconcileResult.dryRun) {
+                                    System.out.println("[DRY-RUN] Reconcile would clear ${reconcileResult.wouldDelete ?: 0} stale row(s) " +
+                                        "(severities=${severitiesList.joinToString(",")}, cutoff=$runStartedAt). Nothing was deleted.")
+                                } else {
+                                    System.out.println("Stale rows cleared (severities=${severitiesList.joinToString(",")}, cutoff=$runStartedAt): ${reconcileResult.rowsDeleted}")
+                                }
                             } else {
-                                System.out.println("Stale rows cleared (severities=${severitiesList.joinToString(",")}, cutoff=$runStartedAt): ${reconcileResult.rowsDeleted}")
+                                // null return is documented as no-op (empty severities); shouldn't happen here.
+                                System.out.println("Reconcile skipped (no severities provided).")
                             }
-                        } else {
-                            // null return is documented as no-op (empty severities); shouldn't happen here.
-                            System.out.println("Reconcile skipped (no severities provided).")
+                        } catch (e: com.secman.cli.service.ReconcileFailedException) {
+                            reconcileFailed = true
+                            System.err.println("\n--- Reconciliation ---")
+                            System.err.println("ERROR: ${e.message}")
+                            System.err.println("Stale CrowdStrike vulnerabilities may persist. Re-run after backend recovery before trusting query results.")
                         }
-                    } catch (e: com.secman.cli.service.ReconcileFailedException) {
-                        reconcileFailed = true
-                        System.err.println("\n--- Reconciliation ---")
-                        System.err.println("ERROR: ${e.message}")
-                        System.err.println("Stale CrowdStrike vulnerabilities may persist. Re-run after backend recovery before trusting query results.")
                     }
-                }
 
-                if (totalErrorCount > 0) {
-                    System.err.println("\n--- Errors ($totalErrorCount) ---")
-                    allErrors.take(20).forEach { error ->
-                        System.err.println("  - $error")
+                    if (totalErrorCount > 0) {
+                        System.err.println("\n--- Errors ($totalErrorCount) ---")
+                        allErrors.take(20).forEach { error ->
+                            System.err.println("  - $error")
+                        }
+                        if (totalErrorCount > 20) {
+                            System.err.println("  ... and ${totalErrorCount - 20} more errors")
+                        }
                     }
-                    if (totalErrorCount > 20) {
-                        System.err.println("  ... and ${totalErrorCount - 20} more errors")
-                    }
-                }
 
-                return when {
-                    reconcileFailed -> 2
-                    totalErrorCount > 0 -> 1
-                    else -> 0
+                    val exitCode = when {
+                        reconcileFailed -> 2
+                        totalErrorCount > 0 -> 1
+                        else -> 0
+                    }
+                    importSession.complete(exitCode == 0 && !reconcileDryRun)
+                    exitCode
                 }
             }
 
@@ -437,6 +439,10 @@ class ServersCommand {
                 lastSeenDays = lastSeenDays
             )
 
+            if (response.failedAids.isNotEmpty()) {
+                System.err.println("Incomplete lookup for ${response.failedAids.size} device(s); existing findings preserved")
+            }
+
             System.out.println("Found ${response.vulnerabilities.size} vulnerabilities across ${parsedDeviceType.displayName()}")
 
             val vulnerabilitiesByHostname = response.vulnerabilities.groupBy { it.hostname }
@@ -462,7 +468,7 @@ class ServersCommand {
 
             if (response.vulnerabilities.isEmpty()) {
                 System.out.println("No vulnerabilities found matching criteria")
-                return 0
+                return if (response.failedAids.isEmpty()) 0 else 2
             }
 
             System.out.println("${parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }} with vulnerabilities: ${vulnerabilitiesByHostname.size}")
@@ -485,40 +491,25 @@ class ServersCommand {
 
             if (dryRun) {
                 System.out.println("\n[DRY-RUN MODE] Would import ${vulnerabilitiesByHostname.size} ${parsedDeviceType.displayName()} with ${response.vulnerabilities.size} vulnerabilities")
-                return 0
+                return if (response.failedAids.isEmpty()) 0 else 2
             }
 
             if (!save) {
                 System.out.println("\nQuery completed successfully. Use --save to import directly to database.")
-                return 0
+                return if (response.failedAids.isEmpty()) 0 else 2
             }
 
             // Import via backend HTTP API
             System.out.println("\nImporting to database...")
 
-            val serverBatches = vulnerabilitiesByHostname.map { (hostname, vulns) ->
-                val firstVuln = vulns.firstOrNull()
-                val latestCloudInstanceId = vulns
-                    .filter { !it.cloudInstanceId.isNullOrBlank() }
-                    .maxByOrNull { it.detectedAt ?: java.time.LocalDateTime.MIN }
-                    ?.cloudInstanceId
-                hostname to ServerVulnerabilityBatch(
-                    hostname = hostname,
-                    vulnerabilities = vulns,
-                    groups = null,
-                    cloudAccountId = firstVuln?.cloudAccountId,
-                    cloudInstanceId = latestCloudInstanceId ?: firstVuln?.cloudInstanceId,
-                    adDomain = firstVuln?.adDomain,
-                    osVersion = null,
-                    ip = vulns.resolveHostIp()
-                )
-            }.toMap()
+            val serverBatches = buildCrowdStrikeServerBatches(response.vulnerabilities, response.devices, response.failedAids)
 
             val systemsWithOverdueVulns = serverBatches.count { (_, batch) ->
                 batch.vulnerabilities.any { parseDaysOpenToInt(it.daysOpen) > overdueThreshold }
             }
 
-            val result = storageService.storeServerVulnerabilities(serverBatches, backendUrl = resolvedBackendUrl, authToken = authToken)
+            val result = storageService.storeServerVulnerabilities(serverBatches, backendUrl = resolvedBackendUrl, authToken = authToken,
+                runSeverities = severity.split(",").map(String::trim).filter(String::isNotBlank))
 
             val deviceLabel = parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }
             System.out.println("\n--- Import Statistics ---")
@@ -549,7 +540,7 @@ class ServersCommand {
                 }
             }
 
-            if (result.errors.isNotEmpty()) 1 else 0
+            if (result.errors.isNotEmpty()) 1 else if (response.failedAids.isNotEmpty()) 2 else 0
         } catch (e: NotFoundException) {
             System.err.println()
             val hostnameInfo = if (hostnames != null && hostnames!!.size == 1) {

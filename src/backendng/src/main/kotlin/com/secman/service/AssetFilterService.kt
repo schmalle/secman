@@ -90,6 +90,18 @@ open class AssetFilterService(
         }
     }
 
+    /** Apply reporting filters to the current access scope without hydrating Asset entities. */
+    fun getFilteredAccessibleAssetIds(authentication: Authentication, domain: String?, awsHosted: Boolean): Set<Long> {
+        val normalizedDomain = domain?.takeIf { it.isNotBlank() }
+        if (normalizedDomain == null && !awsHosted) return getAccessibleAssetIds(authentication)
+        if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
+            return assetRepository.findIdsWithStatisticsFilters(normalizedDomain, awsHosted).toSet()
+        }
+        return getAccessibleAssetIds(authentication).chunked(1000).flatMap { ids ->
+            assetRepository.findIdsWithStatisticsFiltersForAssets(ids, normalizedDomain, awsHosted)
+        }.toSet()
+    }
+
     /**
      * Get accessible assets using unified single-query approach
      * Feature 073: Combines all access criteria in one database round trip.

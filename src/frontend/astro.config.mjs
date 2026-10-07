@@ -47,6 +47,8 @@ export default defineConfig({
     port: Number(process.env.SECMAN_FRONTEND_PORT || 4321),
   },
   vite: {
+    // The disposable copy shares node_modules, so its optimizer cache must stay local.
+    cacheDir: process.env.SECMAN_E2E_FRONTEND_DIR ? ".astro/vite" : undefined,
     plugins: [suppressDevWarnings],
     optimizeDeps: {
       // exceljs is reached only through `await import('exceljs')` inside React

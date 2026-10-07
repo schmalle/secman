@@ -19,6 +19,21 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     @io.micronaut.data.annotation.Query("SELECT a.id FROM Asset a")
     fun findAllIds(): List<Long>
 
+    @io.micronaut.data.annotation.Query("""
+        SELECT a.id FROM Asset a
+        WHERE (:domain IS NULL OR LOWER(a.adDomain) = LOWER(:domain))
+          AND (:awsHosted = false OR (a.cloudAccountId IS NOT NULL AND TRIM(a.cloudAccountId) <> ''))
+    """)
+    fun findIdsWithStatisticsFilters(domain: String?, awsHosted: Boolean): List<Long>
+
+    @io.micronaut.data.annotation.Query("""
+        SELECT a.id FROM Asset a
+        WHERE a.id IN (:assetIds)
+          AND (:domain IS NULL OR LOWER(a.adDomain) = LOWER(:domain))
+          AND (:awsHosted = false OR (a.cloudAccountId IS NOT NULL AND TRIM(a.cloudAccountId) <> ''))
+    """)
+    fun findIdsWithStatisticsFiltersForAssets(assetIds: Collection<Long>, domain: String?, awsHosted: Boolean): List<Long>
+
     // Memory Optimization - Feature 073
 
     /**

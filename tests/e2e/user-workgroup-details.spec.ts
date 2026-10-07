@@ -76,3 +76,63 @@ test('denied workgroup details do not render assignments', async ({ page }) => {
   await expect(dialog.getByRole('alert')).toContainText('You do not have permission');
   await expect(dialog.getByRole('region')).toHaveCount(0);
 });
+
+test('popup enables, cancels disabling, and preserves details when a save fails', async ({ page }) => {
+  const dialog = await prepare(page);
+  let updates = 0;
+  await page.route('**/api/workgroups/42', async route => {
+    if (route.request().method() !== 'PUT') return route.fallback();
+    updates++;
+    expect(route.request().postDataJSON()).toEqual({ enabled: updates === 1 });
+    await route.fulfill(updates === 1
+      ? { contentType: 'application/json', body: JSON.stringify({ ...group, enabled: true }) }
+      : { status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Failed to update workgroup status' }) });
+  });
+  await dialog.getByRole('button', { name: 'Enable', exact: true }).click();
+  await expect(dialog.getByText('Enabled', { exact: true })).toBeVisible();
+  page.once('dialog', confirmation => confirmation.dismiss());
+  await dialog.getByRole('button', { name: 'Disable', exact: true }).click();
+  expect(updates).toBe(1);
+  page.once('dialog', async confirmation => {
+    expect(confirmation.message()).toContain('will no longer grant access');
+    await confirmation.accept();
+  });
+  await dialog.getByRole('button', { name: 'Disable', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Failed to update workgroup status');
+  await expect(dialog.getByText('Enabled', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('region', { name: 'Users (1)' })).toContainText('member@example.com');
+});
+
+test('popup status changes persist through the real API and reopening', async ({ page }, testInfo) => {
+  const login = await page.request.post('/api/auth/login', {
+    data: { username: process.env.SECMAN_ADMIN_NAME!, password: process.env.SECMAN_ADMIN_PASS! },
+  });
+  expect(login.ok()).toBeTruthy();
+  const users = await (await page.request.get('/api/users')).json();
+  const currentUser = users.find((user: { username: string }) => user.username === process.env.SECMAN_ADMIN_NAME);
+  expect(currentUser).toBeDefined();
+  const name = `Popup status ${Date.now()}`;
+  const created = await page.request.post('/api/workgroups', { data: { name, criticality: 'MEDIUM' } });
+  expect(created.ok()).toBeTruthy();
+  const workgroup = await created.json();
+  try {
+    const assigned = await page.request.post(`/api/workgroups/${workgroup.id}/users`, { data: { userIds: [currentUser.id] } });
+    expect(assigned.ok()).toBeTruthy();
+    await page.goto('/admin/user-management');
+    await page.getByRole('button', { name, exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: `Workgroup Details — ${name}` });
+    page.once('dialog', confirmation => confirmation.accept());
+    await dialog.getByRole('button', { name: 'Disable', exact: true }).click();
+    await expect(dialog.getByText('Disabled', { exact: true })).toBeVisible();
+    expect((await (await page.request.get(`/api/workgroups/${workgroup.id}`)).json()).enabled).toBe(false);
+    await page.screenshot({ path: testInfo.outputPath('workgroup-status-control.png') });
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await page.getByRole('button', { name, exact: true }).click();
+    await expect(dialog.getByText('Disabled', { exact: true })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Enable', exact: true }).click();
+    await expect(dialog.getByText('Enabled', { exact: true })).toBeVisible();
+    expect((await (await page.request.get(`/api/workgroups/${workgroup.id}`)).json()).enabled).toBe(true);
+  } finally {
+    expect((await page.request.delete(`/api/workgroups/${workgroup.id}`)).ok()).toBeTruthy();
+  }
+});

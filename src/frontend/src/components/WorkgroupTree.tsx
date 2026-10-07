@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { WorkgroupResponse } from '../services/workgroupApi';
 import { getWorkgroupChildren, getRootWorkgroups, isAwsWorkgroup } from '../services/workgroupApi';
+import { getJson } from '../utils/apiJson';
 
 /**
  * Workgroup Tree Component
@@ -19,6 +20,7 @@ interface WorkgroupTreeProps {
   selectedWorkgroupId?: number | null;
   /** When false (default), workgroups named "AWS-…" are hidden. */
   showAwsWorkgroups?: boolean;
+  searchTerm?: string;
 }
 
 interface TreeNodeProps {
@@ -181,11 +183,30 @@ const WorkgroupTree: React.FC<WorkgroupTreeProps> = ({
   onSelectWorkgroup,
   onCreateChild,
   selectedWorkgroupId,
-  showAwsWorkgroups = false
+  showAwsWorkgroups = false,
+  searchTerm = ''
 }) => {
   const [rootWorkgroups, setRootWorkgroups] = useState<WorkgroupResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchWorkgroups, setSearchWorkgroups] = useState<WorkgroupResponse[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const searching = searchTerm.trim().length > 0;
+
+  useEffect(() => {
+    if (!searching) return;
+    let active = true;
+    setSearchLoading(true);
+    setSearchError(null);
+    // Search all visible levels, including children that have never been expanded.
+    getJson<WorkgroupResponse[]>('/api/workgroups/tree').then(groups => {
+      if (active) setSearchWorkgroups(groups);
+    }).catch(cause => {
+      if (active) setSearchError(cause instanceof Error ? cause.message : 'Failed to search workgroups');
+    }).finally(() => { if (active) setSearchLoading(false); });
+    return () => { active = false; };
+  }, [searching]);
 
   useEffect(() => {
     fetchRootWorkgroups();
@@ -212,6 +233,28 @@ const WorkgroupTree: React.FC<WorkgroupTreeProps> = ({
           <span className="visually-hidden">Loading...</span>
         </div>
         <p className="text-muted mt-2">Loading workgroup tree...</p>
+      </div>
+    );
+  }
+
+  if (searching) {
+    if (searchLoading) return <p role="status">Searching workgroups…</p>;
+    if (searchError) return <div role="alert" className="alert alert-danger">{searchError}</div>;
+    const matches = searchWorkgroups.filter(wg =>
+      (showAwsWorkgroups || !isAwsWorkgroup(wg.name))
+      && wg.name.toLowerCase().includes(searchTerm.trim().toLowerCase())
+    );
+    return (
+      <div className="list-group">
+        {matches.length === 0 && <p className="text-muted">No workgroups match your search.{!showAwsWorkgroups && ' Enable "Show AWS- workgroups" to include AWS- workgroups.'}</p>}
+        {matches.map(workgroup => (
+          <button
+            key={workgroup.id}
+            type="button"
+            className={`list-group-item list-group-item-action ${selectedWorkgroupId === workgroup.id ? 'active' : ''}`}
+            onClick={() => onSelectWorkgroup?.(workgroup)}
+          >{workgroup.name}</button>
+        ))}
       </div>
     );
   }

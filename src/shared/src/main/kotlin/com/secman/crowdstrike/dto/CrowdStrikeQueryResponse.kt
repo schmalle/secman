@@ -1,5 +1,6 @@
 package com.secman.crowdstrike.dto
 
+import com.secman.crowdstrike.client.QueriedHost
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
@@ -44,6 +45,10 @@ data class CrowdStrikeQueryResponse(
      * matching vulnerabilities" — previously both surfaced as count=0.
      */
     val notFoundHostnames: List<String> = emptyList(),
+
+    /** A partial lookup is displayable but must never replace a stored snapshot. */
+    val failedAids: Set<String> = emptySet(),
+    val devices: Set<QueriedHost> = emptySet(),
 
     /**
      * List of vulnerabilities found (empty if none)

@@ -22,7 +22,7 @@ Security requirement, vulnerability and risk-assessment platform.
 
 ## Stack
 
-Kotlin 2.4.20 / Java 25 · Micronaut 5.1 · Hibernate JPA · Astro 7 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.7.1 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2 · Go 1.24 (mobile relay).
+Kotlin 2.4.20 / Java 25 · Micronaut 5.2 · Hibernate JPA · Astro 7 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.8.0 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2 · Go 1.24 (mobile relay).
 
 ## Quick Start (development)
 
