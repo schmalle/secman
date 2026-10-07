@@ -624,7 +624,8 @@ private fun com.secman.crowdstrike.dto.CrowdStrikeQueryResponse.toBackendRespons
         queriedAt = this.queriedAt.toUtcIsoString(),
         // toBackendResponse is only ever called on the live-Falcon fallthrough paths
         // (queryVulnerabilities / queryByInstanceId), so these rows are not persisted.
-        dataSource = "LIVE_API"
+        dataSource = "LIVE_API",
+        notice = if (failedAids.isEmpty()) null else "Incomplete CrowdStrike lookup: ${failedAids.size} device(s) failed; findings are partial."
     )
 }
 

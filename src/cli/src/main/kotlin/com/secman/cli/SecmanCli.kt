@@ -131,7 +131,7 @@ class SecmanCli {
                             i++
                         }
                         args[i] == "--limit" && i + 1 < args.size -> {
-                            serversCommand.limit = args[i + 1].toIntOrNull() ?: 800
+                            serversCommand.limit = args[i + 1].toIntOrNull() ?: 4000
                             i++
                         }
                         args[i] == "--client-id" && i + 1 < args.size -> {
@@ -536,7 +536,7 @@ class SecmanCli {
                   --severity <levels>      Severity filter (default: HIGH,CRITICAL)
                   --min-days-open <num>    Minimum days open filter (default: 30)
                   --last-seen-days <num>   Only include devices seen within N days (default: 0 = all)
-                  --limit <num>            Page size for pagination (default: 800)
+                  --limit <num>            Page size for pagination (default: 4000)
                   --client-id <id>         CrowdStrike API client ID (overrides config file)
                   --client-secret <secret> CrowdStrike API client secret (overrides config file)
                   --overdue-threshold <num> Days threshold for overdue vulnerability report (default: 30)

@@ -425,7 +425,70 @@ a full page, and Falcon's `meta.pagination.total` bounds the fetch. Prior to thi
 guard, a two-token ping-pong re-fetched the same pages up to the 50-page cap and
 inflated single hosts to ~27x their real row count (2026-08-25 incident).
 
+For streaming `--save` imports, incomplete batches contribute no rows to storage.
+If one device fails, successful sibling devices for the same hostname or cloud
+instance are also excluded from replacement and reconciliation. Hostnames connected by a shared short name or cloud instance
+are kept together in an outer fetch batch. Aliases of one cloud instance use a
+canonical hostname; distinct cloud instances retain separate identities even when their hostnames match, so later batches cannot overwrite an
+earlier partial host payload. Age-filtered pages do not terminate pagination.
+Incomplete fetches are included in the final error count and cause exit code `1`.
+
+Multi-AID imports carry the complete device identity set separately from vulnerability
+rows. Deduplicating `(CVE, affected product)` therefore does not discard AIDs,
+including sibling devices with zero matching findings. The CLI groups replacements
+by instance ID with cloud-account compatibility checks when available, so two
+machines with the exact same hostname can produce separate payloads. Missing
+account/domain metadata does not split a sibling group; conflicting known accounts
+or non-cloud AD domains refuse replacement. Compatible short/FQDN aliases make one
+non-cloud snapshot; distinct FQDNs sharing a short name are ambiguous and refuse
+replacement without a stable machine identity. Metadata comes from device observations rather than the
+creation date of a vulnerability. Missing device metadata aborts a streaming run
+before replacement starts, because an unresolved AID might belong to any sibling
+group.
+
+Hostname-specific lookups expose failed AIDs. A failed device query, cursor loop,
+404 after pagination starts, exhausted timeout retry, or page cap makes the lookup
+incomplete. Such a lookup cannot replace its stored host snapshot; a multi-host save may still
+import independent complete hosts. Read-only queries
+may show partial findings with an explicit warning; save failures return nonzero. Product-filtered single-host lookups are read-only:
+`--product` with `--save` refuses replacement. Severity-filtered saves forward the
+requested severity slice so other severities remain intact.
+
+The backend rejects conflicting stored AID/instance/account/domain identities before
+replacement. Reconciliation resolves stable identities first and permits short-name
+fallback only when exactly one compatible asset exists. Ambiguous matches are
+excluded from both stale deletion and agent-seen stamping, with a warning. Existing
+source/severity restrictions, timestamp fences and deletion safety brakes still apply.
+No existing AID mapping is automatically moved between assets.
+
+Bulk `query servers` defaults to 4,000 rows per Spotlight page (maximum 5,000).
+When a multi-device shard reaches the 50-page bound, its partial rows are discarded
+and the device set is split into smaller shards and retried. Splitting stops at a
+single device; an incomplete single-device result remains a reported failure.
+Cursor anomalies are not retried through this path.
+
+Streaming CLI imports register an authenticated run before fetching, heartbeat every
+30 seconds, and explicitly finish after storage and reconciliation. Only the initiating
+user can heartbeat or finish the run, and a competing run receives HTTP 409. The
+backend holds deferred refreshes and completion notifications while that run is active.
+A crashed CLI loses its lease after ten minutes; it does not produce a success event.
+Failed and reconciliation-aborted runs also suppress success notifications. Older
+callers retain the existing quiet-period fallback. CLI backend authentication is renewed
+every twenty minutes during long runs. These leases are local to the backend process;
+a backend restart invalidates an active run and the CLI must rerun.
+
 ## Performance
+
+The streaming importer resolves device metadata and address history once per run,
+in 100-device chunks with four concurrent workers, and reuses the result during
+Spotlight fetching. Logs include metadata duration, fetch duration per outer batch,
+and storage duration. Backend DEBUG logs include per-asset resolution, prior-date
+read, deletion, insertion, exception/classification and compliance timings. These
+stage timings exclude transaction commit; the batch storage duration includes it.
+Prior first-seen dates are read as a grouped scalar projection across the resolved
+asset IDs, preserving the oldest `COALESCE(first_seen_at, scan_timestamp)` per CVE
+and product without hydrating vulnerability entities.
+
 
 | Dataset | Time | Bottleneck |
 |---|---|---|

@@ -726,6 +726,7 @@ const UserManagement = () => {
                     workgroupId={detailWorkgroup.id}
                     workgroupName={detailWorkgroup.name}
                     onClose={() => setDetailWorkgroup(null)}
+                    onStatusChanged={() => { fetchUsers(true); fetchWorkgroups(); }}
                 />
             )}
 

@@ -31,22 +31,22 @@ dependencies {
     implementation("io.micronaut.cache:micronaut-cache-caffeine")
 
     // Database
-    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.2.0")
+    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.2.1")
     implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.2.0")
     implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.2.0")
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.10")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:8.1.1")
-	runtimeOnly("org.flywaydb:flyway-core:13.8.0")
-	runtimeOnly("org.flywaydb:flyway-mysql:13.8.0")
+	runtimeOnly("org.flywaydb:flyway-core:13.9.0")
+	runtimeOnly("org.flywaydb:flyway-mysql:13.9.0")
 
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt:5.4.0")
     implementation("io.micronaut.security:micronaut-security-oauth2:5.4.0")
 
     // WebAuthn/Passkey support
-    implementation("com.webauthn4j:webauthn4j-core:0.31.10.RELEASE")
-    implementation("com.webauthn4j:webauthn4j-metadata:0.31.10.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-core:0.31.11.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-metadata:0.31.11.RELEASE")
 
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")
@@ -64,7 +64,7 @@ dependencies {
     implementation("org.thymeleaf:thymeleaf:3.1.5.RELEASE")
 
     // Serialization
-    implementation("io.micronaut.serde:micronaut-serde-jackson:3.2.2")
+    implementation("io.micronaut.serde:micronaut-serde-jackson:3.2.4")
     
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-reflect:${kotlinVersion}")
@@ -87,7 +87,7 @@ dependencies {
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.6.4")
+    runtimeOnly("ch.qos.logback:logback-classic:1.6.5")
     // Bridge Log4j to Logback (required for Apache POI)
     runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.26.1")
     // Logstash encoder for JSON logging (Feature 046)
@@ -131,7 +131,7 @@ dependencies {
     testImplementation("io.mockk:mockk:1.14.11")
     // Tests assert on log output via Logback's ListAppender; main code stays
     // slf4j-only (logback-classic is runtimeOnly above).
-    testImplementation("ch.qos.logback:logback-classic:1.6.3")
+    testImplementation("ch.qos.logback:logback-classic:1.6.5")
     testImplementation("org.assertj:assertj-core:3.27.7")
 }
 

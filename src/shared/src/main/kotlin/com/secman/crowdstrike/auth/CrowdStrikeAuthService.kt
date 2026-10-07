@@ -41,6 +41,7 @@ open class CrowdStrikeAuthService(
      * @throws AuthenticationException if authentication fails
      * @throws RateLimitException if rate limit exceeded during auth
      */
+    @Synchronized
     fun authenticate(config: FalconConfigDto): AuthToken {
         require(config.clientId.isNotBlank()) { "Client ID cannot be blank" }
         require(config.clientSecret.isNotBlank()) { "Client secret cannot be blank" }

@@ -21,7 +21,7 @@ subprojects {
 // Common dependency versions
 ext {
     set("kotlinVersion", "2.4.20")
-    set("micronautVersion", "5.1.4")
+    set("micronautVersion", "5.2.1")
     set("jvmTarget", "25")
     set("picocliVersion", "4.7.7")
 }

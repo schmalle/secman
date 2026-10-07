@@ -333,4 +333,16 @@ class CrowdStrikeQueryServiceTest {
         status = "open",
         hasException = false // shared client hardcodes this; applyExceptions must override it
     )
+    @Test
+    fun `partial live Falcon response retains a visible warning`() {
+        every { assetRepository.findByNameIgnoreCase("partial-host") } returns null
+        every { falconConfigRepository.findActiveConfig() } returns Optional.of(FalconConfig(clientId = "cid", clientSecret = "secret"))
+        every { apiClient.queryAllVulnerabilities("partial-host", any()) } returns
+            sharedResponse(sharedVuln(cve = "CVE-2026-00001", product = "Chrome Enterprise")).copy(failedAids = setOf("aid-failed"))
+        every { vulnerabilityExceptionRepository.findByExpirationDateIsNullOrExpirationDateGreaterThan(any()) } returns emptyList()
+        val response = service.queryVulnerabilitiesLive("partial-host")
+        assertThat(response.notice).contains("Incomplete CrowdStrike lookup", "1 device(s)", "partial")
+        assertThat(response.vulnerabilities).hasSize(1)
+    }
+
 }

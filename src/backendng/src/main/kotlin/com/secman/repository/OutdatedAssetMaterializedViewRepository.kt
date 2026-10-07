@@ -160,6 +160,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
                     ELSE true
                 END))
             AND (:adDomain IS NULL OR LOWER(v.adDomain) = LOWER(:adDomain))
+            ORDER BY v.assetId, v.id
         """,
         countQuery = """
             SELECT COUNT(v) FROM OutdatedAssetMaterializedView v
@@ -185,6 +186,46 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
         adDomain: String?,
         pageable: Pageable
     ): Page<OutdatedAssetMaterializedView>
+
+    /** IDs must come from AssetFilterService; apply scope before paging and counting. */
+    @Query(
+        value = """
+            SELECT v FROM OutdatedAssetMaterializedView v
+            WHERE v.assetId IN (:assetIds)
+            AND (:searchTerm IS NULL OR LOWER(v.assetName) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
+            AND (:minSeverity IS NULL OR
+                (CASE
+                    WHEN :minSeverity = 'CRITICAL' THEN v.criticalCount > 0
+                    WHEN :minSeverity = 'HIGH' THEN (v.criticalCount > 0 OR v.highCount > 0)
+                    WHEN :minSeverity = 'MEDIUM' THEN (v.criticalCount > 0 OR v.highCount > 0 OR v.mediumCount > 0)
+                    ELSE true
+                END))
+            AND (:adDomain IS NULL OR LOWER(v.adDomain) = LOWER(:adDomain))
+            ORDER BY v.assetId, v.id
+        """,
+        countQuery = """
+            SELECT COUNT(v) FROM OutdatedAssetMaterializedView v
+            WHERE v.assetId IN (:assetIds)
+            AND (:searchTerm IS NULL OR LOWER(v.assetName) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
+            AND (:minSeverity IS NULL OR
+                (CASE
+                    WHEN :minSeverity = 'CRITICAL' THEN v.criticalCount > 0
+                    WHEN :minSeverity = 'HIGH' THEN (v.criticalCount > 0 OR v.highCount > 0)
+                    WHEN :minSeverity = 'MEDIUM' THEN (v.criticalCount > 0 OR v.highCount > 0 OR v.mediumCount > 0)
+                    ELSE true
+                END))
+            AND (:adDomain IS NULL OR LOWER(v.adDomain) = LOWER(:adDomain))
+        """
+    )
+    fun findOutdatedAssetsForAssets(
+        assetIds: Set<Long>,
+        searchTerm: String?,
+        minSeverity: String?,
+        adDomain: String?,
+        pageable: Pageable
+    ): Page<OutdatedAssetMaterializedView>
+
+    fun countByAssetIdIn(assetIds: Set<Long>): Long
 
     /**
      * Get latest refresh timestamp for staleness indicator

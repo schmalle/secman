@@ -36,6 +36,7 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
   // AD-imported workgroups (names starting "AWS-") are hidden by default; this
   // toggle reveals them in both the tree and table views.
   const [showAwsWorkgroups, setShowAwsWorkgroups] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Keep hierarchy mutations on the same grant-manager boundary as the backend.
   const canCreateChild = useClientHasRole(['ADMIN', 'SECCHAMPION']);
@@ -131,6 +132,18 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
         </div>
       </div>
 
+      <div className="mb-3 flex-shrink-0">
+        <label htmlFor="workgroup-search" className="form-label">Search workgroups</label>
+        <input
+          id="workgroup-search"
+          type="search"
+          className="form-control"
+          placeholder="Search by workgroup name…"
+          value={searchTerm}
+          onChange={event => setSearchTerm(event.target.value)}
+        />
+      </div>
+
       {/* Tree View */}
       {viewMode === 'tree' && (
         <div className="row flex-grow-1 overflow-auto" style={{ minHeight: 0, overscrollBehavior: 'contain' }}>
@@ -144,6 +157,7 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
                   onCreateChild={canCreateChild ? handleCreateChild : undefined}
                   selectedWorkgroupId={selectedWorkgroup?.id}
                   showAwsWorkgroups={showAwsWorkgroups}
+                  searchTerm={searchTerm}
                 />
               </div>
             </div>
@@ -301,7 +315,7 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
             <i className="bi bi-info-circle"></i>
             <strong> Table View:</strong> This is the classic flat view of all workgroups. Switch to Tree View to see the hierarchy.
           </div>
-          <WorkgroupManagement showAwsWorkgroups={showAwsWorkgroups} />
+          <WorkgroupManagement showAwsWorkgroups={showAwsWorkgroups} searchTerm={searchTerm} />
         </div>
       )}
 

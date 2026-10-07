@@ -3,6 +3,7 @@ package com.secman.dto
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.NotNull
+import jakarta.validation.constraints.Size
 import java.time.LocalDateTime
 
 /**
@@ -26,7 +27,11 @@ import java.time.LocalDateTime
 data class QueriedHostDto(
     val hostname: String? = null,
     val instanceId: String? = null,
-    val crowdStrikeAid: String? = null
+    val crowdStrikeAid: String? = null,
+    @field:Size(max = 255)
+    val cloudAccountId: String? = null,
+    @field:Size(max = 255)
+    val adDomain: String? = null
 )
 
 @Serdeable

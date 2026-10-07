@@ -40,6 +40,38 @@ class ImportCompletionNotifierTest {
     )
 
     @Test
+    fun `explicit run ignores quiet period and publishes only on successful finish`() {
+        val lease = CrowdStrikeImportRunLease()
+        val id = lease.start("cli")
+        val n = ImportCompletionNotifier(publisher, 0, lease)
+        n.beginExplicitRun(id)
+        recordBatch(n)
+        repeat(3) { n.sweepCrowdStrikeRun() }
+        verify(exactly = 0) { publisher.publishEvent(any()) }
+        n.finishExplicitRun(id, true)
+        lease.finish(id, "cli")
+        n.sweepCrowdStrikeRun()
+        verify(exactly = 1) { publisher.publishEvent(any()) }
+    }
+
+    @Test
+    fun `failed or expired explicit runs never publish success`() {
+        val lease = CrowdStrikeImportRunLease()
+        val n = ImportCompletionNotifier(publisher, 0, lease)
+        var id = lease.start("cli")
+        n.beginExplicitRun(id)
+        recordBatch(n)
+        n.finishExplicitRun(id, false)
+        lease.finish(id, "cli")
+        id = lease.start("cli")
+        n.beginExplicitRun(id)
+        recordBatch(n)
+        lease.clock = java.time.Clock.offset(java.time.Clock.systemUTC(), java.time.Duration.ofMinutes(11))
+        n.sweepCrowdStrikeRun()
+        verify(exactly = 0) { publisher.publishEvent(any()) }
+    }
+
+    @Test
     fun `many CrowdStrike sub-batches publish exactly one aggregated event`() {
         val n = notifier()
         repeat(94) { recordBatch(n, servers = 20, imported = 100) }

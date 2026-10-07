@@ -25,8 +25,9 @@ import java.time.temporal.ChronoUnit
  *    import has actually gone quiet. Same debounce shape, and for the same reason, as
  *    [MaterializedViewRefreshService.requestDeferredRefresh].
  *
- * Server-side debouncing rather than a CLI "I'm done" call keeps this working for older
- * CLI versions, for the `/api/crowdstrike/vulnerabilities/save` path, and for manual callers.
+ * Current streaming CLIs explicitly start, heartbeat and finish a run. Its lease suppresses
+ * quiet-period completion until finish. Server-side debouncing remains for older CLI versions
+ * and manual callers that do not register a run.
  */
 @Singleton
 open class ImportCompletionNotifier(
@@ -37,7 +38,8 @@ open class ImportCompletionNotifier(
      * comfortably exceed the gap between sub-batches, or one run reports as several.
      */
     @Value("\${secman.notifications.chat.crowdstrike-quiet-period-seconds:180}")
-    private val crowdStrikeQuietPeriodSeconds: Long
+    private val crowdStrikeQuietPeriodSeconds: Long,
+    private val importRunLease: CrowdStrikeImportRunLease = CrowdStrikeImportRunLease()
 ) {
     private val log = LoggerFactory.getLogger(ImportCompletionNotifier::class.java)
 
@@ -56,6 +58,24 @@ open class ImportCompletionNotifier(
     /** Guarded by [lock] — concurrent import workers all write to it. */
     private var currentRun: CrowdStrikeRun? = null
     private val lock = Any()
+    private var explicitRunId: String? = null
+
+    open fun beginExplicitRun(id: String) {
+        synchronized(lock) {
+            currentRun = null
+            explicitRunId = id
+        }
+    }
+
+    open fun finishExplicitRun(id: String, successful: Boolean) {
+        val finished = synchronized(lock) {
+            check(explicitRunId == id) { "Import run is unavailable" }
+            explicitRunId = null
+            currentRun.also { currentRun = null }
+        }
+        if (successful && finished != null && finished.errorCount == 0) publishCrowdStrikeRun(finished)
+        else log.info("CrowdStrike run ended without a success notification: runId={}, successful={}", id, successful)
+    }
 
     /**
      * Record one CrowdStrike import sub-batch. Cheap and non-blocking: it only updates
@@ -91,6 +111,13 @@ open class ImportCompletionNotifier(
     @Scheduled(fixedDelay = "30s")
     open fun sweepCrowdStrikeRun() {
         val finished = synchronized(lock) {
+            if (explicitRunId != null) {
+                if (importRunLease.activeRunId() == explicitRunId) return
+                log.warn("CrowdStrike import lease expired; suppressing completion notification")
+                currentRun = null
+                explicitRunId = null
+                return
+            }
             val run = currentRun ?: return
             val quietSeconds = ChronoUnit.SECONDS.between(run.lastActivityAt, Instant.now())
             if (quietSeconds < crowdStrikeQuietPeriodSeconds) return
@@ -98,6 +125,10 @@ open class ImportCompletionNotifier(
             run
         }
 
+        publishCrowdStrikeRun(finished)
+    }
+
+    private fun publishCrowdStrikeRun(finished: CrowdStrikeRun) {
         val durationMinutes = ChronoUnit.MINUTES.between(finished.startedAt, finished.lastActivityAt)
         val fields = mutableListOf(
             ChatField("Servers processed", finished.serversProcessed.toString()),
