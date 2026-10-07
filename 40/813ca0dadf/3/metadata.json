@@ -1,0 +1,116 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "40813ca0dadf",
+  "session_id": "01a1161e-7163-77d0-95e9-7d895800ed25",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-07T21:04:35.072207Z",
+  "branch": "dev",
+  "checkpoints_count": 2,
+  "save_step_count": 2,
+  "files_touched": [
+    "docs/CROWDSTRIKE_IMPORT.md",
+    "src/backendng/src/main/kotlin/com/secman/controller/CrowdStrikeController.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/Asset.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/CrowdStrikeAssetIdentity.kt",
+    "src/backendng/src/main/kotlin/com/secman/dto/CrowdStrikeVulnerabilityBatchDto.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/AssetRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/CrowdStrikeAssetIdentityRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeDeviceReplacementService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/DomainVulnsService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/InstalledProductImportService.kt",
+    "src/backendng/src/main/resources/db/migration/V283__falcon_device_enrollment_timestamps.sql",
+    "src/backendng/src/test/kotlin/com/secman/integration/CrowdStrikeLatestDeviceIntegrationTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeDeviceReplacementServiceTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportServiceTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/InstalledProductImportServiceTest.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/commands/QueryCommand.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/service/CrowdStrikeServerBatches.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/service/VulnerabilityStorageService.kt",
+    "src/cli/src/test/kotlin/com/secman/cli/commands/QueryCommandTest.kt",
+    "src/cli/src/test/kotlin/com/secman/cli/service/VulnerabilityStorageServiceTest.kt",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClient.kt",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/dto/CrowdStrikeDeviceSelection.kt",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/dto/CrowdStrikeQueryResponse.kt",
+    "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplHostInfoFacetTest.kt",
+    "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplPaginationLoopTest.kt",
+    "src/shared/src/test/kotlin/com/secman/crowdstrike/dto/CrowdStrikeDeviceSelectionTest.kt"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "99f301a43c4c",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 434490,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 28286464,
+    "output_tokens": 97870,
+    "api_call_count": 227,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-07T21:04:34.947944Z",
+    "agent_lines": 854,
+    "agent_removed": 914,
+    "human_added": 0,
+    "human_modified": 115,
+    "human_removed": 30,
+    "total_committed": 964,
+    "total_lines_changed": 1913,
+    "agent_percentage": 92.42028227914271,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 386,
+      "user_lines_removed": 128,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "docs/CROWDSTRIKE_IMPORT.md": 22,
+        "src/backendng/src/main/kotlin/com/secman/domain/Asset.kt": 1,
+        "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt": 13,
+        "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityService.kt": 12,
+        "src/backendng/src/test/kotlin/com/secman/integration/CrowdStrikeIpImportIntegrationTest.kt": 70,
+        "src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportServiceTest.kt": 16,
+        "src/cli/src/main/kotlin/com/secman/cli/commands/QueryCommand.kt": 9,
+        "src/cli/src/test/kotlin/com/secman/cli/commands/QueryCommandTest.kt": 49,
+        "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt": 72,
+        "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplHostInfoFacetTest.kt": 5,
+        "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplPaginationLoopTest.kt": 117
+      },
+      "user_removed_per_file": {
+        "docs/CROWDSTRIKE_IMPORT.md": 21,
+        "src/backendng/src/main/kotlin/com/secman/domain/Asset.kt": 1,
+        "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt": 12,
+        "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityService.kt": 3,
+        "src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportServiceTest.kt": 8,
+        "src/cli/src/main/kotlin/com/secman/cli/commands/QueryCommand.kt": 1,
+        "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt": 73,
+        "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplHostInfoFacetTest.kt": 3,
+        "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplPaginationLoopTest.kt": 6
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 386,
+      "agent_lines_removed": 128
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1380,
+      "agent_lines_removed": 1042
+    }
+  ]
+}

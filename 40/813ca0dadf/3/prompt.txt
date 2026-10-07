@@ -1,0 +1,5 @@
+i have new a hostname with 19 different IDs, resulting in 19 potential servers. [Image #1] i want only the LATEST device ID to be used and all others ignored and also removed from the internal asset management system from secman. Carefully evaluate the code and propose a change.
+
+---
+
+implement this change, i will do the testing on my own

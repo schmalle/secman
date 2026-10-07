@@ -3,16 +3,38 @@
   "checkpoint_id": "40813ca0dadf",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 4,
+  "checkpoints_count": 6,
   "files_touched": [
     "docs/CROWDSTRIKE_IMPORT.md",
+    "src/backendng/src/main/kotlin/com/secman/controller/CrowdStrikeController.kt",
     "src/backendng/src/main/kotlin/com/secman/domain/Asset.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/CrowdStrikeAssetIdentity.kt",
+    "src/backendng/src/main/kotlin/com/secman/dto/CrowdStrikeVulnerabilityBatchDto.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/AssetRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/CrowdStrikeAssetIdentityRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeDeviceReplacementService.kt",
     "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt",
     "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/DomainVulnsService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/InstalledProductImportService.kt",
+    "src/backendng/src/main/resources/db/migration/V283__falcon_device_enrollment_timestamps.sql",
+    "src/backendng/src/test/kotlin/com/secman/integration/CrowdStrikeLatestDeviceIntegrationTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeDeviceReplacementServiceTest.kt",
     "src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportServiceTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/InstalledProductImportServiceTest.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/commands/QueryCommand.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/service/CrowdStrikeServerBatches.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/service/VulnerabilityStorageService.kt",
+    "src/cli/src/test/kotlin/com/secman/cli/commands/QueryCommandTest.kt",
+    "src/cli/src/test/kotlin/com/secman/cli/service/VulnerabilityStorageServiceTest.kt",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClient.kt",
     "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/dto/CrowdStrikeDeviceSelection.kt",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/dto/CrowdStrikeQueryResponse.kt",
     "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplHostInfoFacetTest.kt",
-    "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplPaginationLoopTest.kt"
+    "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplPaginationLoopTest.kt",
+    "src/shared/src/test/kotlin/com/secman/crowdstrike/dto/CrowdStrikeDeviceSelectionTest.kt"
   ],
   "sessions": [
     {
@@ -35,14 +57,21 @@
       "compact_transcript": "/40/813ca0dadf/2/transcript.jsonl",
       "content_hash": "/40/813ca0dadf/2/content_hash.txt",
       "prompt": "/40/813ca0dadf/2/prompt.txt"
+    },
+    {
+      "metadata": "/40/813ca0dadf/3/metadata.json",
+      "transcript": "/40/813ca0dadf/3/full.jsonl",
+      "compact_transcript": "/40/813ca0dadf/3/transcript.jsonl",
+      "content_hash": "/40/813ca0dadf/3/content_hash.txt",
+      "prompt": "/40/813ca0dadf/3/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 352688,
+    "input_tokens": 787178,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 20559360,
-    "output_tokens": 40506,
-    "api_call_count": 192,
+    "cache_read_tokens": 48845824,
+    "output_tokens": 138376,
+    "api_call_count": 419,
     "subagent_tokens_complete": true
   }
 }
