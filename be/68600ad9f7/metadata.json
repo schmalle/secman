@@ -3,7 +3,7 @@
   "checkpoint_id": "be68600ad9f7",
   "strategy": "manual-commit",
   "branch": "dev",
-  "checkpoints_count": 4,
+  "checkpoints_count": 5,
   "files_touched": [
     "docs/operations/CROWDSTRIKE_INVENTORY_REPAIR.md",
     "scripts/repair-crowdstrike-inventory.sh",
@@ -71,14 +71,21 @@
       "compact_transcript": "/be/68600ad9f7/0/transcript.jsonl",
       "content_hash": "/be/68600ad9f7/0/content_hash.txt",
       "prompt": "/be/68600ad9f7/0/prompt.txt"
+    },
+    {
+      "metadata": "/be/68600ad9f7/1/metadata.json",
+      "transcript": "/be/68600ad9f7/1/full.jsonl",
+      "compact_transcript": "/be/68600ad9f7/1/transcript.jsonl",
+      "content_hash": "/be/68600ad9f7/1/content_hash.txt",
+      "prompt": "/be/68600ad9f7/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 1068537,
+    "input_tokens": 1094799,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 104105600,
-    "output_tokens": 241747,
-    "api_call_count": 768,
-    "subagent_tokens_complete": true
+    "cache_read_tokens": 106307328,
+    "output_tokens": 248081,
+    "api_call_count": 779,
+    "subagent_tokens_complete": false
   }
 }
