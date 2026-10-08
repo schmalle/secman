@@ -14,7 +14,8 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
         val owner: String?,
         val adDomain: String?,
         val accountId: String?,
-        val workgroupId: Long?
+        val workgroupId: Long?,
+        val falconActivity: String? = null
     )
 
     /** A page of assets plus the exact matching row count. */
@@ -27,8 +28,9 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
 
         val rows = entityManager.createNativeQuery(ROW_QUERY, Asset::class.java)
         val count = entityManager.createNativeQuery(COUNT_QUERY)
-        bind(rows, ids, filters)
-        bind(count, ids, filters)
+        val cutoff = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusHours(24)
+        bind(rows, ids, filters, cutoff)
+        bind(count, ids, filters, cutoff)
         rows.firstResult = page * pageSize
         rows.maxResults = pageSize
         val assets = rows.resultList as List<Asset>
@@ -42,7 +44,7 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
         return Result(assets, (count.singleResult as Number).toLong(), addresses)
     }
 
-    private fun bind(query: jakarta.persistence.Query, ids: Set<Long>?, filters: Filters) {
+    private fun bind(query: jakarta.persistence.Query, ids: Set<Long>?, filters: Filters, cutoff: java.time.LocalDateTime) {
         query.setParameter("restrictIds", ids != null)
         query.setParameter("ids", ids ?: setOf(-1L))
         query.setParameter("name", filters.name)
@@ -51,12 +53,18 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
         query.setParameter("adDomain", filters.adDomain)
         query.setParameter("accountId", filters.accountId)
         query.setParameter("workgroupId", filters.workgroupId)
+        query.setParameter("falconActivity", filters.falconActivity)
+        query.setParameter("falconCutoff", cutoff)
     }
 
     companion object {
         private const val ROW_QUERY = """
             SELECT a.* FROM asset a
             WHERE (:restrictIds = FALSE OR a.id IN (:ids))
+              AND (:falconActivity IS NULL
+                OR (:falconActivity = 'recent' AND a.crowdstrike_agent_seen_at >= :falconCutoff)
+                OR (:falconActivity = 'older' AND a.crowdstrike_agent_seen_at < :falconCutoff)
+                OR (:falconActivity = 'unknown' AND a.crowdstrike_agent_seen_at IS NULL))
               AND (:name IS NULL OR LOCATE(LOWER(:name), LOWER(a.name)) > 0)
               AND (:ip IS NULL OR LOCATE(LOWER(:ip), LOWER(a.ip)) > 0 OR EXISTS (
                   SELECT 1 FROM asset_ip_address ai
@@ -75,6 +83,10 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
         private const val COUNT_QUERY = """
             SELECT COUNT(*) FROM asset a
             WHERE (:restrictIds = FALSE OR a.id IN (:ids))
+              AND (:falconActivity IS NULL
+                OR (:falconActivity = 'recent' AND a.crowdstrike_agent_seen_at >= :falconCutoff)
+                OR (:falconActivity = 'older' AND a.crowdstrike_agent_seen_at < :falconCutoff)
+                OR (:falconActivity = 'unknown' AND a.crowdstrike_agent_seen_at IS NULL))
               AND (:name IS NULL OR LOCATE(LOWER(:name), LOWER(a.name)) > 0)
               AND (:ip IS NULL OR LOCATE(LOWER(:ip), LOWER(a.ip)) > 0 OR EXISTS (
                   SELECT 1 FROM asset_ip_address ai

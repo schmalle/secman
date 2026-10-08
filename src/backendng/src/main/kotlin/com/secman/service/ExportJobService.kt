@@ -657,7 +657,8 @@ open class ExportJobService(
             cloudAccountId = filters.cloudAccountId,
             page = page,
             size = size,
-            includeInstallerFindings = filters.includeInstallerFindings
+            includeInstallerFindings = filters.includeInstallerFindings,
+            seenToday = filters.seenToday
         )
     }
 

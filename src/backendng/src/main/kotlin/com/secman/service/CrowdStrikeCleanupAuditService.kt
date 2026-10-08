@@ -12,6 +12,7 @@ import io.micronaut.context.annotation.Value
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
+import java.time.ZoneOffset
 import java.time.Clock
 import java.time.Duration
 import java.time.LocalDateTime
@@ -175,7 +176,8 @@ open class CrowdStrikeCleanupAuditService @Inject constructor(
 
         // Same query as the cleanup's own rule-A selection (agent-seen aware) and the
         // SAME cutoff instant — numerator and deletion set are one population.
-        val timestampCandidates = assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff)
+        val agentCutoff = cutoff.atZone(clock.zone).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime()
+        val timestampCandidates = assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff, agentCutoff)
             .count { it.crowdStrikeLastImportedAt != null && it.id != null }
 
         // Rule B — legacy CrowdStrike-origin stale rows. Only counted into the

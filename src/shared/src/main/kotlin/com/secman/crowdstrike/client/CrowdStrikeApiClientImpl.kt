@@ -912,120 +912,53 @@ open class CrowdStrikeApiClientImpl(
             return combined
         }
 
-        log.info(">>> Stage 1: Querying {} devices with product_type_desc filter{}", deviceType.name,
-            if (lastSeenDays > 0) " + last_seen:>'now-${lastSeenDays}d'" else " (no recency filter)")
-
-        val allDeviceIds = mutableListOf<String>()
-        var offset = 0
-        var hasMore = true
-
-        while (hasMore) {
-            try {
-                // Filter by device type, optionally restricting to recently seen devices
-                // - product_type_desc is an exact Falcon category such as Server,
-                //   Domain Controller, or Workstation
-                // - last_seen:>'now-Nd' = Only devices seen in the last N days (when lastSeenDays > 0)
-                val deviceTypeFilter = requireNotNull(deviceType.toFqlFilter()) {
-                    "Composite device scopes must be expanded before querying a single device type"
-                }
-                val filter = if (lastSeenDays > 0) {
-                    "$deviceTypeFilter+last_seen:>'now-${lastSeenDays}d'"
-                } else {
-                    deviceTypeFilter
-                }
-
-                val uri = UriBuilder.of("/devices/queries/devices/v1")
-                    .queryParam("filter", filter)
-                    .queryParam("limit", limit.coerceAtMost(5000))
-                    .queryParam("offset", offset)
-                    .build()
-
-                val request = HttpRequest.GET<Any>(uri.toString())
-                    .header("Authorization", "Bearer ${token.accessToken}")
-                    .header("Accept", "application/json")
-
-                log.info(">>> Stage 1 (page {}): FQL filter: {}", (offset / limit) + 1, filter)
-                log.debug(">>> Stage 1 (page {}): limit={}, offset={}", (offset / limit) + 1, limit, offset)
-
-                val response = httpClient.toBlocking().exchange(request, Map::class.java)
-
-                when (response.status.code) {
-                    200 -> {
-                        @Suppress("UNCHECKED_CAST")
-                        val responseBody = response.body() as? Map<String, Any>
-                            ?: throw CrowdStrikeException("Empty response from CrowdStrike Hosts API")
-
-                        if (!(responseBody["errors"] as? List<*>).isNullOrEmpty()) throw CrowdStrikeException("Incomplete Falcon device enumeration")
-                        val resources = responseBody["resources"] as? List<*>
-                            ?: throw CrowdStrikeException("Missing Falcon device IDs")
-                        val deviceIds = resources.mapNotNull { it?.toString() }
-
-                        if (deviceIds.isEmpty() && offset > 0) throw CrowdStrikeException("Incomplete Falcon device enumeration")
-                        if (deviceIds.any { it in allDeviceIds } || deviceIds.distinct().size != deviceIds.size) {
-                            throw CrowdStrikeException("Repeated Falcon device enumeration page")
-                        }
-                        allDeviceIds.addAll(deviceIds)
-
-                        // Check if there are more pages
-                        val meta = responseBody["meta"] as? Map<*, *>
-                        val pagination = meta?.get("pagination") as? Map<*, *>
-                        val total = (pagination?.get("total") as? Number)?.toInt()
-                        if (total != null && (allDeviceIds.size > total || (allDeviceIds.size < total && deviceIds.isEmpty()))) {
-                            throw CrowdStrikeException("Incomplete Falcon device enumeration")
-                        }
-
-                        log.info(">>> Stage 1 (page {}): Retrieved {} device IDs (total so far: {}, total available: {})",
-                            (offset / limit) + 1, deviceIds.size, allDeviceIds.size, total)
-
-                        hasMore = if (total != null) allDeviceIds.size < total else deviceIds.size >= limit.coerceAtMost(5000)
-                        offset += deviceIds.size
-                        if (hasMore && offset >= 1000000) throw CrowdStrikeException("Falcon device enumeration exceeded safety limit")
-
-                        if (hasMore) {
-                            log.info(">>> Stage 1: More devices available, continuing pagination (offset: {})", offset)
-                        }
-                    }
-                    404 -> {
-                        if (offset > 0) throw CrowdStrikeException("Incomplete Falcon device enumeration")
-                        log.info("No {} devices found", deviceType.name)
-                        hasMore = false
-                    }
-                    429 -> {
-                        val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                        throw RateLimitException("Rate limit exceeded querying ${deviceType.name} devices", retryAfter)
-                    }
-                    in 500..599 -> throw CrowdStrikeException("CrowdStrike server error: ${response.status}")
-                    else -> throw CrowdStrikeException("Unexpected CrowdStrike response: ${response.status}")
-                }
+        // Falcon's combined endpoint uses an opaque next cursor, not an integer offset.
+        val category = requireNotNull(deviceType.toFqlFilter())
+        val cutoff = Instant.now().minusSeconds(lastSeenDays.toLong() * 86400)
+        val filter = if (lastSeenDays > 0) "$category+last_seen:>'$cutoff'" else category
+        val ids = linkedSetOf<String>()
+        val cursors = mutableSetOf<String>()
+        var cursor: String? = null
+        var page = 0
+        do {
+            val builder = UriBuilder.of("/devices/combined/devices/v1")
+                .queryParam("filter", filter).queryParam("limit", limit.coerceIn(1, 5000))
+                .queryParam("sort", "device_id.asc")
+            cursor?.let { builder.queryParam("offset", it) }
+            val request = HttpRequest.GET<Any>(builder.build().toString())
+                .header("Authorization", "Bearer ${token.accessToken}")
+                .header("Accept", "application/json")
+            val response = try {
+                httpClient.toBlocking().exchange(request, Map::class.java)
             } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
-                when (e.status.code) {
-                    404 -> {
-                        if (offset > 0) throw CrowdStrikeException("Incomplete Falcon device enumeration")
-                        log.info("No {} devices found", deviceType.name)
-                        hasMore = false
-                    }
-                    429 -> {
-                        val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                        throw RateLimitException("Rate limit exceeded", retryAfter, e)
-                    }
-                    in 500..599 -> throw CrowdStrikeException("Server error: ${e.status}", e)
-                    else -> throw CrowdStrikeException("API error: ${e.message}", e)
-                }
-            } catch (e: RateLimitException) {
-                throw e
-            } catch (e: Exception) {
-                log.error("Unexpected error querying {} device IDs", deviceType.name, e)
-                throw CrowdStrikeException("Failed to query ${deviceType.name} device IDs: ${e.message}", e)
+                if (e.status.code == 429) throw RateLimitException("Falcon enumeration rate limit",
+                    e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L, e)
+                throw CrowdStrikeException("Falcon enumeration failed: ${e.status}", e)
             }
-        }
-
-        val uniqueDeviceIds = allDeviceIds.distinct()
-        if (uniqueDeviceIds.size < allDeviceIds.size) {
-            log.info("Deduplicated device IDs: {} -> {} unique (removed {} duplicates from pagination overlap)",
-                allDeviceIds.size, uniqueDeviceIds.size, allDeviceIds.size - uniqueDeviceIds.size)
-        }
-        log.info(">>> Stage 1 complete: {} {} devices found (lastSeenDays={})", uniqueDeviceIds.size, deviceType.name, lastSeenDays)
-        return uniqueDeviceIds
+            if (response.status.code != 200) throw CrowdStrikeException("Falcon enumeration failed")
+            val body = response.body() as? Map<*, *> ?: throw CrowdStrikeException("Missing Falcon enumeration response")
+            if (!(body["errors"] as? List<*>).isNullOrEmpty()) throw CrowdStrikeException("Incomplete Falcon device enumeration")
+            val resources = body["resources"] as? List<*> ?: throw CrowdStrikeException("Missing Falcon devices")
+            val pagination = (body["meta"] as? Map<*, *>)?.get("pagination") as? Map<*, *>
+                ?: throw CrowdStrikeException("Missing Falcon pagination")
+            val total = (pagination["total"] as? Number)?.toLong()
+                ?: throw CrowdStrikeException("Missing Falcon device count")
+            resources.forEach { resource ->
+                val id = (resource as? Map<*, *>)?.get("device_id") as? String
+                    ?: throw CrowdStrikeException("Missing Falcon device identity")
+                if (!ids.add(id)) throw CrowdStrikeException("Repeated Falcon device enumeration page")
+            }
+            cursor = (pagination["next"] as? String)?.takeIf(String::isNotBlank)
+            if (cursor != null && (!cursors.add(cursor!!) || resources.isEmpty())) {
+                throw CrowdStrikeException("Repeated or empty Falcon enumeration cursor")
+            }
+            // A moving live population can change total during traversal. Refuse incomplete
+            // results; retry the whole discovery before any persistence rather than infer absence.
+            if (cursor == null && ids.size.toLong() != total) throw CrowdStrikeException("Incomplete Falcon device enumeration")
+            if (++page > 1000 || ids.size > 1000000) throw CrowdStrikeException("Falcon enumeration exceeded safety limit")
+            log.info("Falcon discovery category={} page={} devices={} reportedTotal={}", deviceType, page, ids.size, total)
+        } while (cursor != null)
+        return ids.toList()
     }
 
     /**
@@ -2030,6 +1963,7 @@ open class CrowdStrikeApiClientImpl(
         val osVersion: String?,  // Operating system reported by the device entity
         val lastSeen: Instant? = null,
         val firstSeen: Instant? = null,
+        val productType: String? = null,
         val selection: CrowdStrikeDeviceSelection? = null
     ) {
         fun toQueriedHost(aid: String) = QueriedHost(hostname, cloudInstanceId, aid,
@@ -2045,7 +1979,7 @@ open class CrowdStrikeApiClientImpl(
                 val md = metadata.getValue(id)
                 // Falcon can omit a cloud device's hostname while retaining its instance identity.
                 CrowdStrikeDeviceRecord(id, firstNonBlank(md.hostname, md.cloudInstanceId).orEmpty(), md.cloudInstanceId,
-                    md.cloudAccountId, md.adDomain, md.firstSeen, md.lastSeen)
+                    md.cloudAccountId, md.adDomain, md.firstSeen, md.lastSeen, md.productType)
             })
         } catch (e: IllegalArgumentException) {
             log.warn("Latest Falcon device selection rejected: {}", e.message)
@@ -2196,7 +2130,8 @@ open class CrowdStrikeApiClientImpl(
                         cloudInstanceId = cloudInstanceId,
                         osVersion = osVersion,
                         lastSeen = device["last_seen"]?.toString()?.let { runCatching { Instant.parse(it) }.getOrNull() },
-                        firstSeen = device["first_seen"]?.toString()?.let { runCatching { Instant.parse(it) }.getOrNull() }
+                        firstSeen = device["first_seen"]?.toString()?.let { runCatching { Instant.parse(it) }.getOrNull() },
+                        productType = device["product_type_desc"]?.toString()
                     )
                 }
             } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {

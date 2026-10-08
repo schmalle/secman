@@ -31,7 +31,8 @@ data class QueriedHostDto(
     @field:Size(max = 255)
     val cloudAccountId: String? = null,
     @field:Size(max = 255)
-    val adDomain: String? = null
+    val adDomain: String? = null,
+    val lastSeen: java.time.Instant? = null
 )
 
 @Serdeable
@@ -55,8 +56,7 @@ data class ReconcileStaleVulnerabilitiesRequest(
     /**
      * When true the sweep runs in report-only mode: candidates are counted with the
      * exact DELETE predicate but nothing is deleted and no materialized-view refresh
-     * is requested. Agent-seen stamping still happens (it never deletes anything and
-     * the queried population is valid EDR-presence evidence either way).
+     * is requested. Contact timestamps and severity history are also left unchanged.
      */
     val dryRun: Boolean = false,
     /**

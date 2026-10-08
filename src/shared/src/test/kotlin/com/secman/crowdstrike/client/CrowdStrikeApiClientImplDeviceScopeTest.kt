@@ -35,7 +35,7 @@ class CrowdStrikeApiClientImplDeviceScopeTest {
             }
             HttpResponse.ok(
                 mapOf(
-                    "resources" to ids,
+                    "resources" to ids.map { mapOf("device_id" to it) },
                     "meta" to mapOf("pagination" to mapOf("total" to ids.size))
                 )
             )
@@ -52,12 +52,31 @@ class CrowdStrikeApiClientImplDeviceScopeTest {
         assertThat(requests).hasSize(2)
         val decodedUris = requests.map { decode(it.uri.toString()) }
         assertThat(decodedUris).anyMatch {
-            it.contains("product_type_desc:'Server'") && it.contains("last_seen:>'now-30d'")
+            it.contains("product_type_desc:'Server'") && it.contains("last_seen:>'")
         }
         assertThat(decodedUris).anyMatch {
-            it.contains("product_type_desc:'Domain Controller'") && it.contains("last_seen:>'now-30d'")
+            it.contains("product_type_desc:'Domain Controller'") && it.contains("last_seen:>'")
         }
         assertThat(decodedUris).noneMatch { it.contains("product_type_desc:'Workstation'") }
+    }
+
+    @Test
+    fun `discovery follows next cursor with stable ordering and rejects incomplete terminal pages`() {
+        val requests = mutableListOf<HttpRequest<Any>>()
+        every { blockingClient.exchange(capture(requests), Map::class.java) } returnsMany listOf(
+            HttpResponse.ok(mapOf("resources" to listOf(mapOf("device_id" to "one")),
+                "meta" to mapOf("pagination" to mapOf("total" to 2, "next" to "opaque-cursor")))),
+            HttpResponse.ok(mapOf("resources" to listOf(mapOf("device_id" to "two")),
+                "meta" to mapOf("pagination" to mapOf("total" to 2))))
+        )
+        assertThat(client.getDeviceIdsFiltered(token)).containsExactly("one", "two")
+        assertThat(requests.last().parameters.get("offset")).isEqualTo("opaque-cursor")
+        assertThat(requests.map { it.parameters.get("sort") }).containsOnly("device_id.asc")
+        every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } returns
+            HttpResponse.ok(mapOf("resources" to listOf(mapOf("device_id" to "one")),
+                "meta" to mapOf("pagination" to mapOf("total" to 2))))
+        org.assertj.core.api.Assertions.assertThatThrownBy { client.getDeviceIdsFiltered(token) }
+            .hasMessageContaining("Incomplete")
     }
 
     private fun decode(value: String): String =

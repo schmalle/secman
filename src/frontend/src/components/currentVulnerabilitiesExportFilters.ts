@@ -41,6 +41,7 @@ export function buildVulnerabilityExportFilters(
     adDomain: clean(state.adDomainFilter),
     cloudAccountId: clean(state.cloudAccountIdFilter),
     includeInstallerFindings: state.includeInstallerFindings,
+    seenToday: true,
   };
 }
 
@@ -71,7 +72,9 @@ export function describeExportScope(
 ): string {
   const count = countActiveExportFilters(filters);
   if (count === 0) {
-    return "Export all vulnerabilities to Excel";
+    return filters.seenToday
+      ? "Export vulnerabilities of systems seen today (Europe/Berlin) to Excel"
+      : "Export all vulnerabilities to Excel";
   }
   return count === 1
     ? "Export to Excel using the 1 active filter"

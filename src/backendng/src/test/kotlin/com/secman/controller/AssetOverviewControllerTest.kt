@@ -59,8 +59,8 @@ class AssetOverviewControllerTest : BaseIntegrationTest() {
         userRepository.delete(viewer)
     }
 
-    private fun search(ip: String? = null, page: Int = 0, auth: String = token): Map<*, *> {
-        val query = "/api/assets/search?page=$page&pageSize=25&name=${asset.name}" + (ip?.let { "&ip=$it" } ?: "")
+    private fun search(ip: String? = null, page: Int = 0, auth: String = token, activity: String? = null): Map<*, *> {
+        val query = "/api/assets/search?page=$page&pageSize=25&name=${asset.name}" + (ip?.let { "&ip=$it" } ?: "") + (activity?.let { "&falconActivity=$it" } ?: "")
         val body = client.toBlocking().retrieve(HttpRequest.GET<Any>(query).bearerAuth(auth))
         return requireNotNull(jsonMapper.readValue(body, Map::class.java))
     }
@@ -114,4 +114,18 @@ class AssetOverviewControllerTest : BaseIntegrationTest() {
         val rows = requireNotNull(jsonMapper.readValue(body, Argument.listOf(AssignedAssetDto::class.java)))
         assertThat(rows.single().ipAddresses).containsExactly("10.4.0.10", "10.77.32.9", "10.8.0.10", "2001:db8::9")
     }
+    @Test
+    fun `Falcon recency separates retained inventory and preserves access scope`() {
+        assertThat((search(activity = "unknown")["matchingCount"] as Number).toLong()).isEqualTo(1)
+        asset.crowdStrikeAgentSeenAt = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusHours(2)
+        assetRepository.update(asset)
+        assertThat((search(activity = "recent")["matchingCount"] as Number).toLong()).isEqualTo(1)
+        assertThat((search(activity = "older")["matchingCount"] as Number).toLong()).isZero()
+        assertThat((search(activity = "recent", auth = TestAuthHelper.getAuthToken(client, viewer.username))["matchingCount"] as Number).toLong()).isZero()
+        asset.crowdStrikeAgentSeenAt = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(3)
+        assetRepository.update(asset)
+        assertThat((search(activity = "recent")["matchingCount"] as Number).toLong()).isZero()
+        assertThat((search(activity = "older")["matchingCount"] as Number).toLong()).isEqualTo(1)
+    }
+
 }

@@ -71,6 +71,11 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         "resources" to deviceIds.toList()
     )
 
+    private fun combinedDeviceResponse(vararg ids: String) = mapOf(
+        "resources" to ids.map { mapOf("device_id" to it) },
+        "meta" to mapOf("pagination" to mapOf("total" to ids.size))
+    )
+
     /**
      * Serves metadata lookups and hands out Spotlight pages from a queue.
      * Returns the list of captured requests for URI assertions.
@@ -268,7 +273,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         every { blockingClient.exchange(capture(requests), Map::class.java) } answers {
             val uri = firstArg<HttpRequest<Any>>().uri.toString()
             when {
-                uri.contains("/devices/queries/devices/v1") -> HttpResponse.ok(deviceQueryResponse(*ids.toTypedArray()))
+                uri.contains("/devices/combined/devices/v1") -> HttpResponse.ok(combinedDeviceResponse(*ids.toTypedArray()))
                 uri.contains("/devices/entities/devices/v2") -> HttpResponse.ok(metadataResponse(*ids.toTypedArray(), sameHostname = true))
                 uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
                 uri.contains("/spotlight/") -> HttpResponse.ok(spotlightPage(listOf(vulnResource("aid-6", "aid-6")), null, 1))
@@ -293,7 +298,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } answers {
             val uri = firstArg<HttpRequest<Any>>().uri.toString()
             when {
-                uri.contains("/devices/queries/devices/v1") -> HttpResponse.ok(deviceQueryResponse(*ids.toTypedArray()))
+                uri.contains("/devices/combined/devices/v1") -> HttpResponse.ok(combinedDeviceResponse(*ids.toTypedArray()))
                 uri.contains("/devices/entities/devices/v2") -> HttpResponse.ok(mapOf("resources" to ids.mapIndexed { i, id ->
                     mapOf("device_id" to id, "hostname" to "alias-$i", "instance_id" to "i-shared", "first_seen" to Instant.parse("2026-01-01T00:00:00Z").plusSeconds(i.toLong()).toString(), "last_seen" to Instant.now().toString())
                 }))
@@ -315,7 +320,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } answers {
             val uri = firstArg<HttpRequest<Any>>().uri.toString()
             when {
-                uri.contains("/devices/queries/devices/v1") -> HttpResponse.ok(deviceQueryResponse(*ids.toTypedArray()))
+                uri.contains("/devices/combined/devices/v1") -> HttpResponse.ok(combinedDeviceResponse(*ids.toTypedArray()))
                 uri.contains("/devices/entities/devices/v2") -> HttpResponse.ok(mapOf("resources" to ids.mapIndexed { i, id ->
                     mapOf("device_id" to id, "hostname" to "server.domain-$i", "instance_id" to "i-$id", "first_seen" to "2026-01-01T00:00:00Z", "last_seen" to Instant.now().toString())
                 }))
@@ -339,7 +344,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } answers {
             val uri = firstArg<HttpRequest<Any>>().uri.toString()
             when {
-                uri.contains("/devices/queries/devices/v1") -> HttpResponse.ok(deviceQueryResponse("device-1"))
+                uri.contains("/devices/combined/devices/v1") -> HttpResponse.ok(combinedDeviceResponse("device-1"))
                 uri.contains("/devices/entities/devices/v2") -> HttpResponse.ok(metadataResponse("device-1"))
                 uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
                 uri.contains("/spotlight/") -> HttpResponse.ok(spotlightPage(listOf(vulnResource("partial")), "A", 10))
@@ -367,7 +372,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } answers {
             val uri = firstArg<HttpRequest<Any>>().uri
             when {
-                uri.path.contains("/devices/queries/devices/v1") -> HttpResponse.ok(deviceQueryResponse(*ids.toTypedArray()))
+                uri.path.contains("/devices/combined/devices/v1") -> HttpResponse.ok(combinedDeviceResponse(*ids.toTypedArray()))
                 uri.path.contains("/network-address-history/") -> {
                     historyCalls.incrementAndGet()
                     HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
@@ -646,7 +651,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } answers {
             val uri = firstArg<HttpRequest<Any>>().uri.toString()
             when {
-                uri.contains("/devices/queries/") -> HttpResponse.ok(deviceQueryResponse(*ids.toTypedArray()))
+                uri.contains("/devices/combined/") -> HttpResponse.ok(combinedDeviceResponse(*ids.toTypedArray()))
                 uri.contains("/devices/entities/") -> HttpResponse.ok(metadataResponse(*ids.toTypedArray(), sameHostname = true))
                 uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
                 uri.contains("/spotlight/") -> HttpResponse.ok(spotlightPage(emptyList(), null, 0))
@@ -677,8 +682,8 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         val requests = mutableListOf<HttpRequest<Any>>()
         every { blockingClient.exchange(capture(requests), Map::class.java) } answers {
             when {
-                firstArg<HttpRequest<Any>>().uri.toString().contains("/devices/queries/") ->
-                    HttpResponse.ok(deviceQueryResponse("old", "winner"))
+                firstArg<HttpRequest<Any>>().uri.toString().contains("/devices/combined/") ->
+                    HttpResponse.ok(combinedDeviceResponse("old", "winner"))
                 firstArg<HttpRequest<Any>>().uri.toString().contains("/devices/entities/") ->
                     HttpResponse.ok(mapOf("resources" to listOf(
                         mapOf("device_id" to "old", "hostname" to "old-server", "instance_id" to "i-shared",
@@ -708,7 +713,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         every { blockingClient.exchange(capture(requests), Map::class.java) } answers {
             val uri = firstArg<HttpRequest<Any>>().uri.toString()
             when {
-                uri.contains("/devices/queries/") -> HttpResponse.ok(deviceQueryResponse("known", "nameless"))
+                uri.contains("/devices/combined/") -> HttpResponse.ok(combinedDeviceResponse("known", "nameless"))
                 uri.contains("/devices/entities/") -> HttpResponse.ok(mapOf("resources" to listOf(
                     mapOf("device_id" to "known", "hostname" to "server01", "first_seen" to "2026-01-01T00:00:00Z"),
                     mapOf("device_id" to "nameless")
@@ -743,7 +748,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
             every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } answers {
                 val uri = firstArg<HttpRequest<Any>>().uri.toString()
                 when {
-                    uri.contains("/devices/queries/") -> HttpResponse.ok(deviceQueryResponse("known", "nameless"))
+                    uri.contains("/devices/combined/") -> HttpResponse.ok(combinedDeviceResponse("known", "nameless"))
                     uri.contains("/devices/entities/") -> HttpResponse.ok(mapOf("resources" to listOf(
                         mapOf("device_id" to "known", "hostname" to "server01", "first_seen" to "2026-01-01T00:00:00Z"),
                         mapOf("device_id" to "nameless", "hostname" to " ")
@@ -771,7 +776,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } answers {
             val uri = firstArg<HttpRequest<Any>>().uri.toString()
             when {
-                uri.contains("/devices/queries/") -> HttpResponse.ok(deviceQueryResponse("known", "missing"))
+                uri.contains("/devices/combined/") -> HttpResponse.ok(combinedDeviceResponse("known", "missing"))
                 uri.contains("/devices/entities/") -> HttpResponse.ok(metadataResponse("known"))
                 uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
                 else -> error("Vulnerability fetch must not start: $uri")
@@ -789,7 +794,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } answers {
             val uri = firstArg<HttpRequest<Any>>().uri.toString()
             when {
-                uri.contains("/devices/queries/") -> HttpResponse.ok(deviceQueryResponse(*ids.toTypedArray()))
+                uri.contains("/devices/combined/") -> HttpResponse.ok(combinedDeviceResponse(*ids.toTypedArray()))
                 uri.contains("/devices/entities/") -> HttpResponse.ok(mapOf("resources" to ids.mapIndexed { index, id ->
                     mapOf("device_id" to id, "hostname" to if (index == 0) "old-alias" else "new-alias", "instance_id" to "i-shared", "first_seen" to Instant.parse("2026-01-01T00:00:00Z").plusSeconds(index.toLong()).toString(),
                         "last_seen" to if (index == 0) "2026-01-01T00:00:00Z" else "2026-02-01T00:00:00Z")

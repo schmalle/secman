@@ -430,6 +430,8 @@ matrix_create_asset_and_vulnerability() {
     asset_id=$(echo "$res" | jq -r '.id')
     [[ -z "$asset_id" || "$asset_id" == "null" ]] && fail "Matrix $case_key: failed to create asset: $res"
 
+    db_exec "UPDATE asset SET crowdstrike_agent_seen_at=UTC_TIMESTAMP() WHERE id=${asset_id};"
+
     if [[ -n "$aws_account" ]]; then
         create_user_mapping "$USER1_EMAIL" "$aws_account" "$USER1_ID" >/dev/null
     fi
@@ -1216,6 +1218,9 @@ res=$(mcp_call "create_asset" "$(jq -nc \
 ASSET2_ID=$(echo "$res" | jq -r '.id')
 [[ -z "$ASSET2_ID" || "$ASSET2_ID" == "null" ]] && fail "Failed to create $ASSET2_NAME: $res"
 ok "Created asset $ASSET2_NAME (id=$ASSET2_ID, owner=$USER2_USERNAME)"
+
+# The current-vulnerability view includes only verified Falcon contacts today.
+db_exec "UPDATE asset SET crowdstrike_agent_seen_at=UTC_TIMESTAMP() WHERE id IN (${ASSET1_ID},${ASSET2_ID});"
 
 # vuln1 on testasset1 (40 days, overdue)
 res=$(mcp_call "add_vulnerability" "$(jq -nc \

@@ -75,10 +75,16 @@ class CrowdStrikeDeviceReplacementService(
             val provenInstance = !asset.cloudInstanceId.isNullOrBlank() && !asset.cloudAccountId.isNullOrBlank() &&
                 records.any { it.instanceId.equals(asset.cloudInstanceId, ignoreCase = true) &&
                     it.cloudAccountId.equals(asset.cloudAccountId, ignoreCase = true) }
-            return compatibleValue(asset.cloudAccountId, selected.cloudAccountId) &&
+            return compatibleValue(asset.cloudInstanceId, selected.instanceId) &&
+                compatibleValue(asset.cloudAccountId, selected.cloudAccountId) &&
                 (compatibleValue(asset.adDomain, selected.adDomain) || provenIdentity || provenInstance)
         }
-        val candidates = (identities.map { it.asset } + hostnameCandidates.filter(::compatible) +
+        // A hostname-only record is not evidence for a separately identified cloud instance.
+        // A matching AID still enters through identities and must pass every identity guard.
+        val matchingHostnameCandidates = hostnameCandidates.filter {
+            compatible(it) && (selected.instanceId.isNullOrBlank() || !it.cloudInstanceId.isNullOrBlank())
+        }
+        val candidates = (identities.map { it.asset } + matchingHostnameCandidates +
             instanceCandidates.filter(::compatible)).distinctBy { it.id }
         require(candidates.size <= 101) { "Too many stored Falcon replacement candidates" }
         val locked = candidates.sortedBy { it.id }.map { asset ->
@@ -124,6 +130,8 @@ class CrowdStrikeDeviceReplacementService(
             }
             proven &&
                 duplicate.manualCreator == null && duplicate.scanUploader == null &&
+                duplicate.owner == com.secman.constants.AssetOwners.CROWDSTRIKE_IMPORT &&
+                duplicate.workgroups.isEmpty() &&
                 matchingRetired.isNotEmpty()
         }) { "Duplicate assets do not have proven superseded Falcon identities" }
         if (duplicates.isNotEmpty()) {
@@ -131,6 +139,23 @@ class CrowdStrikeDeviceReplacementService(
                 "SELECT COUNT(s) FROM IntegrationSubject s WHERE s.assetId IN :ids", Long::class.javaObjectType
             ).setParameter("ids", duplicates.map { it.id }).singleResult.toLong()
             require(subjectCount == 0L) { "Superseded asset has integration bindings; replacement requires review" }
+            val manualFindingCount = entityManager.createQuery(
+                "SELECT COUNT(v) FROM Vulnerability v WHERE v.asset.id IN :ids AND (v.source IS NULL OR v.source <> :source)",
+                Long::class.javaObjectType
+            ).setParameter("ids", duplicates.map { it.id })
+                .setParameter("source", com.secman.constants.VulnerabilitySources.CROWDSTRIKE).singleResult.toLong()
+            require(manualFindingCount == 0L) { "Superseded asset has findings from another source; replacement requires review" }
+            val linkedRecords = (entityManager.createNativeQuery("""
+                SELECT (SELECT COUNT(*) FROM asset_tag WHERE asset_id IN (:ids))
+                     + (SELECT COUNT(*) FROM application_register_asset WHERE asset_id IN (:ids))
+                     + (SELECT COUNT(*) FROM risk WHERE asset_id IN (:ids))
+                     + (SELECT COUNT(*) FROM risk_assessment WHERE asset_id IN (:ids))
+                     + (SELECT COUNT(*) FROM demand WHERE existing_asset_id IN (:ids))
+                     + (SELECT COUNT(*) FROM scan_result WHERE asset_id IN (:ids))
+            """).setParameter("ids", duplicates.map { it.id }).singleResult as Number).toLong()
+            require(linkedRecords == 0L) { "Superseded asset has inventory relationships; replacement requires review" }
+
+
         }
         if (canonical != null && !canonical.cloudInstanceId.isNullOrBlank() &&
             !canonical.cloudInstanceId.equals(selected.instanceId, ignoreCase = true)) {
@@ -149,6 +174,27 @@ class CrowdStrikeDeviceReplacementService(
     }
 
     fun finish(asset: Asset, replacement: Replacement, selection: CrowdStrikeDeviceSelection, actor: String) {
+        // Historical evidence is separate from the single current binding used for matching.
+        (listOf(selection.selected) + selection.superseded).forEach { device ->
+            entityManager.createNativeQuery("""
+                INSERT INTO crowdstrike_enrollment_history
+                    (crowdstrike_aid, asset_id, hostname, instance_id, cloud_account_id, product_type,
+                     falcon_first_seen_at, falcon_last_seen_at, superseded_by, observed_at)
+                VALUES (:aid, :assetId, :hostname, :instanceId, :accountId, :productType,
+                        :firstSeen, :lastSeen, :supersededBy, UTC_TIMESTAMP(6))
+                ON DUPLICATE KEY UPDATE asset_id=VALUES(asset_id), hostname=VALUES(hostname),
+                    instance_id=VALUES(instance_id), cloud_account_id=VALUES(cloud_account_id),
+                    product_type=VALUES(product_type), falcon_first_seen_at=VALUES(falcon_first_seen_at),
+                    falcon_last_seen_at=VALUES(falcon_last_seen_at), superseded_by=VALUES(superseded_by),
+                    observed_at=VALUES(observed_at)
+            """).setParameter("aid", device.aid).setParameter("assetId", asset.id)
+                .setParameter("hostname", device.hostname).setParameter("instanceId", device.instanceId)
+                .setParameter("accountId", device.cloudAccountId).setParameter("productType", device.productType)
+                .setParameter("firstSeen", device.firstSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) })
+                .setParameter("lastSeen", device.lastSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) })
+                .setParameter("supersededBy", selection.selected.aid.takeIf { it != device.aid })
+                .executeUpdate()
+        }
         val operationId = UUID.randomUUID().toString()
         replacement.duplicates.forEach { duplicate ->
             identityRepository.findByAssetIdIn(listOf(requireNotNull(duplicate.id))).forEach(identityRepository::delete)

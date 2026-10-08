@@ -236,7 +236,8 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
 
       // PERFORMANCE: When only page/sort changes (filters unchanged), pass the known total
       // to skip the expensive COUNT query with NOT EXISTS on 358k+ rows
-      const currentFilterKey = `${severityFilter}|${debouncedSystemFilter}|${exceptionFilter}|${productFilter}|${debouncedCveFilter}|${adDomainFilter}|${cloudAccountIdFilter}|${includeInstallerFindings}`;
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(new Date());
+      const currentFilterKey = `${today}|${severityFilter}|${debouncedSystemFilter}|${exceptionFilter}|${productFilter}|${debouncedCveFilter}|${adDomainFilter}|${cloudAccountIdFilter}|${includeInstallerFindings}`;
       const filtersUnchanged = currentFilterKey === prevFiltersRef.current;
       const knownTotal = filtersUnchanged && paginatedResponse?.totalExact !== false
         ? paginatedResponse.totalElements
@@ -727,7 +728,7 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
           <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
             <h2 className={embedded ? "h4 mb-0" : "mb-0"}>
               <i className="bi bi-shield-exclamation me-2"></i>
-              Current Vulnerabilities
+              Current vulnerabilities of active systems
             </h2>
             <div className="d-flex gap-2">
               {isAdmin() && (
@@ -1041,9 +1042,9 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
                 <details className="current-vulns__count-help text-muted small mb-1">
                   <summary>About this count</summary>
                   <p className="mb-1">
-                    Excepted vulnerabilities are hidden by default. This figure equals the
-                    <strong> Not excepted</strong> count on the Account Vulnerabilities view;
-                    switch <strong>Overdue Status</strong> to <em>All (incl. Excepted)</em> to see the full total.
+                    Only systems last seen today (Europe/Berlin) are included.
+                    Excepted vulnerabilities are hidden by default. Inventory-wide views may
+                    include older systems and therefore show different totals.
                   </p>
                 </details>
               )}

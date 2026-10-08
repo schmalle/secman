@@ -301,7 +301,7 @@ const HomeStatisticsDashboard: React.FC = () => {
     cards.push({
       label: 'AWS Servers Without Old Vulnerabilities',
       value: formatAwsCleanServerKpi(stats.awsCleanServerKpi),
-      subtitle: 'Share of AWS servers with no vulnerability older than 30 days',
+      subtitle: 'Share of AWS servers seen today (Europe/Berlin) with no vulnerability older than 30 days',
       icon: 'bi-cloud-check'
     });
   }

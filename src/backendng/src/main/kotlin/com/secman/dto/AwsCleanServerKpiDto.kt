@@ -26,5 +26,6 @@ data class AwsCleanServerKpiResponse(
 data class AwsCleanServerKpiCacheData(
     val totalAwsServers: Long,
     val cleanAwsServers: Long,
-    val percentage: Double
+    val percentage: Double,
+    val seenTodayStartUtc: String? = null
 )

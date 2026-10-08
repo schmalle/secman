@@ -8,6 +8,7 @@ import com.secman.dto.CrowdStrikeAssetCleanupResponse
 import com.secman.repository.AssetRepository
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
+import java.time.ZoneOffset
 import java.time.Clock
 import java.time.LocalDateTime
 import java.util.UUID
@@ -66,7 +67,9 @@ open class CrowdStrikeAssetCleanupService(
         // when it has no recent findings import. A fully-patched host with a live sensor
         // never refreshes crowdStrikeLastImportedAt — deleting it would destroy a healthy,
         // remediated asset.
-        val timestampCandidates = assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff)
+        // Import timestamps use the local clock; Falcon contact timestamps are UTC.
+        val agentCutoff = cutoff.atZone(clock.zone).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime()
+        val timestampCandidates = assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff, agentCutoff)
             .mapNotNull { asset ->
                 val importedAt = asset.crowdStrikeLastImportedAt ?: return@mapNotNull null
                 val assetId = asset.id ?: return@mapNotNull null

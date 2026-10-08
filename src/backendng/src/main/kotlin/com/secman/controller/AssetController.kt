@@ -153,7 +153,10 @@ open class AssetController(
         val cloudAccountId: String?,
         val cloudInstanceId: String?,
         val adDomain: String?,
-        val osVersion: String?
+        val osVersion: String?,
+        val type: String,
+        val falconLastSeen: java.time.Instant?,
+        val falconProductType: String?
     ) {
         companion object {
             fun from(asset: Asset, addresses: List<String>) = AssetOverviewRow(
@@ -166,7 +169,10 @@ open class AssetController(
                 cloudAccountId = CloudIdentifierDisplay.accountId(asset.cloudAccountId),
                 cloudInstanceId = CloudIdentifierDisplay.instanceId(asset.cloudInstanceId),
                 adDomain = asset.adDomain,
-                osVersion = asset.osVersion
+                osVersion = asset.osVersion,
+                type = asset.type,
+                falconLastSeen = asset.crowdStrikeAgentSeenAt?.toInstant(java.time.ZoneOffset.UTC),
+                falconProductType = asset.crowdStrikeProductType
             )
         }
     }
@@ -331,12 +337,16 @@ open class AssetController(
         @Nullable @QueryValue owner: String?,
         @Nullable @QueryValue adDomain: String?,
         @Nullable @QueryValue accountId: String?,
-        @Nullable @QueryValue workgroupId: Long?
+        @Nullable @QueryValue workgroupId: Long?,
+        @Nullable @QueryValue falconActivity: String? = null
     ): HttpResponse<*> {
         if (page !in 0..MAX_OVERVIEW_PAGE || pageSize !in ALLOWED_OVERVIEW_PAGE_SIZES) {
             return HttpResponse.badRequest(ErrorResponse("Page must be non-negative and pageSize must be 25, 50, 100, or 250"))
         }
 
+        if (falconActivity != null && falconActivity !in setOf("recent", "older", "unknown")) {
+            return HttpResponse.badRequest(ErrorResponse("Invalid Falcon activity filter"))
+        }
         val filterValues = listOf(name, ip, owner, adDomain, accountId).map { it?.trim()?.takeIf(String::isNotEmpty) }
         val restrictedIds = if (GrantAuthority.canManage(authentication.roles)) null else {
             assetFilterService.getAccessibleAssetIds(authentication)
@@ -349,7 +359,8 @@ open class AssetController(
                 owner = filterValues[2],
                 adDomain = filterValues[3],
                 accountId = filterValues[4],
-                workgroupId = workgroupId
+                workgroupId = workgroupId,
+                falconActivity = falconActivity
             ),
             page,
             pageSize

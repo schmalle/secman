@@ -25,7 +25,7 @@ class CrowdStrikeDeviceReplacementServiceTest {
     private val assets = mockk<AssetRepository>()
     private val identities = mockk<CrowdStrikeAssetIdentityRepository>(relaxed = true)
     private val deletion = mockk<AssetCascadeDeleteService>(relaxed = true)
-    private val em = mockk<EntityManager>()
+    private val em = mockk<EntityManager>(relaxed = true)
     private val products = mockk<com.secman.repository.InstalledProductRepository>(relaxed = true)
     private val service = CrowdStrikeDeviceReplacementService(assets, identities, products, deletion, em)
     private val older = CrowdStrikeDeviceRecord("aid-old", "server.example.test", firstSeen = Instant.parse("2026-01-01T00:00:00Z"))
@@ -65,7 +65,7 @@ class CrowdStrikeDeviceReplacementServiceTest {
     }
 
     @Test
-    fun `known AID updates cloud metadata after an instance move and domain join`() {
+    fun `known AID cannot silently move to a conflicting cloud instance`() {
         val asset = Asset(id = 1L, name = newest.hostname, type = "SERVER", owner = "CrowdStrike Import",
             cloudInstanceId = "i-old", cloudAccountId = "account-a", adDomain = "old.test")
         val binding = CrowdStrikeAssetIdentity(asset = asset, crowdStrikeAid = newest.aid, sourceHostname = newest.hostname)
@@ -75,7 +75,8 @@ class CrowdStrikeDeviceReplacementServiceTest {
         val evidence = CrowdStrikeDeviceSelection(incoming)
         val incomingBatch = batch.copy(cloudInstanceId = incoming.instanceId, cloudAccountId = incoming.cloudAccountId,
             adDomain = incoming.adDomain, deviceSelection = evidence)
-        assertThat(service.prepare(incomingBatch, evidence).asset).isSameAs(asset)
+        assertThatThrownBy { service.prepare(incomingBatch, evidence) }
+            .isInstanceOf(IllegalArgumentException::class.java)
         assertThatThrownBy { service.prepare(incomingBatch.copy(cloudAccountId = "account-b"),
             CrowdStrikeDeviceSelection(incoming.copy(cloudAccountId = "account-b"))) }
             .isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("account or domain")
@@ -103,4 +104,24 @@ class CrowdStrikeDeviceReplacementServiceTest {
             .isInstanceOf(IllegalArgumentException::class.java)
         verify(exactly = 0) { assets.findCrowdStrikeReplacementCandidates(any(), any()) }
     }
+    @Test
+    fun `proven retired identity with inventory relationships is preserved for review`() {
+        val oldAsset = Asset(id = 1L, name = older.hostname, type = "SERVER", owner = "CrowdStrike Import")
+        val newAsset = Asset(id = 2L, name = newest.hostname, type = "SERVER", owner = "CrowdStrike Import")
+        stub(CrowdStrikeAssetIdentity(asset = oldAsset, crowdStrikeAid = older.aid, sourceHostname = older.hostname),
+            CrowdStrikeAssetIdentity(asset = newAsset, crowdStrikeAid = newest.aid, sourceHostname = newest.hostname))
+        val counts = mockk<jakarta.persistence.TypedQuery<Long>>()
+        every { counts.setParameter(any<String>(), any()) } returns counts
+        every { counts.singleResult } returns 0L
+        every { em.createQuery(any<String>(), Long::class.javaObjectType) } returns counts
+        val links = mockk<jakarta.persistence.Query>()
+        every { links.setParameter(any<String>(), any()) } returns links
+        every { links.singleResult } returns 1L
+        every { em.createNativeQuery(any<String>()) } returns links
+        assertThatThrownBy { service.prepare(batch, selection) }
+            .isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("inventory relationships")
+        verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any()) }
+        verify(exactly = 0) { identities.delete(any()) }
+    }
+
 }

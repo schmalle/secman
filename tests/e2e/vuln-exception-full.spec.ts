@@ -747,7 +747,9 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
                 return bounds.top >= viewport.top && bounds.bottom <= viewport.bottom;
             }).length;
         });
-        expect(visibleRows).toBeGreaterThanOrEqual(4);
+        // Active fixtures have two-line rows: hostname plus verified Last seen.
+        expect(visibleRows).toBeGreaterThanOrEqual(3);
+        await expect(page.locator('.asset-management__results tbody tr').first()).toContainText('Last seen:');
 
         await page.getByRole('button', { name: 'More filters' }).click();
         await page.locator('#ownerFilter').fill(USER1.user);
@@ -764,6 +766,7 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
         await login(page, ADMIN.user, ADMIN.pass);
         await page.setViewportSize({ width: 2048, height: 638 });
         await page.goto('/analytics');
+        await expect(page.getByRole('heading', { name: 'Current vulnerabilities of active systems' })).toBeVisible();
         await expect(page.locator('.current-vulns tbody tr').first()).toBeVisible();
 
         const visibleRows = await page.locator('.current-vulns tbody tr').evaluateAll((rows) => {

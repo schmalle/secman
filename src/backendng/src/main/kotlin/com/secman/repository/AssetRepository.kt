@@ -166,27 +166,18 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      */
     fun findByCloudInstanceIdIgnoreCase(cloudInstanceId: String): Asset?
 
+    @io.micronaut.data.annotation.Query("SELECT a FROM Asset a WHERE LOWER(a.cloudInstanceId) IN (:instanceIds)")
+    fun findByNormalizedCloudInstanceIdIn(instanceIds: Collection<String>): List<Asset>
+
     fun findByCrowdStrikeLastImportedAtBefore(cutoff: LocalDateTime): List<Asset>
 
-    /**
-     * Stale-asset cleanup rule A, agent-seen aware: stale by
-     * `crowdStrikeLastImportedAt` AND not recently confirmed as a managed device
-     * via `crowdStrikeAgentSeenAt`.
-     *
-     * `crowdStrikeLastImportedAt` alone is a false staleness signal: it is only
-     * written for hosts that returned findings, so a fully-patched host with a
-     * healthy Falcon sensor never sets it and ages into the delete window while
-     * being demonstrably alive. `crowdStrikeAgentSeenAt` is stamped for the whole
-     * Stage-1 queried population on every reconcile (see stampCrowdStrikeAgentSeenAt)
-     * and is therefore the EDR-presence veto: an asset CrowdStrike reported within
-     * the window is never a cleanup candidate.
-     */
+    /** Retention candidates require both an old import and old or unknown provider contact. */
     @io.micronaut.data.annotation.Query("""
         SELECT a FROM Asset a
         WHERE a.crowdStrikeLastImportedAt < :cutoff
-          AND (a.crowdStrikeAgentSeenAt IS NULL OR a.crowdStrikeAgentSeenAt < :cutoff)
+          AND (a.crowdStrikeAgentSeenAt IS NULL OR a.crowdStrikeAgentSeenAt < :agentCutoff)
     """)
-    fun findCrowdStrikeStaleExcludingAgentSeen(cutoff: LocalDateTime): List<Asset>
+    fun findCrowdStrikeStaleExcludingAgentSeen(cutoff: LocalDateTime, agentCutoff: LocalDateTime): List<Asset>
 
     /**
      * Record that CrowdStrike reported these assets as managed devices.
@@ -293,6 +284,15 @@ interface AssetRepository : JpaRepository<Asset, Long> {
           AND a.cloudInstanceId <> ''
     """)
     fun countAllAwsAssetsWithInstanceId(): Long
+
+    @io.micronaut.data.annotation.Query("""
+        SELECT COUNT(a) FROM Asset a
+        WHERE a.cloudInstanceId IS NOT NULL AND a.cloudInstanceId <> ''
+          AND a.crowdStrikeAgentSeenAt >= :seenTodayStart
+          AND a.crowdStrikeAgentSeenAt < :seenTodayEnd
+    """)
+    fun countAwsAssetsSeenToday(seenTodayStart: LocalDateTime, seenTodayEnd: LocalDateTime): Long
+
 
     /**
      * EDR-coverage KPI: EC2 instances excluded from the denominator by an approved,

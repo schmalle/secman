@@ -43,6 +43,8 @@ interface Asset {
   cloudAccountId?: string;
   cloudInstanceId?: string;
   osVersion?: string;
+  falconLastSeen?: string;
+  falconProductType?: string;
   adDomain?: string;
   criticality?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NA' | null;
   createdAt?: string;
@@ -96,6 +98,7 @@ const AssetManagement: React.FC = () => {
   const [adDomainFilter, setAdDomainFilter] = useState('');
   const [accountIdFilter, setAccountIdFilter] = useState('');
   const [workgroupFilter, setWorkgroupFilter] = useState('');
+  const [falconActivity, setFalconActivity] = useState('');
 
   // Bulk delete states (Feature 029 - User Story 1)
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
@@ -132,6 +135,7 @@ const AssetManagement: React.FC = () => {
     setAdDomainFilter(params.get('adDomain') || '');
     setAccountIdFilter(params.get('accountId') || '');
     setWorkgroupFilter(params.get('workgroupId') || '');
+    setFalconActivity(params.get('falconActivity') || '');
     setCompactRows(window.localStorage.getItem('assetOverviewCompactRows') !== 'false');
     setUrlStateReady(true);
     fetchWorkgroups();
@@ -149,7 +153,7 @@ const AssetManagement: React.FC = () => {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [page, pageSize, nameFilter, ipFilter, ownerFilter, adDomainFilter, accountIdFilter, workgroupFilter]);
+  }, [page, pageSize, nameFilter, ipFilter, ownerFilter, adDomainFilter, accountIdFilter, workgroupFilter, falconActivity]);
 
   useEffect(() => {
     if (!urlStateReady) return;
@@ -162,8 +166,9 @@ const AssetManagement: React.FC = () => {
     if (adDomainFilter) params.set('adDomain', adDomainFilter);
     if (accountIdFilter) params.set('accountId', accountIdFilter);
     if (workgroupFilter) params.set('workgroupId', workgroupFilter);
+    if (falconActivity) params.set('falconActivity', falconActivity);
     window.history.replaceState(null, '', `${window.location.pathname}${params.size ? `?${params}` : ''}`);
-  }, [urlStateReady, page, pageSize, nameFilter, ipFilter, ownerFilter, adDomainFilter, accountIdFilter, workgroupFilter]);
+  }, [urlStateReady, page, pageSize, nameFilter, ipFilter, ownerFilter, adDomainFilter, accountIdFilter, workgroupFilter, falconActivity]);
 
   const fetchAssetCount = async () => {
     try {
@@ -184,6 +189,7 @@ const AssetManagement: React.FC = () => {
       if (adDomainFilter.trim()) params.set('adDomain', adDomainFilter.trim());
       if (accountIdFilter.trim()) params.set('accountId', accountIdFilter.trim());
       if (workgroupFilter) params.set('workgroupId', workgroupFilter);
+    if (falconActivity) params.set('falconActivity', falconActivity);
       const response = await authenticatedGet(`/api/assets/search?${params}`, { signal });
       if (response.ok) {
         const data: AssetOverviewResponse = await response.json();
@@ -571,7 +577,7 @@ const AssetManagement: React.FC = () => {
     () => [...new Set(assets.flatMap(a => a.workgroups?.map(w => w.name) || []))].sort(),
     [assets]
   );
-  const hasFilters = Boolean(nameFilter || ipFilter || ownerFilter || adDomainFilter || accountIdFilter || workgroupFilter);
+  const hasFilters = Boolean(nameFilter || ipFilter || ownerFilter || adDomainFilter || accountIdFilter || workgroupFilter || falconActivity);
   const advancedFilterCount = [ipFilter, ownerFilter, accountIdFilter].filter(Boolean).length;
 
   const clearFilters = () => {
@@ -581,6 +587,7 @@ const AssetManagement: React.FC = () => {
     setOwnerFilter('');
     setAdDomainFilter('');
     setWorkgroupFilter('');
+    setFalconActivity('');
     setPage(0);
   };
 
@@ -976,6 +983,17 @@ const AssetManagement: React.FC = () => {
             {hasFilters && <button type="button" className="btn btn-link" onClick={clearFilters}>Clear all</button>}
           </div>
         </div>
+        <div className="mt-2">
+          <label htmlFor="falconActivity" className="form-label me-2">Falcon sensor contact</label>
+          <select id="falconActivity" className="form-select w-auto d-inline-block" value={falconActivity}
+            onChange={(event) => { setFalconActivity(event.target.value); setPage(0); }}>
+            <option value="">All inventory, including retained older assets</option>
+            <option value="recent">Seen within 24 hours</option>
+            <option value="older">Last seen more than 24 hours ago</option>
+            <option value="unknown">No verified Falcon contact time</option>
+          </select>
+          <div className="form-text">Sensor contact is reported by Falcon. Older contact does not mean a machine is retired. Server-family imports also include domain controllers.</div>
+        </div>
         {showMoreFilters && (
           <div id="assetMoreFilters" className="asset-management__more-filters">
             <div>
@@ -1038,7 +1056,7 @@ const AssetManagement: React.FC = () => {
                 <div aria-label="Loading assets">{Array.from({ length: 8 }, (_, index) => <div className="placeholder-glow py-2" key={index}><span className="placeholder col-12"></span></div>)}</div>
               ) : assets.length === 0 ? (
                 <p className="text-muted">
-                  {matchingCount === 0 && !nameFilter && !ipFilter && !accountIdFilter && !ownerFilter && !adDomainFilter && !workgroupFilter
+                  {matchingCount === 0 && !hasFilters
                     ? 'No assets found. Click "Add New Asset" to create one.'
                     : 'No assets match the current filters.'}
                 </p>
@@ -1060,7 +1078,11 @@ const AssetManagement: React.FC = () => {
                     <tbody>
                       {assets.map((asset) => (
                         <tr key={asset.id}>
-                          <td>{asset.name}</td>
+                          <td>
+                            {asset.name}
+                            {asset.falconProductType === 'Domain Controller' && <span className="badge bg-secondary ms-2">Domain controller</span>}
+                            {asset.falconLastSeen && <small className="d-block text-muted">Last seen: {new Date(asset.falconLastSeen).toLocaleString()}</small>}
+                          </td>
                           <td>
                             {(asset.ipAddresses?.length ? asset.ipAddresses : asset.ip ? [asset.ip] : []).length > 0
                               ? (asset.ipAddresses?.length ? asset.ipAddresses : [asset.ip!]).map(ip => (

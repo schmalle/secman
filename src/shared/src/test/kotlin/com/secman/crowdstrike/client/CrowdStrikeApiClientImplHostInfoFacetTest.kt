@@ -92,7 +92,8 @@ class CrowdStrikeApiClientImplHostInfoFacetTest {
         } answers {
             val uri = firstArg<HttpRequest<Any>>().uri.toString()
             when {
-                uri.contains("/devices/queries/") -> HttpResponse.ok(mapOf("resources" to listOf("device-1")))
+                uri.contains("/devices/combined/") -> HttpResponse.ok(mapOf("resources" to listOf(mapOf("device_id" to "device-1")),
+                    "meta" to mapOf("pagination" to mapOf("total" to 1))))
                 uri.contains("/devices/entities/") -> HttpResponse.ok(mapOf("resources" to listOf(mapOf(
                     "device_id" to "device-1", "hostname" to "server01", "first_seen" to "2026-01-01T00:00:00Z"
                 ))))

@@ -4,6 +4,7 @@ import com.secman.domain.Asset
 import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
 import com.secman.service.AwsCleanServerKpiService
+import com.secman.service.FalconSeenTodayWindow
 import com.secman.testutil.BaseIntegrationTest
 import com.secman.testutil.TestDataFactory
 import jakarta.inject.Inject
@@ -45,7 +46,7 @@ class AwsCleanServerKpiCountIntegrationTest : BaseIntegrationTest() {
 
         val threshold = LocalDateTime.now().minusDays(AwsCleanServerKpiService.VULN_AGE_THRESHOLD_DAYS)
 
-        assertThat(vulnerabilityRepository.countDirtyAwsServers(threshold)).isZero()
+        assertThat(vulnerabilityRepository.countDirtyAwsServers(threshold, FalconSeenTodayWindow.today().startUtc, FalconSeenTodayWindow.today().endUtc)).isZero()
     }
 
     @Test
@@ -66,7 +67,24 @@ class AwsCleanServerKpiCountIntegrationTest : BaseIntegrationTest() {
 
         val threshold = LocalDateTime.now().minusDays(AwsCleanServerKpiService.VULN_AGE_THRESHOLD_DAYS)
 
-        assertThat(vulnerabilityRepository.countDirtyAwsServers(threshold)).isEqualTo(1L)
+        assertThat(vulnerabilityRepository.countDirtyAwsServers(threshold, FalconSeenTodayWindow.today().startUtc, FalconSeenTodayWindow.today().endUtc)).isEqualTo(1L)
+    }
+
+
+    @Test
+    fun `both KPI counts exclude old missing and tomorrow contact despite a fresh import`() {
+        val window = FalconSeenTodayWindow.today()
+        val contacts = listOf(window.startUtc.minusSeconds(1), window.startUtc, window.endUtc.minusSeconds(1), window.endUtc, null)
+        contacts.forEachIndexed { index, contact ->
+            val asset = assetRepository.save(Asset(name = "contact-$index", type = "SERVER", owner = "ops",
+                cloudInstanceId = "i-contact-$index", crowdStrikeAgentSeenAt = contact,
+                crowdStrikeLastImportedAt = LocalDateTime.now(), lastSeen = LocalDateTime.now()))
+            vulnerabilityRepository.save(TestDataFactory.createVulnerabilityWithTimestamp(
+                asset, "CVE-2099-12345", "High", LocalDateTime.now().minusDays(40)))
+        }
+        assertThat(assetRepository.countAwsAssetsSeenToday(window.startUtc, window.endUtc)).isEqualTo(2)
+        assertThat(vulnerabilityRepository.countDirtyAwsServers(
+            LocalDateTime.now().minusDays(30), window.startUtc, window.endUtc)).isEqualTo(2)
     }
 
     private fun awsAsset(name: String, instanceId: String): Asset = assetRepository.save(
@@ -75,7 +93,8 @@ class AwsCleanServerKpiCountIntegrationTest : BaseIntegrationTest() {
             type = "SERVER",
             owner = "ops",
             cloudAccountId = "111122223333",
-            cloudInstanceId = instanceId
+            cloudInstanceId = instanceId,
+            crowdStrikeAgentSeenAt = FalconSeenTodayWindow.today().startUtc
         )
     )
 }

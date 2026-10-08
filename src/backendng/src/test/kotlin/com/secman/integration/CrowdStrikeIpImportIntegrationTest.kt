@@ -55,6 +55,27 @@ class CrowdStrikeIpImportIntegrationTest : BaseIntegrationTest() {
         assertPersistedAddresses(asset.id!!, "10.0.0.2", setOf("10.0.0.2", "10.0.0.3"))
     }
 
+    @Test
+    fun `interactive save cannot reassign a hostname to another cloud instance`() {
+        val asset = existingAsset()
+        asset.cloudInstanceId = "i-00000000000000001"
+        assetRepository.update(asset)
+        entityManager.flush()
+        entityManager.clear()
+        val row = CrowdStrikeVulnerabilityDto(
+            id = "conflicting-finding", hostname = asset.name, ip = "10.0.0.99",
+            cveId = "CVE-2026-1234", severity = "High", cvssScore = 8.0,
+            affectedProduct = "test-product", daysOpen = "5 days", detectedAt = null,
+            status = "open", hasException = false
+        )
+        org.assertj.core.api.Assertions.assertThatThrownBy {
+            saveService.saveToDatabase(CrowdStrikeSaveRequest(asset.name, listOf(row), "i-00000000000000002"),
+                Authentication.build("test-admin", listOf("ADMIN")))
+        }.isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("stored asset identity")
+        assertPersistedAddresses(asset.id!!, "10.0.0.1", setOf("10.0.0.1", "203.0.113.1"))
+        assertThat(assetRepository.findById(asset.id!!).orElseThrow().cloudInstanceId).isEqualTo("i-00000000000000001")
+    }
+
     private fun existingAsset(): Asset = assetRepository.save(Asset(
         name = "ip-import-${System.nanoTime()}", type = "SERVER", owner = "test",
         ip = "10.0.0.1", ipAddresses = mutableSetOf("10.0.0.1", "203.0.113.1")

@@ -28,12 +28,9 @@ import java.time.LocalDateTime
  *    excludes the synthetic "AWS Account <id>" placeholder assets, which get a cloudAccountId
  *    but never a cloudInstanceId.
  *
- *  - **"has CrowdStrike"** = `crowdStrikeAgentSeenAt` within [AGENT_SEEN_FRESHNESS_DAYS], NOT
- *    `crowdStrikeLastImportedAt`. The latter is only written for hosts that returned findings —
- *    the daily import filters `--severity CRITICAL,HIGH` and drops empty batches — so building
- *    the numerator on it would systematically undercount, reporting low coverage precisely for
- *    well-patched fleets. `crowdStrikeAgentSeenAt` is stamped from the import's full Stage-1
- *    queried-host population instead (see CrowdStrikeVulnerabilityImportService.stampAgentSeen).
+ *  - **"has CrowdStrike"** = the provider's UTC sensor contact within
+ *    [AGENT_SEEN_FRESHNESS_DAYS]. Importing an offline host's retained findings does
+ *    not refresh this timestamp; zero-finding hosts still retain their contact evidence.
  */
 @Singleton
 open class EdrCoverageKpiService(
@@ -81,7 +78,7 @@ open class EdrCoverageKpiService(
                 0L
             } else {
                 assetRepository.countEc2AssetsWithFreshCrowdStrikeAgent(
-                    LocalDateTime.now().minusDays(AGENT_SEEN_FRESHNESS_DAYS)
+                    LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(AGENT_SEEN_FRESHNESS_DAYS)
                 )
             }
 

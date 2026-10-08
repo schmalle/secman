@@ -81,6 +81,19 @@ open class AssetBulkDeleteService(
                 .executeUpdate()
             log.info("Deleted $deletedWorkgroupLinks asset-workgroup links")
 
+            // Bulk JPQL bypasses entity cascades. Remove integration children before
+            // their runs/subjects and vulnerability projections; keep scanner configuration.
+            listOf(
+                "DELETE FROM integration_attachment",
+                "DELETE FROM web_exposure",
+                "DELETE FROM web_component",
+                "DELETE FROM integration_finding",
+                "DELETE FROM integration_run",
+                "DELETE FROM integration_subject",
+                "DELETE FROM asset_tag"
+            ).forEach { sql -> entityManager.createNativeQuery(sql).executeUpdate() }
+            log.info("Deleted integration results, subject bindings, and asset tags")
+
             // Step 3: Delete all vulnerabilities
             vulnerabilityRepository.deleteAll()
             log.info("Deleted $vulnCount vulnerabilities")

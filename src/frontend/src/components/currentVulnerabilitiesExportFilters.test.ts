@@ -41,6 +41,7 @@ test('every filter maps to its request field', () => {
   });
 
   assert.deepEqual(filters, {
+    seenToday: true,
     severity: 'Critical',
     system: 'THMTPPI1',
     exceptionStatus: 'overdue',
@@ -116,7 +117,7 @@ test('active filter count ignores the always-present exceptionStatus', () => {
 test('the export button no longer claims to export everything when a filter is set', () => {
   assert.equal(
     describeExportScope(buildVulnerabilityExportFilters(empty)),
-    'Export all vulnerabilities to Excel',
+    'Export vulnerabilities of systems seen today (Europe/Berlin) to Excel',
   );
   assert.equal(
     describeExportScope(

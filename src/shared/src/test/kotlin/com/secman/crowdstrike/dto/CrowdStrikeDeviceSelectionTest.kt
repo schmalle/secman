@@ -75,4 +75,16 @@ class CrowdStrikeDeviceSelectionTest {
         assertThat(selectLatestCrowdStrikeDevices(listOf(device(1), device(2).copy(hostname = "SERVER.EXAMPLE.TEST"))))
             .hasSize(1)
     }
+    @Test
+    fun `reused hostname does not collapse different cloud instances or bridge missing instance metadata`() {
+        val firstInstance = device(1).copy(instanceId = "i-first", cloudAccountId = "account-a")
+        val secondInstance = device(2).copy(instanceId = "i-second", cloudAccountId = "account-a")
+        val unknownInstance = device(3).copy(cloudAccountId = "account-a")
+        val reenrolled = device(4).copy(instanceId = "i-first", cloudAccountId = "account-a")
+        val selected = selectLatestCrowdStrikeDevices(listOf(firstInstance, secondInstance, unknownInstance, reenrolled))
+        assertThat(selected).hasSize(3)
+        assertThat(selected.first { it.selected == reenrolled }.superseded).containsExactly(firstInstance)
+        assertThat(selected.flatMap { it.superseded }).doesNotContain(secondInstance, unknownInstance)
+    }
+
 }

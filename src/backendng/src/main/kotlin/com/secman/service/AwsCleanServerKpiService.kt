@@ -16,7 +16,7 @@ import java.time.LocalDateTime
 /**
  * Computes and caches the "AWS servers with no vulnerability older than 30 days"
  * security KPI: (AWS servers with zero vulnerabilities detected >30 days ago) /
- * (all AWS servers), as a percentage.
+ * (AWS servers seen today in Europe/Berlin), as a percentage. Both counts use that contact day.
  *
  * Deliberately uses a fixed 30-day window rather than the admin-tunable
  * `VulnerabilityConfig.reminderOneDays` threshold, so the KPI's meaning never
@@ -63,13 +63,15 @@ open class AwsCleanServerKpiService(
     fun recalculate() {
         val start = System.currentTimeMillis()
         try {
-            val totalAwsServers = assetRepository.countAllAwsAssetsWithInstanceId()
+            val window = FalconSeenTodayWindow.today()
+            val totalAwsServers = assetRepository.countAwsAssetsSeenToday(window.startUtc, window.endUtc)
 
             val awsServersWithOldDetections = if (totalAwsServers == 0L) {
                 0L
             } else {
                 vulnerabilityRepository.countDirtyAwsServers(
-                    LocalDateTime.now().minusDays(VULN_AGE_THRESHOLD_DAYS)
+                    LocalDateTime.now().minusDays(VULN_AGE_THRESHOLD_DAYS),
+                    window.startUtc, window.endUtc
                 )
             }
 
@@ -80,7 +82,8 @@ open class AwsCleanServerKpiService(
                 AwsCleanServerKpiCacheData(
                     totalAwsServers = totalAwsServers,
                     cleanAwsServers = cleanAwsServers,
-                    percentage = percentage
+                    percentage = percentage,
+                    seenTodayStartUtc = window.startUtc.toString()
                 )
             )
             upsertCache(json, System.currentTimeMillis() - start)
@@ -104,6 +107,9 @@ open class AwsCleanServerKpiService(
             ?: return AwsCleanServerKpiResponse(available = false)
 
         val data = objectMapper.readValue(entry.cachedJson, AwsCleanServerKpiCacheData::class.java)
+        if (data.seenTodayStartUtc != FalconSeenTodayWindow.today().startUtc.toString()) {
+            return AwsCleanServerKpiResponse(available = false)
+        }
         return AwsCleanServerKpiResponse(
             available = true,
             percentage = data.percentage,
@@ -111,6 +117,12 @@ open class AwsCleanServerKpiService(
             cleanAwsServers = data.cleanAwsServers,
             lastCalculatedAt = entry.lastRefreshedAt
         )
+    }
+
+    /** Refresh old-scope caches after deployment and at the Berlin day boundary, off the request thread. */
+    @io.micronaut.scheduling.annotation.Scheduled(fixedDelay = "1m", initialDelay = "1m")
+    fun refreshForNewDay() {
+        if (!getKpi().available) recalculate()
     }
 
     private fun computePercentage(clean: Long, total: Long): Double {

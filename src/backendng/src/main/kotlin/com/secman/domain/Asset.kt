@@ -126,17 +126,11 @@ data class Asset(
     @Column(name = "crowdstrike_last_imported_at")
     var crowdStrikeLastImportedAt: LocalDateTime? = null,
 
-    /**
-     * Timestamp when CrowdStrike last reported this asset as a managed device — i.e. when
-     * it appeared in an import's Stage-1 queried-host population.
-     *
-     * Distinct from [crowdStrikeLastImportedAt], which means "had a finding imported" and
-     * drives the CrowdStrike stale-asset deletion rules. That column is a poor EDR-presence
-     * signal because the daily import filters `--severity CRITICAL,HIGH` and drops empty
-     * batches, so a fully-patched host with a healthy sensor never sets it. This column is
-     * stamped for every queried device regardless of findings, and is the numerator source
-     * for `EdrCoverageKpiService`.
-     */
+    /** Provider category, separate from the inventory type used by risk rules. */
+    @Column(name = "crowdstrike_product_type", length = 64)
+    var crowdStrikeProductType: String? = null,
+
+    /** Falcon's actual last sensor contact in UTC, never the time SecMan imported it. */
     @Column(name = "crowdstrike_agent_seen_at")
     var crowdStrikeAgentSeenAt: LocalDateTime? = null,
 

@@ -20,7 +20,9 @@ data class CrowdStrikeDeviceRecord(
     @field:Size(max = 255)
     val adDomain: String? = null,
     val firstSeen: Instant? = null,
-    val lastSeen: Instant? = null
+    val lastSeen: Instant? = null,
+    @field:Size(max = 64)
+    val productType: String? = null
 )
 
 @Serdeable
@@ -62,11 +64,14 @@ fun selectLatestCrowdStrikeDevices(records: List<CrowdStrikeDeviceRecord>): List
         val scope = device.hostnameScope()
         // Missing account metadata is compatible only with one unambiguous hostname account.
         val account = scope.last().ifBlank { accountsByHostname.getValue(scope.take(2)).singleOrNull().orEmpty() }
-        val keys = listOf(listOf("hostname") + scope.take(2) + account) + listOfNotNull(
-            device.instanceId?.trim()?.takeIf(String::isNotBlank)?.let {
-                listOf("instance", it.lowercase(), account)
-            }
-        )
+        // A reused hostname is not proof that two cloud instances are the same machine.
+        // Records without an instance ID must not bridge otherwise independent instances.
+        val instance = device.instanceId?.trim()?.takeIf(String::isNotBlank)
+        val keys = if (instance != null) {
+            listOf(listOf("instance", instance.lowercase(), account))
+        } else {
+            listOf(listOf("hostname") + scope.take(2) + account)
+        }
         keys.forEach { key ->
             owners.putIfAbsent(key, index)?.let { previous -> parents[root(index)] = root(previous) }
         }
