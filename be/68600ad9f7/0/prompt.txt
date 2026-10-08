@@ -1,0 +1,27 @@
+[Image #1] mass deleting assets is not working, please fix [Image #2]
+
+---
+
+[Image #1] [Image #2] [Image #3] please carefully evaluate the import / handling logic of Crowdstrike data. The Crowdstrike picture shows close to 3000 servers but secman imports more than 14000 assets. There is a structural error in the export. Please evaluate root cause and plan a holistic fix. The holistic fix must include fixing of wrong data in the asset inventory.
+
+---
+
+implement your changes, then restart backend and perform "./scripts/import.sh" to validate the fix is working
+
+---
+
+[Image #1] rename Falcon contact to "Last seen"
+
+---
+
+[Image #1] Rename "Current vulnerabilities" to "Current vulnerabilities of active systems". Additionally change the query that only vulnerabilities will be shown for systems, which have been seen today.
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"Europe/Berlin calendar day (Recommended)","question":"For “seen today,” which calendar day should the view use? I recommend Europe/Berlin to match your local day.","questionItemId":"[\"request_user_input_async\",\"call_c645975d195e4ba58f4bc7ff07e61cb9\",0]"}]
+</send_user_message_question_reply>
+
+---
+
+[Image #1] the KPI "Servers without old vulnerabilities" must only be calculated based on servers, which have been seen today.
