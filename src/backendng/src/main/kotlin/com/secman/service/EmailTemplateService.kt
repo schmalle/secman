@@ -117,6 +117,10 @@ class EmailTemplateService(
         }
 
         sb.appendLine()
+        if (context.notificationType != NotificationType.NEW_VULNERABILITY) {
+            sb.appendLine("Only assets with Falcon sensor contact within the last 72 hours are included.")
+            sb.appendLine()
+        }
         sb.appendLine("SEVERITY BREAKDOWN")
         sb.appendLine("-" .repeat(20))
         if (context.criticalCount > 0) sb.appendLine("Critical: ${context.criticalCount}")

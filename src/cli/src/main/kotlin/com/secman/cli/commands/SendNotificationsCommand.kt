@@ -13,7 +13,7 @@ import jakarta.inject.Singleton
 @Singleton
 @Command(
     name = "send-notifications",
-    description = ["Send email notifications for outdated assets and new vulnerabilities"],
+    description = ["Send overdue reminders for assets seen by Falcon within the last 72 hours"],
     mixinStandardHelpOptions = true
 )
 class SendNotificationsCommand : Runnable {

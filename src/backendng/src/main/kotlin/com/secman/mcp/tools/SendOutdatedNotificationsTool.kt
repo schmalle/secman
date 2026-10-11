@@ -5,6 +5,7 @@ import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.AssetRepository
 import com.secman.repository.OutdatedAssetMaterializedViewRepository
 import com.secman.repository.UserMappingRepository
+import com.secman.service.NotificationAssetSeenWindow
 import com.secman.service.NotificationService
 import io.micronaut.data.model.Pageable
 import jakarta.inject.Inject
@@ -28,7 +29,7 @@ class SendOutdatedNotificationsTool(
 ) : McpTool {
 
     override val name = "send_outdated_notifications"
-    override val description = "Send outdated-asset reminder emails to owners with overdue vulnerabilities (ADMIN only, requires User Delegation)"
+    override val description = "Send outdated-asset reminders for assets seen by Falcon within the last 72 hours (ADMIN only, requires User Delegation)"
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(
@@ -74,6 +75,7 @@ class SendOutdatedNotificationsTool(
     }
 
     private fun buildOutdatedAssetList(): List<NotificationService.OutdatedAssetData> {
+        val seenWindow = NotificationAssetSeenWindow.current()
         val page = outdatedAssetRepository.findOutdatedAssets(
             workgroupId = null,
             searchTerm = null,
@@ -85,6 +87,7 @@ class SendOutdatedNotificationsTool(
         val results = mutableListOf<NotificationService.OutdatedAssetData>()
         for (view in page.content) {
             val asset = assetRepository.findByIdWithWorkgroups(view.assetId).orElse(null) ?: continue
+            if (!seenWindow.includes(asset.crowdStrikeAgentSeenAt)) continue
             val mappings = userMappingRepository.findByAwsAccountId(asset.owner)
             if (mappings.isEmpty()) continue
             val ownerEmail = mappings.first().email

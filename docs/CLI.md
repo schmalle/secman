@@ -322,6 +322,11 @@ Existing assets start with `crowdstrike_last_imported_at = NULL` after the schem
 
 ### `send-notifications` — outdated-asset & new-vuln emails
 
+Overdue reminders include only assets with actual Falcon sensor contact within the
+last 72 hours (inclusive), evaluated at notification time. Missing or future contact
+timestamps are excluded; SecMan import time does not establish eligibility.
+The MCP `send_outdated_notifications` tool applies the same recency rule.
+
 ```bash
 ./scripts/secman send-notifications --dry-run --verbose
 ./scripts/secman send-notifications --outdated-only
@@ -350,6 +355,12 @@ notified at most once per day regardless of how many recipients it reaches. An a
 with no recipients in any category is skipped (logged with `--verbose`).
 
 ### `send-notification-users` — per-AWS-account vulnerability emails
+
+All modes, including dry runs and verbose details, include only assets with actual
+Falcon sensor contact within the last 72 hours (inclusive). Missing or future contact
+timestamps are excluded; `last_seen` and import time are not used as fallbacks.
+Counts and affected accounts reflect only eligible assets. The same rule applies
+to the MCP vulnerability and patch notification tools.
 
 Finds AWS accounts whose EC2 assets have vulnerabilities open longer than
 `--days` (excluding active exceptions) and sends each recipient one consolidated
