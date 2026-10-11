@@ -482,3 +482,7 @@ failure would look like an app bug.
 | Relay push `400 section has no policy entry` | a section was added to `RelaySnapshotBuilder` without a row in `SECTION_POLICIES` |
 | App: "this account is not authorized" | no `RelayIdentity` links that provider subject to a secman user |
 | App: "requires a stronger login method" | the account holds ADMIN and tried GitHub or an enrollment code — working as intended |
+
+### AI buddy(beta)
+
+Default off. Configure AI buddy in the existing **Admin → LLM Configuration** form, using the active OpenRouter record’s key, URL, model and token limit. Additional enablement, approved-provider, budget and evidence settings are stored in that same record; no AI buddy environment variables are needed or read. See [AI_BUDDY.md](AI_BUDDY.md) for migration, privacy, single-instance and rollout/rollback requirements. BETA adds eligibility without adding object access; ADMIN and SECCHAMPION are implicitly eligible. Reports are temporary advice only.

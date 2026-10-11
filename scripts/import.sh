@@ -32,5 +32,5 @@ if [[ -n "${SECMAN_TEST_ISOLATED_DB:-}" ]]; then
         exec java -Xmx4g -Xms2g -jar ./src/cli/build/libs/cli-0.1.0-all.jar query servers --device-type SERVER_FAMILY --severity CRITICAL,HIGH --min-days-open 1 --save --last-seen-days 30
     '
 else
-    pass-cli run --env-file "$REPO_ROOT/secmanpp.env" -- java -Xmx4g -Xms2g -jar ./src/cli/build/libs/cli-0.1.0-all.jar query servers --device-type SERVER_FAMILY --severity CRITICAL,HIGH --min-days-open 1 --save --last-seen-days 30
+    pass-cli run --env-file "$REPO_ROOT/secmanpp.env" -- java -Xmx4g -Xms2g -jar ./src/cli/build/libs/cli-0.1.0-all.jar query servers --device-type SERVER_FAMILY --severity CRITICAL,HIGH --min-days-open 1 --save --last-seen-days 7
 fi

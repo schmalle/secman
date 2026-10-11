@@ -1,21 +1,16 @@
 package com.secman.integration
 
 import com.secman.domain.Asset
-import com.secman.dto.CrowdStrikeSaveRequest
 import com.secman.dto.CrowdStrikeVulnerabilityBatchDto
-import com.secman.dto.CrowdStrikeVulnerabilityDto
 import com.secman.repository.AssetRepository
 import com.secman.service.CrowdStrikeVulnerabilityImportService
-import com.secman.service.CrowdStrikeVulnerabilityService
 import com.secman.testutil.BaseIntegrationTest
-import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Inject
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
 class CrowdStrikeIpImportIntegrationTest : BaseIntegrationTest() {
     @Inject lateinit var importService: CrowdStrikeVulnerabilityImportService
-    @Inject lateinit var saveService: CrowdStrikeVulnerabilityService
     @Inject lateinit var assetRepository: AssetRepository
     @Inject lateinit var entityManager: jakarta.persistence.EntityManager
 
@@ -37,41 +32,16 @@ class CrowdStrikeIpImportIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
-    fun `interactive save replaces persisted addresses from all current rows`() {
-        val asset = existingAsset()
-        val row = CrowdStrikeVulnerabilityDto(
-            id = "current-finding", hostname = asset.name, ip = "10.0.0.2",
-            cveId = "CVE-2026-1234", severity = "High", cvssScore = 8.0,
-            affectedProduct = "test-product", daysOpen = "5 days", detectedAt = null,
-            status = "open", hasException = false
-        )
-        val request = CrowdStrikeSaveRequest(asset.name, listOf(row, row.copy(id = "other-finding", ip = "10.0.0.3")))
-        val authentication = Authentication.build("test-admin", listOf("ADMIN"))
-        val result = saveService.saveToDatabase(request, authentication)
-        assertThat(result.errors).isEmpty()
-        assertPersistedAddresses(asset.id!!, "10.0.0.2", setOf("10.0.0.2", "10.0.0.3"))
-        val missing = saveService.saveToDatabase(request.copy(vulnerabilities = listOf(row.copy(ip = " "))), authentication)
-        assertThat(missing.errors).isEmpty()
-        assertPersistedAddresses(asset.id!!, "10.0.0.2", setOf("10.0.0.2", "10.0.0.3"))
-    }
-
-    @Test
-    fun `interactive save cannot reassign a hostname to another cloud instance`() {
+    fun `authoritative import cannot reassign a hostname to another cloud instance`() {
         val asset = existingAsset()
         asset.cloudInstanceId = "i-00000000000000001"
         assetRepository.update(asset)
         entityManager.flush()
         entityManager.clear()
-        val row = CrowdStrikeVulnerabilityDto(
-            id = "conflicting-finding", hostname = asset.name, ip = "10.0.0.99",
-            cveId = "CVE-2026-1234", severity = "High", cvssScore = 8.0,
-            affectedProduct = "test-product", daysOpen = "5 days", detectedAt = null,
-            status = "open", hasException = false
-        )
-        org.assertj.core.api.Assertions.assertThatThrownBy {
-            saveService.saveToDatabase(CrowdStrikeSaveRequest(asset.name, listOf(row), "i-00000000000000002"),
-                Authentication.build("test-admin", listOf("ADMIN")))
-        }.isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("stored asset identity")
+        val batch = CrowdStrikeVulnerabilityBatchDto(asset.name, null, null,
+            "i-00000000000000002", null, null, "10.0.0.99", vulnerabilities = emptyList())
+        importService.importVulnerabilitiesForServer(batch)
+        assertThat(assetRepository.findByCloudInstanceIdIgnoreCase("i-00000000000000002")!!.id).isNotEqualTo(asset.id)
         assertPersistedAddresses(asset.id!!, "10.0.0.1", setOf("10.0.0.1", "203.0.113.1"))
         assertThat(assetRepository.findById(asset.id!!).orElseThrow().cloudInstanceId).isEqualTo("i-00000000000000001")
     }

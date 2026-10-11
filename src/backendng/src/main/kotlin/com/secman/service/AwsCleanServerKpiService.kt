@@ -60,7 +60,7 @@ open class AwsCleanServerKpiService(
      * list stay reachable for the whole refresh cycle, which is what left no headroom during the
      * 2026-07-30 import. Two cheap aggregates beat one reused giant list.
      */
-    fun recalculate() {
+    fun recalculate(requireSuccess: Boolean = false) {
         val start = System.currentTimeMillis()
         try {
             val window = FalconSeenTodayWindow.today()
@@ -69,13 +69,15 @@ open class AwsCleanServerKpiService(
             val awsServersWithOldDetections = if (totalAwsServers == 0L) {
                 0L
             } else {
-                vulnerabilityRepository.countDirtyAwsServers(
+                vulnerabilityRepository.countDirtyVerifiedAwsServers(
                     LocalDateTime.now().minusDays(VULN_AGE_THRESHOLD_DAYS),
                     window.startUtc, window.endUtc
                 )
             }
 
-            val cleanAwsServers = (totalAwsServers - awsServersWithOldDetections).coerceAtLeast(0)
+            val unknownServers = if (totalAwsServers == 0L) 0L else
+                vulnerabilityRepository.countUnknownAwsServers(window.startUtc, window.endUtc)
+            val cleanAwsServers = (totalAwsServers - awsServersWithOldDetections - unknownServers).coerceAtLeast(0)
             val percentage = computePercentage(cleanAwsServers, totalAwsServers)
 
             val json = objectMapper.writeValueAsString(
@@ -83,7 +85,8 @@ open class AwsCleanServerKpiService(
                     totalAwsServers = totalAwsServers,
                     cleanAwsServers = cleanAwsServers,
                     percentage = percentage,
-                    seenTodayStartUtc = window.startUtc.toString()
+                    seenTodayStartUtc = window.startUtc.toString(),
+                    unknownAwsServers = unknownServers
                 )
             )
             upsertCache(json, System.currentTimeMillis() - start)
@@ -93,7 +96,8 @@ open class AwsCleanServerKpiService(
                 totalAwsServers, cleanAwsServers, percentage
             )
         } catch (e: Exception) {
-            log.error("AWS clean-server KPI recalculation failed (non-fatal): {}", e.message, e)
+            log.error("AWS clean-server KPI recalculation failed: {}", e.message, e)
+            if (requireSuccess) throw e
         }
     }
 
@@ -115,7 +119,8 @@ open class AwsCleanServerKpiService(
             percentage = data.percentage,
             totalAwsServers = data.totalAwsServers,
             cleanAwsServers = data.cleanAwsServers,
-            lastCalculatedAt = entry.lastRefreshedAt
+            lastCalculatedAt = entry.lastRefreshedAt,
+            unknownAwsServers = data.unknownAwsServers
         )
     }
 

@@ -3,7 +3,6 @@ package com.secman.dto
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
-import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.Size
 
 /**
@@ -24,9 +23,9 @@ data class CrowdStrikeSaveRequest(
     /**
      * List of vulnerabilities to save (at least one required)
      */
-    @field:NotEmpty(message = "At least one vulnerability is required")
     @field:Valid
-    val vulnerabilities: List<CrowdStrikeVulnerabilityDto>,
+    @field:Size(max = 50000)
+    val vulnerabilities: List<CrowdStrikeVulnerabilityDto> = emptyList(),
 
     /**
      * AWS EC2 Instance ID (optional, for instance ID queries)

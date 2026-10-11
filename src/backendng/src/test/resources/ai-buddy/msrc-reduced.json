@@ -1,0 +1,57 @@
+{
+  "DocumentTracking": {
+    "CurrentReleaseDate": "2026-10-07T01:48:58"
+  },
+  "ProductTree": {
+    "Branch": [
+      {
+        "Items": [
+          {
+            "ProductID": "11923",
+            "Value": "Windows Server 2022"
+          },
+          {
+            "ProductID": "11924",
+            "Value": "Windows Server 2022 (Server Core installation)"
+          }
+        ]
+      }
+    ]
+  },
+  "Vulnerability": [
+    {
+      "CVE": "CVE-2025-6965",
+      "ProductStatuses": [
+        {
+          "Type": 3,
+          "ProductID": [
+            "11923",
+            "11924"
+          ]
+        }
+      ],
+      "Remediations": [
+        {
+          "Description": {
+            "Value": "5073457"
+          },
+          "URL": "https://catalog.update.microsoft.com/v7/site/Search.aspx?q=KB5073457",
+          "Supercedence": "5071547",
+          "ProductID": [
+            "11923",
+            "11924"
+          ],
+          "Type": 2,
+          "Date": "0001-01-01T00:00:00",
+          "DateSpecified": false,
+          "AffectedFiles": [],
+          "RestartRequired": {
+            "Value": "Yes"
+          },
+          "SubType": "Security Update",
+          "FixedBuild": "10.0.20348.4648"
+        }
+      ]
+    }
+  ]
+}

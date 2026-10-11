@@ -7,7 +7,8 @@ description: >
   call made by the independent client repos under extensions/ still matches the
   live Kotlin controller contract (path, method, request fields, auth scheme,
   RBAC) and fixes plus commits drift inside those repos, runs a security review
-  of the branch diff reporting only HIGH and CRITICAL findings, re-checks the
+  of the branch diff reporting only HIGH and CRITICAL findings, audits frontend JSON consumers against backend serialization (including
+  nested and omitted empty fields), re-checks the
   relay contract the iOS client depends on, and compresses CLAUDE.md by archiving
   its changelog to docs/CHANGELOG.md while keeping the operational contracts
   verbatim. Runs entirely offline — no backend, frontend, or pass-cli needed. Use this skill whenever the user says "finalizer", "run
@@ -15,7 +16,7 @@ description: >
   "ready to merge?", "check CLAUDE.md is current", "are the extensions still in
   sync", "tidy up CLAUDE.md", or asks for a final consistency, documentation,
   or contract-drift pass before committing or merging — even if they only
-  mention one of the five jobs.
+  mention one of these jobs.
 context: fork
 ---
 
@@ -33,9 +34,9 @@ context: fork
 
 # Finalizer — pre-merge consistency, contract, and security pass
 
-You are finishing a piece of work in the secman repo. Five kinds of rot creep
-in while a change is being built, and none of them are caught by `./gradlew
-build` or the E2E gates:
+You are finishing a piece of work in the secman repo. Six kinds of rot creep
+in while a change is being built. A green `./gradlew build` or a page-visit
+E2E scan does not guarantee that these were checked:
 
 1. **CLAUDE.md drifts from the build files.** Someone bumps Kotlin in
    `build.gradle.kts` and CLAUDE.md keeps advertising the old number. Every
@@ -52,6 +53,10 @@ build` or the E2E gates:
 5. **The two skill trees drift apart.** `.claude/skills/` and `.agents/skills/`
    are required to move together in both directions, and they do not do it on
    their own.
+
+6. **Frontend JSON contracts drift from their consumers.** Empty lists can be
+   omitted during serialization; a TypeScript cast hides the missing nested
+   field until a sorter or renderer calls `.includes`, `.map` or `.length`.
 
 Work through the steps in order. Steps 1–5 are independent, so a failure in one
 does not excuse skipping the others — do all five, then report once.
@@ -154,7 +159,7 @@ the user's call, not yours.
 
 ---
 
-## Step 2 — Extension repos must still match the backend contract
+## Step 2 — Extension and frontend clients must match the serialized contract
 
 `extensions/` holds independent client repos. They are **gitignored by the
 parent repo** and have **their own GitHub remotes**, so changes you make there
@@ -281,6 +286,59 @@ Two things to reconcile, and both are mechanical:
 Treat a mismatch the same way as an RBAC tightening in 2c: **report it, do not
 fix it**. Bumping a schema version is a release decision about which app builds
 keep working, and it is not yours to make silently.
+
+---
+
+### 2f — Frontend JSON contracts, including nested and empty values
+
+The frontend is a backend client too. A TypeScript interface or an `as` cast
+cannot validate JSON, and a successful build does not exercise data-dependent
+rendering. This audit is mandatory whenever the review scope touches frontend
+API consumers or their backend response DTOs. Report it as not applicable only
+when neither side was touched.
+
+Discover consumers in the changed files, including untracked files, then follow
+each response into helpers, sorting, state updates and rendering:
+
+```bash
+rg -n 'response\.json\(|authenticated(Get|Post|Put|Delete)|axios|fetch\(' src/frontend/src
+rg -n '\.(includes|map|filter|sort|length|localeCompare)\b' <consumer-and-helper-files>
+rg -n 'JsonInclude|Serdeable|serialization-inclusion' <response-dto-files> src/backendng/src/main/resources
+```
+
+For each consumed field, compare the **serialized JSON contract** with the
+frontend's runtime checks. Check nested entries, not just the outer array.
+Review absent fields, null, empty arrays, false booleans, malformed nested
+entries and both successful and unsuccessful responses. Kotlin non-null fields
+and default empty lists do not prove a field is present on the wire: Micronaut
+Serde can omit empty values unless inclusion is explicit. Jackson configuration
+or tests using a plain ObjectMapper alone do not prove Serde's output shape.
+
+A concrete regression to recognize: a compatible provider can arrive as
+`{"tag":"vendor","name":"Vendor","compatible":true}` with `reasons` omitted.
+A sorter or renderer calling `provider.reasons.includes(...)` then crashes,
+even if the outer `providers` and top-level `reasons` passed `Array.isArray`.
+Trace that minimal payload through every consumer. Required collection fields
+need explicit serialization inclusion and/or normalization at the client
+boundary; malformed capability data must fail closed, never become an approved
+or ZDR-verified route by default.
+
+Require regression coverage for the minimal serialized payload, empty/omitted
+lists and malformed nested entries. Backend coverage must use the production
+Micronaut serialization path when asserting the wire contract. Frontend fixtures
+must include the serialized shape, not just fully populated typed objects.
+During this static pass, inspect the fixtures and assertions **without executing
+tests**. If coverage is missing, report the exact fixture and assertion needed.
+
+Record endpoint, DTO, serializer inclusion, consumer file:line, reviewed payloads,
+findings and coverage gaps. A missing nested guard or an unsafe dereference is a
+**correctness blocker**, independently of the HIGH/CRITICAL security threshold;
+do not bury it as a low-severity security note. A static audit can find this
+pattern, but cannot guarantee all runtime failures are detected. Browser checks
+must exercise API-driven controls (edit/open forms, load choices, empty results,
+errors and selection), not just visit the page. Leave those checks in Still
+required unless they actually ran; respect an explicit user instruction not to
+test, compile or restart services.
 
 ---
 
@@ -454,6 +512,11 @@ Repos found by `ls -d extensions/*/`: <list>
 <findings reported but not fixed, and why>
 <2e relay: backend schemaVersion <n> vs app relaySupportedSnapshotSchemaVersion <n>;
  section names / paths checked; agree or mismatch>
+
+## 2f. Frontend JSON contracts
+<endpoint / DTO / serializer inclusion / consumer file:line / payloads reviewed>
+<correctness blockers and regression coverage gaps; or not applicable with scope reason>
+<static audit only; browser interactions checked or still required>
 
 ## 3. Security review (HIGH / CRITICAL only)
 OWASP: <categories touched> — <clean | n BLOCK | n REVIEW>

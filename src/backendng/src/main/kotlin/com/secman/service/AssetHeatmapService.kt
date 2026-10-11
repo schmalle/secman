@@ -62,7 +62,7 @@ open class AssetHeatmapService(
                 a.manual_creator_id,
                 a.scan_uploader_id
             FROM asset a
-            LEFT JOIN vulnerability v ON v.asset_id = a.id
+            LEFT JOIN ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v ON v.asset_id = a.id
             GROUP BY a.id, a.name, a.type, a.cloud_account_id, a.ad_domain, a.owner, a.manual_creator_id, a.scan_uploader_id
         """).resultList as List<Array<Any?>>
 

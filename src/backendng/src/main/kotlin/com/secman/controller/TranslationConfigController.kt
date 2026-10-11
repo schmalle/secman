@@ -3,6 +3,9 @@ package com.secman.controller
 import com.secman.domain.TranslationConfig
 import com.secman.repository.TranslationConfigRepository
 import com.secman.service.TranslationServiceSimple
+import com.secman.service.aibuddy.AiBuddySettingsService
+import io.micronaut.security.authentication.Authentication
+import org.slf4j.LoggerFactory
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.annotation.*
 import io.micronaut.scheduling.TaskExecutors
@@ -33,8 +36,10 @@ import java.time.LocalDateTime
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class TranslationConfigController(
     private val translationConfigRepository: TranslationConfigRepository,
-    private val translationService: TranslationServiceSimple
+    private val translationService: TranslationServiceSimple,
+    private val buddySetup: com.secman.service.aibuddy.AiBuddySetupService
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
 
     @Serdeable
     data class CreateTranslationConfigRequest(
@@ -56,7 +61,16 @@ open class TranslationConfigController(
         @field:DecimalMax("1.0")
         val temperature: Double = 0.3,
 
-        val isActive: Boolean = false
+        val isActive: Boolean = false,
+        val aiBuddyEnabled: Boolean = false,
+        val aiBuddySingleInstance: Boolean = false,
+        val aiBuddyProviders: String = "",
+        val aiBuddyMaxCostPerJobUsd: Double = 0.50,
+        val aiBuddyDailyBudgetUsd: Double = 10.0,
+        val aiBuddyMaxInputPricePerMillion: Double = 5.0,
+        val aiBuddyMaxOutputPricePerMillion: Double = 20.0,
+        val aiBuddyMicrosoftEvidenceEnabled: Boolean = true,
+        val aiBuddyCrowdStrikeEvidenceEnabled: Boolean = false
     )
 
     @Serdeable
@@ -66,7 +80,16 @@ open class TranslationConfigController(
         val modelName: String? = null,
         val maxTokens: Int? = null,
         val temperature: Double? = null,
-        val isActive: Boolean? = null
+        val isActive: Boolean? = null,
+        val aiBuddyEnabled: Boolean? = null,
+        val aiBuddySingleInstance: Boolean? = null,
+        val aiBuddyProviders: String? = null,
+        val aiBuddyMaxCostPerJobUsd: Double? = null,
+        val aiBuddyDailyBudgetUsd: Double? = null,
+        val aiBuddyMaxInputPricePerMillion: Double? = null,
+        val aiBuddyMaxOutputPricePerMillion: Double? = null,
+        val aiBuddyMicrosoftEvidenceEnabled: Boolean? = null,
+        val aiBuddyCrowdStrikeEvidenceEnabled: Boolean? = null
     )
 
     @Serdeable
@@ -125,23 +148,32 @@ open class TranslationConfigController(
     @Post
     @Secured("ADMIN")
     @Transactional
-    open fun createConfig(@Valid @Body request: CreateTranslationConfigRequest): HttpResponse<*> {
+    open fun createConfig(@Valid @Body request: CreateTranslationConfigRequest, authentication: Authentication): HttpResponse<*> {
         return try {
-            // If setting as active, deactivate all others first
-            if (request.isActive) {
-                translationConfigRepository.deactivateAll()
-            }
-
             val config = TranslationConfig(
                 apiKey = request.apiKey.trim(),
                 baseUrl = request.baseUrl.trim(),
                 modelName = request.modelName.trim(),
                 maxTokens = request.maxTokens,
                 temperature = request.temperature,
-                isActive = request.isActive
+                isActive = request.isActive,
+                aiBuddyEnabled = request.aiBuddyEnabled,
+                aiBuddySingleInstance = request.aiBuddySingleInstance,
+                aiBuddyProviders = request.aiBuddyProviders,
+                aiBuddyMaxCostPerJobUsd = request.aiBuddyMaxCostPerJobUsd,
+                aiBuddyDailyBudgetUsd = request.aiBuddyDailyBudgetUsd,
+                aiBuddyMaxInputPricePerMillion = request.aiBuddyMaxInputPricePerMillion,
+                aiBuddyMaxOutputPricePerMillion = request.aiBuddyMaxOutputPricePerMillion,
+                aiBuddyMicrosoftEvidenceEnabled = request.aiBuddyMicrosoftEvidenceEnabled,
+                aiBuddyCrowdStrikeEvidenceEnabled = request.aiBuddyCrowdStrikeEvidenceEnabled
             )
 
+            if (config.apiKey == TranslationConfig.API_KEY_MASK || !AiBuddySettingsService.valid(config)) {
+                return HttpResponse.badRequest(ErrorResponse("Invalid OpenRouter or AI buddy settings"))
+            }
+            if (request.isActive) translationConfigRepository.deactivateAll()
             val savedConfig = translationConfigRepository.save(config)
+            log.info("OpenRouter configuration actor={} config={} outcome=created aiBuddyEnabled={}", authentication.attributes["userId"], savedConfig.id, savedConfig.aiBuddyEnabled)
             HttpResponse.created(savedConfig.toSafeResponse())
         } catch (e: Exception) {
             HttpResponse.badRequest(ErrorResponse("An internal error occurred"))
@@ -151,14 +183,14 @@ open class TranslationConfigController(
     @Put("/{id}")
     @Secured("ADMIN")
     @Transactional
-    open fun updateConfig(id: Long, @Valid @Body request: UpdateTranslationConfigRequest): HttpResponse<*> {
+    open fun updateConfig(id: Long, @Valid @Body request: UpdateTranslationConfigRequest, authentication: Authentication): HttpResponse<*> {
         return try {
             val existingConfig = translationConfigRepository.findById(id)
             if (!existingConfig.isPresent) {
                 return HttpResponse.notFound(ErrorResponse("Translation configuration not found"))
             }
 
-            val config = existingConfig.get()
+            val config = existingConfig.get().copy()
 
             // Update fields if provided
             request.baseUrl?.let { config.baseUrl = it.trim() }
@@ -173,6 +205,19 @@ open class TranslationConfigController(
                 config.apiKey = request.apiKey!!.trim()
             }
 
+            request.aiBuddyEnabled?.let { config.aiBuddyEnabled = it }
+            request.aiBuddySingleInstance?.let { config.aiBuddySingleInstance = it }
+            request.aiBuddyProviders?.let { config.aiBuddyProviders = it.trim() }
+            request.aiBuddyMaxCostPerJobUsd?.let { config.aiBuddyMaxCostPerJobUsd = it }
+            request.aiBuddyDailyBudgetUsd?.let { config.aiBuddyDailyBudgetUsd = it }
+            request.aiBuddyMaxInputPricePerMillion?.let { config.aiBuddyMaxInputPricePerMillion = it }
+            request.aiBuddyMaxOutputPricePerMillion?.let { config.aiBuddyMaxOutputPricePerMillion = it }
+            request.aiBuddyMicrosoftEvidenceEnabled?.let { config.aiBuddyMicrosoftEvidenceEnabled = it }
+            request.aiBuddyCrowdStrikeEvidenceEnabled?.let { config.aiBuddyCrowdStrikeEvidenceEnabled = it }
+            if (!AiBuddySettingsService.valid(config)) {
+                return HttpResponse.badRequest(ErrorResponse("Invalid OpenRouter or AI buddy settings"))
+            }
+
             // Handle activation status
             request.isActive?.let { newActiveStatus ->
                 if (newActiveStatus && !config.isActive) {
@@ -183,6 +228,7 @@ open class TranslationConfigController(
             }
 
             val updatedConfig = translationConfigRepository.update(config)
+            log.info("OpenRouter configuration actor={} config={} outcome=updated aiBuddyEnabled={}", authentication.attributes["userId"], id, updatedConfig.aiBuddyEnabled)
             HttpResponse.ok(updatedConfig.toSafeResponse())
         } catch (e: Exception) {
             HttpResponse.badRequest(ErrorResponse("An internal error occurred"))
@@ -219,6 +265,45 @@ open class TranslationConfigController(
             HttpResponse.ok(testResult)
         } catch (e: Exception) {
             HttpResponse.serverError(ErrorResponse("An internal error occurred"))
+        }
+    }
+
+    @Serdeable
+    data class AiBuddySetupRequest(val configId: Long? = null, val settings: UpdateTranslationConfigRequest)
+
+    @Post("/ai-buddy/setup")
+    @Secured("ADMIN")
+    open fun checkAiBuddySetup(@Body request: AiBuddySetupRequest, authentication: Authentication): HttpResponse<*> {
+        val stored = request.configId?.let {
+            translationConfigRepository.findById(it).orElse(null)
+                ?: return HttpResponse.notFound(ErrorResponse("Translation configuration not found"))
+        }
+        val draft = stored?.copy() ?: TranslationConfig(apiKey = "")
+        val input = request.settings
+        if (draft.shouldUpdateApiKey(input.apiKey)) draft.apiKey = input.apiKey!!.trim()
+        input.baseUrl?.let { draft.baseUrl = it.trim() }
+        input.modelName?.let { draft.modelName = it.trim() }
+        input.maxTokens?.let { draft.maxTokens = it }
+        input.isActive?.let { draft.isActive = it }
+        input.aiBuddyEnabled?.let { draft.aiBuddyEnabled = it }
+        input.aiBuddySingleInstance?.let { draft.aiBuddySingleInstance = it }
+        input.aiBuddyProviders?.let { draft.aiBuddyProviders = it.trim() }
+        input.aiBuddyMaxCostPerJobUsd?.let { draft.aiBuddyMaxCostPerJobUsd = it }
+        input.aiBuddyDailyBudgetUsd?.let { draft.aiBuddyDailyBudgetUsd = it }
+        input.aiBuddyMaxInputPricePerMillion?.let { draft.aiBuddyMaxInputPricePerMillion = it }
+        input.aiBuddyMaxOutputPricePerMillion?.let { draft.aiBuddyMaxOutputPricePerMillion = it }
+        return try {
+            if (draft.apiKey.length > 512 || draft.aiBuddyProviders.length > 512 ||
+                draft.modelName.length > 255 || draft.baseUrl.length > 2048)
+                return HttpResponse.badRequest(ErrorResponse("OpenRouter setup fields exceed their size limits"))
+            val result = buddySetup.check(draft)
+            log.info("AI buddy setup actor={} config={} outcome={}", authentication.attributes["userId"], request.configId,
+                if (result.ready) "ready" else "incomplete")
+            HttpResponse.ok(result)
+        } catch (e: Exception) {
+            log.warn("AI buddy setup actor={} config={} outcome=metadata-unavailable", authentication.attributes["userId"], request.configId)
+            HttpResponse.status<ErrorResponse>(io.micronaut.http.HttpStatus.BAD_GATEWAY)
+                .body(ErrorResponse("Provider metadata could not be verified. Check the API key and try again; no settings were saved."))
         }
     }
 

@@ -1,13 +1,14 @@
 # CrowdStrike Vulnerability Import
 
-## Latest Falcon device per hostname
+## Current Falcon enrollment per machine
 
-Vulnerability lookups and imports keep the most recently enrolled Falcon device:
-maximum Falcon `first_seen`, then maximum `last_seen` for an enrollment-time tie.
-AID order and SecMan observation timestamps are not ranking inputs. Equal ranking
-timestamps, missing enrollment timestamps, incomplete discovery or missing device
-metadata abort selection before replacement. No fallback to an older device is made
-when the winner's Spotlight query fails.
+Interactive lookup, single-host synchronization and bulk imports use the same
+selection: maximum Falcon `first_seen`, then maximum `last_seen` for an enrollment
+time tie, within one machine identity. A reused hostname across separate instances,
+accounts or FQDN/domain identities is ambiguous for interactive lookup. Supply the
+asset ID/instance instead. All case variants and full-name aliases are discovered
+before selection. Missing enrollment timestamps, incomplete discovery and tied
+ranking fail closed; a failed winner never falls back to an older enrollment.
 
 Full hostnames are compared without case sensitivity, within the same AD-domain
 and cloud-account scope. Short names in different FQDNs stay separate. Aliases for
@@ -32,8 +33,9 @@ transaction. It removes old bindings on the canonical asset and deletes proven
 superseded duplicate assets using audited cascade deletion. It preserves the
 canonical asset's display-name override, owner and workgroups; it does not copy
 access grants from duplicates. Cross-account/domain conflicts, unknown bindings,
-ambiguous legacy assets, manually created/uploaded duplicates and integration-bound
-duplicates stop that host's replacement for review. Legacy duplicate assets without
+ambiguous legacy assets, unknown legacy duplicates stop that host's replacement for review. Proven retired
+duplicates with manual or integration relationships retain their inventory, grants
+and manual findings; only their retired CrowdStrike contribution is removed. Legacy duplicate assets without
 AID bindings require a matching retired cloud instance and CrowdStrike import ownership.
 
 On a device transition, the canonical asset's old CrowdStrike snapshot is cleared
@@ -51,6 +53,41 @@ Migration `V283__falcon_device_enrollment_timestamps.sql` adds nullable Falcon
 `last_seen_at` remain SecMan observation times. The next successful ADMIN import
 populates the Falcon timestamps and performs evidence-backed cleanup; the migration
 itself deletes nothing. Deploy the backend migration before the rebuilt CLI.
+
+## Verified snapshot synchronization
+
+Migration `V286__crowdstrike_snapshot_provenance.sql` adds per-severity snapshots
+and finding provenance, plus a database identity lock to serialize imports across
+backend processes. It does not invent provenance for historical rows or delete
+them. Legacy findings remain visible and explicitly unverified until a successful
+authoritative synchronization establishes their disposition.
+
+Use `POST /api/crowdstrike/vulnerabilities/sync` as ADMIN with
+`{"hostname":"server.example.com","assetId":42}`. The backend resolves the stored
+instance/account, refetches all severities from Falcon, and commits binding,
+coverage and findings together. The compatibility save endpoint also refetches;
+browser-submitted findings are not trusted as replacement evidence. The UI action
+is **Synchronize from Falcon**, including when the live result has zero findings.
+
+A successful empty result with reported total zero clears the fetched scope.
+Missing pagination totals, 404, provider errors, inconsistent totals and incomplete
+pagination preserve stored findings. A successful same-enrollment scoped import
+retains other severity scopes; enrollment replacement invalidates all retired
+CrowdStrike scopes and installed products. Saved server queries fetch every age in
+the requested severity scope, regardless of `--min-days-open`, so presentation
+filters cannot incorrectly erase younger findings.
+
+Responses expose asset ID, selected AID, successful snapshot time and coverage.
+A verified empty database snapshot remains a database result. Current ORM/native
+readers exclude retired proven snapshots; unknown coverage does not count as a
+clean AWS server. Sensor contact today and findings snapshot age remain distinct.
+
+ADMIN can page through local reconciliation evidence using
+`GET /api/crowdstrike/snapshots/reconciliation?afterId=0&limit=100`, then synchronize
+individual asset IDs. This preview does not contact Falcon or claim that missing
+provider records are retired. It reports legacy findings, binding counts and
+verified scopes. Resolve ambiguous/unverified identity groups individually before
+attempting retirement; no migration performs an absence-based fleet purge.
 
 ## Asset IP addresses
 
@@ -514,6 +551,28 @@ excluded from both stale deletion and agent-seen stamping, with a warning. Exist
 source/severity restrictions, timestamp fences and deletion safety brakes still apply.
 No existing AID mapping is automatically moved between assets.
 
+An ADMIN import may correct an existing asset's EC2 instance ID when the current
+Falcon AID and verified enrollment first-seen timestamp are unchanged, the AWS
+account is present and matches, and the AD domain matches. The incoming instance
+must be valid and unowned by another asset in that account. Missing identity
+evidence, additional unexplained bindings, an older observation, and an older
+provider contact timestamp reject the correction. The original asset ID and its
+manual relationships remain intact. AID and instance locks serialize concurrent
+claims; metadata, findings, snapshots, and the append-only
+`crowdstrike_instance_transition` audit commit or roll back together. A repeat
+save does not create another transition. V287 adds this history and a nullable
+last-accepted identity observation; legacy observation times are not invented.
+
+Verified snapshots cover supported CVE findings in their declared severity
+scope. Findings without CVE IDs are counted as exclusions. Invalid supported
+findings or incomplete provider fetches cannot replace stored data. Each new
+snapshot records request-wide fetched, accepted, missing-CVE, and duplicate
+counts with `coverage_kind=SUPPORTED_CVE`; those totals repeat across its severity
+rows and must not be summed across severities. Legacy snapshots retain unknown
+counts. Import responses add `hostOutcomes` while retaining existing aggregate
+fields. The CLI reports committed instance changes and leaves rejected assets
+marked unchanged.
+
 Bulk `query servers` defaults to 4,000 rows per Spotlight page (maximum 5,000).
 When a multi-device shard reaches the 50-page bound, its partial rows are discarded
 and the device set is split into smaller shards and retried. Splitting stops at a
@@ -680,3 +739,11 @@ already trusts the same resolution for the strictly more destructive DELETE.
 ./gradlew test --tests "CrowdStrikeVulnerabilityImportServiceTest"
 ./gradlew test --tests "CrowdStrikeStaleVulnerabilityIntegrationTest"
 ```
+
+CrowdStrike findings shown in SecMan are restricted to HIGH and CRITICAL,
+including live lookups, stored finding lists, exports and operational counts.
+Complete synchronization still records evidence for every fetched severity so
+that empty results and enrollment replacement can be verified safely. Findings
+below HIGH remain internal reconciliation data; they are excluded by the shared
+ORM/native read boundary. Other vulnerability sources retain their existing
+severity visibility.

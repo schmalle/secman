@@ -163,7 +163,21 @@ class QueryCommand(
                 )
 
                 System.out.println(if (result.errors.isEmpty()) "Save completed!" else "Save failed")
-                System.out.println("  - Asset: ${if (result.serversCreated > 0) "CREATED" else "UPDATED"}")
+                val status = when {
+                    result.serversCreated > 0 -> "CREATED"
+                    result.serversUpdated > 0 -> "UPDATED"
+                    else -> "UNCHANGED (save rejected)"
+                }
+                System.out.println("  - Asset: $status")
+                result.hostOutcomes.forEach { outcome ->
+                    if (outcome.status != "REJECTED" && outcome.formerInstanceId != null)
+                        System.out.println("  - EC2 instance ID (asset ${outcome.assetId}): ${outcome.formerInstanceId} -> ${outcome.instanceId}")
+                    outcome.coverage?.let {
+                        System.out.println("  - Provider findings fetched: ${it.fetched}")
+                        System.out.println("  - Findings excluded: ${it.missingCve} (missing CVE ID); duplicates collapsed: ${it.duplicates}")
+                    }
+                    if (outcome.errorCode != null) System.err.println("  - ${outcome.errorCode}: ${outcome.message}")
+                }
                 System.out.println("  - Vulnerabilities imported: ${result.vulnerabilitiesImported}")
                 System.out.println("  - Vulnerabilities skipped: ${result.vulnerabilitiesSkipped}")
 

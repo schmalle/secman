@@ -111,6 +111,13 @@ class MaterializedViewRefreshServiceTest {
     }
 
     @Test
+    fun `derived failure cannot mark refresh complete`() {
+        every { assetHeatmapService.recalculateHeatmap() } throws IllegalStateException("heatmap unavailable")
+        assertThatThrownBy { service.executeRefresh(job) }.hasMessageContaining("Derived data refresh")
+        assertThat(job.status).isNotEqualTo(com.secman.domain.RefreshJobStatus.COMPLETED)
+    }
+
+    @Test
     fun `active import blocks deferred refresh even after quiet interval`() {
         val lease = CrowdStrikeImportRunLease()
         val id = lease.start("cli")
@@ -225,7 +232,7 @@ class MaterializedViewRefreshServiceTest {
 
         service.executeRefresh(job)
 
-        verify(exactly = 1) { awsCleanServerKpiService.recalculate() }
+        verify(exactly = 1) { awsCleanServerKpiService.recalculate(requireSuccess = true) }
         // The EDR-coverage KPI hangs off the same hook. Asserted here because a refresh that
         // silently stopped recalculating it would leave the dashboard reporting stale coverage
         // with nothing to indicate the number had gone cold.

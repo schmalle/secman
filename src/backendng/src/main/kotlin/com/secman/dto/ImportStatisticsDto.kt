@@ -35,5 +35,6 @@ data class ImportStatisticsDto(
      * must exclude these hosts from the reconcile sweep's scope or the sweep
      * would delete their rows with nothing reinserted.
      */
-    val failedHostnames: List<String> = emptyList()
+    val failedHostnames: List<String> = emptyList(),
+    val hostOutcomes: List<com.secman.crowdstrike.dto.CrowdStrikeHostImportOutcome> = emptyList()
 )

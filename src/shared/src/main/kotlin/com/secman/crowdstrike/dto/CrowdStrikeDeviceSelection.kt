@@ -30,7 +30,9 @@ data class CrowdStrikeDeviceSelection(
     @field:Valid
     val selected: CrowdStrikeDeviceRecord,
     @field:Valid @field:Size(max = 100)
-    val superseded: List<CrowdStrikeDeviceRecord> = emptyList()
+    val superseded: List<CrowdStrikeDeviceRecord> = emptyList(),
+    /** Selection precedes provider fetch; prevents an older concurrent response overwriting a newer one. */
+    val observedAt: Instant = Instant.now()
 )
 
 /** Never collapse equal short names across FQDNs, AD domains or cloud accounts. */

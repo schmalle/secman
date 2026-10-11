@@ -14,7 +14,7 @@ Security requirement, vulnerability and risk management platform.
 
 ## Roles (RBAC)
 
-`USER`, `ADMIN`, `VULN`, `RELEASE_MANAGER`, `REQ`, `REQADMIN`, `RISK`, `SECCHAMPION`, `REPORT`.
+`USER`, `ADMIN`, `VULN`, `RELEASE_MANAGER`, `REQ`, `REQADMIN`, `RISK`, `SECCHAMPION`, `REPORT`, `BETA`. BETA is additive feature eligibility only; ADMIN and SECCHAMPION are implicitly eligible. Existing object scopes still apply.
 
 ## Tooling Conventions (canonical, do not deviate)
 
@@ -313,7 +313,7 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-10-09*
+*Last updated: 2026-10-10*
 
 ## Recent Changes
 

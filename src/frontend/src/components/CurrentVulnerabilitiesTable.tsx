@@ -1044,7 +1044,10 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
                   <p className="mb-1">
                     Only systems last seen today (Europe/Berlin) are included.
                     Excepted vulnerabilities are hidden by default. Inventory-wide views may
-                    include older systems and therefore show different totals.
+                    include older systems and therefore show different totals. Sensor activity
+                    does not establish findings freshness. Legacy CrowdStrike findings remain
+                    visible until a verified synchronization establishes their enrollment; open
+                    a system to inspect its device, snapshot time and coverage.
                   </p>
                 </details>
               )}
@@ -1122,7 +1125,7 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
                           <tr key={vuln.id}>
                             <td>
                               <a
-                                href={`/vulnerabilities/system?hostname=${encodeURIComponent(vuln.assetName)}`}
+                                href={`/vulnerabilities/system?assetId=${vuln.assetId}&hostname=${encodeURIComponent(vuln.assetName)}`}
                                 className="text-decoration-none"
                                 title={`View all vulnerabilities for ${vuln.assetName}`}
                               >

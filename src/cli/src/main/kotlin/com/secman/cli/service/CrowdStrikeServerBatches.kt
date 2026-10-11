@@ -54,6 +54,7 @@ fun buildCrowdStrikeServerBatches(
             adDomain = representative?.adDomain?.takeIf(String::isNotBlank) ?: domains.singleOrNull(),
             osVersion = representative?.osVersion ?: first?.osVersion,
             ip = representative?.ip ?: findings.resolveHostIp(),
+            ipAddresses = representative?.ipAddresses.orEmpty(),
             crowdStrikeAids = (siblings.mapNotNull { it.crowdStrikeAid } + findings.mapNotNull { it.crowdStrikeAid }).toSet(),
             deviceSelection = siblings.mapNotNull { it.deviceSelection }.also {
                 require(it.isEmpty() || (it.size == 1 && siblings.size == 1)) { "Ambiguous selected Falcon devices" }

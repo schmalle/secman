@@ -84,7 +84,7 @@ object VulnQuerySql {
                COALESCE(v.cvss_severity, 'UNKNOWN') as cvssSeverity,
                COUNT(*) as occurrenceCount,
                COUNT(DISTINCT v.asset_id) as affectedAssetCount
-        FROM vulnerability v
+        FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
         JOIN asset a ON v.asset_id = a.id
         WHERE """
     // GROUP BY the same COALESCE the SELECT projects, not the raw column: grouping on
@@ -104,7 +104,7 @@ object VulnQuerySql {
                COUNT(DISTINCT v.asset_id) as affectedAssetCount,
                COUNT(DISTINCT CASE WHEN v.cvss_severity = 'CRITICAL' THEN v.vulnerability_id END) as criticalCount,
                COUNT(DISTINCT CASE WHEN v.cvss_severity = 'HIGH' THEN v.vulnerability_id END) as highCount
-        FROM vulnerability v
+        FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
         JOIN asset a ON v.asset_id = a.id
         WHERE """
     const val MOST_VULNERABLE_PRODUCTS_TAIL = """v.vulnerable_product_versions IS NOT NULL
@@ -118,7 +118,7 @@ object VulnQuerySql {
     // --- Severity distribution ---
     const val SEVERITY_DISTRIBUTION_SELECT = """
         SELECT COALESCE(v.cvss_severity, 'UNKNOWN') as severity, COUNT(*) as count
-        FROM vulnerability v
+        FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
         JOIN asset a ON v.asset_id = a.id
         WHERE """
     const val SEVERITY_DISTRIBUTION_TAIL = """$VISIBLE
@@ -133,7 +133,7 @@ object VulnQuerySql {
                SUM(CASE WHEN v.cvss_severity = 'HIGH' THEN 1 ELSE 0 END) as highCount,
                SUM(CASE WHEN v.cvss_severity = 'MEDIUM' THEN 1 ELSE 0 END) as mediumCount,
                SUM(CASE WHEN v.cvss_severity = 'LOW' THEN 1 ELSE 0 END) as lowCount
-        FROM vulnerability v
+        FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
         JOIN asset a ON v.asset_id = a.id
         WHERE """
     // Tiebreaker on a.id so the LIMIT 50 boundary is stable across refreshes.
@@ -153,7 +153,7 @@ object VulnQuerySql {
                SUM(CASE WHEN v.cvss_severity = 'MEDIUM' THEN 1 ELSE 0 END) as mediumCount,
                SUM(CASE WHEN v.cvss_severity = 'LOW' THEN 1 ELSE 0 END) as lowCount,
                CAST(COUNT(*) AS DOUBLE) / COUNT(DISTINCT a.id) as avgVulnsPerAsset
-        FROM vulnerability v
+        FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
         JOIN asset a ON v.asset_id = a.id
         WHERE """
     const val BY_ASSET_TYPE_TAIL = """$VISIBLE
@@ -169,7 +169,7 @@ object VulnQuerySql {
                SUM(CASE WHEN v.cvss_severity = 'HIGH' THEN 1 ELSE 0 END) as highCount,
                SUM(CASE WHEN v.cvss_severity = 'MEDIUM' THEN 1 ELSE 0 END) as mediumCount,
                SUM(CASE WHEN v.cvss_severity = 'LOW' THEN 1 ELSE 0 END) as lowCount
-        FROM vulnerability v
+        FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
         JOIN asset a ON v.asset_id = a.id
         WHERE """
     const val TEMPORAL_TRENDS_TAIL = """v.scan_timestamp >= :startDate

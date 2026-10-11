@@ -430,12 +430,13 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
     }
 
     @Test
-    fun `per-host blank cursor ends pagination without a reported total`() {
+    fun `per-host missing total cannot prove completeness even with a blank cursor`() {
         val requests = stubSpotlightPages(listOf(mapOf(
             "resources" to listOf(vulnResource("one")),
             "meta" to mapOf("pagination" to mapOf("after" to ""))
         )))
-        assertThat(client.querySpotlightApi("device-1", "server01", token).map { it.id }).containsExactly("one")
+        assertThatThrownBy { client.querySpotlightApi("device-1", "server01", token) }
+            .hasMessageContaining("missing reported total")
         assertThat(spotlightCalls(requests)).isEqualTo(1)
     }
 
@@ -489,10 +490,11 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
     }
 
     @Test
-    fun `per-host thrown 404 on first page returns no vulnerabilities`() {
+    fun `per-host thrown 404 never proves a clean device`() {
         every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } throws
             io.micronaut.http.client.exceptions.HttpClientResponseException("not found", HttpResponse.notFound<Any>())
-        assertThat(client.querySpotlightApi("device-1", "server01", token)).isEmpty()
+        assertThatThrownBy { client.querySpotlightApi("device-1", "server01", token) }
+            .hasMessageContaining("404 does not prove")
     }
 
     @Test
@@ -503,7 +505,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
             else throw io.micronaut.http.client.exceptions.HttpClientResponseException("not found", HttpResponse.notFound<Any>())
         }
         assertThatThrownBy { client.querySpotlightApi("device-1", "server01", token) }
-            .hasMessageContaining("404 after cursor")
+            .hasMessageContaining("404 does not prove")
     }
 
     @Test
@@ -553,7 +555,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         val response = client.queryVulnerabilities("server01", config)
 
         // Discovery retains old records as cleanup evidence, but only the winner reaches Spotlight.
-        assertThat(requests.count { it.uri.toString().contains("/devices/queries/devices/v1") }).isEqualTo(1)
+        assertThat(requests.count { it.uri.toString().contains("/devices/queries/devices/v1") }).isEqualTo(3)
         assertThat(spotlightCalls(requests)).isEqualTo(1)
         assertThat(response.vulnerabilities.map { it.id }).containsExactly("v2")
         assertThat(response.deviceCount).isEqualTo(1)
@@ -561,7 +563,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
     }
 
     @Test
-    fun `hostname resolution uses the first non-empty strategy without unioning later ones`() {
+    fun `hostname resolution unions case and full-name discovery strategies`() {
         val requests = mutableListOf<HttpRequest<Any>>()
         var deviceQueries = 0
         every { blockingClient.exchange(capture(requests), Map::class.java) } answers {
@@ -579,8 +581,8 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
 
         val deviceIds = client.getDeviceIdsByHostname("server01", token)
 
-        // Cascade stops at the first non-empty strategy.
-        assertThat(deviceQueries).isEqualTo(2)
+        // Resolve all exact-case and short-name aliases before selecting an enrollment.
+        assertThat(deviceQueries).isEqualTo(3)
         assertThat(deviceIds).containsExactly("aid-2", "aid-9")
     }
 
@@ -820,7 +822,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
                 "meta" to mapOf("pagination" to mapOf("total" to 101))))
         }
         assertThat(client.getDeviceIdsByHostname("server01", token)).containsExactlyElementsOf(ids)
-        assertThat(requests.map { it.parameters.get("offset") }).containsExactly("0", "100")
+        assertThat(requests.map { it.parameters.get("offset") }).containsExactly("0", "100", "0", "100", "0", "100")
     }
 
     @Test
@@ -837,6 +839,57 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         assertThat(response.vulnerabilities).isEmpty()
         assertThat(response.failedAids).containsExactly("aid-2")
         io.mockk.verify(exactly = 0) { selectingClient.querySpotlightApi("aid-1", any(), any()) }
+    }
+
+    private fun stubHostnameDevices(records: List<Map<String, Any>>): MutableList<HttpRequest<Any>> {
+        val requests = mutableListOf<HttpRequest<Any>>()
+        every { blockingClient.exchange(capture(requests), Map::class.java) } answers {
+            val request = firstArg<HttpRequest<Any>>()
+            val uri = request.uri.toString()
+            when {
+                uri.contains("/devices/entities/devices/v2") -> HttpResponse.ok(mapOf("resources" to records))
+                uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
+                uri.contains("/devices/queries/devices/v1") -> HttpResponse.ok(mapOf("resources" to records.map { it.getValue("device_id") }))
+                uri.contains("/spotlight/combined/vulnerabilities/v1") -> HttpResponse.ok(spotlightPage(emptyList(), null, 0))
+                else -> error("Unexpected request: $uri")
+            }
+        }
+        return requests
+    }
+
+    @Test
+    fun `hostname query refuses to choose between nineteen independent cloud instances`() {
+        val records = (0 until 19).map { index -> mapOf<String, Any>(
+            "device_id" to "aid-$index", "hostname" to "server01",
+            "instance_id" to "i-${index.toString().padStart(17, '0')}", "service_provider" to "AWS",
+            "first_seen" to "2026-01-01T00:00:00Z",
+            "last_seen" to Instant.parse("2026-01-02T00:00:00Z").plusSeconds(index.toLong()).toString()) }
+        val requests = stubHostnameDevices(records)
+        assertThatThrownBy { client.queryVulnerabilities("server01", config) }
+            .isInstanceOf(com.secman.crowdstrike.exception.CrowdStrikeException::class.java)
+            .hasMessageContaining("multiple machines")
+        assertThat(spotlightCalls(requests)).isZero()
+    }
+
+    @Test
+    fun `hostname lookup uses the same newest enrollment rule as imports`() {
+        stubHostnameDevices(listOf(
+            mapOf("device_id" to "aid-1", "hostname" to "server01", "first_seen" to "2026-01-03T00:00:00Z", "last_seen" to "2026-01-03T00:00:00Z"),
+            mapOf("device_id" to "aid-2", "hostname" to "SERVER01", "first_seen" to "2026-01-01T00:00:00Z", "last_seen" to "2026-01-04T00:00:00Z"),
+            mapOf("device_id" to "aid-3", "hostname" to "server01", "first_seen" to "2026-01-02T00:00:00Z", "last_seen" to "2026-01-04T00:00:00Z")))
+        assertThat(client.getDeviceIdByHostname("server01", token)).isEqualTo("aid-1")
+    }
+
+    @Test
+    fun `tied or missing recency cannot silently choose a hostname device`() {
+        val record = mapOf<String, Any>("device_id" to "aid-1", "hostname" to "server01",
+            "first_seen" to "2026-01-01T00:00:00Z", "last_seen" to "2026-01-02T00:00:00Z")
+        for (other in listOf(record + ("device_id" to "aid-2"), (record - "first_seen") + ("device_id" to "aid-2"))) {
+            val requests = stubHostnameDevices(listOf(record, other))
+            assertThatThrownBy { client.queryVulnerabilities("server01", config) }
+                .isInstanceOf(com.secman.crowdstrike.exception.CrowdStrikeException::class.java)
+            assertThat(spotlightCalls(requests)).isZero()
+        }
     }
 
 }

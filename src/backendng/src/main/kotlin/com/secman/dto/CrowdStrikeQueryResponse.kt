@@ -84,5 +84,9 @@ data class CrowdStrikeQueryResponse(
      * failing the request and wiping the operator's screen, the persisted rows are returned with
      * this notice so it is obvious the live lookup did not succeed.
      */
-    val notice: String? = null
+    val notice: String? = null,
+    val assetId: Long? = null,
+    val selectedAid: String? = null,
+    val snapshotStatus: String = "UNVERIFIED",
+    val snapshotCoverage: List<String> = emptyList()
 )

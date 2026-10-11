@@ -47,5 +47,8 @@ data class CrowdStrikeAssetIdentity(
     var falconFirstSeenAt: LocalDateTime? = null,
 
     @Column(name = "falcon_last_seen_at")
-    var falconLastSeenAt: LocalDateTime? = null
+    var falconLastSeenAt: LocalDateTime? = null,
+
+    @Column(name = "identity_observed_at")
+    var identityObservedAt: LocalDateTime? = null
 )

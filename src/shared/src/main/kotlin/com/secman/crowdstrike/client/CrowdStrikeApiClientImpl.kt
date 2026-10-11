@@ -83,15 +83,8 @@ open class CrowdStrikeApiClientImpl(
 
             val discoveredIds = getDeviceIdsByHostname(hostname, token)
             if (discoveredIds.isEmpty()) throw NotFoundException("Hostname not found in CrowdStrike: $hostname")
-            val metadata = selectImportDevices(discoveredIds, resolveImportMetadata(discoveredIds, config))
-            val matching = metadata.filterValues { md ->
-                md.hostname.equals(hostname, ignoreCase = true) ||
-                    (!hostname.contains('.') && md.hostname?.substringBefore(".").equals(hostname, ignoreCase = true))
-            }
-            if (matching.size != 1) throw CrowdStrikeException("Hostname does not resolve to one unambiguous Falcon device")
-            val deviceIds = matching.keys.toList()
-            log.info("Selected latest device for hostname={}: aid={}, ignored={}", hostname,
-                deviceIds.single(), matching.values.single().selection?.superseded?.size ?: 0)
+            val metadata = selectCurrentHostnameDevice(hostname, discoveredIds, resolveImportMetadata(discoveredIds, config))
+            val deviceIds = metadata.keys.toList()
 
             val vulnerabilityDtos = mutableListOf<CrowdStrikeVulnerabilityDto>()
             val failedAids = mutableSetOf<String>()
@@ -1201,6 +1194,7 @@ open class CrowdStrikeApiClientImpl(
         // Raw (pre-minDaysOpen-filter) rows fetched, checked against Falcon's own
         // meta.pagination.total so the loop can neither overshoot nor end silently short.
         var rawFetched = 0
+        val seenResourceIds = mutableSetOf<String>()
         var expectedTotal: Int? = null
 
         log.debug(">>> Batch {}/{} starting with {} device IDs", batchIndex + 1, totalBatches, deviceIds.size)
@@ -1274,18 +1268,23 @@ open class CrowdStrikeApiClientImpl(
                             throw CrowdStrikeException("Falcon findings do not match the selected devices")
                         }
 
-                        val filtered = vulns.filter { vuln ->
+                        val ids = resources.map { (it as? Map<*, *>)?.get("id")?.toString()?.takeIf(String::isNotBlank)
+                            ?: throw CrowdStrikeException("Missing Falcon finding identity") }
+                        val unique = vulns.filterIndexed { index, _ -> seenResourceIds.add(ids[index]) }
+                        val filtered = unique.filter { vuln ->
                             val daysOpenValue = vuln.daysOpen?.split(" ")?.firstOrNull()?.toIntOrNull() ?: 0
                             daysOpenValue >= minDaysOpen
                         }
 
                         val meta = responseBody["meta"] as? Map<*, *>
                         val pagination = meta?.get("pagination") as? Map<*, *>
-                        afterToken = pagination?.get("after")?.toString()
+                        afterToken = pagination?.get("after")?.toString()?.takeIf(String::isNotBlank)
                         if (expectedTotal == null) {
                             expectedTotal = (pagination?.get("total") as? Number)?.toInt()
                         }
-                        rawFetched += vulns.size
+                        if (expectedTotal == null || expectedTotal!! < 0) throw CrowdStrikeException("Missing or invalid Falcon findings total")
+                        rawFetched = seenResourceIds.size
+                        if (rawFetched > expectedTotal!!) throw CrowdStrikeException("Falcon findings exceed the reported total")
 
                         log.info(">>> Batch {}/{} page {}: Retrieved {} vulns, {} after filter (batch total: {})",
                             batchIndex + 1, totalBatches, pageCount, vulns.size, filtered.size,
@@ -1331,7 +1330,7 @@ open class CrowdStrikeApiClientImpl(
                             }
                         }
                     }
-                    404 -> hasMore = false
+                    404 -> throw CrowdStrikeException("Spotlight 404 does not prove an empty snapshot")
                     429 -> {
                         val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
                         throw RateLimitException("Rate limit exceeded on batch ${batchIndex + 1}", retryAfter)
@@ -1348,7 +1347,7 @@ open class CrowdStrikeApiClientImpl(
                         token = getAuthToken(config)
                         continue
                     }
-                    404 -> hasMore = false
+                    404 -> throw CrowdStrikeException("Spotlight 404 does not prove an empty snapshot")
                     429 -> {
                         val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
                         log.warn(">>> Batch {}/{}: Rate limit, retrying after {}s",
@@ -1481,23 +1480,22 @@ open class CrowdStrikeApiClientImpl(
     open fun getDeviceIdByHostname(hostname: String, token: AuthToken): String? {
         val ids = getDeviceIdsByHostname(hostname, token)
         if (ids.isEmpty()) return null
-        val metadata = selectImportDevices(ids, resolveDeviceMetadata(ids, token))
-        val matching = metadata.filterValues { it.hostname.equals(hostname, ignoreCase = true) ||
-            (!hostname.contains('.') && it.hostname?.substringBefore(".").equals(hostname, ignoreCase = true)) }
-        if (matching.size != 1) throw CrowdStrikeException("Ambiguous Falcon hostname")
-        return matching.keys.single()
+        return selectCurrentHostnameDevice(hostname, ids, resolveDeviceMetadata(ids, token)).keys.single()
     }
 
     /** Discover all exact matches before considering a short-name/FQDN fallback. */
     open fun getDeviceIdsByHostname(hostname: String, token: AuthToken): List<String> {
         require(hostname.matches(Regex("[A-Za-z0-9_.-]{1,255}"))) { "Invalid hostname" }
-        val strategies = listOf(hostname, hostname.lowercase(), hostname.uppercase()).distinct()
-            .map { "hostname:'$it'" } + listOf("hostname:'$hostname*'", "hostname:'*$hostname*'")
-        for (filter in strategies) {
-            val ids = queryAllMatchingDeviceIds(filter, token)
-            if (ids.isNotEmpty()) return ids
+        val exactFilters = listOf(hostname, hostname.lowercase(), hostname.uppercase()).distinct()
+            .map { "hostname:'$it'" }
+        val ids = linkedSetOf<String>()
+        exactFilters.forEach { ids.addAll(queryAllMatchingDeviceIds(it, token)) }
+        // Short-name discovery must include FQDN candidates as well as exact-name records.
+        if (!hostname.contains('.') || ids.isEmpty()) {
+            ids.addAll(queryAllMatchingDeviceIds("hostname:'$hostname*'", token))
+            if (ids.isEmpty()) ids.addAll(queryAllMatchingDeviceIds("hostname:'*$hostname*'", token))
         }
-        return emptyList()
+        return ids.toList()
     }
 
     private fun queryAllMatchingDeviceIds(filter: String, token: AuthToken, pageLimit: Int = 100): List<String> {
@@ -1618,6 +1616,10 @@ open class CrowdStrikeApiClientImpl(
                                     throw CrowdStrikeException("Invalid Spotlight pagination total")
                                 }
                             }
+                            if (!(responseBody["errors"] as? List<*>).isNullOrEmpty()) {
+                                throw CrowdStrikeException("Spotlight returned provider errors")
+                            }
+                            if (expectedTotal == null) throw CrowdStrikeException("Incomplete Spotlight pagination: missing reported total")
                             val newAfterToken = pagination?.get("after")?.toString()?.takeIf { it.isNotBlank() }
                             val resourceIds = resources.map { resource ->
                                 (resource as? Map<*, *>)?.get("id")?.toString()?.takeIf { it.isNotBlank() }
@@ -1630,9 +1632,6 @@ open class CrowdStrikeApiClientImpl(
                             }) throw CrowdStrikeException("Falcon findings belong to a different device")
                             val vulns = mapResponseToDtos(resources, hostname, deviceId)
                             if (vulns.size != resources.size) throw CrowdStrikeException("Incomplete Falcon findings mapping")
-                            if (vulns.size != resources.size) {
-                                throw CrowdStrikeException("Incomplete Spotlight resource mapping")
-                            }
                             allVulnerabilities.addAll(vulns.filterIndexed { index, _ ->
                                 seenResourceIds.add(resourceIds[index])
                             })
@@ -1663,10 +1662,7 @@ open class CrowdStrikeApiClientImpl(
                             pageSuccess = true
                         }
                         404 -> {
-                            if (afterToken != null) throw CrowdStrikeException("Incomplete Spotlight query: 404 after cursor")
-                            log.info("Spotlight API returned 404 for device {}. Treating as no vulnerabilities.", deviceId)
-                            hasMore = false
-                            pageSuccess = true
+                            throw CrowdStrikeException("Spotlight 404 does not prove an empty snapshot")
                         }
                         429 -> {
                             val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
@@ -1693,10 +1689,7 @@ open class CrowdStrikeApiClientImpl(
                 } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
                     when (e.status.code) {
                         404 -> {
-                            if (afterToken != null) throw CrowdStrikeException("Incomplete Spotlight query: 404 after cursor")
-                            log.info("Spotlight API returned 404 for device. Treating as no vulnerabilities.")
-                            hasMore = false
-                            pageSuccess = true
+                            throw CrowdStrikeException("Spotlight 404 does not prove an empty snapshot", e)
                         }
                         429 -> {
                             val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
@@ -1967,7 +1960,23 @@ open class CrowdStrikeApiClientImpl(
         val selection: CrowdStrikeDeviceSelection? = null
     ) {
         fun toQueriedHost(aid: String) = QueriedHost(hostname, cloudInstanceId, aid,
-            cloudAccountId, adDomain, osVersion, ip, lastSeen, selection)
+            cloudAccountId, adDomain, osVersion, ip, lastSeen, selection, ipAddresses)
+    }
+
+    /** Resolve one machine, then use the same enrollment ranking as fleet imports. */
+    private fun selectCurrentHostnameDevice(
+        hostname: String, ids: List<String>, metadata: Map<String, DeviceMetadata>
+    ): Map<String, DeviceMetadata> {
+        if (ids.any { it !in metadata }) throw CrowdStrikeException("Incomplete Falcon device metadata")
+        val matching = metadata.filter { (_, md) ->
+            md.hostname.equals(hostname, ignoreCase = true) ||
+                (!hostname.contains('.') && md.hostname?.substringBefore(".").equals(hostname, ignoreCase = true))
+        }
+        if (matching.isEmpty()) throw NotFoundException("Hostname not found in CrowdStrike: $hostname")
+        val selected = selectImportDevices(matching.keys.toList(), matching)
+        if (selected.size != 1) throw CrowdStrikeException(
+            "Hostname resolves to multiple machines; use an instance ID or an authorized asset lookup")
+        return selected
     }
 
     private fun selectImportDevices(

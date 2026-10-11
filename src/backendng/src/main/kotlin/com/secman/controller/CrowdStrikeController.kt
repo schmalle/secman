@@ -48,7 +48,11 @@ open class CrowdStrikeController(
     private val crowdStrikeService: CrowdStrikeVulnerabilityService,
     private val queryService: CrowdStrikeQueryService,
     private val importService: CrowdStrikeVulnerabilityImportService,
-    private val reconcileJobService: CrowdStrikeReconcileJobService
+    private val reconcileJobService: CrowdStrikeReconcileJobService,
+    private val syncService: com.secman.service.CrowdStrikeSyncService,
+    private val assetRepository: com.secman.repository.AssetRepository,
+    private val assetFilterService: com.secman.service.AssetFilterService,
+    private val identityRepository: com.secman.repository.CrowdStrikeAssetIdentityRepository
 ) {
     private val log = LoggerFactory.getLogger(CrowdStrikeController::class.java)
 
@@ -76,6 +80,53 @@ open class CrowdStrikeController(
      * - 500: Server error
      */
     @Get("/vulnerabilities")
+    open fun queryAuthorizedVulnerabilities(
+        @QueryValue hostname: String?,
+        @QueryValue severity: String? = null,
+        @QueryValue product: String? = null,
+        @QueryValue limit: Int? = null,
+        @QueryValue page: Int? = null,
+        @QueryValue(defaultValue = "false") force: Boolean = false,
+        @QueryValue assetId: Long? = null,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        var selected = assetId?.let { id ->
+            if (!assetFilterService.canAccessAsset(id, authentication)) return HttpResponse.notFound<Any>()
+            assetRepository.findById(id).orElse(null) ?: return HttpResponse.notFound<Any>()
+        }
+        var identifier = selected?.cloudInstanceId ?: selected?.crowdStrikeHostname ?: selected?.name ?: hostname
+        if (!authentication.roles.contains("ADMIN") && selected == null) {
+            if (identifier.isNullOrBlank()) return HttpResponse.badRequest(mapOf("error" to "System is required"))
+            val asset = if (InputDetectionUtils.isAwsInstanceId(identifier)) assetRepository.findByCloudInstanceIdIgnoreCase(identifier)
+                else assetRepository.findByCrowdStrikeHostnameIgnoreCase(identifier) ?: assetRepository.findByNameIgnoreCase(identifier)
+            if (asset?.id == null || !assetFilterService.canAccessAsset(requireNotNull(asset.id), authentication)) {
+                return HttpResponse.notFound<Any>()
+            }
+            selected = asset
+            identifier = asset.cloudInstanceId ?: asset.crowdStrikeHostname ?: asset.name
+        }
+        val grantedAids = if (selected != null && !authentication.roles.contains("ADMIN")) {
+            identityRepository.findByAssetIdIn(listOf(requireNotNull(selected.id))).map { it.crowdStrikeAid }.toSet()
+        } else emptySet()
+        var result = queryVulnerabilities(identifier, severity, product, limit, page, force)
+        var body = result.body() as? CrowdStrikeQueryResponse ?: return result
+        if (selected != null && body.dataSource == "DATABASE" && body.assetId != selected.id) {
+            queryService.invalidateAllCachedQueries()
+            result = queryVulnerabilities(identifier, severity, product, limit, page, force)
+            body = result.body() as? CrowdStrikeQueryResponse ?: return result
+            if (body.dataSource == "DATABASE" && body.assetId != selected.id) return HttpResponse.notFound<Any>()
+        }
+        if (selected != null && !selected.cloudAccountId.isNullOrBlank() && body.dataSource == "LIVE_API" &&
+            !selected.cloudAccountId.equals(body.cloudAccountId, ignoreCase = true)) return HttpResponse.notFound<Any>()
+        if (selected != null && !authentication.roles.contains("ADMIN") && body.dataSource == "LIVE_API") {
+            val stableCloudIdentity = !selected.cloudInstanceId.isNullOrBlank() && !selected.cloudAccountId.isNullOrBlank() &&
+                selected.cloudInstanceId.equals(body.instanceId, ignoreCase = true) &&
+                selected.cloudAccountId.equals(body.cloudAccountId, ignoreCase = true)
+            if (body.selectedAid !in grantedAids && !stableCloudIdentity) return HttpResponse.notFound<Any>()
+        }
+        return HttpResponse.ok(body.copy(assetId = selected?.id ?: body.assetId))
+    }
+
     open fun queryVulnerabilities(
         @QueryValue hostname: String?,
         @QueryValue severity: String? = null,
@@ -226,50 +277,8 @@ open class CrowdStrikeController(
      * @return CrowdStrikeQueryResponse with vulnerabilities
      */
     @Get("/crowdstrike/vulnerabilities")
-    open fun queryVulnerabilitiesLegacy(
-        @QueryValue @NotBlank hostname: String
-    ): HttpResponse<*> {
-        log.info("Received legacy CrowdStrike query request: hostname={}", hostname)
-
-        return try {
-            val sanitizedHostname = sanitizeHostname(hostname)
-            val response = crowdStrikeService.queryByHostname(sanitizedHostname)
-
-            log.info("CrowdStrike query successful: hostname={}, count={}", sanitizedHostname, response.totalCount)
-            HttpResponse.ok(response)
-        } catch (e: IllegalArgumentException) {
-            log.warn("Invalid hostname: {}", hostname, e)
-            HttpResponse.badRequest(mapOf("error" to "Invalid hostname format"))
-        } catch (e: CrowdStrikeError.ConfigurationError) {
-            log.error("CrowdStrike configuration error", e)
-            HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(mapOf("error" to "CrowdStrike API credentials not configured. Contact administrator."))
-        } catch (e: CrowdStrikeError.AuthenticationError) {
-            log.error("CrowdStrike authentication failed", e)
-            HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(mapOf("error" to "CrowdStrike authentication failed"))
-        } catch (e: CrowdStrikeError.NotFoundError) {
-            log.warn("System not found in CrowdStrike: {}", hostname)
-            HttpResponse.notFound(mapOf("error" to "System '$hostname' not found in CrowdStrike"))
-        } catch (e: CrowdStrikeError.RateLimitError) {
-            log.warn("CrowdStrike rate limit exceeded")
-            val retryAfter = e.retryAfterSeconds ?: 30
-            HttpResponse.status<Map<String, String>>(HttpStatus.TOO_MANY_REQUESTS)
-                .header("Retry-After", retryAfter.toString())
-                .body(mapOf("error" to "CrowdStrike API rate limit exceeded. Try again in $retryAfter seconds."))
-        } catch (e: CrowdStrikeError.NetworkError) {
-            log.error("Unable to reach CrowdStrike API", e)
-            HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(mapOf("error" to "Unable to reach CrowdStrike API. Please try again later."))
-        } catch (e: CrowdStrikeError.ServerError) {
-            log.error("CrowdStrike service error", e)
-            HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(mapOf("error" to "CrowdStrike service temporarily unavailable. Please try again later."))
-        } catch (e: Exception) {
-            log.error("Unexpected error querying CrowdStrike", e)
-            HttpResponse.serverError(mapOf("error" to "An unexpected error occurred. Please try again later."))
-        }
-    }
+    open fun queryVulnerabilitiesLegacy(@QueryValue @NotBlank hostname: String, authentication: Authentication): HttpResponse<*> =
+        queryAuthorizedVulnerabilities(hostname, force = true, authentication = authentication)
 
     /**
      * Save CrowdStrike vulnerabilities to database with asset auto-creation
@@ -285,6 +294,7 @@ open class CrowdStrikeController(
      * @return Save response with statistics
      */
     @Post("/crowdstrike/vulnerabilities/save")
+    @Secured("ADMIN")
     open fun saveVulnerabilities(
         @Body @Valid request: CrowdStrikeSaveRequest,
         authentication: Authentication  // T012: Pass authentication to service
@@ -318,6 +328,26 @@ open class CrowdStrikeController(
             HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(mapOf("error" to "An internal error occurred while saving vulnerabilities"))
         }
+    }
+
+    @Post("/crowdstrike/vulnerabilities/sync")
+    @Secured("ADMIN")
+    open fun synchronizeVulnerabilities(@Body @Valid request: com.secman.dto.CrowdStrikeSyncRequest,
+        authentication: Authentication): HttpResponse<*> = try {
+        HttpResponse.ok(syncService.sync(request, authentication))
+    } catch (e: io.micronaut.http.exceptions.HttpStatusException) {
+        HttpResponse.status<Map<String, String>>(e.status).body(mapOf("error" to e.message))
+    } catch (e: com.secman.service.CrowdStrikeIdentityConflict) {
+        log.warn("Falcon sync rejected: actor={} assetId={} code={} outcome=preserved",
+            authentication.name.replace('\r', '_').replace('\n', '_'), e.assetId, e.code)
+        HttpResponse.badRequest(mapOf("error" to e.message, "errorCode" to e.code,
+            "assetId" to e.assetId, "formerInstanceId" to e.formerInstanceId, "instanceId" to e.instanceId))
+    } catch (e: IllegalArgumentException) {
+        log.warn("Falcon sync rejected: actor={} outcome=preserved", authentication.name.replace('\r', '_').replace('\n', '_'), e)
+        HttpResponse.badRequest(mapOf("error" to "Falcon identity or snapshot could not be verified; stored data was preserved."))
+    } catch (e: Exception) {
+        log.error("Falcon sync failed: actor={} outcome=preserved", authentication.name.replace('\r', '_').replace('\n', '_'), e)
+        HttpResponse.serverError(mapOf("error" to "Falcon synchronization failed; stored data was preserved."))
     }
 
     /**
@@ -356,6 +386,12 @@ open class CrowdStrikeController(
                 return HttpResponse.status<Map<String, String>>(HttpStatus.FORBIDDEN)
                     .body(mapOf("error" to "Falcon device replacement requires ADMIN"))
             }
+            if (!authentication.roles.contains("ADMIN") && batches.any { batch ->
+                val asset = batch.cloudInstanceId?.let(assetRepository::findByCloudInstanceIdIgnoreCase)
+                    ?: assetRepository.findByCrowdStrikeHostnameIgnoreCase(batch.hostname)
+                    ?: assetRepository.findByNameIgnoreCase(batch.hostname)
+                asset?.id == null || !assetFilterService.canAccessAsset(requireNotNull(asset.id), authentication)
+            }) return HttpResponse.notFound<Any>()
             val statistics = importService.importServerVulnerabilities(batches, username,
                 allowDeviceReplacement = authentication.roles.contains("ADMIN"))
 

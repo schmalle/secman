@@ -69,7 +69,23 @@ class QueryCommandTest {
         every { auth.authenticate(any(), any(), any()) } returns UUID.randomUUID().toString()
         every { storage.storeServerVulnerabilities(any(), any(), any(), any(), any()) } returns
             BatchStorageResult(0, 0, 0, 0, 0, 0, listOf("identity conflict"), listOf("server-1"))
-        assertThat(cmd.execute()).isEqualTo(1)
+        val (exit, output) = outputOf(cmd)
+        assertThat(exit).isEqualTo(1)
+        assertThat(output).contains("Asset: UNCHANGED (save rejected)").doesNotContain("Asset: UPDATED")
+    }
+
+    @Test
+    fun `successful instance replacement reports committed identity and exclusions`() {
+        val cmd = command()
+        every { api.queryAllVulnerabilities(any(), any()) } returns response()
+        every { auth.authenticate(any(), any(), any()) } returns UUID.randomUUID().toString()
+        every { storage.storeServerVulnerabilities(any(), any(), any(), any(), any()) } returns
+            BatchStorageResult(1, 0, 1, 1, 0, 2, emptyList(), hostOutcomes = listOf(
+                com.secman.crowdstrike.dto.CrowdStrikeHostImportOutcome("server-1", "UPDATED", 1L, "i-old", "i-new",
+                    coverage = com.secman.crowdstrike.dto.CrowdStrikeFindingCoverage(3, 1, missingCve = 2))))
+        val (exit, output) = outputOf(cmd)
+        assertThat(exit).isZero()
+        assertThat(output).contains("Asset: UPDATED", "i-old -> i-new", "Provider findings fetched: 3", "Findings excluded: 2")
     }
 
     @Test

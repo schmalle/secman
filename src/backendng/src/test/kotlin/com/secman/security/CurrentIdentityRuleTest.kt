@@ -2,6 +2,7 @@ package com.secman.security
 
 import com.secman.domain.User
 import com.secman.repository.UserRepository
+import io.micronaut.http.HttpRequest
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRuleResult
 import io.mockk.every
@@ -43,6 +44,20 @@ class CurrentIdentityRuleTest {
         user.enabled = false
         every { users.findById(1L) } returns Optional.of(user)
         assertEquals(SecurityRuleResult.REJECTED, evaluateIdentity())
+    }
+
+    @Test
+    fun `only guarded AI buddy routes defer role freshness to live authorization`() {
+        every { users.findById(1L) } returns Optional.of(user)
+        val stale = Authentication.build("alice", listOf("ADMIN"), mapOf("userId" to "1", "email" to user.email))
+        for (path in listOf("/api/ai-buddy/capabilities", "/api/ai-buddy/assets/2/jobs")) {
+            assertEquals(SecurityRuleResult.UNKNOWN, Mono.from(rule.check(HttpRequest.GET<Any>(path), stale)).block())
+        }
+        for (path in listOf("/api/assets/2", "/api/ai-buddy-unsafe/capabilities")) {
+            assertEquals(SecurityRuleResult.REJECTED, Mono.from(rule.check(HttpRequest.GET<Any>(path), stale)).block())
+        }
+        user.enabled = false
+        assertEquals(SecurityRuleResult.REJECTED, Mono.from(rule.check(HttpRequest.GET<Any>("/api/ai-buddy/capabilities"), stale)).block())
     }
 
 }

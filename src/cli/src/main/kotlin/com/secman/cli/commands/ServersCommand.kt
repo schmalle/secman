@@ -239,7 +239,7 @@ class ServersCommand {
                         apiClient.queryServersWithFiltersStreaming(
                             deviceType = deviceType,
                             severity = severity,
-                            minDaysOpen = minDaysOpen,
+                            minDaysOpen = if (save) 0 else minDaysOpen,
                             config = config,
                             limit = limit,
                             lastSeenDays = lastSeenDays,
@@ -382,7 +382,7 @@ class ServersCommand {
                 val summary = apiClient.queryServersWithFiltersSummary(
                     deviceType = deviceType,
                     severity = severity,
-                    minDaysOpen = minDaysOpen,
+                    minDaysOpen = if (save) 0 else minDaysOpen,
                     config = config,
                     limit = limit,
                     lastSeenDays = lastSeenDays,
@@ -433,7 +433,7 @@ class ServersCommand {
                 hostnames = hostnames,
                 deviceType = deviceType,
                 severity = severity,
-                minDaysOpen = minDaysOpen,
+                minDaysOpen = if (save) 0 else minDaysOpen,
                 config = config,
                 limit = limit,
                 lastSeenDays = lastSeenDays

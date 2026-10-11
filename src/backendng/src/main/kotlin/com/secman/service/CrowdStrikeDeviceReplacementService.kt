@@ -30,14 +30,15 @@ class CrowdStrikeDeviceReplacementService(
     private val log = LoggerFactory.getLogger(javaClass)
     private val importLocks = Array(64) { Any() }
 
-    data class Replacement(val asset: Asset?, val duplicates: List<Asset>, val snapshotChanged: Boolean)
+    data class Replacement(val asset: Asset?, val duplicates: List<Asset>, val snapshotChanged: Boolean,
+        val formerInstanceId: String? = null)
 
     /** Includes transaction completion, so concurrent first imports cannot create two assets. */
     fun <T> withSelectionLocks(selection: CrowdStrikeDeviceSelection?, action: () -> T): T {
         if (selection == null) return action()
         val stripes = (listOf(selection.selected) + selection.superseded).flatMap { device ->
             val scope = device.hostnameScope()
-            listOf(listOf("hostname") + scope) + listOfNotNull(device.instanceId?.takeIf(String::isNotBlank)?.let {
+            listOf(listOf("hostname") + scope, listOf("aid", device.aid)) + listOfNotNull(device.instanceId?.takeIf(String::isNotBlank)?.let {
                 listOf("instance", it.trim().lowercase(), scope.last())
             })
         }.map { Math.floorMod(it.hashCode(), importLocks.size) }.distinct().sorted()
@@ -47,6 +48,7 @@ class CrowdStrikeDeviceReplacementService(
     }
 
     fun prepare(batch: CrowdStrikeVulnerabilityBatchDto, selection: CrowdStrikeDeviceSelection): Replacement {
+        lockIdentity(selection)
         val records = listOf(selection.selected) + selection.superseded
         val verified = selectLatestCrowdStrikeDevices(records).singleOrNull()
         require(verified != null && verified.selected == selection.selected && verified.superseded.toSet() == selection.superseded.toSet()) {
@@ -66,8 +68,45 @@ class CrowdStrikeDeviceReplacementService(
             require(page.totalSize <= 101) { "Ambiguous stored Falcon hostname" }
             page.content
         }
-        val instanceCandidates = records.mapNotNull { it.instanceId?.trim()?.takeIf(String::isNotBlank) }
-            .distinctBy(String::lowercase).mapNotNull(assetRepository::findByCloudInstanceIdIgnoreCase)
+        // FOR UPDATE uses the current committed state, even under MariaDB REPEATABLE READ.
+        // A plain repository read could retain the snapshot from the pre-lock lookup.
+        val instanceCandidates = records.filter { !it.instanceId.isNullOrBlank() && !it.cloudAccountId.isNullOrBlank() }
+            .flatMap { device ->
+                val ownerIds = entityManager.createNativeQuery("""
+                    SELECT id FROM asset WHERE LOWER(cloud_instance_id) = LOWER(:instance)
+                        AND LOWER(cloud_account_id) = LOWER(:account) ORDER BY id LIMIT 102 FOR UPDATE
+                """).setParameter("instance", device.instanceId).setParameter("account", device.cloudAccountId).resultList
+                require(ownerIds.size <= 101) { "Ambiguous stored cloud instance" }
+                ownerIds.map { id ->
+                    val owner = entityManager.find(Asset::class.java, (id as Number).toLong(), LockModeType.PESSIMISTIC_WRITE)
+                        ?: error("Cloud instance owner disappeared")
+                    entityManager.refresh(owner)
+                    owner
+                }
+            }.distinctBy { it.id }
+        val knownWinner = identities.firstOrNull { it.crowdStrikeAid == selected.aid }
+        val changingInstance = knownWinner?.asset?.let {
+            !it.cloudInstanceId.isNullOrBlank() && !it.cloudInstanceId.equals(selected.instanceId, ignoreCase = true)
+        } == true
+        if (changingInstance) {
+            val asset = requireNotNull(knownWinner).asset
+            fun conflict(code: String, message: String): Nothing = throw CrowdStrikeIdentityConflict(code, message,
+                asset.id, asset.cloudInstanceId, selected.instanceId)
+            if (selected.instanceId?.matches(Regex("i-(?:[0-9a-f]{8}|[0-9a-f]{17})")) != true)
+                conflict("INCOMPLETE_IDENTITY", "A valid incoming EC2 instance ID is required")
+            if (selected.lastSeen == null)
+                conflict("INCOMPLETE_IDENTITY", "Provider contact time is required for an instance change")
+            if (asset.cloudAccountId.isNullOrBlank() || selected.cloudAccountId.isNullOrBlank() ||
+                !asset.cloudAccountId.orEmpty().trim().equals(selected.cloudAccountId.orEmpty().trim(), ignoreCase = true))
+                conflict("CLOUD_ACCOUNT_CONFLICT", "Falcon device conflicts with stored account or domain")
+            if (!asset.adDomain.orEmpty().trim().equals(selected.adDomain.orEmpty().trim(), ignoreCase = true))
+                conflict("AD_DOMAIN_CONFLICT", "Falcon device conflicts with stored AD domain")
+            if (knownWinner.falconFirstSeenAt == null || knownWinner.falconFirstSeenAt !=
+                LocalDateTime.ofInstant(requireNotNull(selected.firstSeen), ZoneOffset.UTC))
+                conflict("ENROLLMENT_MISMATCH", "An instance change requires the same verified Falcon enrollment")
+            if (instanceCandidates.any { it.id != asset.id })
+                conflict("INSTANCE_ALREADY_BOUND", "Incoming EC2 instance already belongs to another asset")
+        }
         fun compatible(asset: Asset): Boolean {
             fun compatibleValue(stored: String?, incoming: String?) = stored.isNullOrBlank() ||
                 (!incoming.isNullOrBlank() && stored.trim().equals(incoming.trim(), ignoreCase = true))
@@ -75,7 +114,8 @@ class CrowdStrikeDeviceReplacementService(
             val provenInstance = !asset.cloudInstanceId.isNullOrBlank() && !asset.cloudAccountId.isNullOrBlank() &&
                 records.any { it.instanceId.equals(asset.cloudInstanceId, ignoreCase = true) &&
                     it.cloudAccountId.equals(asset.cloudAccountId, ignoreCase = true) }
-            return compatibleValue(asset.cloudInstanceId, selected.instanceId) &&
+            return (compatibleValue(asset.cloudInstanceId, selected.instanceId) ||
+                (changingInstance && knownWinner?.asset?.id == asset.id)) &&
                 compatibleValue(asset.cloudAccountId, selected.cloudAccountId) &&
                 (compatibleValue(asset.adDomain, selected.adDomain) || provenIdentity || provenInstance)
         }
@@ -94,7 +134,8 @@ class CrowdStrikeDeviceReplacementService(
         require(locked.all(::compatible)) { "Falcon device conflicts with stored account or domain" }
         val current = if (locked.isEmpty()) emptyList() else
             identityRepository.findByAssetIdIn(locked.map { requireNotNull(it.id) })
-        require(current.all { it.crowdStrikeAid in ids }) { "Stored asset has an unverified Falcon device identity" }
+        if (current.any { it.crowdStrikeAid !in ids }) throw CrowdStrikeIdentityConflict("UNEXPLAINED_AID",
+            "Stored asset has an unverified Falcon device identity")
         require(identities.all { binding -> current.any { it.crowdStrikeAid == binding.crowdStrikeAid && it.asset.id == binding.asset.id } }) {
             "Falcon identity changed while acquiring replacement locks"
         }
@@ -102,6 +143,17 @@ class CrowdStrikeDeviceReplacementService(
         val incomingFirst = LocalDateTime.ofInstant(requireNotNull(selected.firstSeen), ZoneOffset.UTC)
         require(newestStored == null || incomingFirst >= newestStored) { "An older Falcon enrollment cannot replace the current device" }
         val storedWinner = current.firstOrNull { it.crowdStrikeAid == selected.aid }
+        val observed = LocalDateTime.ofInstant(selection.observedAt, ZoneOffset.UTC)
+        require(!selection.observedAt.isAfter(java.time.Instant.now().plusSeconds(60))) { "Future identity observation" }
+        if (storedWinner?.identityObservedAt?.let { it > observed || (changingInstance && it == observed) } == true ||
+            (changingInstance && storedWinner?.falconLastSeenAt?.let { prior ->
+                selected.lastSeen == null || LocalDateTime.ofInstant(selected.lastSeen, ZoneOffset.UTC) < prior
+            } == true)) {
+            throw CrowdStrikeIdentityConflict("STALE_IDENTITY_OBSERVATION", "An older Falcon identity observation cannot replace newer data",
+                storedWinner?.asset?.id, storedWinner?.asset?.cloudInstanceId, selected.instanceId)
+        }
+        if (changingInstance && (current.size != 1 || current.single().crowdStrikeAid != selected.aid))
+            throw CrowdStrikeIdentityConflict("UNEXPLAINED_AID", "An instance change requires one current Falcon binding")
         require(current.none { binding ->
             binding.crowdStrikeAid != selected.aid && binding.falconFirstSeenAt == incomingFirst &&
                 (binding.falconLastSeenAt ?: LocalDateTime.MIN) >=
@@ -117,46 +169,12 @@ class CrowdStrikeDeviceReplacementService(
         val duplicates = locked.filter { it.id != canonical?.id }
         require(duplicates.all { duplicate ->
             val bindings = current.filter { it.asset.id == duplicate.id }
-            val matchingRetired = selection.superseded.filter { old ->
-                (duplicate.crowdStrikeHostname ?: duplicate.name).trim().equals(old.hostname.trim(), ignoreCase = true)
-            }
-            val proven = if (bindings.isNotEmpty()) {
-                bindings.all { binding -> matchingRetired.any { it.aid == binding.crowdStrikeAid } }
-            } else {
-                duplicate.owner == com.secman.constants.AssetOwners.CROWDSTRIKE_IMPORT &&
-                    !duplicate.cloudInstanceId.isNullOrBlank() && matchingRetired.any {
-                        it.instanceId.equals(duplicate.cloudInstanceId, ignoreCase = true)
-                    }
-            }
-            proven &&
-                duplicate.manualCreator == null && duplicate.scanUploader == null &&
-                duplicate.owner == com.secman.constants.AssetOwners.CROWDSTRIKE_IMPORT &&
-                duplicate.workgroups.isEmpty() &&
-                matchingRetired.isNotEmpty()
+            if (bindings.isNotEmpty()) bindings.all { binding -> selection.superseded.any { it.aid == binding.crowdStrikeAid } }
+            else duplicate.owner == com.secman.constants.AssetOwners.CROWDSTRIKE_IMPORT &&
+                !duplicate.cloudInstanceId.isNullOrBlank() && selection.superseded.any {
+                    it.instanceId.equals(duplicate.cloudInstanceId, ignoreCase = true)
+                }
         }) { "Duplicate assets do not have proven superseded Falcon identities" }
-        if (duplicates.isNotEmpty()) {
-            val subjectCount = entityManager.createQuery(
-                "SELECT COUNT(s) FROM IntegrationSubject s WHERE s.assetId IN :ids", Long::class.javaObjectType
-            ).setParameter("ids", duplicates.map { it.id }).singleResult.toLong()
-            require(subjectCount == 0L) { "Superseded asset has integration bindings; replacement requires review" }
-            val manualFindingCount = entityManager.createQuery(
-                "SELECT COUNT(v) FROM Vulnerability v WHERE v.asset.id IN :ids AND (v.source IS NULL OR v.source <> :source)",
-                Long::class.javaObjectType
-            ).setParameter("ids", duplicates.map { it.id })
-                .setParameter("source", com.secman.constants.VulnerabilitySources.CROWDSTRIKE).singleResult.toLong()
-            require(manualFindingCount == 0L) { "Superseded asset has findings from another source; replacement requires review" }
-            val linkedRecords = (entityManager.createNativeQuery("""
-                SELECT (SELECT COUNT(*) FROM asset_tag WHERE asset_id IN (:ids))
-                     + (SELECT COUNT(*) FROM application_register_asset WHERE asset_id IN (:ids))
-                     + (SELECT COUNT(*) FROM risk WHERE asset_id IN (:ids))
-                     + (SELECT COUNT(*) FROM risk_assessment WHERE asset_id IN (:ids))
-                     + (SELECT COUNT(*) FROM demand WHERE existing_asset_id IN (:ids))
-                     + (SELECT COUNT(*) FROM scan_result WHERE asset_id IN (:ids))
-            """).setParameter("ids", duplicates.map { it.id }).singleResult as Number).toLong()
-            require(linkedRecords == 0L) { "Superseded asset has inventory relationships; replacement requires review" }
-
-
-        }
         if (canonical != null && !canonical.cloudInstanceId.isNullOrBlank() &&
             !canonical.cloudInstanceId.equals(selected.instanceId, ignoreCase = true)) {
             require(!selected.instanceId.isNullOrBlank()) { "Missing replacement cloud instance metadata" }
@@ -170,10 +188,65 @@ class CrowdStrikeDeviceReplacementService(
             (current.filter { it.asset.id == canonical.id }.let { bindings ->
                 bindings.size != 1 || bindings.singleOrNull()?.crowdStrikeAid != selected.aid ||
                     bindings.singleOrNull()?.falconFirstSeenAt == null
-            }))
+            }), canonical?.cloudInstanceId?.takeIf { changingInstance })
+    }
+
+    private fun lockIdentity(selection: CrowdStrikeDeviceSelection) {
+        val records = listOf(selection.selected) + selection.superseded
+        val stored = identityRepository.findByCrowdStrikeAidIn(records.map { it.aid })
+        val keys = (records.flatMap { device ->
+            listOf("hostname:" + device.hostname.trim().lowercase(), "aid:" + device.aid) +
+                listOfNotNull(device.instanceId?.takeIf(String::isNotBlank)?.let {
+                    "instance:${it.trim().lowercase()}"
+                })
+        } + stored.mapNotNull { it.asset.cloudInstanceId?.takeIf(String::isNotBlank)?.let { id -> "instance:${id.trim().lowercase()}" } })
+            .map { key -> java.security.MessageDigest.getInstance("SHA-256").digest(key.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) } }.distinct().sorted()
+        keys.forEach { key ->
+            entityManager.createNativeQuery("INSERT INTO crowdstrike_identity_lock (identity_key) VALUES (:key) ON DUPLICATE KEY UPDATE identity_key = VALUES(identity_key)")
+                .setParameter("key", key).executeUpdate()
+            entityManager.createNativeQuery("SELECT identity_key FROM crowdstrike_identity_lock WHERE identity_key = :key FOR UPDATE")
+                .setParameter("key", key).singleResult
+        }
+        // The pre-lock lookup can be cached by Hibernate while another import commits.
+        stored.sortedBy { it.asset.id }.forEach { binding ->
+            val asset = entityManager.find(Asset::class.java, binding.asset.id, LockModeType.PESSIMISTIC_WRITE)
+                ?: error("Falcon replacement candidate disappeared")
+            entityManager.refresh(asset)
+            entityManager.refresh(binding)
+        }
+    }
+
+    private fun canDeleteDuplicate(asset: Asset): Boolean {
+        if (asset.manualCreator != null || asset.scanUploader != null ||
+            asset.owner != com.secman.constants.AssetOwners.CROWDSTRIKE_IMPORT || asset.workgroups.isNotEmpty()) return false
+        val linked = entityManager.createNativeQuery("""
+            SELECT (SELECT COUNT(*) FROM integration_subject WHERE asset_id = :id)
+                 + (SELECT COUNT(*) FROM vulnerability WHERE asset_id = :id AND source <> :source)
+                 + (SELECT COUNT(*) FROM asset_tag WHERE asset_id = :id)
+                 + (SELECT COUNT(*) FROM application_register_asset WHERE asset_id = :id)
+                 + (SELECT COUNT(*) FROM risk WHERE asset_id = :id)
+                 + (SELECT COUNT(*) FROM risk_assessment WHERE asset_id = :id)
+                 + (SELECT COUNT(*) FROM demand WHERE existing_asset_id = :id)
+                 + (SELECT COUNT(*) FROM scan_result WHERE asset_id = :id)
+        """).setParameter("id", asset.id).setParameter("source", com.secman.constants.VulnerabilitySources.CROWDSTRIKE).singleResult as Number
+        return linked.toLong() == 0L
     }
 
     fun finish(asset: Asset, replacement: Replacement, selection: CrowdStrikeDeviceSelection, actor: String) {
+        replacement.formerInstanceId?.let { former ->
+            val selected = selection.selected
+            entityManager.persist(com.secman.domain.CrowdStrikeInstanceTransition(
+                assetId = requireNotNull(asset.id), crowdStrikeAid = selected.aid, formerInstanceId = former,
+                instanceId = requireNotNull(selected.instanceId), cloudAccountId = requireNotNull(selected.cloudAccountId),
+                adDomain = selected.adDomain, falconFirstSeenAt = LocalDateTime.ofInstant(requireNotNull(selected.firstSeen), ZoneOffset.UTC),
+                falconLastSeenAt = selected.lastSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) },
+                observedAt = LocalDateTime.ofInstant(selection.observedAt, ZoneOffset.UTC),
+                actor = actor.replace('\r', '_').replace('\n', '_').take(255)))
+            log.info("Falcon instance change actor={} assetId={} formerInstanceId={} instanceId={} outcome=staged-in-import-transaction",
+                actor.replace('\r', '_').replace('\n', '_'), asset.id,
+                former.replace('\r', '_').replace('\n', '_'), selected.instanceId)
+        }
         // Historical evidence is separate from the single current binding used for matching.
         (listOf(selection.selected) + selection.superseded).forEach { device ->
             entityManager.createNativeQuery("""
@@ -199,7 +272,17 @@ class CrowdStrikeDeviceReplacementService(
         replacement.duplicates.forEach { duplicate ->
             identityRepository.findByAssetIdIn(listOf(requireNotNull(duplicate.id))).forEach(identityRepository::delete)
             entityManager.flush()
-            cascadeDeleteService.deleteAsset(requireNotNull(duplicate.id), actor, bulkOperationId = operationId)
+            if (canDeleteDuplicate(duplicate)) {
+                cascadeDeleteService.deleteAsset(requireNotNull(duplicate.id), actor, bulkOperationId = operationId)
+            } else {
+                entityManager.createNativeQuery("DELETE FROM vulnerability WHERE asset_id = :id AND source = :source")
+                    .setParameter("id", duplicate.id).setParameter("source", com.secman.constants.VulnerabilitySources.CROWDSTRIKE).executeUpdate()
+                installedProductRepository.deleteByAssetId(requireNotNull(duplicate.id))
+                entityManager.createNativeQuery("UPDATE crowdstrike_snapshot SET active = 0 WHERE asset_id = :id")
+                    .setParameter("id", duplicate.id).executeUpdate()
+                log.info("Falcon duplicate actor={} assetId={} outcome=retired-findings-inventory-preserved",
+                    actor.replace('\r', '_').replace('\n', '_'), duplicate.id)
+            }
         }
         if (replacement.snapshotChanged) installedProductRepository.deleteByAssetId(requireNotNull(asset.id))
         val bindings = identityRepository.findByAssetIdIn(listOf(requireNotNull(asset.id)))
@@ -211,6 +294,7 @@ class CrowdStrikeDeviceReplacementService(
         winner.sourceHostname = selection.selected.hostname
         winner.lastSeenAt = now
         winner.falconFirstSeenAt = LocalDateTime.ofInstant(requireNotNull(selection.selected.firstSeen), ZoneOffset.UTC)
+        winner.identityObservedAt = LocalDateTime.ofInstant(selection.observedAt, ZoneOffset.UTC)
         winner.falconLastSeenAt = listOfNotNull(winner.falconLastSeenAt,
             selection.selected.lastSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) }).maxOrNull()
         identityRepository.save(winner)

@@ -2,12 +2,12 @@
 /**
  * System Vulnerabilities Page
  *
- * CrowdStrike Falcon API integration for real-time system vulnerability lookup
+ * Recorded asset findings with optional authorized CrowdStrike lookup
  */
 import Layout from '../../layouts/Layout.astro';
-import CrowdStrikeVulnerabilityLookup from '../../components/CrowdStrikeVulnerabilityLookup';
+import SystemVulnerabilities from '../../components/SystemVulnerabilities';
 ---
 
-<Layout title="System Vulnerabilities - CrowdStrike Lookup">
-    <CrowdStrikeVulnerabilityLookup client:load />
+<Layout title="System Vulnerabilities">
+    <SystemVulnerabilities client:load />
 </Layout>

@@ -19,7 +19,7 @@ import java.util.Optional
  *
  * The three predicates that decide which servers are "dirty" (non-excepted, has an EC2
  * instance id, older than the 30-day SLA anchor) now live in
- * VulnerabilityRepository.countDirtyAwsServers and cannot be exercised with a mock. They are
+ * VulnerabilityRepository.countDirtyVerifiedAwsServers and cannot be exercised with a mock. They are
  * covered against a real database by AwsCleanServerKpiCountIntegrationTest — which is the right
  * place, since transcribing those predicates from Kotlin into SQL is exactly the step where a
  * silent regression could hide.
@@ -36,6 +36,7 @@ class AwsCleanServerKpiServiceTest {
         assetRepository = mockk()
         vulnerabilityRepository = mockk()
         cacheRepository = mockk()
+        every { vulnerabilityRepository.countUnknownAwsServers(any(), any()) } returns 0L
         service = AwsCleanServerKpiService(
             assetRepository,
             vulnerabilityRepository,
@@ -44,6 +45,17 @@ class AwsCleanServerKpiServiceTest {
         )
     }
 
+
+    @Test
+    fun `missing snapshot coverage is unknown instead of clean`() {
+        every { assetRepository.countAwsAssetsSeenToday(any(), any()) } returns 3L
+        every { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) } returns 0L
+        every { vulnerabilityRepository.countUnknownAwsServers(any(), any()) } returns 2L
+        val jsonSlot = slot<String>()
+        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
+        service.recalculate()
+        assertThat(jsonSlot.captured).contains("\"cleanAwsServers\":1", "\"unknownAwsServers\":2")
+    }
 
     @Test
     fun `old scope and yesterday caches are unavailable and scheduled for refresh`() {
@@ -86,7 +98,7 @@ class AwsCleanServerKpiServiceTest {
     @Test
     fun `recalculate computes 100 percent when no AWS server has an old vulnerability`() {
         every { assetRepository.countAwsAssetsSeenToday(any(), any()) } returns 3L
-        every { vulnerabilityRepository.countDirtyAwsServers(any(), any(), any()) } returns 0L
+        every { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) } returns 0L
 
         val jsonSlot = slot<String>()
         every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
@@ -101,7 +113,7 @@ class AwsCleanServerKpiServiceTest {
     @Test
     fun `recalculate derives clean count and rounds the percentage to one decimal`() {
         every { assetRepository.countAwsAssetsSeenToday(any(), any()) } returns 3L
-        every { vulnerabilityRepository.countDirtyAwsServers(any(), any(), any()) } returns 1L
+        every { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) } returns 1L
 
         val jsonSlot = slot<String>()
         every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
@@ -126,12 +138,12 @@ class AwsCleanServerKpiServiceTest {
     @Test
     fun `recalculate derives the dirty count from a scalar aggregate`() {
         every { assetRepository.countAwsAssetsSeenToday(any(), any()) } returns 1L
-        every { vulnerabilityRepository.countDirtyAwsServers(any(), any(), any()) } returns 1L
+        every { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) } returns 1L
         every { cacheRepository.upsertByCacheKey(any(), any(), any(), any()) } returns 1
 
         service.recalculate()
 
-        verify(exactly = 1) { vulnerabilityRepository.countDirtyAwsServers(any(), any(), any()) }
+        verify(exactly = 1) { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) }
     }
 
     @Test
@@ -139,7 +151,7 @@ class AwsCleanServerKpiServiceTest {
         // Defensive: the two counts are separate queries, so a concurrent import could in
         // principle report more dirty servers than the total. coerceAtLeast(0) must hold.
         every { assetRepository.countAwsAssetsSeenToday(any(), any()) } returns 2L
-        every { vulnerabilityRepository.countDirtyAwsServers(any(), any(), any()) } returns 5L
+        every { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) } returns 5L
 
         val jsonSlot = slot<String>()
         every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
@@ -161,7 +173,7 @@ class AwsCleanServerKpiServiceTest {
 
         assertThat(jsonSlot.captured).contains("\"totalAwsServers\":0")
         assertThat(jsonSlot.captured).contains("\"percentage\":0.0")
-        verify(exactly = 0) { vulnerabilityRepository.countDirtyAwsServers(any(), any(), any()) }
+        verify(exactly = 0) { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) }
     }
 
     @Test

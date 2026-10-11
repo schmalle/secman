@@ -48,7 +48,8 @@ open class CrowdStrikeQueryService(
     private val falconConfigRepository: FalconConfigRepository,
     private val assetRepository: AssetRepository,
     private val vulnerabilityRepository: VulnerabilityRepository,
-    private val vulnerabilityExceptionRepository: VulnerabilityExceptionRepository
+    private val vulnerabilityExceptionRepository: VulnerabilityExceptionRepository,
+    private val snapshotRepository: com.secman.repository.CrowdStrikeSnapshotRepository
 ) {
     private val log = LoggerFactory.getLogger(CrowdStrikeQueryService::class.java)
 
@@ -179,7 +180,7 @@ open class CrowdStrikeQueryService(
      * @return FalconConfigDto with API credentials
      * @throws CrowdStrikeError.ConfigurationError if config not found
      */
-    private fun getConfiguration(): FalconConfigDto {
+    fun getConfiguration(): FalconConfigDto {
         return try {
             val configOpt = falconConfigRepository.findActiveConfig()
             val config = if (configOpt.isPresent) {
@@ -392,7 +393,8 @@ open class CrowdStrikeQueryService(
         val assetId = asset.id ?: return null
 
         val vulns = vulnerabilityRepository.findByAssetId(assetId, Pageable.from(page, limit))
-        if (vulns.content.isEmpty()) return null
+        val snapshots = snapshotRepository.findCurrentByAssetId(assetId)
+        if (vulns.content.isEmpty() && snapshots.isEmpty()) return null
 
         val now = LocalDateTime.now()
         // Honest freshness: report when the underlying rows were last touched by an
@@ -435,8 +437,20 @@ open class CrowdStrikeQueryService(
                 )
             },
             totalCount = vulns.totalSize.toInt(),
-            queriedAt = dataAsOf.toUtcIsoString(),
-            dataSource = "DATABASE"
+            queriedAt = snapshots.minOfOrNull { it.completedAt }?.toInstant(java.time.ZoneOffset.UTC)?.toString() ?: dataAsOf.toUtcIsoString(),
+            dataSource = "DATABASE",
+            assetId = assetId,
+            selectedAid = snapshots.map { it.crowdStrikeAid }.distinct().singleOrNull(),
+            snapshotStatus = when {
+                snapshots.isEmpty() -> "UNVERIFIED"
+                snapshots.any { !it.complete } || !snapshots.map { it.severity }.containsAll(CrowdStrikeSnapshotService.SEVERITIES) -> "PARTIAL"
+                else -> "VERIFIED"
+            },
+            snapshotCoverage = snapshots.map { it.severity },
+            notice = if (snapshots.any { !it.complete }) "Some provider findings were excluded during import; risk coverage is incomplete."
+                else if (snapshots.isEmpty()) "Stored findings have no verified Falcon enrollment snapshot; synchronize before treating them as current."
+                else if (snapshots.map { it.severity }.toSet().containsAll(CrowdStrikeSnapshotService.SEVERITIES)) null
+                else "Only the listed severity scopes have a verified snapshot; other coverage is unknown."
         )
     }
 
@@ -449,7 +463,8 @@ open class CrowdStrikeQueryService(
         val assetId = asset.id ?: return null
 
         val vulns = vulnerabilityRepository.findByAssetId(assetId, Pageable.from(page, limit))
-        if (vulns.content.isEmpty()) return null
+        val snapshots = snapshotRepository.findCurrentByAssetId(assetId)
+        if (vulns.content.isEmpty() && snapshots.isEmpty()) return null
 
         val now = LocalDateTime.now()
         // Honest freshness: report when the underlying rows were last touched by an
@@ -492,8 +507,20 @@ open class CrowdStrikeQueryService(
                 )
             },
             totalCount = vulns.totalSize.toInt(),
-            queriedAt = dataAsOf.toUtcIsoString(),
-            dataSource = "DATABASE"
+            queriedAt = snapshots.minOfOrNull { it.completedAt }?.toInstant(java.time.ZoneOffset.UTC)?.toString() ?: dataAsOf.toUtcIsoString(),
+            dataSource = "DATABASE",
+            assetId = assetId,
+            selectedAid = snapshots.map { it.crowdStrikeAid }.distinct().singleOrNull(),
+            snapshotStatus = when {
+                snapshots.isEmpty() -> "UNVERIFIED"
+                snapshots.any { !it.complete } || !snapshots.map { it.severity }.containsAll(CrowdStrikeSnapshotService.SEVERITIES) -> "PARTIAL"
+                else -> "VERIFIED"
+            },
+            snapshotCoverage = snapshots.map { it.severity },
+            notice = if (snapshots.any { !it.complete }) "Some provider findings were excluded during import; risk coverage is incomplete."
+                else if (snapshots.isEmpty()) "Stored findings have no verified Falcon enrollment snapshot; synchronize before treating them as current."
+                else if (snapshots.map { it.severity }.toSet().containsAll(CrowdStrikeSnapshotService.SEVERITIES)) null
+                else "Only the listed severity scopes have a verified snapshot; other coverage is unknown."
         )
     }
 
@@ -600,11 +627,16 @@ open class CrowdStrikeQueryService(
  * Feature 041: Now includes instanceId and deviceCount fields
  */
 private fun com.secman.crowdstrike.dto.CrowdStrikeQueryResponse.toBackendResponse(): CrowdStrikeQueryResponse {
+    val visible = vulnerabilities.filter { it.severity.uppercase() in setOf("HIGH", "CRITICAL") }
     return CrowdStrikeQueryResponse(
         hostname = this.hostname,
-        instanceId = this.instanceId,
+        instanceId = this.instanceId ?: devices.singleOrNull()?.instanceId,
+        cloudAccountId = devices.singleOrNull()?.cloudAccountId,
+        selectedAid = devices.singleOrNull()?.crowdStrikeAid,
+        snapshotStatus = if (failedAids.isEmpty()) "LIVE_COMPLETE" else "INCOMPLETE",
+        snapshotCoverage = if (failedAids.isEmpty()) CrowdStrikeSnapshotService.SEVERITIES else emptyList(),
         deviceCount = this.deviceCount,
-        vulnerabilities = this.vulnerabilities.map { shared ->
+        vulnerabilities = visible.map { shared ->
             com.secman.dto.CrowdStrikeVulnerabilityDto(
                 id = shared.id,
                 hostname = shared.hostname,
@@ -620,7 +652,7 @@ private fun com.secman.crowdstrike.dto.CrowdStrikeQueryResponse.toBackendRespons
                 exceptionReason = shared.exceptionReason
             )
         },
-        totalCount = this.totalCount,
+        totalCount = visible.size,
         queriedAt = this.queriedAt.toUtcIsoString(),
         // toBackendResponse is only ever called on the live-Falcon fallthrough paths
         // (queryVulnerabilities / queryByInstanceId), so these rows are not persisted.
