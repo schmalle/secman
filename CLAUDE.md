@@ -68,7 +68,7 @@ See `docs/AUTHORIZATION_REWORK.md` for assessment assignments, contribution hist
 | Releases | `GET/POST/DELETE /api/releases[/{id}]` (ADMIN/REQADMIN to write), `GET /api/releases/compare`. Statuses: PREPARATION→ALIGNMENT→ACTIVE→ARCHIVED | mixed |
 | Public Standard Download | `GET /api/requirements/export/{docx,xlsx}` with optional `standard`/`standardId` + `release`/`releaseId` (`release=latest` → ACTIVE release, 404 if none); `GET /api/standards/public` (slim `{id,name}` list). All `IS_ANONYMOUS` by explicit decision — `docs/PUBLIC_STANDARD_DOWNLOAD.md` | public |
 | Export Templates | `GET /api/requirement-export-templates[/latest]` (auth); `GET .../example`, `POST /api/requirement-export-templates`, `POST .../validate`, `GET .../{id}[/download,/usage]`, `POST .../{id}/{activate,deactivate}`, `DELETE .../{id}` (ADMIN/REQADMIN). Company Word template for requirement exports — `docs/REQUIREMENT_EXPORT_TEMPLATES.md` | mixed |
-| CrowdStrike | `POST/GET /api/crowdstrike/{servers/import,vulnerabilities/save,vulnerabilities}` (ADMIN/VULN); `GET /api/crowdstrike/last-checkin` (PUBLIC, `text/plain` ISO-8601 or `"never"`); stale-asset cleanup `GET /api/crowdstrike/cleanup/{config,runs}` + `POST .../run-now` (ADMIN) — `run-now` replays the 02:30 scheduled policy **with the safety brake**, unlike the brake-free `POST /api/assets/delete-not-seen-by-crowdstrike`; see `docs/ENVIRONMENT.md` §CrowdStrike stale-asset cleanup | mixed |
+| CrowdStrike | `POST/GET /api/crowdstrike/{servers/import,vulnerabilities/save,vulnerabilities}` (ADMIN/VULN); authoritative refresh `POST /api/crowdstrike/vulnerabilities/sync` (ADMIN); `GET /api/crowdstrike/last-checkin` (PUBLIC, `text/plain` ISO-8601 or `"never"`); stale-asset cleanup `GET /api/crowdstrike/cleanup/{config,runs}` + `POST .../run-now` (ADMIN) — `run-now` replays the 02:30 scheduled policy **with the safety brake**, unlike the brake-free `POST /api/assets/delete-not-seen-by-crowdstrike`; see `docs/ENVIRONMENT.md` §CrowdStrike stale-asset cleanup | mixed |
 | User Mappings | `GET /api/user-mappings/{current,applied-history}`, `POST/PUT/DELETE /api/user-mappings[/{id}]`; `POST /api/user-mappings/link-workgroup-accounts` (links AWS accounts to the workgroup named `aws-<display name>`, creating it when missing — `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`) | ADMIN |
 | AWS Sharing | `GET/POST /api/aws-account-sharing`, `DELETE .../{id}` | ADMIN |
 | Heatmap | `GET /api/vulnerability-heatmap`; `POST .../refresh` (ADMIN); `GET /api/external/vulnerability-heatmap` (API-key, CORS) | mixed |
@@ -82,6 +82,7 @@ See `docs/AUTHORIZATION_REWORK.md` for assessment assignments, contribution hist
 | Chat Notifications | `GET /api/notification-events` (event catalogue); `GET/PUT /api/slack/settings`, `POST .../test`; `GET/PUT /api/telegram/settings`, `POST .../test` (self-scoped); `GET/PUT /api/slack/config`, `POST .../test`, `GET/PUT /api/telegram/config` (ADMIN) | mixed |
 | CLI | `POST /api/vulnerabilities/cli-add` (ADMIN/VULN; auto-creates asset) | ADMIN/VULN |
 | Integrations | `/api/integrations/v1`: `GET /summary`, `/findings[/{id}[/attachments/{attachmentId}]]`, `/runs[/{id}]` (asset-scoped); web inventory `GET /web-exposure/summary`, `/web-exposures`, `/web-components` (ADMIN/VULN/SECCHAMPION, asset-scoped); `POST /runs` (assigned service user + asset access); `/scanners` configuration and target binding (ADMIN). MCP mirrors subject/run, findings, exposure, and component reads; `docs/INTEGRATION_RESULTS.md` | mixed |
+| AI Buddy | `GET /api/ai-buddy/capabilities`; `POST /api/ai-buddy/assets/{assetId}/jobs`; `GET .../{jobId}` and `.../{jobId}/report`; `DELETE .../{jobId}`. Authenticated entry points; live BETA eligibility, job ownership, and asset access are enforced in the service. Setup preflight is `POST /api/translation-config/ai-buddy/setup` (ADMIN). See `docs/AI_BUDDY.md` | mixed |
 | Account Onboarding | `GET/POST/PUT/DELETE /api/account-onboarding/questions[/{id}[/choices[/{cid}]]]`, `.../rules[/{id}]`, `GET .../rules/{coverage,matrix}`, `POST .../rules/preview`, `POST .../simulate` (ADMIN/SECCHAMPION); public single-use token `GET/POST /api/public/account-onboarding/{token}` | ADMIN/SECCHAMPION + public |
 | Product Classification | `GET/POST /api/product-classification/rules`, `PUT/DELETE .../rules/{id}`, `POST .../test`, `POST .../reclassify`, `GET .../stats` (ADMIN). Marks installer/setup payloads so vuln + EOL reads can hide them — `docs/CROWDSTRIKE_IMPORT.md` | ADMIN |
 | Mobile Relay | `GET /api/relay/{status,sections,devices,identities}`, `POST /api/relay/{publish,enrollments,revocations,identities,principals/publish}`, `DELETE /api/relay/identities/{id}` | ADMIN |
@@ -313,7 +314,7 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-10-10*
+*Last updated: 2026-10-12*
 
 ## Recent Changes
 
