@@ -11,7 +11,8 @@ description: >
   nested and omitted empty fields), re-checks the
   relay contract the iOS client depends on, and compresses CLAUDE.md by archiving
   its changelog to docs/CHANGELOG.md while keeping the operational contracts
-  verbatim. Runs entirely offline — no backend, frontend, or pass-cli needed. Use this skill whenever the user says "finalizer", "run
+  verbatim. Owns full build/startup and E2E validation of the combined change
+  before merge; explicit static review skips runtime gates and cannot establish merge readiness. Use this skill whenever the user says "finalizer", "run
   the finalizer", "finalize", "wrap up this change", "pre-merge check",
   "ready to merge?", "check CLAUDE.md is current", "are the extensions still in
   sync", "tidy up CLAUDE.md", or asks for a final consistency, documentation,
@@ -32,7 +33,7 @@ context: fork
 > calling the change done. See `CLAUDE.md` §"Tooling Conventions" and
 > `AGENTS.md` §Skills.
 
-# Finalizer — pre-merge consistency, contract, and security pass
+# Finalizer — combined-change validation before merge
 
 You are finishing a piece of work in the secman repo. Six kinds of rot creep
 in while a change is being built. A green `./gradlew build` or a page-visit
@@ -61,28 +62,23 @@ E2E scan does not guarantee that these were checked:
 Work through the steps in order. Steps 1–5 are independent, so a failure in one
 does not excuse skipping the others — do all five, then report once.
 
-## Scope fence
+## Scope and ownership
 
-This skill is **static only**. Do not start the backend or frontend, do not
-call `pass-cli`, do not run `./gradlew build` or the E2E gates. It reads files,
-edits two things (CLAUDE.md and the extension repos), and reports. Keeping it
-offline is what makes it cheap enough to run at the end of every change.
+Default finalization validates the combined change before merge. Workers run
+focused tests and affected-module checks; they do not invoke this skill merely
+to finish an individual task. Preserve unrelated work and the normal 8080/4321
+stack. Read `../_shared/stack-lifecycle.md` in full before runtime validation.
 
-`./scripts/owasp-check.sh` (step 3) is **in** scope despite the fence: it is a
-static, diff-scoped grep over the working tree that needs no stack and no
-secrets, and CLAUDE.md's review gate requires it before any change is reported
-complete.
+An explicitly requested static-only/read-only review runs steps 0–5 without
+starting services, using secrets, editing files, committing, or running runtime
+gates. Report **static review only — not ready to merge**. Documentation-only
+changes outside `src/`, `tests/`, and `scripts/` may skip runtime gates with a
+stated scope reason. Explicit requests for a particular test remain in scope.
 
-If the work you are finalizing touched `src/`, remind the user in the final
-report that CLAUDE.md's mandatory gates still apply — but do not run them. The
-full set, conditioned on what the change touched:
+Complete documentation and authorized contract fixes before step 6, including
+focused extension tests. Any edits after validation invalidate affected gate
+evidence. Never change the integration workspace while its stack is running.
 
-| Touched | Gate |
-|---|---|
-| anything under `src/` | `./gradlew build` clean, then `./scripts/startbackenddev.sh` starts cleanly (Principle 5 — compile-clean is not runtime-clean) |
-| `src/frontend/` | `cd src/frontend && npm ci && npm run build` exits 0 (Principle 5a) |
-| `src/relay/` | `go build ./... && go vet ./... && gofmt -l . && go test ./...` all clean (Principle 5a-relay). **`./gradlew build` never compiles this module**, so a break here survives an otherwise-green report |
-| anything under `src/`, `tests/`, `scripts/` | `/e2ejs` and `/e2evulnexception` (Principle 7) |
 
 ---
 
@@ -92,12 +88,14 @@ The security review (step 3) needs a diff. Resolve it with this ladder and
 **state which rung you landed on** in the report, so a reader knows what was
 actually examined:
 
-1. Commits ahead of the remote plus uncommitted work:
-   `git diff origin/main...HEAD` combined with `git diff HEAD`.
-2. If both are empty (you are on `main`, fully pushed, clean tree), fall back
-   to the **last commit**: `git show HEAD`.
-3. If that is somehow empty too, say so and skip step 3 rather than inventing
-   a target.
+1. Use an explicit integration base when supplied. Otherwise use `dev` for a
+   `task/<name>` branch, or `origin/dev` when on `dev`. Record its resolved hash
+   and verify that it exists; do not silently substitute `main`.
+2. Review `git diff <base>...HEAD`, `git diff HEAD`, and untracked files.
+   If the committed and working-tree scopes are empty, review `git show HEAD`
+   and state that the last commit is the fallback scope.
+3. If no valid base or target exists, report the missing scope. Do not claim
+   merge readiness from an invented or empty target.
 
 Steps 1, 2, 4 and 5 ignore the diff entirely — they verify current state from
 scratch. This matters: drift introduced three commits ago is exactly the drift
@@ -237,7 +235,9 @@ decide.
 
 ### 2d — Fix and commit, path-scoped, never push
 
-For drift you can fix unambiguously (renamed path, renamed field, changed
+In static-only mode, report drift without editing or committing. Otherwise,
+verify each extension branch is `dev` or a `task/<name>` branch based on `dev`
+before edits and again before committing. For drift you can fix unambiguously (renamed path, renamed field, changed
 method, changed auth header), edit the client and any test that asserts the old
 shape. Then commit **only the files you edited**:
 
@@ -490,7 +490,44 @@ Also surface any `WARNING: normalization rule … matched nothing` line. That
 means a rule no longer matches the wording it was written for, so a green result
 from that run is weaker than it looks.
 
-## Step 6 — Report
+## Step 6 — Build, startup, and E2E gates
+
+Resolve gates from the entire combined scope, including finalizer fixes. Execute
+once after integration and static checks; do not run them once per worker.
+
+| Combined scope | Required validation |
+|---|---|
+| `src/`, `tests/`, or `scripts/` | Full build/test tier, clean isolated startup, `/e2ejs` for admin + normal user, `/e2evulnexception` including its cleanup repeat |
+| `src/frontend/` | `cd src/frontend && npm ci && npm test && npm run build` |
+| `src/relay/` | `cd src/relay && go build ./... && go vet ./... && gofmt -l . && go test ./...` |
+| Feature-specific behavior | Relevant lifecycle skill (for example onboarding, EOL, import, or export templates); state why each was selected or not applicable |
+| Extension fixes | Affected extension tests and contract checks in that independent repository |
+
+Run `./scripts/test/run-isolated-e2e.sh --database-only -- ./gradlew build`
+for the full Gradle gate so backend tests receive a disposable database. Include
+CLI/frontend unit tests and tooling self-tests from `/testsuite` where applicable;
+do not repeat identical successful commands already recorded for this snapshot.
+
+Read and follow `../e2ejs/SKILL.md` and `../e2evulnexception/SKILL.md`, then
+run their drivers sequentially through the isolated runner. Its cold start via
+`./scripts/startbackenddev.sh` verifies startup as well as the lifecycle gates.
+The runner owns teardown; never stop the regular stack. Keep each lifecycle's
+required cleanup repeat and five-iteration budget. A busy reservation is an
+infrastructure result: retry when the owner finishes, never displace it.
+
+On failure, let the runner tear down, apply or request a focused fix, and repeat
+the gates that the fix can affect. Do not multiply skill retry budgets with an
+outer finalizer retry loop. A remaining failure or unavailable prerequisite
+means **not ready to merge**, with a concrete reason.
+
+Record base and HEAD hashes, dirty-tree content fingerprint (including untracked
+files) if applicable, dependency/configuration identity, exact commands, exit
+codes, timestamps and log paths in the report or a linked `.e2e-logs/` artifact.
+Reuse prior evidence only when these inputs and test selection are identical.
+Do not introduce automatic caching based only on a commit hash or elapsed time.
+Confirm the integration snapshot did not change during validation.
+
+## Step 7 — Report
 
 Your final message is the deliverable. Because this skill runs in a forked
 context, nothing you did along the way is visible to the user unless it appears
@@ -532,8 +569,12 @@ Before: <n> lines / <n> words → After: <n> lines / <n> words
 ./scripts/check-skill-sync.sh → exit <0|1|2>
 <in sync, or the findings verbatim; plus any dead-normalization-rule warnings>
 
-## Still required
-<the gates from the scope-fence table, selected by what this change touched>
+## 6. Combined-change validation
+Base / HEAD / dirty snapshot: <identity and evidence path>
+<gate | command | exit code | log path | passed / failed / not run / reused>
+<specialized suites selected and scope reasons; cleanup repeat outcome>
+Readiness: <ready to merge | ready for integration | static review only | blocked>
+<remaining gates and concrete blockers; never describe missing evidence as a pass>
 
 ## Not checked
 <any step you could not complete, and why — omit the heading only if there were none>

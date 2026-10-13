@@ -13,9 +13,10 @@ ways**: an edit to either tree must be ported to the other in the same commit
 skills — what each one does, which write data, and the pairs that get confused.
 This file does not duplicate that content.
 
-Six never touch the running stack: `/secure-code`, `/finalizer`, `/testsuite`,
-`/integration-contract-test`, `/humanizer`, and `/optimizer`. See the routing
-guide for the lifecycle and data effects of every remaining skill.
+Most focused skills leave the regular stack untouched. `/finalizer` owns the
+combined-change build/startup and serialized full-stack gates before merge; its
+E2E work uses the disposable stack. See the routing guide for the lifecycle
+and data effects of every remaining skill.
 
 ## SpecKit commands (`/speckit.*`)
 

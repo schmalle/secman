@@ -24,7 +24,7 @@ writes.
 | I want to… | Skill | Writes data? |
 |---|---|---|
 | Write code that satisfies the OWASP Top 10 by construction | `/secure-code` | No |
-| Finish a change and check it before merging | `/finalizer` | Docs only |
+| Finish the combined change before merge | `/finalizer` | Docs/extension fixes; disposable E2E DB |
 | Run the unit/integration tests, or ask where coverage is thin | `/testsuite` | No |
 | Verify the shared GitHub/Visual/Web checker result contract | `/integration-contract-test` | No |
 | Improve code clarity and report risky renames | `/humanizer` | No |
@@ -52,26 +52,25 @@ in the current database are reported, never deleted by prefix alone.
 
 ---
 
-## The two mandatory gates
+## Finalizer-owned merge gates
 
-CLAUDE.md Hard Principle 7 makes these non-negotiable after any change under
-`src/`, `tests/`, or `scripts/`:
+Hard Principles 5–7 put full validation on `/finalizer` once for the combined
+change before merge, not after each worker task. Workers add regression tests,
+run affected tests/module builds, and report **ready for integration** with
+focused evidence and remaining gates. `/finalizer` establishes **ready to merge**.
 
-1. **`/e2ejs`** — 0 JS errors, for both the admin and normal-user runs.
-2. **`/e2evulnexception`** — full vuln + exception lifecycle, 0 failures.
+For runtime/test changes, finalization runs the full Gradle/test tier with a
+disposable database, a cold isolated startup, `/e2ejs` with zero errors for both
+roles, and `/e2evulnexception` with zero failures and its cleanup repeat. It adds
+feature-specific lifecycle suites when the combined scope calls for them.
+Documentation-only changes outside `src/`, `tests/`, and `scripts/` may skip
+runtime gates with an explicit scope reason. Targeted E2E remains appropriate
+when a worker needs it to reproduce or verify a change; it does not trigger both
+universal suites.
 
-Doc-only edits outside those directories may skip both, but say so explicitly
-rather than staying silent.
-
-`./gradlew build` clean and a clean `./scripts/startbackenddev.sh` startup are
-separate requirements (Hard Principle 5) — no skill runs them for you.
-Compile-clean is not runtime-clean: Micronaut bean wiring, Flyway and the
-SessionFactory only fail at startup.
-
-`/testsuite` runs the test half of that (`:backendng:test`, `:cli:test`, and the
-frontend `npm ci && npm test && npm run build` gate) but it deliberately never
-starts the stack, so it does not discharge either Hard Principle 5 or the two
-gates above. It is the cheap check you run *first*, not a substitute for them.
+`/testsuite` runs the fast unit/integration tier and coverage report without the
+full-stack gates. It can be run by a worker on its isolated workspace or by the
+finalizer for the combined change; it does not alone establish merge readiness.
 
 `/secure-code` covers a third, orthogonal requirement: Hard Principle 1 and the
 binding OWASP checklist. It is the only skill meant to run **before** the code
@@ -93,7 +92,7 @@ These sound identical and are not. The names are a historical accident.
 | Subject × scope matrix | No (one CVE × ASSET case) | Yes — 28 fixtures across 3 subjects × 5 scopes, incl. `OS` |
 | Authorization negatives | No | Yes |
 | Patch-notification path | No | Yes (Phase 8b) |
-| Is a mandatory gate | No | **Yes** |
+| Is a finalizer-owned merge gate | No | **Yes** |
 | Runtime | Shorter | Long |
 
 **Default to `/e2evulnexception`.** Reach for `/e2eexception` only when you
@@ -192,21 +191,20 @@ Use it whenever you are about to add an endpoint, a query, an MCP tool, an
 upload, an export, an HTML sink or an outbound HTTP call — and any time the
 answer to "is this secure?" needs to be more than an opinion.
 
-### `/finalizer` — pre-merge consistency pass
-**Offline.** No backend, no frontend, no `pass-cli`.
+### `/finalizer` — combined-change validation before merge
 
-Four checks plus a fifth: CLAUDE.md states the versions the build files actually
-declare; the `extensions/` client repos still match the Kotlin controller
-contract; a security review of the branch diff reporting **HIGH/CRITICAL only**;
-CLAUDE.md compression (changelog archived to `docs/CHANGELOG.md`); and
-`./scripts/check-skill-sync.sh` for two-tree skill drift.
+Runs static consistency, extension/relay/frontend contract, security and skill
+sync checks, then the full build/test tier, isolated backend startup, `/e2ejs`
+for both roles and `/e2evulnexception` (including cleanup repeat) for the
+integrated snapshot. It selects relevant feature-specific lifecycle suites from
+the combined diff. It fixes and commits unambiguous extension-client drift
+inside each independent repo, path-scoped, and never pushes. Other source fixes
+remain in the integration workspace for review and validation.
 
-Run it at the end of any change, before committing. It is cheap because it never
-starts the stack. It **fixes and commits** drift inside the `extensions/` repos
-(never pushes) but only **reports** security findings — those usually encode a
-design decision that is yours to make.
-
-Does **not** run the mandatory gates. It will remind you they still apply.
+Run once after workers' changes have been integrated. It uses a host-wide lock
+for full-stack E2E sessions; workers use focused checks in isolated workspaces.
+Record the base, snapshot, commands, outcomes and logs. A static-only review is
+available only when explicitly requested and cannot declare merge readiness.
 
 ### `/testsuite` — fast test tier + coverage evaluation
 **Never starts or stops the regular stack.** Backend integration tests use a
@@ -223,7 +221,7 @@ Use it when you want to know whether the units are sound, or which areas have no
 tests at all. Its coverage output is **name-reference** coverage, not line
 coverage — see [Testing → Coverage](TESTING.md#coverage) for how far to trust it.
 
-### `/e2ejs` — JS error scanner (mandatory gate)
+### `/e2ejs` — JS error scanner (finalizer gate)
 Cold-starts the stack, then scans every discovered page twice — once as admin,
 once as a normal user — via `https://secman.covestro.net`, and iteratively fixes
 what it finds.
@@ -240,7 +238,7 @@ Needs `SECMAN_ADMIN_NAME/PASS` and `SECMAN_USER_USER/PASS` (vault field
 `SECMAN_USER_NAME`). If the normal-user account does not exist, run
 `./scripts/test/provision-test-user.sh` — idempotent.
 
-### `/e2evulnexception` — full vuln + exception loop (mandatory gate)
+### `/e2evulnexception` — full vuln + exception loop (finalizer gate)
 ⚠️ **Run only in the disposable `secman_e2e_*` database created by the isolated runner.** Phase 10 is global within that database.
 
 Two users, two assets, three vulnerability rows; the exception lifecycle

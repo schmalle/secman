@@ -563,6 +563,19 @@ claims; metadata, findings, snapshots, and the append-only
 save does not create another transition. V287 adds this history and a nullable
 last-accepted identity observation; legacy observation times are not invented.
 
+When a superseded AID now reports a different EC2 instance than its stored asset,
+an ADMIN import retires that old binding only with the same verified enrollment,
+matching AWS account, non-decreasing Falcon contact and a newer identity observation.
+The former physical asset and its manual data remain intact; its CrowdStrike findings,
+installed-product snapshot and active vulnerability snapshots are retired. The selected
+device is imported into its own compatible asset, or a new asset. An append-only
+transition with reason `SUPERSEDED_ENROLLMENT_MOVED` records the former binding.
+Missing evidence or unexplained additional AIDs still reject the transaction.
+
+V288 adds the cloud-instance/account lookup index. Identity-key locks serialize claims;
+owner discovery uses bound equality predicates without locking the asset-table scan.
+Only resolved asset rows receive write locks, avoiding contention between unrelated imports.
+
 Verified snapshots cover supported CVE findings in their declared severity
 scope. Findings without CVE IDs are counted as exclusions. Invalid supported
 findings or incomplete provider fetches cannot replace stored data. Each new
@@ -584,6 +597,12 @@ Streaming CLI imports register an authenticated run before fetching, heartbeat e
 user can heartbeat or finish the run, and a competing run receives HTTP 409. The
 backend holds deferred refreshes and completion notifications while that run is active.
 A crashed CLI loses its lease after ten minutes; it does not produce a success event.
+An active-run HTTP 409 includes the current lease expiry, which the CLI displays
+with retry guidance. Ctrl+C and normal JVM termination attempt to finish the run
+as failed, with a five-second cleanup bound; force termination or an unreachable
+backend still relies on lease expiry. Normal close and shutdown share one cleanup
+request. The backend retains the last 100 finalized results in memory so an owner
+can retry finish without changing the original outcome or clearing a newer run.
 Failed and reconciliation-aborted runs also suppress success notifications. Older
 callers retain the existing quiet-period fallback. CLI backend authentication is renewed
 every twenty minutes during long runs. These leases are local to the backend process;

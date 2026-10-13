@@ -245,11 +245,13 @@ Comment-only edits still have to build: a stray character inside a KDoc block
 takes a Kotlin file with it (comments nest in Kotlin, so `/api/**` inside a
 KDoc closes it early).
 
-Run what your change touched — these are `CLAUDE.md` Principles 5, 5a and 5a-relay:
+Run focused checks for your worker task. `/finalizer` runs the full build/startup
+and E2E gates once for the combined change before merge. These are useful focused
+checks; do not start a shared stack merely to finish this task:
 
 ```bash
-./gradlew build                                   # any Kotlin/Java edit
-cd src/frontend && npm ci && npm run build        # any frontend edit
+./scripts/runbackendtests.sh --tests "*RelevantTest*" # focused backend coverage
+cd src/frontend && npm test && npm run build       # frontend unit/build checks
 cd src/relay && go build ./... && go vet ./... && gofmt -l . && go test ./...
 ./scripts/owasp-check.sh                          # you edited code; the gate is diff-scoped
 ./scripts/humanizer-scan.sh                       # confirm the findings are gone
@@ -260,11 +262,8 @@ must pass. It asserts both directions per rule — that a violation fires *and*
 that clean code stays silent — because a rule that quietly stopped firing looks
 exactly like a clean repo.
 
-If you touched the backend, Principle 5 also requires
-`./scripts/startbackenddev.sh` to start cleanly (run it outside the sandbox —
-`sandbox_permissions: "require_escalated"`), then stop it. Compile-clean is
-not runtime-clean: Micronaut bean wiring, Flyway and the SessionFactory only
-check at startup, which is exactly where a rename fails.
+Micronaut bean wiring and Flyway still need runtime validation; `/finalizer`
+checks startup in its disposable stack after integration.
 
 If you renamed anything the `extensions/` clients call, Principle 5b applies —
 rediscover the surface, do not trust a written list:
@@ -281,7 +280,8 @@ Humanizer — <scope>
 Applied     <n> comments rewritten, <n> deleted, <n> local names, <n> layout
 Proposed    <n> renames / splits — awaiting your call (listed below)
 Deferred    <n> REVIEW findings left alone — <one line saying why>
-Verified    gradlew build ✓  humanizer-scan ✓  owasp-check ✓
+Verified    focused checks ✓  humanizer-scan ✓  owasp-check ✓
+Merge gates Finalizer pending
 ```
 
 Deferred needs a reason, not a count. "Left alone" without one is the failure

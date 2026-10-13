@@ -43,7 +43,10 @@ class CrowdStrikeDeviceReplacementServiceTest {
         every { assets.findCrowdStrikeReplacementCandidates(any(), any()) } returns
             Page.of(candidates, Pageable.from(0, 102), candidates.size.toLong())
         every { identities.findByCrowdStrikeAidIn(any()) } returns bindings.toList()
-        every { identities.findByAssetIdIn(any()) } returns bindings.toList()
+        every { identities.findByAssetIdIn(any()) } answers {
+            val ids = firstArg<Collection<Long>>()
+            bindings.filter { it.asset.id in ids }
+        }
         every { identities.save(any<CrowdStrikeAssetIdentity>()) } answers { firstArg() }
         candidates.forEach { asset -> every { em.find(Asset::class.java, asset.id, LockModeType.PESSIMISTIC_WRITE) } returns asset }
     }
@@ -153,6 +156,62 @@ class CrowdStrikeDeviceReplacementServiceTest {
         val payload = incomingBatch(incoming)
         assertThatThrownBy { service.prepare(payload, payload.deviceSelection!!) }
             .isInstanceOf(CrowdStrikeIdentityConflict::class.java).extracting("code").isEqualTo("INSTANCE_ALREADY_BOUND")
+    }
+
+    @Test
+    fun `superseded enrollment moved to another instance preserves the former inventory`() {
+        val oldAsset = Asset(id = 1L, name = "Former machine", type = "SERVER", owner = "Human owner",
+            cloudInstanceId = "i-0123456789abcdef0", cloudAccountId = "123456789012", adDomain = "old.test")
+        val retired = older.copy(instanceId = "i-0123456789abcdef1", cloudAccountId = oldAsset.cloudAccountId,
+            lastSeen = Instant.parse("2026-03-01T00:00:00Z"))
+        val selected = retired.copy(aid = newest.aid, firstSeen = newest.firstSeen)
+        val binding = CrowdStrikeAssetIdentity(asset = oldAsset, crowdStrikeAid = retired.aid,
+            sourceHostname = retired.hostname, falconFirstSeenAt = LocalDateTime.ofInstant(retired.firstSeen, ZoneOffset.UTC))
+        stub(binding)
+        val evidence = CrowdStrikeDeviceSelection(selected, listOf(retired))
+        val payload = incomingBatch(selected).copy(deviceSelection = evidence)
+        val plan = service.prepare(payload, evidence)
+        assertThat(plan.asset).isNull()
+        assertThat(plan.duplicates).isEmpty()
+        assertThat(plan.relocatedBindings).containsExactly(binding)
+        val destination = oldAsset.copy(id = 2L, name = selected.hostname, cloudInstanceId = selected.instanceId, adDomain = null)
+        every { identities.findByAssetIdIn(listOf(2L)) } returns emptyList()
+        service.finish(destination, plan, evidence, "admin")
+        verify { identities.delete(binding) }
+        verify { em.persist(match<com.secman.domain.CrowdStrikeInstanceTransition> {
+            it.assetId == 1L && it.crowdStrikeAid == retired.aid && it.reason == "SUPERSEDED_ENROLLMENT_MOVED"
+        }) }
+        verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any()) }
+        assertThat(oldAsset.cloudInstanceId).isEqualTo("i-0123456789abcdef0")
+        assertThat(oldAsset.adDomain).isEqualTo("old.test")
+        verify { em.createNativeQuery(match { it.contains("SELECT id FROM asset") && !it.contains("FOR UPDATE") && !it.contains("LOWER(") }) }
+    }
+
+    @Test
+    fun `moved superseded enrollment requires continuity and rejects unexplained bindings`() {
+        val oldAsset = Asset(id = 1L, name = "Former machine", type = "SERVER", owner = "Human owner",
+            cloudInstanceId = "i-0123456789abcdef0", cloudAccountId = "123456789012")
+        val retired = older.copy(instanceId = "i-0123456789abcdef1", cloudAccountId = oldAsset.cloudAccountId,
+            lastSeen = Instant.parse("2026-03-01T00:00:00Z"))
+        val binding = CrowdStrikeAssetIdentity(asset = oldAsset, crowdStrikeAid = retired.aid,
+            sourceHostname = retired.hostname, falconFirstSeenAt = LocalDateTime.ofInstant(retired.firstSeen, ZoneOffset.UTC))
+        stub(binding)
+        listOf(retired.copy(cloudAccountId = "other-account"), retired.copy(lastSeen = null),
+            retired.copy(firstSeen = retired.firstSeen!!.plusSeconds(1))).forEach { old ->
+            val selected = old.copy(aid = newest.aid, firstSeen = newest.firstSeen)
+            val evidence = CrowdStrikeDeviceSelection(selected, listOf(old))
+            val payload = incomingBatch(selected).copy(deviceSelection = evidence)
+            assertThatThrownBy { service.prepare(payload, evidence) }
+                .isInstanceOf(CrowdStrikeIdentityConflict::class.java).extracting("code")
+                .isEqualTo("SUPERSEDED_IDENTITY_CONFLICT")
+        }
+        val selected = retired.copy(aid = newest.aid, firstSeen = newest.firstSeen)
+        val evidence = CrowdStrikeDeviceSelection(selected, listOf(retired))
+        every { identities.findByAssetIdIn(listOf(1L)) } returns listOf(binding, binding.copy(crowdStrikeAid = "unverified"))
+        assertThatThrownBy { service.prepare(incomingBatch(selected).copy(deviceSelection = evidence), evidence) }
+            .isInstanceOf(CrowdStrikeIdentityConflict::class.java).extracting("code").isEqualTo("UNEXPLAINED_AID")
+        verify(exactly = 0) { identities.delete(any()) }
+        verify(exactly = 0) { em.persist(any()) }
     }
 
     @Test

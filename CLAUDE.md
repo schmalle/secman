@@ -18,7 +18,7 @@ Security requirement, vulnerability and risk management platform.
 
 ## Tooling Conventions (canonical, do not deviate)
 
-- **Branch**: `dev` is the default and only branch for agent-authored commits unless the user explicitly names another branch. Verify the current branch before editing and before committing; never commit directly to `main` or `master` by inference. Each repository under `extensions/` is independent and must pass the same check locally.
+- **Branch**: `dev` is the integration branch. Agents may work and commit on `dev` or on `task/<name>` branches created from `dev` for isolated parallel work. Verify the branch and its base before editing and before committing. Never commit directly to `main` or `master` unless explicitly instructed. Each repository under `extensions/` is independent and must pass the same check locally. Do not merge, push, or commit unrelated work by inference.
 - **Scripts**: `./scripts/` only.
 - **Skills — two harness trees, one skill set**: every skill exists twice, once per agent harness. `.claude/skills/` is what **Claude Code** loads; `.agents/skills/` is what **Codex** (and other `AGENTS.md`-driven agents) load. They are two renderings of the same skill, not two skills.
   - **Two-way sync is mandatory.** *Whichever* tree an agent edits — Claude Code editing `.claude/skills/`, Codex editing `.agents/skills/` — the same change must land in the counterpart file **in the same commit**. There is no "port it later"; a commit that touches one tree only is incomplete. This applies to every `*.md` under the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
@@ -121,7 +121,7 @@ private addresses only), or neither.
 
 `/testsuite` runs every tier above plus the frontend build gate, `check-skill-sync.sh`,
 the OWASP and code-hygiene gate self-tests and the coverage report in one pass. It never starts the
-stack, so it does not discharge principle 5 or the principle-7 gates.
+stack. Full build/startup and E2E gates belong to `/finalizer` (principles 5 and 7), once per combined change before merge.
 
 CrowdStrike monitoring: `src/clinotify/check_crowdstrike_checkin.py` polls `/api/crowdstrike/last-checkin` and Telegrams when stale. Stdlib-only.
 
@@ -135,16 +135,18 @@ CrowdStrike monitoring: `src/clinotify/check_crowdstrike_checkin.py` polls `/api
    intermittent `Duplicate entry '<n>' for key 'PRIMARY'`. See `docs/ARCHITECTURE.md`
    §Entity id generation.
 4. Always write tests. Source of truth for credentials and URLs is `pass-cli`.
-5. **A change is complete only when** `./gradlew build` is clean **AND** `./scripts/startbackenddev.sh` starts cleanly. Compile-clean ≠ runtime-clean (Micronaut bean wiring, Flyway, SessionFactory only check at startup). Stop the backend after verifying.
-5a-relay. **Relay changes (`src/relay/`) are complete only when** `cd src/relay && go build ./... && go vet ./... && gofmt -l . && go test ./...` are all clean. It is a separate Go module: `./gradlew build` does not compile it and will not catch a break. It has **no third-party dependencies by contract** — adding one needs a stated reason in the PR body, the same bar as `src/clinotify`.
-5a. **Frontend changes are complete only when** `cd src/frontend && npm ci && npm run build` exits 0. TypeScript errors, missing imports, and broken Astro/React components are caught here — do not skip this step for any frontend file edit.
+5. **Workers validate their scope; the finalizer validates the combined change.** Workers add regression tests, run affected unit/integration tests and module compilation, and report **ready for integration**, with checks run and deferred gates. They do not run a whole-repository build or start the shared stack merely to finish a task. `/finalizer` owns the full build/test tier and clean backend startup before merge. Backend tests use `./scripts/runbackendtests.sh` and its disposable database; run `./gradlew build` inside the runner in database-only mode. Clean startup is verified by the full-stack disposable runner using `./scripts/startbackenddev.sh`; preserve the regular 8080/4321 stack. Compile-clean ≠ runtime-clean (Micronaut bean wiring, Flyway, SessionFactory only check at startup).
+5a-relay. **Finalization of relay changes (`src/relay/`) requires** `cd src/relay && go build ./... && go vet ./... && gofmt -l . && go test ./...` are all clean. It is a separate Go module: `./gradlew build` does not compile it and will not catch a break. It has **no third-party dependencies by contract** — adding one needs a stated reason in the PR body, the same bar as `src/clinotify`.
+5a. **Frontend workers run affected tests and `npm run build` in their own workspace.** Install dependencies when missing or the lockfile changed. `/finalizer` runs `cd src/frontend && npm ci && npm test && npm run build` once for the combined frontend change. TypeScript errors, missing imports, and broken Astro/React components must be resolved before integration.
 5b. **Backend contract changes are complete only when the `extensions/` clients are updated in the same change.** Renaming a path, renaming or retyping a request/response field, tightening `@Secured`, or altering the auth scheme breaks those clients **silently** — nothing in this build compiles or tests against them, so the failure surfaces in production, not in CI. See **Extension Clients** for the surface and the verification rules. `/finalizer` automates the check.
 6. Normal-stack tests route HTTP through `SECMAN_HOST` (from `pass-cli`). Database-mutating E2E tests use only the URLs and restricted database supplied by `./scripts/test/run-isolated-e2e.sh`; never hardcode a test URL in a driver.
-7. **Mandatory post-change E2E gates** (in addition to build + startup):
-   - **`/e2ejs`** must report **0 JS errors** for both admin and normal-user runs against `SECMAN_HOST`. RBAC 403s on role-gated endpoints and documented 404s (e.g., `/api/wg-vulns`, `/api/domain-vulns` for users without mappings) are NOT JS errors. A page that throws or logs `console.error` IS — fix before merge.
+7. **Mandatory finalizer E2E gates**, once for the combined change before merge, rather than after every worker task or implementation step:
+   - **`/e2ejs`** must report **0 JS errors** for both admin and normal-user runs against the disposable runner’s frontend URL. RBAC 403s on role-gated endpoints and documented 404s (e.g., `/api/wg-vulns`, `/api/domain-vulns` for users without mappings) are NOT JS errors. A page that throws or logs `console.error` IS — fix before merge.
    - **`/e2evulnexception`** must run the full vuln + exception lifecycle (MCP + UI, setup + teardown) with **0 failures**.
 
-   Doc-only edits outside `src/`, `tests/`, `scripts/` may skip the gates — state so explicitly. Otherwise both gates are non-negotiable.
+   `/finalizer` owns both gates for changes under `src/`, `tests/`, or `scripts/`, plus feature-specific E2E when the changed behavior requires it. Workers may run a targeted E2E to reproduce or verify their change; this does not trigger both universal gates. Documentation-only changes outside those directories may skip runtime gates with an explicit scope reason. Explicit requests to run test skills still run the requested suites.
+
+   Parallel workers use separate workspaces and agreed file/contract ownership. Integrate their changes before finalization; freeze the integration workspace during runtime validation. Full-stack E2E sessions are serialized by the runner’s host-wide reservation. Database-only tests may run in separate workspaces; never run concurrent clean/build/startup operations in one checkout. **Ready for integration** is distinct from **ready to merge**: only successful finalization establishes merge readiness. Reuse gate evidence only for identical code, test selection, dependencies and relevant configuration; record the revision, dirty-tree fingerprint if applicable, commands, outcomes and log paths. A fix invalidates evidence for the gates it can affect.
 
 ## OWASP Top 10 Compliance (mandatory)
 
@@ -299,8 +301,15 @@ and Flyway history but no application rows, and starts a separate stack on
 18080/14321. It cleans verified abandoned test schemas before a new run and
 removes its own schema on exit. Direct driver calls fail closed. Do not delete
 an unverified legacy fixture merely because its name matches a test prefix.
-The normal 8080/4321 cold-start and stop rules below apply to read-only skills;
-the isolated runner owns the lifecycle for mutating skills.
+The page scanner also uses the disposable runner because it provisions a user.
+Full-stack runs reserve `/tmp/secman-e2e-<uid>.lock` atomically across worktrees
+before port checks or database changes. A busy reservation exits 2; retry after
+the owner finishes. EXIT/INT/TERM release it after cleanup. A crash or SIGKILL
+may leave a reservation: verify its owner PID and that no isolated test processes
+remain before removing it. Never automatically reclaim a stale reservation.
+Database-only runs need no port reservation. The normal 8080/4321 cold-start and
+stop rules below apply only to explicitly requested read-only skills; workers
+preserve that stack. The isolated runner owns the lifecycle for mutating skills.
 
 Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`, `/e2eeol`, `/account-onboarding`, `/aws-account-workgroup-import`, `/importtest`, `/crowdstrike-vuln-match` skills.
 

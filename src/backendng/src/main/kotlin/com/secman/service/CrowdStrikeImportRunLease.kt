@@ -11,6 +11,8 @@ class CrowdStrikeImportRunLease {
     internal var clock: Clock = Clock.systemUTC()
     private data class Run(val id: String, val owner: String, var expiresAt: Instant)
     private var run: Run? = null
+    private data class FinishedRun(val owner: String, val status: String)
+    private val finishedRuns = linkedMapOf<String, FinishedRun>()
 
     @Synchronized
     fun start(owner: String): String {
@@ -33,10 +35,21 @@ class CrowdStrikeImportRunLease {
     }
 
     @Synchronized
-    fun finish(id: String, owner: String) {
+    fun finish(id: String, owner: String, successful: Boolean = false) {
+        if (finishedStatus(id, owner) != null) return
         requireOwner(id, owner)
         run = null
+        finishedRuns[id] = FinishedRun(owner, if (successful) "COMPLETED" else "FAILED")
+        // Keep retries idempotent without retaining an unbounded run history.
+        if (finishedRuns.size > 100) finishedRuns.remove(finishedRuns.keys.first())
     }
+
+    @Synchronized
+    fun finishedStatus(id: String, owner: String): String? =
+        finishedRuns[id]?.takeIf { it.owner == owner }?.status
+
+    @Synchronized
+    fun activeExpiresAt(): Instant? = active()?.expiresAt
 
     @Synchronized
     fun activeRunId(): String? = active()?.id

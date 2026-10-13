@@ -194,4 +194,55 @@ class CrowdStrikeInstanceTransitionIntegrationTest {
         assertThat(result.outcome!!.coverage).isEqualTo(CrowdStrikeFindingCoverage(2, 1, duplicates = 1))
         assertThat(snapshots.findByAssetIdAndActive(assetId(device), true).first().duplicateCount).isEqualTo(1)
     }
+
+    @Test
+    fun `moved superseded agent does not merge physical instances and is idempotent`() {
+        val original = device()
+        importer.importVulnerabilitiesForServer(batch(original), "test-admin", true)
+        val formerId = assetId(original)
+        val former = assets.findById(formerId).orElseThrow()
+        former.owner = "Human owner"
+        assets.update(former)
+        findings.save(Vulnerability(asset = former, vulnerabilityId = "MANUAL-KEEP", cvssSeverity = "HIGH",
+            source = "MANUAL", scanTimestamp = LocalDateTime.now()))
+        val moved = original.copy(instanceId = "i-" + UUID.randomUUID().toString().replace("-", "").take(17),
+            adDomain = null, lastSeen = Instant.now())
+        val selected = moved.copy(aid = UUID.randomUUID().toString().replace("-", ""), firstSeen = original.firstSeen!!.plusSeconds(60))
+        deviceAids.add(selected.aid)
+        val payload = batch(selected).copy(deviceSelection = CrowdStrikeDeviceSelection(selected, listOf(moved)))
+        repeat(2) { importer.importVulnerabilitiesForServer(payload, "test-admin", true) }
+        val destinationId = assetId(selected)
+        assertThat(destinationId).isNotEqualTo(formerId)
+        assertThat(assets.findById(formerId).orElseThrow().cloudInstanceId).isEqualTo(original.instanceId)
+        assertThat(assets.findById(formerId).orElseThrow().owner).isEqualTo("Human owner")
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(original.aid))).isEmpty()
+        assertThat(transitionCount(formerId)).isEqualTo(1)
+        assertThat((scalar("SELECT COUNT(*) FROM vulnerability WHERE asset_id = ? AND source = 'MANUAL'", formerId) as Number).toInt()).isEqualTo(1)
+        assertThat((scalar("SELECT COUNT(*) FROM vulnerability WHERE asset_id = ? AND source = 'CROWDSTRIKE'", formerId) as Number).toInt()).isZero()
+        assertThat(snapshots.findByAssetIdAndActive(formerId, true)).isEmpty()
+        // The retired inventory intentionally has no current AID; clean it by its exact owned ID.
+        jpaTransactions.executeWrite {
+            em.createNativeQuery("DELETE FROM vulnerability WHERE asset_id = :id").setParameter("id", formerId).executeUpdate()
+            deletion.deleteAsset(formerId, "test-admin")
+        }
+    }
+
+    @Test
+    fun `parallel distinct cloud imports do not lock unrelated asset rows`() {
+        val devices = (1..18).map { device() }
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(3)
+        try {
+            devices.chunked(6).map { chunk -> pool.submit<com.secman.dto.ImportStatisticsDto> {
+                importer.importServerVulnerabilities(chunk.map { batch(it) }, "test-admin", triggerRefresh = false,
+                    allowDeviceReplacement = true)
+            } }.forEach { future ->
+                val result = future.get(60, java.util.concurrent.TimeUnit.SECONDS)
+                assertThat(result.errors).isEmpty()
+                assertThat(result.serversCreated).isEqualTo(6)
+            }
+        } finally {
+            pool.shutdownNow()
+        }
+        assertThat(identities.findByCrowdStrikeAidIn(devices.map { it.aid })).hasSize(18)
+    }
 }
