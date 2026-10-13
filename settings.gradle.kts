@@ -4,9 +4,9 @@ pluginManagement {
         mavenCentral()
     }
     plugins {
-        id("org.jetbrains.kotlin.jvm") version "2.4.20"
-        id("org.jetbrains.kotlin.plugin.allopen") version "2.4.20"
-        id("org.jetbrains.kotlin.plugin.jpa") version "2.4.20"
+        id("org.jetbrains.kotlin.jvm") version "2.4.21"
+        id("org.jetbrains.kotlin.plugin.allopen") version "2.4.21"
+        id("org.jetbrains.kotlin.plugin.jpa") version "2.4.21"
         id("com.google.devtools.ksp") version "2.3.12"
         id("io.micronaut.application") version "5.0.2"
         id("io.micronaut.library") version "5.0.2"
