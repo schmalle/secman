@@ -766,3 +766,48 @@ that empty results and enrollment replacement can be verified safely. Findings
 below HIGH remain internal reconciliation data; they are excluded by the shared
 ORM/native read boundary. Other vulnerability sources retain their existing
 severity visibility.
+
+
+## Asset cleanup and sensor retention
+
+The inventory shows **Falcon last contact** separately from **Last imported into SecMan**.
+A fresh import of a historical Falcon record does not indicate a fresh sensor contact.
+
+`delete-asset-not-seen` defaults to `--basis import-inactivity`: both the import and
+Falcon contact must be old (unknown contact is allowed). Use `--basis sensor-contact`
+to select verified Falcon contact older than the threshold even when its import is recent:
+
+```bash
+./scripts/secman delete-asset-not-seen 3 --basis sensor-contact --dry-run --verbose
+# After reviewing the preview:
+./scripts/secman delete-asset-not-seen 3 --basis sensor-contact --verbose
+```
+
+Unknown contact times are excluded in sensor mode. Manual and scan-owned inventory
+is protected in both modes. `--include-legacy` applies only to import-inactivity and
+still protects recent sensor contact. Eligibility is rechecked under the deletion lock.
+CLI/API/MCP responses include policy, UTC cutoff, both timestamps, retention configuration,
+exclusion counts and audit run ID. Candidate detail responses show at most 200 rows;
+candidate counts and deletion cover the entire selected population. Existing API callers retain import-inactivity behavior.
+
+To prevent deleted historical records from being imported again, explicitly set
+`CROWDSTRIKE_SENSOR_RETENTION_DAYS=3` in the backend environment and the shell running
+`import.sh`, then restart the backend. The default `0` keeps historical inventory.
+The backend independently excludes old, unknown or future contact from persistence
+when this policy is enabled, including per-host saves. These skips are reported as
+`SKIPPED_RETENTION`, preserve existing rows and are excluded from findings reconciliation.
+The import wrapper bounds discovery by this setting and uses the same window for
+normal and isolated runs (`CROWDSTRIKE_IMPORT_LAST_SEEN_DAYS`, default 3; wrapper caps wider values to 3).
+
+Scheduled cleanup remains disabled by default. `CROWDSTRIKE_CLEANUP_BASIS` selects
+its policy; the percentage brake remains active. Import-inactivity schedules also
+require a successful complete CLI run within 24 hours, observed since backend startup.
+Failed runs invalidate that evidence; a backend restart requires a new successful run.
+An active CLI import or in-flight import save blocks destructive cleanup in both modes.
+A cleanup permit prevents a new CLI run or save from overlapping the deletion run. History distinguishes
+`ABORTED_IMPORT_HEALTH` from `ABORTED_SAFETY_BRAKE`. A three-day sensor cutoff is an
+inventory retention decision and is not proof that a stopped machine has been retired.
+
+## Current asset visibility
+
+Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.

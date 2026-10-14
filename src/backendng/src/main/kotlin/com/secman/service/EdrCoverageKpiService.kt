@@ -68,8 +68,9 @@ open class EdrCoverageKpiService(
      */
     fun recalculate() {
         val start = System.currentTimeMillis()
+        val calculatedAt = LocalDateTime.now(java.time.ZoneOffset.UTC)
         try {
-            val totalEc2 = assetRepository.countAllAwsAssetsWithInstanceId()
+            val totalEc2 = assetRepository.countCurrentAwsAssetsWithInstanceId()
 
             // Skip the remaining queries entirely when there is no EC2 population at all.
             val excluded = if (totalEc2 == 0L) 0L else assetRepository.countEc2AssetsExcludedByNoEdrException()
@@ -94,7 +95,7 @@ open class EdrCoverageKpiService(
                     agentSeenWithinDays = AGENT_SEEN_FRESHNESS_DAYS
                 )
             )
-            upsertCache(json, System.currentTimeMillis() - start)
+            upsertCache(json, System.currentTimeMillis() - start, calculatedAt)
 
             log.info(
                 "EDR coverage KPI recalculated: totalEc2={}, excludedByNoEdr={}, eligible={}, covered={}, percentage={}",
@@ -116,6 +117,11 @@ open class EdrCoverageKpiService(
     @Scheduled(fixedDelay = "1h", initialDelay = "20m")
     open fun recalculateScheduled() {
         recalculate()
+    }
+
+    @Scheduled(fixedDelay = "1m", initialDelay = "30s")
+    open fun refreshExpiredInventory() {
+        if (cacheRepository.findByCacheKey(CACHE_KEY).isEmpty) recalculate()
     }
 
     /**
@@ -156,9 +162,9 @@ open class EdrCoverageKpiService(
     }
 
     @Transactional
-    open fun upsertCache(json: String, durationMs: Long) {
+    open fun upsertCache(json: String, durationMs: Long, calculatedAt: LocalDateTime = LocalDateTime.now(java.time.ZoneOffset.UTC)) {
         // Atomic native upsert on the cache_key unique index — see
         // VulnerabilityStatisticsCacheRepository.upsertByCacheKey for the race this closes.
-        cacheRepository.upsertByCacheKey(CACHE_KEY, json, LocalDateTime.now(), durationMs)
+        cacheRepository.upsertByCacheKey(CACHE_KEY, json, LocalDateTime.now(), durationMs, calculatedAt)
     }
 }

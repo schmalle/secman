@@ -22,7 +22,7 @@ class CrowdStrikeLookupAuthorizationTest {
     private val viewer = Authentication.build("viewer", listOf("VULN"))
     private var queries = 0
 
-    private fun controller(aid: String, instance: String? = null, account: String? = null, source: String = "LIVE_API", returnedAssetId: Long? = null, refreshedAssetId: Long? = null): CrowdStrikeController {
+    private fun controller(aid: String, instance: String? = null, account: String? = null, source: String = "LIVE_API", returnedAssetId: Long? = null, refreshedAssetId: Long? = null, observedAt: java.time.Instant? = java.time.Instant.now().minusSeconds(60)): CrowdStrikeController {
         every { access.canAccessAsset(7, viewer) } returns true
         every { assets.findById(7) } returns Optional.of(asset)
         every { identities.findByAssetIdIn(listOf(7L)) } returns listOf(
@@ -30,7 +30,7 @@ class CrowdStrikeLookupAuthorizationTest {
         return object : CrowdStrikeController(mockk(), mockk(relaxed = true), mockk(), mockk(), mockk(), assets, access, identities) {
             override fun queryVulnerabilities(hostname: String?, severity: String?, product: String?, limit: Int?, page: Int?, force: Boolean): HttpResponse<*> {
                 queries++
-                return HttpResponse.ok(CrowdStrikeQueryResponse(asset.name, instanceId = instance, cloudAccountId = account,
+                return HttpResponse.ok(CrowdStrikeQueryResponse(asset.name, observedAt = observedAt, instanceId = instance, cloudAccountId = account,
                     vulnerabilities = emptyList(), totalCount = 0, queriedAt = "2026-10-10T00:00:00Z", dataSource = source, selectedAid = aid, assetId = if (queries > 1) refreshedAssetId ?: returnedAssetId else returnedAssetId))
             }
         }
@@ -70,6 +70,17 @@ class CrowdStrikeLookupAuthorizationTest {
             .queryAuthorizedVulnerabilities(asset.name, assetId = 7, authentication = viewer)
         assertThat(result.code()).isEqualTo(200)
         assertThat(queries).isEqualTo(2)
+    }
+
+    @Test
+    fun `cached and live lookups reject stale unknown and future observation`() {
+        for (source in listOf("DATABASE", "LIVE_API")) {
+            for (observed in listOf(null, java.time.Instant.now().minusSeconds(72 * 3600 + 60L), java.time.Instant.now().plusSeconds(3600))) {
+                val result = controller("aid-granted", source = source, returnedAssetId = 7, observedAt = observed)
+                    .queryAuthorizedVulnerabilities(asset.name, force = source == "LIVE_API", assetId = 7, authentication = viewer)
+                assertThat(result.code()).isEqualTo(404)
+            }
+        }
     }
 
     @Test

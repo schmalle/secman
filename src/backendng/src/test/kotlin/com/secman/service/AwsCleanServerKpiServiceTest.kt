@@ -52,7 +52,7 @@ class AwsCleanServerKpiServiceTest {
         every { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) } returns 0L
         every { vulnerabilityRepository.countUnknownAwsServers(any(), any()) } returns 2L
         val jsonSlot = slot<String>()
-        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
+        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any(), any()) } returns 1
         service.recalculate()
         assertThat(jsonSlot.captured).contains("\"cleanAwsServers\":1", "\"unknownAwsServers\":2")
     }
@@ -67,7 +67,7 @@ class AwsCleanServerKpiServiceTest {
             assertThat(service.getKpi().available).isFalse()
         }
         every { assetRepository.countAwsAssetsSeenToday(any(), any()) } returns 0L
-        every { cacheRepository.upsertByCacheKey(any(), any(), any(), any()) } returns 1
+        every { cacheRepository.upsertByCacheKey(any(), any(), any(), any(), any()) } returns 1
         service.refreshForNewDay()
         verify(exactly = 1) { assetRepository.countAwsAssetsSeenToday(any(), any()) }
     }
@@ -101,7 +101,7 @@ class AwsCleanServerKpiServiceTest {
         every { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) } returns 0L
 
         val jsonSlot = slot<String>()
-        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
+        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any(), any()) } returns 1
 
         service.recalculate()
 
@@ -116,7 +116,7 @@ class AwsCleanServerKpiServiceTest {
         every { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) } returns 1L
 
         val jsonSlot = slot<String>()
-        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
+        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any(), any()) } returns 1
 
         service.recalculate()
 
@@ -139,7 +139,7 @@ class AwsCleanServerKpiServiceTest {
     fun `recalculate derives the dirty count from a scalar aggregate`() {
         every { assetRepository.countAwsAssetsSeenToday(any(), any()) } returns 1L
         every { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) } returns 1L
-        every { cacheRepository.upsertByCacheKey(any(), any(), any(), any()) } returns 1
+        every { cacheRepository.upsertByCacheKey(any(), any(), any(), any(), any()) } returns 1
 
         service.recalculate()
 
@@ -154,7 +154,7 @@ class AwsCleanServerKpiServiceTest {
         every { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) } returns 5L
 
         val jsonSlot = slot<String>()
-        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
+        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any(), any()) } returns 1
 
         service.recalculate()
 
@@ -167,7 +167,7 @@ class AwsCleanServerKpiServiceTest {
         every { assetRepository.countAwsAssetsSeenToday(any(), any()) } returns 0L
 
         val jsonSlot = slot<String>()
-        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
+        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any(), any()) } returns 1
 
         service.recalculate()
 

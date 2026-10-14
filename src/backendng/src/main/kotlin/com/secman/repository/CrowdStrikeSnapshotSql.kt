@@ -7,15 +7,16 @@ object CrowdStrikeSnapshotSql {
         JOIN crowdstrike_asset_identity i ON i.asset_id = s.asset_id AND i.crowdstrike_aid = s.crowdstrike_aid
         WHERE s.active = 1
     )) AND (source <> 'CROWDSTRIKE' OR UPPER(COALESCE(cvss_severity, '')) IN ('HIGH', 'CRITICAL'))"""
-    const val CURRENT_FINDINGS = "(SELECT * FROM vulnerability WHERE $VISIBLE)"
+    const val STORED_FINDINGS = "(SELECT * FROM vulnerability WHERE $VISIBLE)"
+    const val CURRENT_FINDINGS = "(SELECT * FROM vulnerability WHERE $VISIBLE AND asset_id IN (${AssetCurrentnessSql.IDS}))"
     const val IDS_AFTER = """
         SELECT v.id
-        FROM $CURRENT_FINDINGS v
+        FROM $STORED_FINDINGS v
         WHERE v.id > :afterId ORDER BY v.id ASC
     """
     const val MAX_ID = """
         SELECT COALESCE(MAX(v.id), 0)
-        FROM $CURRENT_FINDINGS v
+        FROM $STORED_FINDINGS v
     """
     const val INSTALLER_COUNT = """
         SELECT COUNT(*)

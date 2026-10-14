@@ -25,3 +25,14 @@ export function requireIsolatedTarget(): void {
     throw new Error('Disposable database ownership marker does not match');
   }
 }
+
+/** Explicit observation evidence for one ordinary inventory fixture. */
+export function markAssetObserved(assetId: number): void {
+  requireIsolatedTarget();
+  if (!Number.isSafeInteger(assetId) || assetId <= 0) throw new Error('Invalid fixture asset ID');
+  execFileSync('mariadb', [
+    '--batch', '--skip-column-names', '-h', '127.0.0.1', '-u', process.env.DB_USER!,
+    process.env.SECMAN_TEST_ISOLATED_DB!, '-e',
+    `UPDATE asset SET verified_observed_at=UTC_TIMESTAMP(6) WHERE id=${assetId}`,
+  ], { env: { ...process.env, MYSQL_PWD: process.env.DB_PASS }, stdio: ['ignore', 'pipe', 'ignore'] });
+}

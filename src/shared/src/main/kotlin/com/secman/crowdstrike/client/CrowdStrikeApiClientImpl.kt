@@ -908,7 +908,7 @@ open class CrowdStrikeApiClientImpl(
         // Falcon's combined endpoint uses an opaque next cursor, not an integer offset.
         val category = requireNotNull(deviceType.toFqlFilter())
         val cutoff = Instant.now().minusSeconds(lastSeenDays.toLong() * 86400)
-        val filter = if (lastSeenDays > 0) "$category+last_seen:>'$cutoff'" else category
+        val filter = if (lastSeenDays > 0) "$category+last_seen:>='$cutoff'" else category
         val ids = linkedSetOf<String>()
         val cursors = mutableSetOf<String>()
         var cursor: String? = null
@@ -1995,7 +1995,7 @@ open class CrowdStrikeApiClientImpl(
             throw CrowdStrikeException("Cannot select the latest Falcon device safely", e)
         }
         val cutoff = Instant.now().minusSeconds(lastSeenDays.toLong() * 86400)
-        return selections.filter { lastSeenDays <= 0 || it.selected.lastSeen?.isAfter(cutoff) == true }
+        return selections.filter { lastSeenDays <= 0 || it.selected.lastSeen?.let { seen -> !seen.isBefore(cutoff) && !seen.isAfter(Instant.now()) } == true }
             .associate { selection ->
                 val id = selection.selected.aid
                 log.info("Latest Falcon device: aid={}, firstSeen={}, lastSeen={}, ignored={}", id,

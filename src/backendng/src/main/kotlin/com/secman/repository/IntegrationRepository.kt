@@ -10,6 +10,10 @@ import java.time.Instant
 /** Persistence operations used inside the integration services' transactions. */
 @Singleton
 class IntegrationRepository(private val em: EntityManager) {
+    fun invalidateCurrentInventoryCaches() {
+        em.createNativeQuery("UPDATE vulnerability_statistics_cache SET valid_until = NULL").executeUpdate()
+    }
+
     fun <T : Any> findMany(type: Class<T>, ids: Collection<Long>): List<T> {
         if (ids.isEmpty()) return emptyList()
         val sql = when (type) {

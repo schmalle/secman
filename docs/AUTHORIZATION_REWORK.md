@@ -151,3 +151,7 @@ The implementation has not been deployed and no migration or replacement grant
 has been applied to the development database. Connection-local legacy migration fixtures verify SQL backfills and fail-closed
 defaults; this does not replace rehearsal on a representative database copy. See the accompanying verification report for
 the actual checks completed and any remaining test-environment limitations.
+
+## Current asset visibility
+
+Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.

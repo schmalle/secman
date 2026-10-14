@@ -54,7 +54,7 @@ const AdminAddSystem: React.FC = () => {
             const response = await authenticatedPost('/api/assets', body);
             if (response.ok) {
                 const data = await response.json();
-                setAssetMessage({ type: 'success', text: `Asset "${data.name}" created successfully (ID: ${data.id}).` });
+                setAssetMessage({ type: 'success', text: `Asset "${data.name}" created successfully (ID: ${data.id}). It will appear in current inventory after a verified observation.` });
                 setAssetName('');
                 setAssetType('SERVER');
                 setAssetIp('');

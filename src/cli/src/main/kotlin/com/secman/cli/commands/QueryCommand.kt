@@ -166,10 +166,12 @@ class QueryCommand(
                 val status = when {
                     result.serversCreated > 0 -> "CREATED"
                     result.serversUpdated > 0 -> "UPDATED"
+                    result.hostOutcomes.any { it.status == "SKIPPED_RETENTION" } -> "UNCHANGED (sensor retention)"
                     else -> "UNCHANGED (save rejected)"
                 }
                 System.out.println("  - Asset: $status")
                 result.hostOutcomes.forEach { outcome ->
+                    if (outcome.status == "SKIPPED_RETENTION") System.out.println("  - ${outcome.message}")
                     if (outcome.status != "REJECTED" && outcome.formerInstanceId != null)
                         System.out.println("  - EC2 instance ID (asset ${outcome.assetId}): ${outcome.formerInstanceId} -> ${outcome.instanceId}")
                     outcome.coverage?.let {

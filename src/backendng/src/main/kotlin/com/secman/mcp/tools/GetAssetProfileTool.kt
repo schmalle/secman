@@ -84,7 +84,7 @@ class GetAssetProfileTool(
             }
 
             // Fetch asset
-            val asset = assetRepository.findById(assetId).orElse(null)
+            val asset = assetRepository.findById(assetId).filter { com.secman.service.AssetCurrentnessPolicy.isCurrent(it) }.orElse(null)
                 ?: return McpToolResult.error("ASSET_NOT_FOUND", "Asset with ID $assetId not found")
 
             // Build response
@@ -102,7 +102,7 @@ class GetAssetProfileTool(
                     "cloudInstanceId" to asset.cloudInstanceId,
                     "adDomain" to asset.adDomain,
                     "osVersion" to asset.osVersion,
-                    "lastSeen" to asset.lastSeen?.toString(),
+                    "lastSeen" to com.secman.service.AssetCurrentnessPolicy.observedAt(asset)?.toString(),
                     "createdAt" to asset.createdAt?.toString(),
                     "updatedAt" to asset.updatedAt?.toString()
                 )
@@ -110,7 +110,7 @@ class GetAssetProfileTool(
 
             // Include vulnerabilities if requested
             if (includeVulnerabilities) {
-                val vulnPageable = Pageable.from(0, vulnerabilityLimit, Sort.of(Sort.Order.desc("scanTimestamp")))
+                val vulnPageable = Pageable.from(0, vulnerabilityLimit)
                 val vulnPage = vulnerabilityRepository.findByAssetId(assetId, vulnPageable)
 
                 val vulnerabilities = vulnPage.content.map { vuln ->

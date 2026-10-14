@@ -35,7 +35,6 @@ class OutdatedAssetService(
 
     /** Resolve current grants before querying the materialized data. */
     private fun accessibleAssetIds(authentication: Authentication): Set<Long>? {
-        if (authentication.roles.contains("ADMIN")) return null
         return assetFilterService.getAccessibleAssetIds(authentication)
     }
 

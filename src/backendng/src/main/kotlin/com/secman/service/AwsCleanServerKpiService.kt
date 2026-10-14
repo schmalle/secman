@@ -62,6 +62,7 @@ open class AwsCleanServerKpiService(
      */
     fun recalculate(requireSuccess: Boolean = false) {
         val start = System.currentTimeMillis()
+        val calculatedAt = LocalDateTime.now(java.time.ZoneOffset.UTC)
         try {
             val window = FalconSeenTodayWindow.today()
             val totalAwsServers = assetRepository.countAwsAssetsSeenToday(window.startUtc, window.endUtc)
@@ -89,7 +90,7 @@ open class AwsCleanServerKpiService(
                     unknownAwsServers = unknownServers
                 )
             )
-            upsertCache(json, System.currentTimeMillis() - start)
+            upsertCache(json, System.currentTimeMillis() - start, calculatedAt)
 
             log.info(
                 "AWS clean-server KPI recalculated: totalAwsServers={}, cleanAwsServers={}, percentage={}",
@@ -99,6 +100,11 @@ open class AwsCleanServerKpiService(
             log.error("AWS clean-server KPI recalculation failed: {}", e.message, e)
             if (requireSuccess) throw e
         }
+    }
+
+    @io.micronaut.scheduling.annotation.Scheduled(fixedDelay = "1m", initialDelay = "30s")
+    open fun refreshExpiredInventory() {
+        if (cacheRepository.findByCacheKey(CACHE_KEY).isEmpty) recalculate()
     }
 
     /**
@@ -139,9 +145,9 @@ open class AwsCleanServerKpiService(
     }
 
     @Transactional
-    open fun upsertCache(json: String, durationMs: Long) {
+    open fun upsertCache(json: String, durationMs: Long, calculatedAt: LocalDateTime = LocalDateTime.now(java.time.ZoneOffset.UTC)) {
         // Atomic native upsert on the cache_key unique index - see
         // VulnerabilityStatisticsCacheRepository.upsertByCacheKey for the race this closes.
-        cacheRepository.upsertByCacheKey(CACHE_KEY, json, LocalDateTime.now(), durationMs)
+        cacheRepository.upsertByCacheKey(CACHE_KEY, json, LocalDateTime.now(), durationMs, calculatedAt)
     }
 }

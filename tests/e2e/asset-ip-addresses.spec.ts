@@ -64,10 +64,14 @@ test('imported addresses survive a UI edit and partial refresh and remain search
   const headers = { Authorization: `Bearer ${authCookie!.value}` };
   const hostname = `multi-ip-e2e-${Date.now()}`;
   let assetId: number | undefined;
+  const enrollmentStartedAt = new Date(Date.now() - 86400000).toISOString();
   const importAddresses = async (reported: string[]) => {
     const response = await page.request.post('/api/crowdstrike/servers/import', { headers, data: [{
-      hostname, ip: addresses[0], ipAddresses: reported, groups: null, adDomain: null,
+      hostname, ip: reported.length ? addresses[0] : null, ipAddresses: reported, groups: null, adDomain: null,
       cloudAccountId: null, cloudInstanceId: null, osVersion: null, vulnerabilities: [],
+      crowdStrikeAids: [`multi-ip-aid-${hostname}`],
+      deviceSelection: { selected: { aid: `multi-ip-aid-${hostname}`, hostname, productType: 'Server',
+        lastSeen: new Date().toISOString(), firstSeen: enrollmentStartedAt }, superseded: [] },
     }] });
     expect(response.status()).toBe(200);
     expect((await response.json()).errors ?? []).toEqual([]);
@@ -81,7 +85,7 @@ test('imported addresses survive a UI edit and partial refresh and remain search
     expect(result.items[0].ipAddresses).toEqual(addresses);
     assetId = result.items[0].assetId;
     await page.goto(`/assets?name=${hostname}`);
-    const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: hostname, exact: true }) });
+    const row = page.locator('tbody tr').filter({ hasText: hostname });
     for (const address of addresses) await expect(row.getByText(address, { exact: true })).toBeVisible();
     await row.getByRole('button', { name: /Edit$/ }).click();
     await expect(page.getByLabel('Type *', { exact: true })).toHaveValue('SERVER');
@@ -91,7 +95,8 @@ test('imported addresses survive a UI edit and partial refresh and remain search
     const edited = await page.request.get(`/api/assets/${assetId}`, { headers });
     expect((await edited.json()).type).toBe('SERVER');
     for (const address of addresses) await expect(row.getByText(address, { exact: true })).toBeVisible();
-    await importAddresses([addresses[0]]);
+    // A partial refresh omitting address inventory must preserve the stored addresses.
+    await importAddresses([]);
     await page.reload();
     for (const address of [...addresses, '10.4.0.11']) await expect(row.getByText(address, { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'More filters', exact: true }).click();

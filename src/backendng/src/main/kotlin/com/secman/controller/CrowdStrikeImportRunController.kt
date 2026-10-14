@@ -34,9 +34,9 @@ open class CrowdStrikeImportRunController(
         log.info("CrowdStrike import run started: runId={}, actor={}", id, actor(authentication))
         HttpResponse.ok(mapOf("runId" to id))
     } catch (e: IllegalStateException) {
-        val body = mutableMapOf("error" to "An import run is already active")
+        val body = mutableMapOf("error" to "An import or cleanup is already active")
         lease.activeExpiresAt()?.let { body["expiresAt"] = it.toString() }
-        log.warn("CrowdStrike import start actor={} outcome=rejected reason=active-run", actor(authentication))
+        log.warn("CrowdStrike import start actor={} outcome=rejected reason=active-operation", actor(authentication))
         HttpResponse.status<Map<String, String>>(HttpStatus.CONFLICT)
             .body(body)
     }

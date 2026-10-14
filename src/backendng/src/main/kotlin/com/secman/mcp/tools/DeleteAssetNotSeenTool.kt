@@ -3,6 +3,7 @@ package com.secman.mcp.tools
 import com.secman.domain.McpOperation
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.service.CrowdStrikeCleanupAuditService
+import com.secman.service.CrowdStrikeCleanupBasis
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 
@@ -18,17 +19,19 @@ class DeleteAssetNotSeenTool(
 ) : McpTool {
 
     override val name = "delete_asset_not_seen"
-    override val description = "Delete CrowdStrike-imported assets not seen in CrowdStrike for more than N days (ADMIN or SECCHAMPION, requires User Delegation)"
+    override val description = "Delete stale CrowdStrike assets by explicit sensor-contact or import-inactivity policy (ADMIN or SECCHAMPION, requires User Delegation)"
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(
         "type" to "object",
         "properties" to mapOf(
             "days" to mapOf(
-                "type" to "number",
-                "description" to "Days since last CrowdStrike import. Assets with no import in this window are deleted.",
-                "minimum" to 1
+                "type" to "integer",
+                "description" to "Age threshold in days for the selected cleanup basis.",
+                "minimum" to 1, "maximum" to 36500
             ),
+            "basis" to mapOf("type" to "string", "enum" to listOf("import-inactivity", "sensor-contact"),
+                "description" to "Default import-inactivity. Sensor-contact uses Falcon contact, regardless of recent imports."),
             "dryRun" to mapOf(
                 "type" to "boolean",
                 "description" to "Preview matching assets without deleting them. Default: false"
@@ -49,8 +52,11 @@ class DeleteAssetNotSeenTool(
 
         val days = (arguments["days"] as? Number)?.toInt()
             ?: return McpToolResult.error("INVALID_ARGUMENT", "days is required and must be >= 1")
-        if (days < 1) {
-            return McpToolResult.error("INVALID_ARGUMENT", "days must be >= 1")
+        if (days !in 1..36500 || (arguments["days"] as? Number)?.toDouble() != days.toDouble()) {
+            return McpToolResult.error("INVALID_ARGUMENT", "days must be an integer between 1 and 36500")
+        }
+        if (arguments["basis"] != null && arguments["basis"] !is String) {
+            return McpToolResult.error("INVALID_ARGUMENT", "basis must be import-inactivity or sensor-contact")
         }
         val dryRun = arguments["dryRun"] as? Boolean ?: false
         val includeLegacy = arguments["includeLegacy"] as? Boolean
@@ -61,11 +67,16 @@ class DeleteAssetNotSeenTool(
                 dryRun = dryRun,
                 triggeredBy = context.delegatedUserEmail ?: "mcp",
                 maxDeletePercent = null,
-                includeLegacy = includeLegacy
+                includeLegacy = includeLegacy,
+                basis = CrowdStrikeCleanupBasis.parse(arguments["basis"] as? String ?: "import-inactivity")
             )
 
             val response = mapOf(
-                "success" to true,
+                "success" to (result.errors.isEmpty() && result.status?.startsWith("ABORTED") != true),
+                "basis" to result.basis,
+                "cutoffUtc" to result.cutoffUtc?.toString(),
+                "retentionDays" to result.retentionDays,
+                "exclusions" to result.exclusions,
                 "days" to result.days,
                 "cutoff" to result.cutoff.toString(),
                 "dryRun" to result.dryRun,
@@ -76,29 +87,31 @@ class DeleteAssetNotSeenTool(
                 "legacyDeletedCount" to result.legacyDeletedCount,
                 "status" to (result.status ?: if (dryRun) "DRY_RUN" else "SUCCESS"),
                 "runId" to result.runId,
-                "candidates" to result.candidates.map { c ->
+                "candidates" to result.candidates.take(200).map { c ->
                     mapOf(
                         "assetId" to c.assetId,
                         "name" to c.name,
                         "crowdStrikeLastImportedAt" to c.crowdStrikeLastImportedAt?.toString(),
-                        "reason" to c.reason.name
+                        "reason" to c.reason.name,
+                        "falconLastContact" to c.falconLastContact?.toString(),
+                        "lastImportedAt" to c.lastImportedAt?.toString()
                     )
                 },
                 "errors" to result.errors.map { e ->
                     mapOf("assetId" to e.assetId, "assetName" to e.assetName, "message" to e.message)
                 },
                 "message" to if (dryRun) {
-                    "Dry run: ${result.candidateCount} asset(s) would be deleted (not seen in $days days)"
+                    "Dry run: ${result.candidateCount} asset(s) would be deleted (policy ${result.basis}, $days days)"
                 } else {
-                    "Deleted ${result.deletedCount} asset(s) not seen in $days days" +
-                        if (result.skippedCount > 0) " (${result.skippedCount} failed)" else ""
+                    "Deleted ${result.deletedCount} asset(s) using ${result.basis}, $days days" +
+                        if (result.skippedCount > 0) " (${result.skippedCount} skipped or failed)" else ""
                 }
             )
             McpToolResult.success(response)
         } catch (e: IllegalArgumentException) {
             McpToolResult.error("INVALID_ARGUMENT", e.message ?: "Invalid argument")
         } catch (e: Exception) {
-            McpToolResult.error("EXECUTION_ERROR", "Cleanup failed: ${e.message}")
+            McpToolResult.error("EXECUTION_ERROR", "Cleanup failed; see backend log for details")
         }
     }
 }

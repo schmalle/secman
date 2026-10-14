@@ -1,3 +1,4 @@
+import { markAssetObserved } from './helpers/isolated-target';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { requireIsolatedTarget } from './helpers/isolated-target';
@@ -41,7 +42,9 @@ async function login(api: APIRequestContext, username: string, password: string)
 async function create(api: APIRequestContext, path: string, data: unknown): Promise<{ id: number }> {
   const response = await api.post(path, { data });
   expect(response.ok(), `create ${path}: ${response.status()}`).toBeTruthy();
-  return response.json();
+  const saved = await response.json();
+  if (path === '/api/assets') markAssetObserved(saved.id);
+  return saved;
 }
 
 test('live authorization scope old session role refresh report ownership and revocation', async ({ playwright, page }) => {

@@ -69,7 +69,7 @@ open class AiBuddySnapshotService(
     }
 
     private fun readSnapshot(connection: Connection, assetId: Long): AiBuddySnapshot {
-        val asset = query(connection, "SELECT * FROM asset WHERE id = ?", listOf(assetId)) { r ->
+        val asset = query(connection, "SELECT * FROM ${com.secman.repository.AssetCurrentnessSql.ASSETS} a WHERE id = ?", listOf(assetId)) { r ->
             Triple(
                 AiBuddySystem(assetId, r.getString("name"), r.getString("os_version"),
                     build = Regex("(?:10\\.0\\.)?([0-9]{5}\\.[0-9]+)").find(r.getString("os_version") ?: "")?.groupValues?.get(1),

@@ -44,6 +44,7 @@ interface Asset {
   cloudInstanceId?: string;
   osVersion?: string;
   falconLastSeen?: string;
+  crowdStrikeLastImportedAt?: string;
   falconProductType?: string;
   adDomain?: string;
   criticality?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NA' | null;
@@ -710,6 +711,7 @@ const AssetManagement: React.FC = () => {
             <div className="card">
               <div className="card-body">
                 <h5 className="card-title">{editingAsset ? 'Edit Asset' : 'Add New Asset'}</h5>
+                {!editingAsset && <p className="text-muted">New assets appear in current inventory after a verified observation.</p>}
                 <form onSubmit={handleSubmit}>
                   <div className="mb-3">
                     <label htmlFor="name" className="form-label">Name *</label>
@@ -987,12 +989,12 @@ const AssetManagement: React.FC = () => {
           <label htmlFor="falconActivity" className="form-label me-2">Falcon sensor contact</label>
           <select id="falconActivity" className="form-select w-auto d-inline-block" value={falconActivity}
             onChange={(event) => { setFalconActivity(event.target.value); setPage(0); }}>
-            <option value="">All inventory, including retained older assets</option>
+            <option value="">All current assets (seen within 72 hours)</option>
             <option value="recent">Seen within 24 hours</option>
-            <option value="older">Last seen more than 24 hours ago</option>
-            <option value="unknown">No verified Falcon contact time</option>
+            <option value="older">Falcon contact between 24 and 72 hours ago</option>
+            <option value="unknown">Current assets observed by another source</option>
           </select>
-          <div className="form-text">Sensor contact is reported by Falcon. Older contact does not mean a machine is retired. Server-family imports also include domain controllers.</div>
+          <div className="form-text">Only assets observed within the last 72 hours are shown. Falcon-managed assets require actual sensor contact; other assets require a verified observation. Hidden assets remain stored.</div>
         </div>
         {showMoreFilters && (
           <div id="assetMoreFilters" className="asset-management__more-filters">
@@ -1081,7 +1083,8 @@ const AssetManagement: React.FC = () => {
                           <td>
                             {asset.name}
                             {asset.falconProductType === 'Domain Controller' && <span className="badge bg-secondary ms-2">Domain controller</span>}
-                            {asset.falconLastSeen && <small className="d-block text-muted">Last seen: {new Date(asset.falconLastSeen).toLocaleString()}</small>}
+                            {asset.falconLastSeen && <small className="d-block text-muted">Falcon last contact: {new Date(asset.falconLastSeen).toLocaleString()}</small>}
+                            {asset.crowdStrikeLastImportedAt && <small className="d-block text-muted">Last imported into SecMan: {new Date(asset.crowdStrikeLastImportedAt).toLocaleString()}</small>}
                           </td>
                           <td>
                             {(asset.ipAddresses?.length ? asset.ipAddresses : asset.ip ? [asset.ip] : []).length > 0

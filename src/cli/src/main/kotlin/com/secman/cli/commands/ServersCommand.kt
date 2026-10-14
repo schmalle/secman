@@ -70,7 +70,7 @@ class ServersCommand {
     var clientId: String? = null
     var clientSecret: String? = null
     var limit: Int = 4000
-    var lastSeenDays: Int = 0
+    var lastSeenDays: Int = 3
     var overdueThreshold: Int = 30
     var backendUrl: String? = null
     /** Run the post-import reconcile sweep in report-only mode (counts, deletes nothing). */
@@ -164,6 +164,7 @@ class ServersCommand {
                     var totalServersProcessed = 0
                     var totalServersCreated = 0
                     var totalServersUpdated = 0
+                    var totalRetentionSkipped = 0
                     var totalVulnsImported = 0
                     var totalVulnsWithPatchDate = 0
                     var totalVulnsSkipped = 0
@@ -212,6 +213,7 @@ class ServersCommand {
                                 totalServersProcessed += result.serversProcessed
                                 totalServersCreated += result.serversCreated
                                 totalServersUpdated += result.serversUpdated
+                                totalRetentionSkipped += result.hostOutcomes.count { it.status == "SKIPPED_RETENTION" }
                                 totalVulnsImported += result.vulnerabilitiesImported
                                 totalVulnsWithPatchDate += result.vulnerabilitiesWithPatchDate
                                 totalVulnsSkipped += result.vulnerabilitiesSkipped
@@ -279,6 +281,7 @@ class ServersCommand {
                     System.out.println("$deviceLabel processed: $totalServersProcessed")
                     System.out.println("  - New $deviceLabel created: $totalServersCreated")
                     System.out.println("  - Existing $deviceLabel updated: $totalServersUpdated")
+                    System.out.println("  - Skipped by sensor retention: $totalRetentionSkipped")
                     System.out.println("Vulnerabilities imported: $totalVulnsImported")
                     System.out.println("  - With patch publication date: $totalVulnsWithPatchDate")
                     System.out.println("Vulnerabilities skipped: $totalVulnsSkipped")
@@ -320,8 +323,8 @@ class ServersCommand {
                             .toSet()
                         val excludedCount = streamResult.queriedHosts.size - effectiveHosts.size
                         if (excludedCount > 0) {
-                            System.out.println("Excluding $excludedCount host(s) with failed fetch/persist from reconcile scope " +
-                                "(${streamResult.failedHosts.size} fetch-side, ${allFailedHostnames.size} persist-side)")
+                            System.out.println("Excluding $excludedCount host(s) with failed fetch/persist or policy skips from reconcile scope " +
+                                "(${streamResult.failedHosts.size} fetch-side, ${allFailedHostnames.size} persist/policy-side)")
                         }
                         try {
                             val reconcileResult = storageService.reconcileStaleVulnerabilities(
@@ -516,6 +519,8 @@ class ServersCommand {
             System.out.println("$deviceLabel processed: ${result.serversProcessed}")
             System.out.println("  - New $deviceLabel created: ${result.serversCreated}")
             System.out.println("  - Existing $deviceLabel updated: ${result.serversUpdated}")
+            val retentionSkipped = result.hostOutcomes.count { it.status == "SKIPPED_RETENTION" }
+            System.out.println("  - Skipped by sensor retention: $retentionSkipped")
             System.out.println("Vulnerabilities imported: ${result.vulnerabilitiesImported}")
             System.out.println("  - With patch publication date: ${result.vulnerabilitiesWithPatchDate}")
             System.out.println("Vulnerabilities skipped: ${result.vulnerabilitiesSkipped}")

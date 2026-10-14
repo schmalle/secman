@@ -282,6 +282,56 @@ expect_silent A03-sql-interp "bound :name parameter"
 expect_silent A03-html       "DOMPurify.sanitize at the assignment site"
 
 setup_repo
+plant src/backendng/src/main/kotlin/com/secman/repository/AssetCurrentnessSql.kt <<'EOF'
+object AssetCurrentnessSql { const val JPQL = "1=1" }
+EOF
+plant src/backendng/src/main/kotlin/com/secman/repository/AssetAccessSql.kt <<'EOF'
+object AssetAccessSql { const val IDS = "SELECT id FROM asset" }
+EOF
+plant src/backendng/src/main/kotlin/com/secman/repository/CrowdStrikeSnapshotSql.kt <<'EOF'
+object CrowdStrikeSnapshotSql { const val CURRENT_FINDINGS = "vulnerability" }
+EOF
+plant src/backendng/src/main/kotlin/com/secman/repository/CurrentRepo.kt <<'EOF'
+@Query("SELECT a FROM Asset a WHERE ${AssetCurrentnessSql.JPQL} AND a.id = :id")
+fun bound(id: Long): Asset?
+@Query(value = "SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL)
+fun current(): List<Asset>
+@Query("SELECT a.* FROM asset a WHERE a.id IN (" + AssetAccessSql.IDS + ")")
+fun authorized(): List<Asset>
+@Query("SELECT COUNT(*) FROM " + CrowdStrikeSnapshotSql.CURRENT_FINDINGS)
+fun countCurrent(): Long
+EOF
+expect_silent A03-sql-interp "static currentness interpolation with bound request value"
+expect_silent A03-sql-concat "static currentness concatenation"
+
+setup_repo
+plant src/backendng/src/main/kotlin/com/secman/repository/AssetCurrentnessSql.kt <<'EOF'
+object AssetCurrentnessSql { const val JPQL = "1=1" }
+EOF
+plant src/backendng/src/main/kotlin/com/secman/repository/AssetAccessSql.kt <<'EOF'
+object AssetAccessSql { const val IDS = "SELECT id FROM asset" }
+EOF
+plant src/backendng/src/main/kotlin/com/secman/repository/CrowdStrikeSnapshotSql.kt <<'EOF'
+object CrowdStrikeSnapshotSql { const val CURRENT_FINDINGS = "vulnerability" }
+EOF
+plant src/backendng/src/main/kotlin/com/secman/repository/MixedRepo.kt <<'EOF'
+fun unsafe(id: String) = em.createQuery("SELECT a FROM Asset a WHERE ${AssetCurrentnessSql.JPQL} AND a.id = '$id'")
+fun unsafeConcat(id: String) = em.createQuery("SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.id = " + id)
+EOF
+expect_fires A03-sql-interp "static currentness must not hide request interpolation"
+expect_fires A03-sql-concat "static currentness must not hide request concatenation"
+
+setup_repo
+plant src/backendng/src/main/kotlin/com/secman/repository/AssetCurrentnessSql.kt <<'EOF'
+object AssetCurrentnessSql { val JPQL = requestValue }
+EOF
+plant src/backendng/src/main/kotlin/com/secman/repository/SpoofedRepo.kt <<'EOF'
+@Query("SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL)
+fun unsafe(): List<Asset>
+EOF
+expect_fires A03-sql-concat "a dynamic field cannot impersonate a trusted SQL constant"
+
+setup_repo
 plant src/frontend/src/components/HtmlSafety.test.ts <<'EOF'
 assert.doesNotMatch(source, /dangerouslySetInnerHTML/);
 EOF

@@ -59,7 +59,7 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
 
     companion object {
         private const val ROW_QUERY = """
-            SELECT a.* FROM asset a
+            SELECT a.* FROM ${com.secman.repository.AssetCurrentnessSql.ASSETS} a
             WHERE (:restrictIds = FALSE OR a.id IN (:ids))
               AND (:falconActivity IS NULL
                 OR (:falconActivity = 'recent' AND a.crowdstrike_agent_seen_at >= :falconCutoff)
@@ -81,7 +81,7 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
             ORDER BY a.created_at DESC, a.id DESC
         """
         private const val COUNT_QUERY = """
-            SELECT COUNT(*) FROM asset a
+            SELECT COUNT(*) FROM ${com.secman.repository.AssetCurrentnessSql.ASSETS} a
             WHERE (:restrictIds = FALSE OR a.id IN (:ids))
               AND (:falconActivity IS NULL
                 OR (:falconActivity = 'recent' AND a.crowdstrike_agent_seen_at >= :falconCutoff)

@@ -286,3 +286,7 @@ secrets, and no `pass-cli` — only Node ≥ 22 for `--experimental-strip-types`
 | `npm ci` fails with "lock file's X does not satisfy Y" | `package-lock.json` drifted from `package.json`, which makes the whole frontend gate unrunnable. `npm install` to rewrite the lock, then re-run `npm ci` to confirm, and commit the lock |
 | `npm test`: `ERR_MODULE_NOT_FOUND` on a component path | the module is `.tsx`; JSX cannot be imported. Extract the logic to a sibling `.ts` module (see [Frontend](#frontend-nodetest-zero-dependencies)) |
 | `@ParameterizedTest` unresolved | `junit-jupiter-params` is not on the classpath. Loop inside a plain `@Test` |
+
+## Current asset visibility
+
+Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.

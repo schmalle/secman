@@ -271,7 +271,7 @@ open class WorkgroupController(
                 criticality = workgroup.criticality,
                 enabled = workgroup.enabled,
                 userCount = workgroup.users.size,
-                assetCount = workgroup.assets.size,
+                assetCount = workgroup.assets.count { com.secman.service.AssetCurrentnessPolicy.isCurrent(it) },
                 createdAt = workgroup.createdAt!!,
                 updatedAt = workgroup.updatedAt!!
             )
@@ -588,7 +588,7 @@ open class WorkgroupController(
                 return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
                     .body(mapOf("error" to "You must be a member of '${workgroup.name}' to view its assets"))
             }
-            val assets = assetRepository.findByWorkgroupsIdOrderByNameAsc(id).map {
+            val assets = assetRepository.findByWorkgroupsIdOrderByNameAsc(id).filter { com.secman.service.AssetCurrentnessPolicy.isCurrent(it) }.map {
                 AssignedAssetDto(
                     id = it.id!!,
                     name = it.name,
@@ -946,7 +946,7 @@ open class WorkgroupController(
         @QueryValue(defaultValue = "") pattern: String,
         @QueryValue(defaultValue = "") type: String
     ): HttpResponse<List<CliAssetDto>> {
-        val allAssets = assetRepository.findAll().toList()
+        val allAssets = assetRepository.findCurrent().toList()
 
         var filtered = allAssets
 
@@ -983,7 +983,7 @@ open class WorkgroupController(
     open fun listWorkgroupAssets(@PathVariable id: Long): HttpResponse<List<CliAssetDto>> {
         return try {
             workgroupService.getWorkgroupById(id)
-            val assets = assetRepository.findByWorkgroupsIdOrderByNameAsc(id)
+            val assets = assetRepository.findByWorkgroupsIdOrderByNameAsc(id).filter { com.secman.service.AssetCurrentnessPolicy.isCurrent(it) }
             val result = assets.map {
                 CliAssetDto(
                     id = it.id!!,

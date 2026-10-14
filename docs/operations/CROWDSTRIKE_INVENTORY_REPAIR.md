@@ -74,3 +74,7 @@ single configured Falcon tenant; this change does not introduce multi-tenant rou
   isolated runner and checks preview, evidence limits, repeated application and rollback.
 - Full build, frontend production build, isolated exception lifecycle, dual-role JS
   scan, and a real operational import are separate gates.
+
+## Current asset visibility
+
+Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](../CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.

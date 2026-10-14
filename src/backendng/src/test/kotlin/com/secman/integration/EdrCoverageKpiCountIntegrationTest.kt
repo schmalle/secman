@@ -46,6 +46,7 @@ class EdrCoverageKpiCountIntegrationTest : BaseIntegrationTest() {
             .apply {
                 cloudInstanceId = instanceId
                 crowdStrikeAgentSeenAt = agentSeenAt
+                verifiedObservedAt = LocalDateTime.now(java.time.ZoneOffset.UTC).minusMinutes(1)
             }
     )
 

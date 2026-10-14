@@ -22,7 +22,7 @@ object AccountAgeSql {
                COUNT(*)                                         AS openFindingCount,
                COUNT(DISTINCT a.id)                             AS affectedAssetCount
         FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
-        JOIN asset a ON v.asset_id = a.id
+        JOIN ${AssetCurrentnessSql.ASSETS} a ON v.asset_id = a.id
         WHERE v.excepted = 0
           AND a.cloud_account_id IS NOT NULL
           AND a.cloud_account_id <> ''
@@ -54,7 +54,7 @@ object AccountAgeSql {
                        ORDER BY COALESCE(v.first_seen_at, v.scan_timestamp) ASC, v.vulnerability_id ASC
                    ) AS rn
             FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
-            JOIN asset a ON v.asset_id = a.id
+            JOIN ${AssetCurrentnessSql.ASSETS} a ON v.asset_id = a.id
             WHERE v.excepted = 0
               AND a.cloud_account_id IN (:accountIds)
         ) ranked

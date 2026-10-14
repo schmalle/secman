@@ -115,14 +115,14 @@ class AssetOverviewControllerTest : BaseIntegrationTest() {
         assertThat(rows.single().ipAddresses).containsExactly("10.4.0.10", "10.77.32.9", "10.8.0.10", "2001:db8::9")
     }
     @Test
-    fun `Falcon recency separates retained inventory and preserves access scope`() {
+    fun `Falcon recency subdivides current inventory and preserves access scope`() {
         assertThat((search(activity = "unknown")["matchingCount"] as Number).toLong()).isEqualTo(1)
         asset.crowdStrikeAgentSeenAt = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusHours(2)
         assetRepository.update(asset)
         assertThat((search(activity = "recent")["matchingCount"] as Number).toLong()).isEqualTo(1)
         assertThat((search(activity = "older")["matchingCount"] as Number).toLong()).isZero()
         assertThat((search(activity = "recent", auth = TestAuthHelper.getAuthToken(client, viewer.username))["matchingCount"] as Number).toLong()).isZero()
-        asset.crowdStrikeAgentSeenAt = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(3)
+        asset.crowdStrikeAgentSeenAt = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusHours(48)
         assetRepository.update(asset)
         assertThat((search(activity = "recent")["matchingCount"] as Number).toLong()).isZero()
         assertThat((search(activity = "older")["matchingCount"] as Number).toLong()).isEqualTo(1)

@@ -49,6 +49,8 @@ Security requirement, vulnerability and risk management platform.
 
 Creator, uploader, and owner remain metadata. They grant no access. Workgroup hierarchy does not propagate membership.
 
+Current operational inventory additionally requires verified observation within the inclusive UTC 72-hour window. Falcon-managed assets use actual sensor contact; other assets use `verified_observed_at`. Stored-record authorization and scanner ingestion remain independent. See `docs/CURRENT_ASSETS.md`.
+
 Authoritative filter: `AssetFilterService`. MCP and heatmap reuse it; SQL entity and ID queries share `AssetAccessSql`. `getScopedAccessibleAssetIds()` retains its ADMIN-only global shortcut for scoped notifications.
 
 ADMIN and SECCHAMPION manage grants and delete assets. Ordinary users edit visible asset details; creation requires atomic placement in an enabled directly joined group. Account/domain/workgroup changes require grant-management authority. Personal mappings, user administration, and canonical workgroup owner remain ADMIN-only.

@@ -83,7 +83,7 @@ class WorkgroupVulnsService(
 
         // Direct-membership assets (asset ↔ workgroup join). The repository query
         // uses LEFT JOIN FETCH on workgroups, so asset.workgroups is safe to read.
-        val directAssets = assetRepository.findByWorkgroupIdIn(workgroupIds)
+        val directAssets = assetRepository.findByWorkgroupIdIn(workgroupIds).filter { AssetCurrentnessPolicy.isCurrent(it) }
         val directAssetIds = directAssets.mapNotNullTo(HashSet()) { it.id }
 
         // Unified Asset Access rule #9: assets in AWS accounts assigned to the
@@ -111,7 +111,7 @@ class WorkgroupVulnsService(
             .groupBy({ it.workgroup.id!! }, { it.adDomain.lowercase() })
         val domains = domainsByGroup.values.flatten().distinct()
         val domainAssets = if (domains.isEmpty()) emptyList() else assetRepository.findByAdDomainInIgnoreCase(domains)
-        val assets = (directAssets + cloudAssets + domainAssets).distinctBy { it.id }
+        val assets = (directAssets + cloudAssets + domainAssets).distinctBy { it.id }.filter { AssetCurrentnessPolicy.isCurrent(it) }
 
         logger.debug(
             "Found {} assets for user {} ({} direct, {} via workgroup AWS accounts) across {} workgroups",

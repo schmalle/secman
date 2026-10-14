@@ -52,10 +52,10 @@ class CrowdStrikeApiClientImplDeviceScopeTest {
         assertThat(requests).hasSize(2)
         val decodedUris = requests.map { decode(it.uri.toString()) }
         assertThat(decodedUris).anyMatch {
-            it.contains("product_type_desc:'Server'") && it.contains("last_seen:>'")
+            it.contains("product_type_desc:'Server'") && it.contains("last_seen:>='")
         }
         assertThat(decodedUris).anyMatch {
-            it.contains("product_type_desc:'Domain Controller'") && it.contains("last_seen:>'")
+            it.contains("product_type_desc:'Domain Controller'") && it.contains("last_seen:>='")
         }
         assertThat(decodedUris).noneMatch { it.contains("product_type_desc:'Workstation'") }
     }

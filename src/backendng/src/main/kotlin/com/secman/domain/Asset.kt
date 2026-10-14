@@ -22,6 +22,7 @@ import java.time.LocalDateTime
         Index(name = "idx_asset_ad_domain", columnList = "ad_domain"),            // AD domain filtering
         Index(name = "idx_asset_type", columnList = "type"),                      // Asset type grouping/filtering
         Index(name = "idx_asset_owner", columnList = "owner"),                    // Owner-based filtering
+        Index(name = "idx_asset_verified_observed_at", columnList = "verified_observed_at"),
         Index(name = "idx_asset_last_seen", columnList = "last_seen"),            // Outdated asset queries
         Index(name = "idx_asset_manual_creator", columnList = "manual_creator_id"), // Access control by creator
         Index(name = "idx_asset_scan_uploader", columnList = "scan_uploader_id"),   // Access control by uploader
@@ -119,6 +120,10 @@ data class Asset(
     @Column(name = "last_seen")
     var lastSeen: LocalDateTime? = null,
 
+    /** Verified scan or integration observation in UTC; never a manual edit/import clock. */
+    @Column(name = "verified_observed_at")
+    var verifiedObservedAt: LocalDateTime? = null,
+
     /**
      * Timestamp when this asset last appeared in a CrowdStrike import.
      * Separate from lastSeen, which is also updated by scan imports and other
@@ -130,6 +135,10 @@ data class Asset(
     /** Provider category, separate from the inventory type used by risk rules. */
     @Column(name = "crowdstrike_product_type", length = 64)
     var crowdStrikeProductType: String? = null,
+
+    /** Durable source marker; editable ownership cannot turn a Falcon asset into scan-only inventory. */
+    @Column(name = "crowdstrike_managed", nullable = false)
+    var crowdStrikeManaged: Boolean = false,
 
     /** Falcon's actual last sensor contact in UTC, never the time SecMan imported it. */
     @Column(name = "crowdstrike_agent_seen_at")
@@ -422,6 +431,13 @@ data class Asset(
         result.asset = this
         lastSeen = result.discoveredAt
         updatedAt = LocalDateTime.now()
+    }
+
+    /** Out-of-order and future uploads cannot replace good observation evidence. */
+    fun recordObservation(seenAt: LocalDateTime, now: LocalDateTime = LocalDateTime.now(java.time.ZoneOffset.UTC)) {
+        if (!seenAt.isAfter(now) && (verifiedObservedAt == null || seenAt.isAfter(verifiedObservedAt))) {
+            verifiedObservedAt = seenAt
+        }
     }
 
     override fun toString(): String {

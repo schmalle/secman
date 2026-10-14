@@ -35,7 +35,7 @@ class CrowdStrikeLatestDeviceIntegrationTest : BaseIntegrationTest() {
         val old = assets.save(Asset(name = hostname, crowdStrikeHostname = hostname, type = "SERVER", owner = "CrowdStrike Import"))
         val oldRecord = CrowdStrikeDeviceRecord("old-${old.id}", hostname, firstSeen = Instant.parse("2026-01-01T00:00:00Z"))
         val newRecord = oldRecord.copy(aid = "new-${winner.id}", firstSeen = Instant.parse("2026-02-01T00:00:00Z"),
-            lastSeen = Instant.parse("2026-09-12T01:02:03Z"), productType = "Domain Controller")
+            lastSeen = Instant.now().minusSeconds(60), productType = "Domain Controller")
         identities.save(CrowdStrikeAssetIdentity(asset = old, crowdStrikeAid = oldRecord.aid, sourceHostname = hostname))
         identities.save(CrowdStrikeAssetIdentity(asset = winner, crowdStrikeAid = newRecord.aid, sourceHostname = hostname))
         vulnerabilities.save(Vulnerability(asset = old, vulnerabilityId = "CVE-2026-1000", cvssSeverity = "HIGH",

@@ -23,7 +23,7 @@ open class AiBuddyAccessGuard(
             log.warn("AI buddy actor={} asset={} outcome=denied", authentication.attributes["userId"]?.toString()?.toLongOrNull(), assetId)
             throw e
         }
-        if (assetId <= 0 || !filter.canAccessAsset(assetId, beta.authentication(user)) || !assets.existsById(assetId)) {
+        if (assetId <= 0 || !filter.canReadCurrentAsset(assetId, beta.authentication(user)) || !assets.existsById(assetId)) {
             log.warn("AI buddy actor={} asset={} outcome=denied", user.id, assetId)
             throw HttpStatusException(HttpStatus.NOT_FOUND, "ASSET_OR_JOB_NOT_FOUND")
         }

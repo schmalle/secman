@@ -84,6 +84,11 @@ open class IntegrationRunWriter(
             } while (batch.size == 500)
         }
         request.inventory?.let { applyInventory(subject, run, it, request.status) }
+        if (request.status == "SUCCESS" &&
+            (scanner.source != "WEB_SECURITY" || request.inventory?.exposure?.reachability == "REACHABLE")) {
+            asset.recordObservation(LocalDateTime.ofInstant(request.completedAt, ZoneOffset.UTC))
+            repository.invalidateCurrentInventoryCaches()
+        }
         subject.lastScanAt = request.completedAt
         subject.lastStatus = request.status
         if (request.status == "SUCCESS") subject.lastSuccessfulScanAt = request.completedAt

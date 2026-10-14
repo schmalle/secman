@@ -724,3 +724,7 @@ their own email in `X-MCP-User-Email`; their roles and workgroup access still
 limit what they can query. To also use the key yourself, expand **Additional
 email domains / use the key yourself** and add your own email domain. Adding
 a domain alone does not authorize everyone in that domain.
+
+## Current asset visibility
+
+Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.

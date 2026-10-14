@@ -14,12 +14,8 @@ if [ ! -f "$JAR_PATH" ]; then
     exit 1
 fi
 
-# --last-seen-days widened from 1 to 30 so hosts that don't check into Falcon every
-# single day (stopped / intermittent EC2 instances) are still imported. A 1-day window
-# silently dropped any such host before its vulns were ever queried, leaving it invisible
-# to notify-user even though the live per-host lookup showed vulnerabilities. 30 aligns
-# with the notification overdue SLA. SERVER_FAMILY covers Falcon's separate Server and
-# Domain Controller categories without importing workstations.
+# Compare the complete AWS export against stored inventory. The 72-hour display
+# window must not shrink this reconciliation population or its deletion safety brake.
 pass-cli run --env-file "$REPO_ROOT/secmanpp.env" -- \
     java -Xmx4g -Xms2g -jar "$JAR_PATH" asset-match-clear \
     --bucket covestro-ec2-export \

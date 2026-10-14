@@ -124,6 +124,9 @@ open class CrowdStrikeController(
                 selected.cloudAccountId.equals(body.cloudAccountId, ignoreCase = true)
             if (body.selectedAid !in grantedAids && !stableCloudIdentity) return HttpResponse.notFound<Any>()
         }
+        if (!com.secman.service.AssetCurrentnessPolicy.includes(body.observedAt?.let {
+                java.time.LocalDateTime.ofInstant(it, java.time.ZoneOffset.UTC)
+            })) return HttpResponse.notFound<Any>()
         return HttpResponse.ok(body.copy(assetId = selected?.id ?: body.assetId))
     }
 

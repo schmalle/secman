@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Local, offline repair of import-time contact stamps using recorded Falcon evidence.
+# Includes hidden stored assets; repair never treats processing time as a new observation.
 # Defaults to a read-only preview. Connection uses the operator's MariaDB client defaults.
 set -euo pipefail
 mode="${1:---preview}"

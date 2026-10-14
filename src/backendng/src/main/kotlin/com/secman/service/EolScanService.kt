@@ -195,7 +195,7 @@ open class EolScanService(
     ) {
         var page = 0
         while (page < MAX_PAGES) {
-            val assets = assetRepository.findAll(Pageable.from(page, pageSize)).content
+            val assets = assetRepository.findCurrent(Pageable.from(page, pageSize)).content
             if (assets.isEmpty()) break
             val batch = mutableListOf<EolFinding>()
             for (asset in assets) {

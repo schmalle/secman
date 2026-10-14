@@ -59,7 +59,7 @@ open class ScanImportService(
             logger.info("Created Scan record: id=${scan.id}, hosts=${nmapData.hosts.size}")
 
             // Process each host
-            val importStats = processHosts(scan, nmapData.hosts, username)
+            val importStats = processHosts(scan, nmapData.hosts, username, nmapData.scanDateVerified)
 
             // Update scan with final host count
             scan.hostCount = importStats.assetsCreated + importStats.assetsUpdated
@@ -76,6 +76,7 @@ open class ScanImportService(
                 message = "Nmap scan imported: $filename (${importStats.assetsCreated + importStats.assetsUpdated} hosts, ${importStats.totalPorts} ports)"
             )
 
+            assetRepository.invalidateCurrentInventoryCaches()
             return ScanImportSummary(
                 scanId = scan.id!!,
                 filename = filename,
@@ -129,7 +130,7 @@ open class ScanImportService(
      * Process all hosts from scan
      * Implements duplicate detection (Decision 2)
      */
-    private fun processHosts(scan: Scan, hosts: List<NmapHost>, username: String): ImportStats {
+    private fun processHosts(scan: Scan, hosts: List<NmapHost>, username: String, timestampVerified: Boolean): ImportStats {
         val stats = ImportStats()
         val seenIps = mutableSetOf<String>()
 
@@ -151,7 +152,7 @@ open class ScanImportService(
             seenIps.add(host.ipAddress)
 
             try {
-                val isNewAsset = processHost(scan, host, username)
+                val isNewAsset = processHost(scan, host, username, timestampVerified)
                 if (isNewAsset) {
                     stats.assetsCreated++
                 } else {
@@ -179,7 +180,7 @@ open class ScanImportService(
      * Process a single host: lookup/create asset, create scan result
      * Returns: true if new asset created, false if existing asset updated
      */
-    private fun processHost(scan: Scan, host: NmapHost, username: String): Boolean {
+    private fun processHost(scan: Scan, host: NmapHost, username: String, timestampVerified: Boolean): Boolean {
         // Lookup asset by IP
         val asset = lookupOrCreateAsset(host, username)
         val isNewAsset = asset.createdAt == asset.updatedAt
@@ -212,6 +213,7 @@ open class ScanImportService(
 
         // Update asset last_seen and scan cache fields
         asset.lastSeen = scan.scanDate
+        if (timestampVerified) asset.recordObservation(scan.scanDate)
         asset.lastScanType = scan.scanType
         asset.lastScanDate = scan.scanDate
         asset.openPortCount = host.ports.count { it.state == "open" }

@@ -87,7 +87,7 @@ class DomainVulnsService(
 
         // Query database for assets matching user's domains (case-insensitive)
         // Feature 053: Use database-level filtering instead of loading all assets
-        val assetsInDomains = assetRepository.findByAdDomainInIgnoreCase(domains)
+        val assetsInDomains = assetRepository.findCurrentByDomains(domains.map { it.lowercase() })
 
         log.info("Found {} assets in user's domains", assetsInDomains.size)
 

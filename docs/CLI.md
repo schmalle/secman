@@ -161,7 +161,7 @@ stored matches and supports `--include-already-eol`, `--only-email`, and
 | `--severity` | `HIGH,CRITICAL` | `CRITICAL,HIGH,MEDIUM,LOW` |
 | `--device-type` | `SERVER` | `SERVER`, `DOMAIN_CONTROLLER`, `SERVER_FAMILY`, `WORKSTATION`, `ALL`; `SERVER_FAMILY` queries servers and domain controllers separately, while `ALL` also includes workstations. **Ignored with `--hostnames`.** |
 | `--min-days-open` | 30 | |
-| `--last-seen-days` | 0 (= all) | recent-checkin window; **ignored with `--hostnames`** |
+| `--last-seen-days` | 3 (0 = all) | recent-checkin window; **ignored with `--hostnames`** |
 | `--limit` | 800 | Spotlight page size |
 | `--save` | false | POST to backend |
 | `--username` / `--password` | — | required with `--save` |
@@ -1184,3 +1184,7 @@ and welcome delivery are separate outcomes.
 For a retained FAILED record, an ADMIN can retry in Account onboarding or with
 MCP `retry_owner_mail_notification`. There is no new CLI retry switch. Records
 older than 90 days lose recipient metadata and are no longer retryable.
+
+## Current asset visibility
+
+Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.

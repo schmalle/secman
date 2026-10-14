@@ -159,9 +159,9 @@ class GetAssetsTool(
                     if (accessibleIds != null) {
                         // Name sort preserved from the Kotlin sortedBy it replaces; it also makes
                         // paging deterministic, which an unordered LIMIT/OFFSET is not.
-                        assetRepository.findByIdIn(accessibleIds, pageable.order("name"))
+                        assetRepository.findByIdIn(accessibleIds, pageable)
                     } else {
-                        assetRepository.findAll(pageable)
+                        assetRepository.findCurrent(pageable)
                     }
                 }
             }
@@ -190,7 +190,7 @@ class GetAssetsTool(
                     "cloudInstanceId" to asset.cloudInstanceId,
                     "adDomain" to asset.adDomain,
                     "osVersion" to asset.osVersion,
-                    "lastSeen" to asset.lastSeen?.toString(),
+                    "lastSeen" to com.secman.service.AssetCurrentnessPolicy.observedAt(asset)?.toString(),
                     "createdAt" to asset.createdAt?.toString(),
                     "updatedAt" to asset.updatedAt?.toString()
                 )

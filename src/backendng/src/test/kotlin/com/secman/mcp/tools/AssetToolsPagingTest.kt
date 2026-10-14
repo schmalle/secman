@@ -39,6 +39,7 @@ class AssetToolsPagingTest {
     /** Trap: stub the unbounded reads so buggy code still "works" and the verify is what fails. */
     private fun stubUnboundedReads() {
         every { assetRepository.findAll() } returns listOf(asset)
+        every { assetRepository.findCurrent() } returns listOf(asset)
         every {
             assetRepository.findByNameContainingIgnoreCase(any<String>(), Pageable.UNPAGED)
         } returns Page.of(listOf(asset), Pageable.UNPAGED, 1L)
@@ -55,6 +56,7 @@ class AssetToolsPagingTest {
 
     private fun assertNoUnboundedRead() {
         verify(exactly = 0) { assetRepository.findAll() }
+        verify(exactly = 0) { assetRepository.findCurrent() }
         verify(exactly = 0) { assetRepository.findByNameContainingIgnoreCase(any<String>(), Pageable.UNPAGED) }
         verify(exactly = 0) { assetRepository.findByType(any<String>()) }
         verify(exactly = 0) { assetRepository.findByOwner(any<String>()) }
@@ -95,13 +97,13 @@ class AssetToolsPagingTest {
     @Test
     fun `get_assets keeps admin on the paged repository calls`() = runBlocking {
         stubUnboundedReads()
-        every { assetRepository.findAll(any<Pageable>()) } returns onePage()
+        every { assetRepository.findCurrent(any<Pageable>()) } returns onePage()
 
         val result = getAssets.execute(mapOf("pageSize" to 50), ctx(null))
 
         assertThat(result.isError).isFalse()
         assertNoUnboundedRead()
-        verify { assetRepository.findAll(match<Pageable> { it.size == 50 }) }
+        verify { assetRepository.findCurrent(match<Pageable> { it.size == 50 }) }
     }
 
     // ------------------------------------------------------------------ get_all_assets_detail
@@ -134,7 +136,7 @@ class AssetToolsPagingTest {
     @Test
     fun `get_all_assets_detail keeps admin on the paged repository calls`() = runBlocking {
         stubUnboundedReads()
-        every { assetRepository.findAll(any<Pageable>()) } returns onePage()
+        every { assetRepository.findCurrent(any<Pageable>()) } returns onePage()
 
         val result = getAllAssetsDetail.execute(mapOf("pageSize" to 50), ctx(null))
 
@@ -252,7 +254,7 @@ class AssetToolsPagingTest {
     // ------------------------------------------------------------------ ordering
 
     @Test
-    fun `restricted unfiltered paging is ordered by name for determinism`() = runBlocking {
+    fun `restricted unfiltered paging leaves deterministic ordering to the repository`() = runBlocking {
         // An unordered LIMIT/OFFSET can repeat or skip rows across pages. The previous Kotlin
         // implementation sorted by name before slicing; that ordering has to move into SQL.
         stubUnboundedReads()
@@ -263,7 +265,7 @@ class AssetToolsPagingTest {
         verify {
             assetRepository.findByIdIn(
                 setOf(1L),
-                match { it.sort.orderBy.any { order -> order.property == "name" } }
+                match { it.sort.orderBy.isEmpty() && it.size == 50 }
             )
         }
     }

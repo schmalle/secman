@@ -75,8 +75,8 @@ class AdminSummaryService(
      */
     fun getSystemStatistics(): SystemStatistics {
         val userCount = userRepository.count()
-        val vulnerabilityCount = vulnerabilityRepository.count()
-        val assetCount = assetRepository.count()
+        val vulnerabilityCount = vulnerabilityRepository.countCurrent()
+        val assetCount = assetRepository.countCurrent()
 
         val baseUrl = appConfig.backend.baseUrl.trimEnd('/')
         val vulnerabilityStatisticsUrl = "$baseUrl/vulnerability-statistics"

@@ -111,7 +111,7 @@ open class ReportController(
     open fun getRiskAssessmentSummary(): ReportSummaryResponse {
         val allAssessments = riskAssessmentRepository.findAll()
         val allRisks = riskRepository.findAll()
-        val totalAssets = assetRepository.count()
+        val totalAssets = assetRepository.countCurrent()
 
         // Assessment summary
         val assessmentStatusBreakdown = allAssessments

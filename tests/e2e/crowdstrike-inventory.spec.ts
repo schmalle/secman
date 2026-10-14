@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test('Falcon inventory distinguishes retained instances from recent sensor contact', async ({ page }, testInfo) => {
+test('Falcon inventory distinguishes current instances by sensor contact', async ({ page }, testInfo) => {
   const login = await page.request.post('/api/auth/login', {
     data: { username: process.env.SECMAN_ADMIN_NAME!, password: process.env.SECMAN_ADMIN_PASS! },
   });
@@ -13,7 +13,7 @@ test('Falcon inventory distinguishes retained instances from recent sensor conta
   const hostname = `falcon-inventory-${suffix}`;
   const assetIds: number[] = [];
   try {
-    for (const [index, ageHours] of [2, 72].entries()) {
+    for (const [index, ageHours] of [2, 48].entries()) {
       const device = {
         aid: `falcon-e2e-${suffix}-${index}`, hostname, instanceId: `i-${suffix}-${index}`,
         cloudAccountId: '123456789012', adDomain: null,
@@ -43,7 +43,7 @@ test('Falcon inventory distinguishes retained instances from recent sensor conta
     await page.getByLabel('Falcon sensor contact', { exact: true }).selectOption('older');
     await expect(page.getByText('Domain controller', { exact: true })).toBeVisible();
     await expect(page.locator('tbody tr').filter({ hasText: hostname })).toHaveCount(1);
-    await page.screenshot({ path: testInfo.outputPath('falcon-retained-inventory.png') });
+    await page.screenshot({ path: testInfo.outputPath('falcon-current-inventory.png') });
     await page.getByLabel('Falcon sensor contact', { exact: true }).selectOption('unknown');
     await expect(page.getByText('No assets match the current filters.', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Clear all', exact: true }).click();

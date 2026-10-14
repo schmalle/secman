@@ -401,3 +401,7 @@ cached payload and a repository dependency is not a file on disk.
 Rules are ADMIN-managed under `/admin/product-classification`; the classification itself, and why it
 keys on product identity rather than the installation path, is documented in
 `docs/CROWDSTRIKE_IMPORT.md` §Installer / setup payload classification.
+
+## Current asset visibility
+
+Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.

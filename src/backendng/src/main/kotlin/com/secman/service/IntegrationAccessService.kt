@@ -16,7 +16,11 @@ class IntegrationAccessService(private val assets: AssetFilterService, private v
     fun requireAsset(assetId: Long, auth: Authentication) {
         if (!assets.canAccessAsset(assetId, auth)) notFound()
     }
-    fun assetIds(auth: Authentication): Set<Long> = assets.getAccessibleAssetIds(auth)
+    fun requireCurrentAsset(assetId: Long, auth: Authentication) {
+        if (!assets.canReadCurrentAsset(assetId, auth)) notFound()
+    }
+    fun currentAssetIds(auth: Authentication): Set<Long> = assets.getAccessibleAssetIds(auth)
+    fun assetIds(auth: Authentication): Set<Long> = assets.getAuthorizedAssetIds(auth)
     fun requireWriter(scanner: IntegrationScanner, auth: Authentication) {
         val user = users.findByUsername(auth.name).orElse(null)
         if (!scanner.enabled || user?.id != scanner.serviceUserId) {

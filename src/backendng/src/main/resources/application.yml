@@ -507,7 +507,9 @@ secman:
     # Scheduled cleanup of assets that have not been re-imported by CrowdStrike
     # for `stale-days` days. Opt-in: disabled by default so existing deployments
     # keep current behavior until ops flips the flag.
+    sensor-retention-days: ${CROWDSTRIKE_SENSOR_RETENTION_DAYS:0}
     cleanup:
+      basis: ${CROWDSTRIKE_CLEANUP_BASIS:import-inactivity}
       enabled: ${CROWDSTRIKE_CLEANUP_ENABLED:false}
       stale-days: ${CROWDSTRIKE_CLEANUP_STALE_DAYS:30}
       # Safety brake: abort the run if more than this percent of CrowdStrike-tracked

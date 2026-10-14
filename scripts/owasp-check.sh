@@ -244,7 +244,36 @@ added_rule_and() {
     fires_in_comments "$rule" && skip=""
     awk -F'\t' -v PR="$(awk_re "$path_re")" -v R1="$(awk_re "$re1")" -v R2="$(awk_re "$re2")" \
         -v EX="$(awk_re "$excl")" -v SK="$(awk_re "$skip")" \
-        '$1 ~ PR && $3 ~ R1 && $3 ~ R2 { if (SK != "" && $3 ~ SK) next; if (EX != "-" && $3 ~ EX) next; print }' "$TMP/added.lines" \
+        -v RULE="$rule" '
+        function staticSqlFile(path, line, found) {
+            found = 0
+            while ((getline line < path) > 0) {
+                if (line ~ /const val /) found++
+                else if (line ~ /(^|[ \t])(val|var)[ \t]/) { close(path); return 0 }
+            }
+            close(path)
+            return found > 0
+        }
+        BEGIN {
+            currentStatic = staticSqlFile("src/backendng/src/main/kotlin/com/secman/repository/AssetCurrentnessSql.kt")
+            accessStatic = staticSqlFile("src/backendng/src/main/kotlin/com/secman/repository/AssetAccessSql.kt")
+            snapshotStatic = staticSqlFile("src/backendng/src/main/kotlin/com/secman/repository/CrowdStrikeSnapshotSql.kt")
+        }
+        $1 ~ PR && $3 ~ R1 {
+            inspected = $3
+            if (RULE == "A03-sql-interp" || RULE == "A03-sql-concat") {
+                # Only this closed set of compile-time policy constants is trusted.
+                # Strip tokens, not entire lines: mixed request interpolation still fires.
+                if (currentStatic) gsub(/\$\{(com\.secman\.repository\.)?AssetCurrentnessSql\.(OBSERVED_AT|CURRENT|IDS|ASSETS|UTC_NOW_JPQL|UTC_START_JPQL|FALCON_JPQL|JPQL|CURRENT_SCAN_JPQL)\}/, "STATIC_SQL", inspected)
+                if (currentStatic) gsub(/(com\.secman\.repository\.)?AssetCurrentnessSql\.(OBSERVED_AT|CURRENT|IDS|ASSETS|UTC_NOW_JPQL|UTC_START_JPQL|FALCON_JPQL|JPQL|CURRENT_SCAN_JPQL)/, "", inspected)
+                if (accessStatic) gsub(/(com\.secman\.repository\.)?AssetAccessSql\.(IDS|PAGE|COUNT)/, "", inspected)
+                if (snapshotStatic) gsub(/(com\.secman\.repository\.)?CrowdStrikeSnapshotSql\.(CURRENT_FINDINGS|STORED_FINDINGS)/, "", inspected)
+            }
+            if (inspected !~ R2) next
+            if (SK != "" && $3 ~ SK) next
+            if (EX != "-" && $3 ~ EX) next
+            print
+        }' "$TMP/added.lines" \
     | while IFS=$'\t' read -r p l t; do
         emit "$sev" "$cat" "$rule" "$p" "$l" "$msg" "$t"
       done

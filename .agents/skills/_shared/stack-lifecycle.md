@@ -202,3 +202,7 @@ Two rules, because both failure modes are silent:
 - **Every claim needs a locator** — `file:line` for findings, a log path for
   errors, a count for anything quantitative. A report the reader cannot verify
   quickly is a report they will stop trusting.
+
+## Current asset test fixtures
+
+Operational inventory requires actual observation within the inclusive UTC 72-hour window. Manual creation, metadata import and vulnerability insertion alone do not make an asset current. Seed explicit evidence for fixtures intended to appear: shell drivers may call `secman_test_mark_asset_observed` after disposable ownership verification; browser fixtures may submit `observedAt` through the ADMIN asset-import endpoint. Do not stamp every database asset or stale-test fixture. Falcon-specific tests must seed actual sensor contact. Ingestion and scanner target discovery retain stored authorization so hidden assets can be re-observed. See `docs/CURRENT_ASSETS.md`.

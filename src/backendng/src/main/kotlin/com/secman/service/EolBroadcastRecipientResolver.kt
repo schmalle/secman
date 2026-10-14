@@ -58,7 +58,7 @@ open class EolBroadcastRecipientResolver(
         if (affectedAssetIds.isEmpty()) return emptyList()
 
         val recipients = linkedMapOf<Long, MutableRecipient>()
-        assetRepository.findByIdIn(affectedAssetIds).forEach { asset ->
+        assetRepository.findByIdIn(affectedAssetIds).filter { AssetCurrentnessPolicy.isCurrent(it) }.forEach { asset ->
             val assetId = asset.id ?: return@forEach
             addUserByUsername(asset.owner, assetId, recipients)
             addUser(asset.manualCreator, assetId, recipients)

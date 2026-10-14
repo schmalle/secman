@@ -1,3 +1,4 @@
+import { markAssetObserved } from './helpers/isolated-target';
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { requireIsolatedTarget } from './helpers/isolated-target';
@@ -33,6 +34,7 @@ test('enabled AI buddy explains missing provider and becomes ready after configu
     expect(asset.status()).toBe(201);
     const savedAsset = await asset.json();
     assetId = savedAsset.id;
+    markAssetObserved(savedAsset.id);
     const finding = await api.post('/api/vulnerabilities/cli-add', { data: {
       hostname: savedAsset.name, cve: 'CVE-2026-90001', criticality: 'HIGH', daysOpen: 1
     } });

@@ -44,7 +44,7 @@ class CrowdStrikeImportSession(
             val expiresAt = (body?.get("expiresAt") as? String)?.let {
                 runCatching { java.time.Instant.parse(it) }.getOrNull()
             }
-            error("Another CrowdStrike import is active" +
+            error("Another CrowdStrike import or cleanup is active" +
                 (expiresAt?.let { " (lease expires at $it)" } ?: "") +
                 ". Wait for it to finish or for its lease to expire before retrying.")
         }

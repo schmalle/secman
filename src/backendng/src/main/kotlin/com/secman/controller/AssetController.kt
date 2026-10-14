@@ -104,7 +104,8 @@ open class AssetController(
         @Nullable val networkZone: NetworkZone? = null,
         @Nullable val tags: Map<String, String>? = null,
         @Nullable val cloudAccountId: String? = null,
-        @Nullable val cloudInstanceId: String? = null
+        @Nullable val cloudInstanceId: String? = null,
+        @Nullable val observedAt: java.time.Instant? = null
     )
 
     @Serdeable
@@ -156,7 +157,8 @@ open class AssetController(
         val osVersion: String?,
         val type: String,
         val falconLastSeen: java.time.Instant?,
-        val falconProductType: String?
+        val falconProductType: String?,
+        val crowdStrikeLastImportedAt: java.time.Instant? = null
     ) {
         companion object {
             fun from(asset: Asset, addresses: List<String>) = AssetOverviewRow(
@@ -172,7 +174,8 @@ open class AssetController(
                 osVersion = asset.osVersion,
                 type = asset.type,
                 falconLastSeen = asset.crowdStrikeAgentSeenAt?.toInstant(java.time.ZoneOffset.UTC),
-                falconProductType = asset.crowdStrikeProductType
+                falconProductType = asset.crowdStrikeProductType,
+                crowdStrikeLastImportedAt = asset.crowdStrikeLastImportedAt?.atZone(java.time.ZoneId.systemDefault())?.toInstant()
             )
         }
     }
@@ -253,7 +256,7 @@ open class AssetController(
                     uri = asset.uri,
                     owner = asset.owner,
                     description = asset.description,
-                    lastSeen = asset.lastSeen?.toString(),
+                    lastSeen = com.secman.service.AssetCurrentnessPolicy.observedAt(asset)?.toString(),
                     groups = asset.groups,
                     criticality = asset.criticality,
                     cloudAccountId = asset.cloudAccountId,
@@ -385,7 +388,7 @@ open class AssetController(
     @Transactional(readOnly = true)
     open fun countAll(authentication: Authentication): HttpResponse<AssetCountResponse> {
         val count = if (com.secman.security.GrantAuthority.canManage(authentication.roles)) {
-            assetRepository.count()
+            assetRepository.countCurrent()
         } else assetFilterService.getAccessibleAssetIds(authentication).size.toLong()
         return HttpResponse.ok(AssetCountResponse(count))
     }
@@ -437,7 +440,7 @@ open class AssetController(
             }
 
             // Check if user can access this asset (workgroup-based access control)
-            if (!assetFilterService.canAccessAsset(id, authentication)) {
+            if (!assetFilterService.canReadCurrentAsset(id, authentication)) {
                 log.warn("User {} denied access to asset {}", authentication.name, id)
                 return HttpResponse.notFound(ErrorResponse("Asset not found"))
             }
@@ -467,7 +470,7 @@ open class AssetController(
                 return HttpResponse.notFound(ErrorResponse("Asset not found"))
             }
 
-            if (!assetFilterService.canAccessAsset(asset.id!!, authentication)) {
+            if (!assetFilterService.canReadCurrentAsset(asset.id!!, authentication)) {
                 log.warn("User {} denied access to asset {}", authentication.name, name)
                 return HttpResponse.notFound(ErrorResponse("Asset not found"))
             }
@@ -494,6 +497,9 @@ open class AssetController(
     @Transactional
     open fun importAsset(@Valid @Body request: ImportAssetRequest, authentication: Authentication): HttpResponse<*> {
         return try {
+            if (request.observedAt?.isAfter(java.time.Instant.now()) == true) {
+                return HttpResponse.badRequest(ErrorResponse("Observation time must not be in the future"))
+            }
             val trimmedName = request.name.trim()
             val trimmedType = request.type.trim()
             val trimmedOwner = request.owner.trim()
@@ -525,6 +531,12 @@ open class AssetController(
                 cloudAccountId = request.cloudAccountId?.trim()?.takeIf { it.isNotBlank() },
                 cloudInstanceId = request.cloudInstanceId?.trim()?.takeIf { it.isNotBlank() }
             )
+
+            request.observedAt?.let {
+                asset.recordObservation(java.time.LocalDateTime.ofInstant(it, java.time.ZoneOffset.UTC))
+                assetRepository.update(asset)
+                assetRepository.invalidateCurrentInventoryCaches()
+            }
 
             log.info("Asset import: {} {} (id={}) by user: {}",
                 if (created) "created" else "updated", asset.name, asset.id, authentication.name)
@@ -898,7 +910,7 @@ open class AssetController(
             log.debug("Fetching port history for asset id: {} for user: {}", id, authentication.name)
 
             // Access control: verify user can access this asset
-            if (!assetFilterService.canAccessAsset(id, authentication)) {
+            if (!assetFilterService.canReadCurrentAsset(id, authentication)) {
                 log.warn("User {} denied access to port history for asset {}", authentication.name, id)
                 return HttpResponse.notFound(ErrorResponse("Asset not found"))
             }
@@ -1047,9 +1059,10 @@ open class AssetController(
                 dryRun = request.dryRun,
                 triggeredBy = authentication.name,
                 maxDeletePercent = null,
-                includeLegacy = request.includeLegacy  // Feature 087 — null = use configured default
+                includeLegacy = request.includeLegacy,
+                basis = com.secman.service.CrowdStrikeCleanupBasis.parse(request.basis)
             )
-            HttpResponse.ok(result)
+            HttpResponse.ok(result.copy(candidates = result.candidates.take(200)))
         } catch (e: IllegalArgumentException) {
             HttpResponse.badRequest(ErrorResponse(e.message ?: "Invalid cleanup request"))
         } catch (e: Exception) {

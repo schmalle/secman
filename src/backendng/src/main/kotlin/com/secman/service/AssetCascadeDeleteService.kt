@@ -126,7 +126,8 @@ open class AssetCascadeDeleteService(
         assetId: Long,
         username: String,
         forceTimeout: Boolean = false,
-        bulkOperationId: String? = null
+        bulkOperationId: String? = null,
+        cleanupEligibility: ((Asset) -> Boolean)? = null
     ): CascadeDeletionResultDto {
         log.info("Starting cascade deletion for asset $assetId by user $username (forceTimeout=$forceTimeout)")
 
@@ -150,6 +151,10 @@ open class AssetCascadeDeleteService(
 
             log.debug("Acquired pessimistic lock on asset $assetId")
 
+            if (cleanupEligibility != null) entityManager.refresh(asset, LockModeType.PESSIMISTIC_WRITE)
+            if (cleanupEligibility != null && !cleanupEligibility(asset)) {
+                throw CleanupEligibilityChangedException()
+            }
             val assetName = asset.name
 
             // Step 2: Collect IDs before deletion (for audit log)
@@ -222,6 +227,9 @@ open class AssetCascadeDeleteService(
                 auditId = auditLogId
             )
 
+        } catch (e: CleanupEligibilityChangedException) {
+            log.info("Cleanup asset={} outcome=retained reason=eligibility-changed", assetId)
+            throw e
         } catch (e: PessimisticLockException) {
             log.error("Asset $assetId is locked by another transaction", e)
             throw e
@@ -385,3 +393,6 @@ open class AssetCascadeDeleteService(
         )
     }
 }
+
+/** The locked asset no longer satisfies the original cleanup policy. */
+class CleanupEligibilityChangedException : RuntimeException("Asset retained after eligibility changed")

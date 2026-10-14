@@ -88,5 +88,7 @@ data class CrowdStrikeQueryResponse(
     val assetId: Long? = null,
     val selectedAid: String? = null,
     val snapshotStatus: String = "UNVERIFIED",
-    val snapshotCoverage: List<String> = emptyList()
+    val snapshotCoverage: List<String> = emptyList(),
+    /** Observation evidence lets cached lookup results expire at the 72-hour boundary. */
+    val observedAt: java.time.Instant? = null
 )

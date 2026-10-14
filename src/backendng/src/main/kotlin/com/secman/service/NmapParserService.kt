@@ -7,7 +7,7 @@ import org.w3c.dom.Element
 import java.io.ByteArrayInputStream
 import java.time.Instant
 import java.time.LocalDateTime
-import java.time.ZoneId
+import java.time.ZoneOffset
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
@@ -42,7 +42,8 @@ class NmapParserService {
             return NmapScanData(
                 scanDate = extractScanDate(root),
                 duration = extractDuration(root),
-                hosts = extractHosts(document)
+                hosts = extractHosts(document),
+                scanDateVerified = root.getAttribute("start").toLongOrNull() != null
             )
         } catch (e: NmapParseException) {
             throw e
@@ -92,15 +93,15 @@ class NmapParserService {
         val startAttr = root.getAttribute("start")
         if (startAttr.isNullOrBlank()) {
             logger.warn("Nmap XML missing 'start' attribute, using current time")
-            return LocalDateTime.now()
+            return LocalDateTime.now(ZoneOffset.UTC)
         }
 
         return try {
             val epochSeconds = startAttr.toLong()
-            LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneId.systemDefault())
+            LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneOffset.UTC)
         } catch (e: NumberFormatException) {
             logger.warn("Invalid 'start' attribute value: $startAttr, using current time", e)
-            LocalDateTime.now()
+            LocalDateTime.now(ZoneOffset.UTC)
         }
     }
 
@@ -286,7 +287,8 @@ class NmapParserService {
 data class NmapScanData(
     val scanDate: LocalDateTime,
     val duration: Int?,
-    val hosts: List<NmapHost>
+    val hosts: List<NmapHost>,
+    val scanDateVerified: Boolean = true
 )
 
 /**

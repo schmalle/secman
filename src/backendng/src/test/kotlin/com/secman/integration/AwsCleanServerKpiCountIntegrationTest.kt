@@ -72,7 +72,7 @@ class AwsCleanServerKpiCountIntegrationTest : BaseIntegrationTest() {
 
 
     @Test
-    fun `both KPI counts exclude old missing and tomorrow contact despite a fresh import`() {
+    fun `both KPI counts exclude old missing and future contact despite a fresh import`() {
         val window = FalconSeenTodayWindow.today()
         val contacts = listOf(window.startUtc.minusSeconds(1), window.startUtc, window.endUtc.minusSeconds(1), window.endUtc, null)
         contacts.forEachIndexed { index, contact ->
@@ -82,9 +82,9 @@ class AwsCleanServerKpiCountIntegrationTest : BaseIntegrationTest() {
             vulnerabilityRepository.save(TestDataFactory.createVulnerabilityWithTimestamp(
                 asset, "CVE-2099-12345", "High", LocalDateTime.now().minusDays(40)))
         }
-        assertThat(assetRepository.countAwsAssetsSeenToday(window.startUtc, window.endUtc)).isEqualTo(2)
+        assertThat(assetRepository.countAwsAssetsSeenToday(window.startUtc, window.endUtc)).isEqualTo(1)
         assertThat(vulnerabilityRepository.countDirtyAwsServers(
-            LocalDateTime.now().minusDays(30), window.startUtc, window.endUtc)).isEqualTo(2)
+            LocalDateTime.now().minusDays(30), window.startUtc, window.endUtc)).isEqualTo(1)
     }
 
     private fun awsAsset(name: String, instanceId: String): Asset = assetRepository.save(

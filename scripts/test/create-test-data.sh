@@ -120,6 +120,12 @@ post "$ADMIN_JAR" /api/assets \
           description:"Synthetic fixture created by scripts/test/create-test-data.sh"}')" 200 201
 ASSET_ID=$(jq -r '.id' "$BODY")
 record_manifest_id assetId "$ASSET_ID"
+OBSERVATION_STATUS=$(curl -sS -o "$BODY" -w '%{http_code}' -b "$ADMIN_JAR" \
+    -H 'Content-Type: application/json' -X PUT "${BASE_URL}/api/assets/import" \
+    --data "$(jq -nc --arg n "$TEST_ASSET" --arg o "$TEST_USER" \
+        --arg seen "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        '{name:$n,type:"Server",owner:$o,observedAt:$seen}')")
+[[ "$OBSERVATION_STATUS" == "200" ]] || { echo "Observation fixture failed (HTTP $OBSERVATION_STATUS)" >&2; exit 1; }
 echo "  ✓ asset id=${ASSET_ID}"
 
 echo "→ [3/4] Adding ${TEST_SEVERITY} vulnerability ${TEST_CVE} to '${TEST_ASSET}' …"

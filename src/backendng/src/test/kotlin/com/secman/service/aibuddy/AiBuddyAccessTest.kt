@@ -29,13 +29,13 @@ class AiBuddyAccessTest {
         val ordinary = user(setOf(User.Role.USER))
         every { users.findById(7) } returns Optional.of(ordinary)
         assertThat(assertThrows<HttpStatusException> { guard.check(2, auth) }.status).isEqualTo(HttpStatus.FORBIDDEN)
-        verify(exactly = 0) { filter.canAccessAsset(any(), any()) }
+        verify(exactly = 0) { filter.canReadCurrentAsset(any(), any()) }
     }
 
     @Test fun `fresh roles replace stale admin claims before object authorization`() {
         every { users.findById(7) } returns Optional.of(user(setOf(User.Role.USER, User.Role.BETA)))
         val current = slot<Authentication>()
-        every { filter.canAccessAsset(2, capture(current)) } returns false
+        every { filter.canReadCurrentAsset(2, capture(current)) } returns false
         assertThat(assertThrows<HttpStatusException> { guard.check(2, auth) }.status).isEqualTo(HttpStatus.NOT_FOUND)
         assertThat(current.captured.roles).contains("BETA").doesNotContain("ADMIN")
         assertThat(current.captured.attributes["email"]).isEqualTo("viewer@test.invalid")
@@ -45,7 +45,7 @@ class AiBuddyAccessTest {
     @Test fun `role addition in an old session works and revocation takes effect immediately`() {
         val oldAuth = Authentication.build("viewer", listOf("USER"), mapOf("userId" to "7"))
         every { users.findById(7) } returns Optional.of(user(setOf(User.Role.USER, User.Role.BETA)))
-        every { filter.canAccessAsset(2, any()) } returns true
+        every { filter.canReadCurrentAsset(2, any()) } returns true
         every { assets.existsById(2) } returns true
         assertThat(guard.check(2, oldAuth).roles).contains(User.Role.BETA)
         every { users.findById(7) } returns Optional.of(user(setOf(User.Role.USER)))

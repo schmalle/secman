@@ -486,3 +486,7 @@ failure would look like an app bug.
 ### AI buddy(beta)
 
 Default off. Configure AI buddy in the existing **Admin → LLM Configuration** form, using the active OpenRouter record’s key, URL, model and token limit. Additional enablement, approved-provider, budget and evidence settings are stored in that same record; no AI buddy environment variables are needed or read. See [AI_BUDDY.md](AI_BUDDY.md) for migration, privacy, single-instance and rollout/rollback requirements. BETA adds eligibility without adding object access; ADMIN and SECCHAMPION are implicitly eligible. Reports are temporary advice only.
+
+## Current asset visibility
+
+Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.

@@ -411,6 +411,7 @@ open class CrowdStrikeQueryService(
         // is applied identically to DB-served and live-Falcon responses. Leave it false here.
         return CrowdStrikeQueryResponse(
             hostname = asset.name,
+            observedAt = AssetCurrentnessPolicy.observedAt(asset)?.toInstant(java.time.ZoneOffset.UTC),
             instanceId = asset.cloudInstanceId,
             cloudAccountId = asset.cloudAccountId,
             vulnerabilities = vulns.content.map { v ->
@@ -481,6 +482,7 @@ open class CrowdStrikeQueryService(
         // is applied identically to DB-served and live-Falcon responses. Leave it false here.
         return CrowdStrikeQueryResponse(
             hostname = asset.name,
+            observedAt = AssetCurrentnessPolicy.observedAt(asset)?.toInstant(java.time.ZoneOffset.UTC),
             instanceId = asset.cloudInstanceId,
             deviceCount = 1,
             cloudAccountId = asset.cloudAccountId,
@@ -627,9 +629,13 @@ open class CrowdStrikeQueryService(
  * Feature 041: Now includes instanceId and deviceCount fields
  */
 private fun com.secman.crowdstrike.dto.CrowdStrikeQueryResponse.toBackendResponse(): CrowdStrikeQueryResponse {
+    val observation = devices.takeIf { it.isNotEmpty() && it.all { device ->
+        AssetCurrentnessPolicy.includes(device.lastSeen?.let { LocalDateTime.ofInstant(it, java.time.ZoneOffset.UTC) })
+    } }?.mapNotNull { it.lastSeen }?.minOrNull()
     val visible = vulnerabilities.filter { it.severity.uppercase() in setOf("HIGH", "CRITICAL") }
     return CrowdStrikeQueryResponse(
         hostname = this.hostname,
+        observedAt = observation,
         instanceId = this.instanceId ?: devices.singleOrNull()?.instanceId,
         cloudAccountId = devices.singleOrNull()?.cloudAccountId,
         selectedAid = devices.singleOrNull()?.crowdStrikeAid,

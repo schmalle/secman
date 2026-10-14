@@ -37,3 +37,7 @@ sink. It does **not** claim external mailbox delivery; a real-mail check needs
 a separate explicit opt-in and recipient. The opt-in AI risk-assessment UI spec
 still needs its own seeded assessment to be self-contained; do not enable it
 against a persistent database or infer a pass from a skipped run.
+
+## Current asset visibility
+
+Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.

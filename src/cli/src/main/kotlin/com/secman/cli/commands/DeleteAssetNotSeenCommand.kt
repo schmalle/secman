@@ -8,7 +8,7 @@ import picocli.CommandLine.Parameters
 
 @Command(
     name = "delete-asset-not-seen",
-    description = ["Delete CrowdStrike-imported assets not seen in CrowdStrike for more than N days"],
+    description = ["Delete stale CrowdStrike assets by import inactivity or verified Falcon sensor contact"],
     mixinStandardHelpOptions = true
 )
 class DeleteAssetNotSeenCommand : Runnable {
@@ -16,8 +16,14 @@ class DeleteAssetNotSeenCommand : Runnable {
     @Inject
     lateinit var cliHttpClient: CliHttpClient
 
-    @Parameters(index = "0", description = ["Days since last CrowdStrike import"])
+    @Parameters(index = "0", description = ["Age threshold in days for the selected policy"])
     var days: Int = 0
+
+    @Option(names = ["--basis"], description = ["import-inactivity (default) or sensor-contact"])
+    var basis: String = "import-inactivity"
+
+    @Option(names = ["--include-legacy"], negatable = true, description = ["Include legacy rows in import-inactivity mode"])
+    var includeLegacy: Boolean? = null
 
     @Option(names = ["--dry-run"], description = ["Preview matching assets without deleting them"])
     var dryRun: Boolean = false
@@ -42,8 +48,9 @@ class DeleteAssetNotSeenCommand : Runnable {
 
     override fun run() {
         try {
-            if (days <= 0) {
-                throw IllegalArgumentException("Days must be greater than zero")
+            require(basis in setOf("import-inactivity", "sensor-contact")) { "basis must be import-inactivity or sensor-contact" }
+            if (days !in 1..36500) {
+                throw IllegalArgumentException("Days must be between 1 and 36500")
             }
 
             val (effectiveUrl, urlSource) = getEffectiveBackendUrlWithSource()
@@ -53,6 +60,7 @@ class DeleteAssetNotSeenCommand : Runnable {
             println("============================================================")
             println("Delete CrowdStrike Assets Not Seen")
             println("============================================================")
+            println("Policy: $basis")
             println("Threshold: $days days")
             println("Mode: ${if (dryRun) "dry-run" else "delete"}")
             println()
@@ -75,10 +83,8 @@ class DeleteAssetNotSeenCommand : Runnable {
                     "Re-run with --verbose to see exactly which username, source, and backend URL were used."
                 )
 
-            val requestBody = mapOf(
-                "days" to days,
-                "dryRun" to dryRun
-            )
+            val requestBody = mutableMapOf<String, Any>("days" to days, "dryRun" to dryRun, "basis" to basis)
+            includeLegacy?.let { requestBody["includeLegacy"] = it }
 
             val (status, result) = cliHttpClient.postMapWithStatus(
                 "$effectiveUrl/api/assets/delete-not-seen-by-crowdstrike",
@@ -94,14 +100,27 @@ class DeleteAssetNotSeenCommand : Runnable {
             val candidateCount = (result["candidateCount"] as? Number)?.toInt() ?: 0
             val deletedCount = (result["deletedCount"] as? Number)?.toInt() ?: 0
             val skippedCount = (result["skippedCount"] as? Number)?.toInt() ?: 0
-            val cutoff = result["cutoff"]?.toString() ?: ""
+            val cutoff = result["cutoffUtc"]?.toString() ?: result["cutoff"]?.toString().orEmpty()
 
             @Suppress("UNCHECKED_CAST")
             val candidates = result["candidates"] as? List<Map<String, Any?>> ?: emptyList()
             @Suppress("UNCHECKED_CAST")
             val errors = result["errors"] as? List<Map<String, Any?>> ?: emptyList()
 
-            println("Cutoff: $cutoff")
+            println("Cutoff (UTC): $cutoff")
+            println("Status: ${result["status"] ?: "UNKNOWN"}")
+            result["runId"]?.let { println("Audit run ID: $it") }
+            val retentionDays = (result["retentionDays"] as? Number)?.toInt() ?: 0
+            if (basis == "sensor-contact" && retentionDays != days) {
+                println("Import sensor retention: ${if (retentionDays == 0) "off" else "$retentionDays days"}")
+                println("Set CROWDSTRIKE_SENSOR_RETENTION_DAYS=$days for the backend and import script to prevent older records being re-imported.")
+            }
+            @Suppress("UNCHECKED_CAST")
+            val exclusions = result["exclusions"] as? Map<String, Any?> ?: emptyMap()
+            if (exclusions.isNotEmpty()) {
+                println("Retained assets by reason:")
+                exclusions.forEach { (reason, count) -> println("  - $reason: $count") }
+            }
             println("Candidates: $candidateCount")
 
             if (dryRun) {
@@ -114,12 +133,13 @@ class DeleteAssetNotSeenCommand : Runnable {
 
             if (verbose && candidates.isNotEmpty()) {
                 println()
-                println("Matching assets:")
+                println("Matching assets (showing ${candidates.size} of $candidateCount):")
                 candidates.forEach { candidate ->
                     val id = candidate["assetId"] ?: "?"
                     val name = candidate["name"] ?: "?"
-                    val importedAt = candidate["crowdStrikeLastImportedAt"] ?: "?"
-                    println("  - $id  $name  last imported: $importedAt")
+                    val importedAt = candidate["lastImportedAt"] ?: candidate["crowdStrikeLastImportedAt"] ?: "unknown"
+                    val contact = candidate["falconLastContact"] ?: "unknown"
+                    println("  - $id  $name  Falcon contact: $contact  last imported: $importedAt  reason: ${candidate["reason"]}")
                 }
             }
 
