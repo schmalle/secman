@@ -35,7 +35,7 @@ interface Workgroup {
 // All roles implemented: USER (baseline), ADMIN (full access),
 // VULN (vulnerabilities), RISK (risk management), REQ (requirements),
 // SECCHAMPION (broad access: risk+req+vuln), RELEASE_MANAGER (release management)
-const AVAILABLE_ROLES = ['USER', 'ADMIN', 'VULN', 'RISK', 'REQ', 'SECCHAMPION', 'RELEASE_MANAGER', 'REPORT', 'BETA'];
+const AVAILABLE_ROLES = ['USER', 'ADMIN', 'VULN', 'RISK', 'REQ', 'REQADMIN', 'SECCHAMPION', 'RELEASE_MANAGER', 'REPORT', 'BETA'];
 
 const UserManagement = () => {
     const [isAdmin, setIsAdmin] = useState(false);
