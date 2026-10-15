@@ -827,7 +827,7 @@ simulated account ID, and sends using the saved backend policy. See
 
 All three `*-s3` commands share AWS options: `--aws-region`, `--aws-profile`, `--aws-access-key-id`, `--aws-secret-access-key`, `--aws-session-token`, `--endpoint-url` (also `AWS_ENDPOINT_URL`, used for S3Mock/MinIO/LocalStack). 10 MB hard size limit. Default credential chain: env → `~/.aws/credentials` → IAM role → SSO.
 
-- **`import-s3`** — download AND POST to backend. Bucket/key from `--bucket`/`--key` or, when omitted, the `AWS_ACCOUNT_BUCKET_NAME` / `AWS_ACCOUNT_BUCKET_KEY_NAME` env vars (flags take priority). Needs `s3:GetObject` (+ `s3:HeadObject` for pre-download size check). Supports `--createnotify` / `--notify-new-accounts` / `--notify-address`, `--start-risk-assessment` / `--risk-usecase` / `--risk-deadline-days` and the `--onboarding-mode` / `--welcome-email` / `--questionnaire-expiry-days` set exactly like `import` (see above). Exit codes: `0` ok / `1` partial / `2` fatal S3/config / `3` unexpected. Detailed flags: `docs/S3_USER_MAPPING_IMPORT.md`.
+- **`import-s3`** — download AND POST to backend. Bucket/key from `--bucket`/`--key` or, when omitted, the `AWS_ACCOUNT_BUCKET_NAME` / `AWS_ACCOUNT_BUCKET_KEY_NAME` env vars (flags take priority). Needs `s3:GetObject` (also used for the HeadObject pre-download size check). Supports `--createnotify` / `--notify-new-accounts` / `--notify-address`, `--start-risk-assessment` / `--risk-usecase` / `--risk-deadline-days` and the `--onboarding-mode` / `--welcome-email` / `--questionnaire-expiry-days` set exactly like `import` (see above). Exit codes: `0` ok / `1` partial / `2` fatal S3/config / `3` unexpected. Detailed flags: `docs/S3_USER_MAPPING_IMPORT.md`.
 - **`download-s3`** — download only, no backend contact. `--bucket -b`, `--key -k`, `--output -o` required; `--force -f` to overwrite; `--quiet -q` (success/error stays on stderr). Parent dir must exist; verbatim copy.
 - **`print-s3`** — download + parse + print to stdout (temp file deleted). `--type AWS|DOMAIN|ALL` (default `AWS`); `--format TABLE|JSON|CSV`; `--file-format CSV|JSON|AUTO`; `--show-errors` to print parse errors to stderr; `--quiet` suppresses banner+summary (still on stderr). **stdout = mappings only**, safe to pipe through `diff`/`jq`/`awk`.
 
@@ -1188,3 +1188,26 @@ older than 90 days lose recipient metadata and are no longer retryable.
 ## Current asset visibility
 
 Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.
+
+
+## Welcome every owner of a newly discovered AWS account
+
+```bash
+./scripts/secman manage-user-mappings import --file mappings.csv \
+  --onboarding-mode WELCOME_ONLY --dry-run
+./scripts/secman manage-user-mappings import --file mappings.csv \
+  --onboarding-mode WELCOME_ONLY
+# Same options for an S3 mapping upload (bucket/key from AWS_ACCOUNT_* env vars):
+./scripts/secman manage-user-mappings import-s3 \
+  --onboarding-mode WELCOME_ONLY --dry-run
+```
+
+ADMIN access and an active email provider are required for live delivery. The
+existing welcome template is configured in Account Onboarding. Each distinct
+mapped owner of a newly discovered AWS account is eligible; adding an owner to a
+known account does not trigger this event. Dry run saves nothing and contacts no
+mail provider. FAILED or uncertain PENDING welcome delivery exits with code 1,
+even if mappings were saved. Inspect the notification before retrying.
+
+See [recipient rules, template setup, delivery statuses, and retries](ACCOUNT_ONBOARDING.md#welcome-every-owner-of-a-newly-discovered-aws-account).
+Both `import --help` and `import-s3 --help` include welcome-only preview examples.

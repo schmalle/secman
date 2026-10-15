@@ -58,7 +58,7 @@ import jakarta.inject.Singleton
     footer = [
         "",
         "Onboarding examples:",
-        "  # Welcome mail only, to the owner of every brand-new AWS account",
+        "  # Welcome mail only, to every mapped owner of each brand-new AWS account",
         "  secman manage-user-mappings import -f m.csv --onboarding-mode WELCOME_ONLY",
         "",
         "  # Welcome mail + an assessment you scope yourself",
@@ -69,8 +69,8 @@ import jakarta.inject.Singleton
         "  secman manage-user-mappings import -f m.csv --onboarding-mode GUIDED \\",
         "      --questionnaire-expiry-days 21",
         "",
-        "  # Preview any of the above without sending or persisting anything",
-        "  secman manage-user-mappings import -f m.csv --onboarding-mode GUIDED --dry-run",
+        "  # Preview owner emails without sending or persisting anything",
+        "  secman manage-user-mappings import -f m.csv --onboarding-mode WELCOME_ONLY --dry-run",
         "",
         "Exit codes: 0 success (skips are NOT failures) - 1 import or onboarding failure -",
         "2 invalid options.",
@@ -97,7 +97,7 @@ class ImportCommand(
 
     @Option(
         names = ["--dry-run"],
-        description = ["Validate file without creating mappings"]
+        description = ["Preview mappings and owner emails without saving data or contacting the mail provider"]
     )
     var dryRun: Boolean = false
 
@@ -446,6 +446,10 @@ class ImportCommand(
                             ob.error != null -> {
                                 onboardingFailures++
                                 println("  ❌ $where  ->  ${ob.error}")
+                            }
+                            ob.welcomeDeliveryNeedsAttention -> {
+                                onboardingFailures++
+                                println("  MAIL ATTENTION $where -> welcome delivery failed or is uncertain; inspect the notification before retrying")
                             }
                             // A skip is an idempotent no-op, deliberately NOT a failure: the pair
                             // already has a live invite or assessment, which is the intended

@@ -36,6 +36,33 @@ class ImportCommandTest {
     }
 
     @Test
+    fun `both import help pages document welcome only preview`() {
+        for (command in listOf(ImportCommand(service), ImportS3Command(io.mockk.mockk(), service))) {
+            val output = java.io.StringWriter()
+            picocli.CommandLine(command).usage(java.io.PrintWriter(output))
+            assertThat(output.toString().replace(Regex("\\s+"), " "))
+                .contains("--onboarding-mode WELCOME_ONLY --dry-run", "without saving data", "mail provider")
+        }
+    }
+
+    @Test
+    fun `welcome delivery failures and uncertain sends need operator attention`() {
+        for (status in listOf("FAILED", "PENDING")) {
+            val outcome = com.secman.cli.service.CliAccountOnboarding(
+                awsAccountId = "123456789012", ownerEmail = "owner@example.test",
+                mode = "WELCOME_ONLY", welcomeEmail = mapOf("status" to status))
+            assertThat(outcome.welcomeDeliveryNeedsAttention).isTrue()
+            assertThat(outcome.copy(dryRun = true).welcomeDeliveryNeedsAttention).isFalse()
+        }
+        for (status in listOf("SENT", "SKIPPED", "WOULD_SEND")) {
+            val outcome = com.secman.cli.service.CliAccountOnboarding(
+                awsAccountId = "123456789012", ownerEmail = "owner@example.test",
+                mode = "WELCOME_ONLY", welcomeEmail = mapOf("status" to status))
+            assertThat(outcome.welcomeDeliveryNeedsAttention).isFalse()
+        }
+    }
+
+    @Test
     fun `rendered help explains account only workgroup reconciliation`() {
         val output = java.io.StringWriter()
         picocli.CommandLine(ImportCommand(service)).usage(java.io.PrintWriter(output))

@@ -15,6 +15,14 @@ class OwnerMailDeliveryServiceTest {
     private val releases = mockk<ReleaseRequirementScopeService>()
     private val service = OwnerMailDeliveryService(repository, email, renderer, releases, AppConfig(), "account-welcome")
 
+    @Test fun `dry run and opt out do not reserve a delivery or contact the provider`() {
+        val preview = service.welcome("123456789012", " OWNER@example.test ", true, true)
+        assertEquals("WOULD_SEND", preview.status)
+        assertNull(preview.notificationId)
+        assertEquals("SKIPPED", service.welcome("123456789012", "owner@example.test", false, false).status)
+        verify { repository wasNot Called; email wasNot Called; renderer wasNot Called; releases wasNot Called }
+    }
+
     @Test fun `normalized owner key is stable across case and whitespace`() {
         assertEquals(OwnerMailDeliveryService.eventKey("123456789012", " Owner@Example.test "),
             OwnerMailDeliveryService.eventKey("123456789012", "owner@example.test"))

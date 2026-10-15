@@ -1168,7 +1168,7 @@ class SecmanCli {
 
                 IAM permissions required on the S3 object:
                   s3:GetObject  (mandatory)
-                  s3:HeadObject (recommended — enables pre-download size check)
+                  HeadObject uses the same s3:GetObject permission for the size check
 
                 Examples:
                   # Local config via env vars, dry run first:

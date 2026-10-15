@@ -15,7 +15,7 @@ import java.nio.file.StandardCopyOption
  * bucket to a local file path. Bypasses the secman backend entirely — this
  * command never authenticates against the secman API and never reads from the
  * `user_mapping` table. It only requires AWS credentials with `s3:GetObject`
- * (and optionally `s3:HeadObject` for a pre-download size check) on the
+ * (also used by HeadObject for the pre-download size check) on the
  * target object.
  *
  * Usage:

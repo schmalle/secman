@@ -858,3 +858,45 @@ and delivery meanings.
 Explicit onboarding simulations report the same `welcomeEmail` status vocabulary,
 but intentionally bypass import deduplication. They have no notification ID and
 cannot be retried through the durable-notification API.
+
+
+## Welcome every owner of a newly discovered AWS account
+
+Use an explicit `WELCOME_ONLY` mode to send the configured welcome email without
+starting an assessment, independently of the saved default onboarding mode:
+
+```bash
+# Preview first: no mappings, delivery records, tokens, or emails are created.
+./scripts/secman manage-user-mappings import --file mappings.csv \
+  --onboarding-mode WELCOME_ONLY --dry-run
+
+# Import and send after the mapping transaction commits.
+./scripts/secman manage-user-mappings import --file mappings.csv \
+  --onboarding-mode WELCOME_ONLY
+
+# S3 uses AWS_ACCOUNT_BUCKET_NAME / AWS_ACCOUNT_BUCKET_KEY_NAME when omitted.
+./scripts/secman manage-user-mappings import-s3 \
+  --onboarding-mode WELCOME_ONLY --dry-run
+```
+
+Run as ADMIN with an active email provider. Configure the welcome subject/body in
+**Admin → Users & Access → Account Onboarding**; SecMan supplies the existing
+`account-welcome` template as the default. Welcome-only mode needs no ACTIVE
+requirements release or questionnaire rules.
+
+A new account is an AWS account ID absent from mapping rows before the import.
+Each distinct normalized mapped owner address receives one email per new account;
+a SecMan user need not already exist. Reimporting a known account, including
+adding a new owner to it, does not trigger this welcome event. Duplicate rows and
+case variants of the same owner do not multiply delivery.
+
+Dry run reports `WOULD_SEND` for eligible account/owner pairs. It does not prove
+SMTP availability. Live `SENT` means SMTP accepted the message, not confirmed inbox
+delivery. `FAILED` and uncertain `PENDING` outcomes make the CLI exit with code 1,
+even when the mappings were saved successfully. Inspect the notification ID in
+**Account Onboarding → Owner welcome-mail delivery**. Retry retained, safe FAILED
+records there or through `retry_owner_mail_notification`; do not repeat the import
+to retry mail. SENT and uncertain PENDING records cannot be retried automatically.
+
+Online help: `./scripts/secman manage-user-mappings import --help` and
+`./scripts/secman manage-user-mappings import-s3 --help`.

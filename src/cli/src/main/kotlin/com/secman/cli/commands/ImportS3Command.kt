@@ -21,9 +21,8 @@ import jakarta.inject.Singleton
  *
  * AWS Credential Resolution (highest priority first):
  *   1. Explicit CLI flags: --aws-access-key-id + --aws-secret-access-key [+ --aws-session-token]
- *   2. Environment variables: AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY [+ AWS_SESSION_TOKEN]
- *   3. Named profile: --aws-profile (reads ~/.aws/credentials)
- *   4. Default credential chain: IAM role, SSO, etc.
+ *   2. Named profile: --aws-profile (overrides environment credentials)
+ *   3. SDK default credential chain: environment, configured profiles, IAM role, etc.
  *
  * CSV Format:
  *   email,type,value
@@ -63,7 +62,16 @@ import jakarta.inject.Singleton
             "Ready workgroups are enabled on import, overriding manual disables; incomplete groups stay disabled and safety limits apply. " +
             "Invalid cov:owner values fall back to a valid top-level email for mapping only, never for ownership."
     ],
-    mixinStandardHelpOptions = true
+    mixinStandardHelpOptions = true,
+    footer = [
+        "",
+        "Welcome every mapped owner of each brand-new AWS account using the configured welcome template:",
+        "  secman manage-user-mappings import-s3 --onboarding-mode WELCOME_ONLY --dry-run",
+        "  secman manage-user-mappings import-s3 --onboarding-mode WELCOME_ONLY",
+        "Bucket/key default to AWS_ACCOUNT_BUCKET_NAME / AWS_ACCOUNT_BUCKET_KEY_NAME.",
+        "Known accounts do not trigger welcome mail, including newly added owners of known accounts.",
+        "Dry run saves nothing and sends no mail. FAILED or PENDING delivery exits with code 1."
+    ]
 )
 class ImportS3Command(
     private val s3DownloadService: S3DownloadService,
@@ -92,7 +100,7 @@ class ImportS3Command(
 
     @Option(
         names = ["--aws-profile"],
-        description = ["AWS credential profile name (default: use default credential chain)"]
+        description = ["AWS credential profile (overrides environment credentials; explicit credential flags take priority)"]
     )
     var awsProfile: String? = null
 
@@ -129,7 +137,7 @@ class ImportS3Command(
 
     @Option(
         names = ["--dry-run"],
-        description = ["Validate file without creating mappings"]
+        description = ["Preview mappings and owner emails without saving data or contacting the mail provider"]
     )
     var dryRun: Boolean = false
 
@@ -320,10 +328,10 @@ class ImportS3Command(
                 println("S3 Endpoint: $resolvedEndpointUrl")
             }
 
-            // Resolve AWS credentials: CLI args take priority, then env vars
-            val resolvedAccessKeyId = awsAccessKeyId ?: System.getenv("AWS_ACCESS_KEY_ID")
-            val resolvedSecretAccessKey = awsSecretAccessKey ?: System.getenv("AWS_SECRET_ACCESS_KEY")
-            val resolvedSessionToken = awsSessionToken ?: System.getenv("AWS_SESSION_TOKEN")
+            // Leave environment resolution to the SDK so --aws-profile takes precedence.
+            val resolvedAccessKeyId = awsAccessKeyId
+            val resolvedSecretAccessKey = awsSecretAccessKey
+            val resolvedSessionToken = awsSessionToken
 
             if (resolvedAccessKeyId != null) {
                 println("AWS Credentials: explicit (access key ${resolvedAccessKeyId.take(4)}...)")
@@ -454,6 +462,10 @@ class ImportS3Command(
                                 onboardingFailures++
                                 println("  FAILED  $where: ${ob.error}")
                             }
+                            ob.welcomeDeliveryNeedsAttention -> {
+                                onboardingFailures++
+                                println("  MAIL ATTENTION $where -> welcome delivery failed or is uncertain; inspect the notification before retrying")
+                            }
                             // A skip is an idempotent no-op, never a failure.
                             ob.skipped ->
                                 println("  SKIPPED $where: ${ob.skipReason ?: "already onboarded"}")
@@ -562,10 +574,7 @@ class ImportS3Command(
             // Exit code 2: fatal S3 error
             println()
             System.err.println("ERROR: ${e.message}")
-            System.err.println()
-            System.err.println("Usage: manage-user-mappings import-s3 --bucket <bucket-name> --key <object-key>")
-            System.err.println("  The --bucket value must be a plain S3 bucket name (e.g. 'my-bucket'),")
-            System.err.println("  not a URL or ARN.")
+
             System.exit(2)
         } catch (e: IllegalArgumentException) {
             // Exit code 2: configuration/argument error

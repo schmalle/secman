@@ -611,7 +611,7 @@ The command uses the standard AWS SDK credential chain:
 ```json
 {
   "Effect": "Allow",
-  "Action": ["s3:GetObject", "s3:HeadObject"],
+  "Action": ["s3:GetObject"],
   "Resource": "arn:aws:s3:::your-bucket/path/*"
 }
 ```
@@ -709,7 +709,7 @@ Import successful
 
 **Command**: `download-s3`
 
-**Purpose**: Download an AWS account mapping file *straight* from an S3 bucket to a local file path. **Does not contact the secman backend** — only AWS credentials with `s3:GetObject` (and optionally `s3:HeadObject` for a pre-download size check) are required. Useful for inspecting the source-of-truth file, diffing it against backend state, or piping its contents into other tooling without going through secman.
+**Purpose**: Download an AWS account mapping file *straight* from an S3 bucket to a local file path. **Does not contact the secman backend** — only AWS credentials with `s3:GetObject` (also used by HeadObject for the pre-download size check) are required. Useful for inspecting the source-of-truth file, diffing it against backend state, or piping its contents into other tooling without going through secman.
 
 This is the read-only counterpart to `import-s3`:
 - `import-s3` downloads AND POSTs the file to the secman backend for processing.
@@ -1207,3 +1207,17 @@ For issues or questions:
 ---
 
 **End of User Mapping Commands Documentation**
+
+### Expired AWS sessions and metadata errors
+
+A generic HeadObject HTTP 400 without an AWS error code triggers a GetObject
+attempt to obtain the detailed AWS error. Known metadata errors, such as a wrong
+signing region, remain errors. Downloads enforce the 10 MB limit while streaming;
+failed or oversized downloads remove their temporary file.
+
+`ExpiredToken` reports that the session credentials have expired. Refresh the
+access key, secret key, and session token together in the credential source, or
+use a valid `--aws-profile`, then rerun. The CLI does not renew vault credentials
+or change AWS policies. `import-s3` exits 2 on this error before importing rows or
+sending owner mail. S3 download errors identify HeadObject or GetObject and retain
+AWS's error code and request ID.

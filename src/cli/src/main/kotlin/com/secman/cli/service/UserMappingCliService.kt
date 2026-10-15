@@ -1288,7 +1288,11 @@ data class CliAccountOnboarding(
     val skipped: Boolean = false,
     val skipReason: String? = null,
     val error: String? = null
-)
+) {
+    // Pending delivery is uncertain; operators must inspect it rather than resend the import.
+    val welcomeDeliveryNeedsAttention: Boolean
+        get() = !dryRun && welcomeEmail["status"] in setOf("FAILED", "PENDING")
+}
 
 /**
  * Result of comparing file mappings against the database (dry-run only)
