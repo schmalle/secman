@@ -137,3 +137,4 @@ extensions/secman_source/
 .ori/state.sqlite
 .ori/state.sqlite-shm
 .ori/state.sqlite-wal
+.context/
