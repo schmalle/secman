@@ -58,7 +58,8 @@ export default defineConfig({
       // prebundled and every Excel export dies with "Importing a module script
       // failed". Production builds are unaffected — Rollup follows dynamic
       // imports.
-      include: ["exceljs"],
+      // RichContent must not trigger dependency reoptimization while a release island loads.
+      include: ["exceljs", "react-markdown", "dompurify"],
     },
     build: {
       // exceljs minified is ~916 KB intrinsically; raise the threshold so the
