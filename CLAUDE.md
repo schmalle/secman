@@ -325,14 +325,14 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-10-14*
+*Last updated: 2026-10-15*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **Current asset visibility (2026-10-14)** — operational inventory now requires verified observation within an inclusive UTC 72-hour window for every role and asset-derived surface. Falcon contact remains authoritative for Falcon-managed assets; other assets use `verified_observed_at`, while stored authorization and ingestion remain separate. See `docs/CURRENT_ASSETS.md` and `docs/CHANGELOG.md`.
+
 - **MCP vulnerability query E2E regression (2026-09-27)** — the automatically discovered Playwright suite now verifies MCP discovery, severity-array schema, filtering, pagination, hydrated asset names, and delegated non-admin authorization on both HTTP transports. It uses only disposable-runner data and generated API keys. See `docs/CHANGELOG.md`.
 
 - **Guest invitation E2E regression (2026-09-27)** — `assessment-guest-invitation.spec.ts` now proves loopback delivery plus anonymous questionnaire load, save, reload, and submit. The public page uses the current token-bound response contract and does not mount the login-only attachment widget. See `docs/CHANGELOG.md`.
-
-- **Respondent invitation compatibility (2026-09-27)** — `/respond/:token` uses the public layout while expiry, revocation, and assignment-scope checks remain server-enforced; the numeric assessment-response route is constrained to avoid token collisions. Migration V282 preserves legacy values while allowing current token creation to deliver external respondent notifications. See `docs/CHANGELOG.md`.
