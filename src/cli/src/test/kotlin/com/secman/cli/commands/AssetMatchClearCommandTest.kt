@@ -123,7 +123,7 @@ class AssetMatchClearCommandTest {
     }
 
     @Test
-    fun `request body includes strict true`() {
+    fun `request body preserves strict scope and translates disabled safety brake`() {
         val downloadedSnapshot = tempDir.resolve("downloaded.json")
         Files.writeString(downloadedSnapshot, """[{"accountId":"123456789012","resourceId":"i-abc123"}]""")
         var requestBody: Map<String, Any?>? = null
@@ -172,6 +172,14 @@ class AssetMatchClearCommandTest {
         command.run()
 
         assertEquals(true, requestBody?.get("strict"))
+        assertEquals(25, requestBody?.get("maxDeletePercent"))
+
+        for (limit in listOf(0, 10, 100)) {
+            CommandLine(command).parseArgs("--max-delete-percent", limit.toString())
+            command.run()
+            assertEquals(true, requestBody?.get("strict"))
+            assertEquals(if (limit == 0) 100 else limit, requestBody?.get("maxDeletePercent"))
+        }
     }
 
     @Test

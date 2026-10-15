@@ -15,6 +15,8 @@
 #   ./scripts/secman manage-user-mappings list --send-email
 #   ./scripts/secman query servers --dry-run
 #   ./scripts/secman send-notifications --dry-run
+#   ./scripts/secman asset-match-clear --dry-run
+#     AWS credentials, region, snapshot bucket and key come from secmanpp.env.
 #
 # Prerequisites:
 #   1. Java 25 must be installed and in PATH

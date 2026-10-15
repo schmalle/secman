@@ -16,7 +16,7 @@ class CrowdStrikeImportSessionTest {
             (409 to mapOf("error" to "An import run is already active", "expiresAt" to "2026-10-13T05:43:27Z"))
         assertThatThrownBy {
             CrowdStrikeImportSession(client, "https://secman.example", "token") { "renewed" }
-        }.hasMessageContaining("Another CrowdStrike import is active")
+        }.hasMessageContaining("Another CrowdStrike import or cleanup is active")
             .hasMessageContaining("2026-10-13T05:43:27Z")
             .hasMessageContaining("before retrying")
         verify(exactly = 0) { client.postMap(any(), any(), any()) }

@@ -263,6 +263,11 @@ AWS S3 operations (`asset-match-clear`, `manage-user-mappings import-s3`, `list-
 | `AWS_ACCOUNT_BUCKET_NAME` | S3 bucket name for the `manage-user-mappings import-s3` mapping file (fallback when `--bucket` is omitted) |
 | `AWS_ACCOUNT_BUCKET_KEY_NAME` | S3 object key for the `manage-user-mappings import-s3` mapping file (fallback when `--key` is omitted) |
 
+`scripts/secman` and `scripts/secmancli` resolve the AWS credentials, region,
+and asset snapshot bucket/key from `secmanpp.env` using Proton Pass. See
+[Asset match-clear](CLI_ASSET_MATCH_CLEAR.md#environment-variables) for the
+vault field mappings and preview command.
+
 ## adread (workgroup import and AWS asset synchronization)
 
 `src/adread/read.py` — see [AD read/import](ADREAD.md) and

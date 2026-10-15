@@ -158,6 +158,30 @@ candidate list regardless of percentage.
 The shared `pass-cli` convention applies — fetch secrets from Proton Pass,
 never hardcode.
 
+`./scripts/secman` and `./scripts/secmancli` load these AWS variables from
+`secmanpp.env` through Proton Pass:
+
+| Variable | Field in `Test/SECMAN` |
+|---|---|
+| `AWS_ACCESS_KEY_ID` | `SECMAN_AWS_ACCESS_KEY_ID` |
+| `AWS_SECRET_ACCESS_KEY` | `SECMAN_AWS_SECRET_ACCESS_KEY` |
+| `AWS_SESSION_TOKEN` | `SECMAN_AWS_ACCESS_TOKEN` |
+| `AWS_REGION` | `SECMAN_AWS_REGION` |
+| `AWS_ASSET_BUCKET_NAME` | `AWS_ASSET_BUCKET_NAME` |
+| `AWS_ASSET_BUCKET_KEY_NAME` | `AWS_ASSET_BUCKET_KEY_NAME` |
+
+With these fields configured, no AWS flags or manual exports are needed:
+
+```bash
+./scripts/secman asset-match-clear --dry-run
+```
+
+Review the preview before running `./scripts/secman asset-match-clear`, which
+deletes unmatched assets in the snapshot's accounts. Command-line options such
+as `--bucket`, `--key`, and `--aws-region` override environment values. Keep
+`pass://` references in the environment file rather than passing them as flags;
+`pass-cli` resolves environment values before launching Java.
+
 ## IAM permissions
 
 Attach to the AWS principal running the CLI:
