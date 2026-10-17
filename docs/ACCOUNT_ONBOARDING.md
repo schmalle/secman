@@ -323,7 +323,7 @@ Welcome the owner of every brand-new account, and start nothing.
 ```
 
 ```
-Onboarding: WELCOME_ONLY (welcome mail to each new account owner)
+Onboarding: WELCOME_ONLY (one welcome mail per owner per import)
 
 Onboarding (1):
   ✉️  111111111111  alice@corp.com  ->  welcome mail sent
@@ -380,7 +380,7 @@ and an empty `riskAssessments[]`.
 ```
 
 ```
-Onboarding: WELCOME_ONLY (welcome mail to each new account owner)
+Onboarding: WELCOME_ONLY (one welcome mail per owner per import)
 Mode: DRY-RUN (validation only, no changes will be made)
 
 DRY-RUN — nothing persisted, nothing sent, no invite token minted.
@@ -821,7 +821,7 @@ Dry runs validate recipients but create no audit row, mint no token, and contact
 no mail provider. Mapping success is independent of delivery success.
 
 The database uniquely reserves the account-discovery welcome event for each
-account/normalized owner and atomically claims sends/retries. Mail starts only
+normalized owner and sorted group of new account IDs, and atomically claims sends/retries. Mail starts only
 after mapping commit. Replayed imports and concurrent retries cannot send the
 same claimed event again. SMTP cannot provide exactly-once inbox delivery:
 a process crash or transport error after sending began leaves a pending,
@@ -885,7 +885,7 @@ Run as ADMIN with an active email provider. Configure the welcome subject/body i
 requirements release or questionnaire rules.
 
 A new account is an AWS account ID absent from mapping rows before the import.
-Each distinct normalized mapped owner address receives one email per new account;
+Each distinct normalized mapped owner address receives one email per import, listing their new accounts;
 a SecMan user need not already exist. Reimporting a known account, including
 adding a new owner to it, does not trigger this welcome event. Duplicate rows and
 case variants of the same owner do not multiply delivery.
@@ -900,3 +900,64 @@ to retry mail. SENT and uncertain PENDING records cannot be retried automaticall
 
 Online help: `./scripts/secman manage-user-mappings import --help` and
 `./scripts/secman manage-user-mappings import-s3 --help`.
+
+### One welcome email per owner per import
+
+Mapping imports send at most one welcome email to each distinct owner address in
+that import. Addresses are trimmed and compared case-insensitively. If several
+brand-new AWS accounts have the same owner, one email covers all those accounts.
+This applies to local-file and S3 CLI imports and the shared REST/MCP import.
+Known accounts do not become eligible merely because another owner is added.
+A later import discovering additional new accounts can send another welcome.
+
+`--dry-run` reports account/owner pairs separately from distinct welcome emails,
+with one `MAIL` line per recipient and the covered account IDs. It persists no
+mapping or notification, mints no invite token, and sends no mail. Each account
+result references the same delivery notification for its owner. Failed deliveries
+can be retried by notification ID; the retry retains the complete account list.
+Successful and uncertain deliveries are not automatically resent.
+
+The configured welcome template is reused. `{awsAccountId}` remains the first
+account for compatibility; `{awsAccountIds}` contains the complete comma-separated
+list and `{accountCount}` its count. For multiple accounts, the full account list
+is also appended to the body so existing custom templates cover every account.
+Assessment and questionnaire messages remain account-specific. Welcome mail can
+still be disabled with `--no-welcome-email`.
+
+### Send one test welcome email
+
+Use `--test-email ADDRESS` with `--onboarding-mode WELCOME_ONLY` to send one
+sample of the configured welcome email without importing any mappings:
+
+```bash
+./scripts/secman manage-user-mappings import-s3 \
+  --bucket example-accounts --key accounts.json \
+  --onboarding-mode WELCOME_ONLY --test-email person@example.com
+# Local CSV and JSON files support the same option:
+./scripts/secman manage-user-mappings import --file mappings.csv \
+  --onboarding-mode WELCOME_ONLY --test-email person@example.com
+```
+
+The first normalized owner alphabetically in the validated file supplies the
+sample; its distinct account IDs are sorted and grouped in one message. Only
+the supplied test recipient receives it, with `[TEST]` in the subject and an
+administrator notice in both bodies. Known accounts can be sampled too.
+No mappings, assessments, questionnaire tokens, or production welcome-delivery
+records are created or changed. No valid AWS group means no email is sent.
+Files must be nonempty and at most 10MB; the sampled group is limited to 200
+accounts. Validation errors refuse the send instead of sampling a partial file.
+
+Remove `--dry-run` when using `--test-email`: the combination is rejected so a
+dry run continues to guarantee no email. Assessment modes, `--start-risk-assessment`,
+`--no-welcome-email`, `--createnotify`, `--notify-address`, and `--risk-usecase`
+cannot be combined with the test option. The S3 statistics flag `--send-email`
+is also incompatible. ADMIN access is required; test sends
+share the existing simulation rate limit. `SENT` confirms SMTP acceptance, not
+inbox delivery. Failed or uncertain delivery returns a nonzero exit code and
+is never automatically retried.
+
+The CLI calls `POST /api/account-onboarding/welcome-test` with `recipient` and
+`accountIds`. This dedicated route returns 404 on an older backend rather than
+silently sending a single-account simulation. Deploy/restart the updated backend
+before using the option. Existing simulation commands and import behavior are
+unchanged when the option is absent.

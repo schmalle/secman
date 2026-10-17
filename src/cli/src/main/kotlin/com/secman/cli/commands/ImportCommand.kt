@@ -142,7 +142,7 @@ class ImportCommand(
         names = ["--onboarding-mode"],
         description = [
             "What to do for the owner of every brand-new AWS account this import introduces. " +
-                "WELCOME_ONLY sends a welcome mail only. DIRECT also starts a risk assessment " +
+                "WELCOME_ONLY sends one welcome email per owner per import, listing all their new accounts. DIRECT also starts a risk assessment " +
                 "immediately for --risk-usecase (what --start-risk-assessment does). " +
                 "GUIDED mails the owner a one-time link; the assessment is created from the " +
                 "use cases their answers resolve to. " +
@@ -150,6 +150,25 @@ class ImportCommand(
         ]
     )
     var onboardingMode: OnboardingMode? = null
+
+    @Option(
+        names = ["--test-email"],
+        description = ["Send one [TEST] welcome email to this address using the first owner group in the file. " +
+            "Requires --onboarding-mode WELCOME_ONLY. No import is saved and actual owners are not contacted. " +
+            "Cannot be combined with --dry-run, --no-welcome-email, or import notification/assessment options."]
+    )
+    var testEmail: String? = null
+
+    fun validateTestEmailOptions(): String? {
+        val recipient = testEmail ?: return null
+        if (recipient.trim().length > 255 || !com.secman.cli.service.UserMappingValidator().validateEmail(recipient.trim())) return "--test-email requires one valid email address"
+        if (dryRun) return "--test-email cannot be combined with --dry-run; dry-run never sends email"
+        if (onboardingMode != ImportCommand.OnboardingMode.WELCOME_ONLY || startRiskAssessment || welcomeEmail == false ||
+            createnotify || notifyAddress != null || riskUseCase != null) {
+            return "--test-email requires --onboarding-mode WELCOME_ONLY without assessment, notification, or --no-welcome-email options"
+        }
+        return null
+    }
 
     @Option(
         names = ["--welcome-email"],
@@ -280,6 +299,8 @@ class ImportCommand(
 
     override fun run() {
         try {
+            validateTestEmailOptions()?.let { System.err.println(it); System.exit(2); return }
+
             println("=" .repeat(60))
             println("Import User Mappings")
             println("=" .repeat(60))
@@ -325,7 +346,7 @@ class ImportCommand(
             println("Format: $format")
             when (effectiveMode()) {
                 OnboardingMode.WELCOME_ONLY ->
-                    println("Onboarding: WELCOME_ONLY (welcome mail to each new account owner)")
+                    println("Onboarding: WELCOME_ONLY (one welcome mail per owner per import)")
                 OnboardingMode.DIRECT -> {
                     val label = if (onboardingMode == null) "DIRECT (via --start-risk-assessment)" else "DIRECT"
                     println("Onboarding: $label")
@@ -344,7 +365,13 @@ class ImportCommand(
             if (dryRun) {
                 println("Mode: DRY-RUN (validation only, no changes will be made)")
             }
+            if (testEmail != null) println("Mode: TEST EMAIL (one sample only; no import will be saved)")
             println()
+
+            testEmail?.let { recipient ->
+                userMappingCliService.testWelcomeFromFile(filePath, format, recipient, backendUrl, token)
+                return
+            }
 
             // Execute import via HTTP
             val result = userMappingCliService.importMappingsFromFile(
@@ -437,11 +464,16 @@ class ImportCommand(
                     } else {
                         println("Onboarding (${result.onboarding.size}):")
                     }
+                    val welcomeMails = result.onboarding.filter { it.welcomeEmail["status"] in setOf("WOULD_SEND", "SENT", "FAILED", "PENDING") }
+                        .distinctBy { it.ownerEmail.trim().lowercase(java.util.Locale.ROOT) }
+                    println("${if (dryRun) "Would send" else "Welcome deliveries:"} ${welcomeMails.size} welcome email(s) to ${welcomeMails.size} distinct owner(s).")
+                    welcomeMails.forEach { ob ->
+                        val accounts = ob.welcomeEmail["accountIds"] ?: listOf(ob.awsAccountId)
+                        println("  MAIL    ${ob.ownerEmail} -> ${ob.welcomeEmail["status"]} (notification=${ob.welcomeEmail["notificationId"] ?: "-"}, retryable=${ob.welcomeEmail["retryable"] ?: false})")
+                        println("          Accounts: $accounts")
+                    }
                     result.onboarding.forEach { ob ->
                         val where = "${ob.awsAccountId}  ${ob.ownerEmail}"
-                        if (ob.welcomeEmail.isNotEmpty()) {
-                            println("  MAIL    $where -> ${ob.welcomeEmail["status"]}${if (ob.welcomeEmailSent) " — welcome mail sent" else ""} (notification=${ob.welcomeEmail["notificationId"] ?: "-"}, retryable=${ob.welcomeEmail["retryable"] ?: false})")
-                        }
                         when {
                             ob.error != null -> {
                                 onboardingFailures++

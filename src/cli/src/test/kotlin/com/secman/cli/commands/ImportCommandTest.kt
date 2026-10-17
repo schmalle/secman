@@ -41,7 +41,7 @@ class ImportCommandTest {
             val output = java.io.StringWriter()
             picocli.CommandLine(command).usage(java.io.PrintWriter(output))
             assertThat(output.toString().replace(Regex("\\s+"), " "))
-                .contains("--onboarding-mode WELCOME_ONLY --dry-run", "without saving data", "mail provider")
+                .contains("--onboarding-mode WELCOME_ONLY --dry-run", "without saving data", "mail provider", "one welcome email per owner per import")
         }
     }
 
@@ -288,4 +288,54 @@ class ImportCommandTest {
         assertThat(s3Command.createnotify).isTrue()
         assertThat(s3Command.notifyAddress).isNull()
     }
+    @Test fun `test email options require explicit welcome only and forbid side effects and dry run`() {
+        for (address in listOf("test@example.test", "a@example.test,b@example.test", "bad", "")) {
+            val local = ImportCommand(service).apply { testEmail = address; onboardingMode = ImportCommand.OnboardingMode.WELCOME_ONLY }
+            val s3 = ImportS3Command(io.mockk.mockk(), service).apply { testEmail = address; onboardingMode = ImportCommand.OnboardingMode.WELCOME_ONLY }
+            assertThat(local.validateTestEmailOptions() == null).isEqualTo(address == "test@example.test")
+            assertThat(s3.validateTestEmailOptions() == null).isEqualTo(address == "test@example.test")
+            local.dryRun = true; s3.dryRun = true
+            assertThat(local.validateTestEmailOptions()).isNotNull()
+            assertThat(s3.validateTestEmailOptions()).isNotNull()
+        }
+        val command = ImportCommand(service).apply { testEmail = "test@example.test" }
+        assertThat(command.validateTestEmailOptions()).isNotNull()
+        command.onboardingMode = ImportCommand.OnboardingMode.GUIDED
+        assertThat(command.validateTestEmailOptions()).isNotNull()
+        command.onboardingMode = ImportCommand.OnboardingMode.WELCOME_ONLY
+        command.welcomeEmail = false
+        assertThat(command.validateTestEmailOptions()).isNotNull()
+        command.welcomeEmail = true
+        command.createnotify = true
+        assertThat(command.validateTestEmailOptions()).isNotNull()
+        for (c in listOf(command, ImportS3Command(io.mockk.mockk(), service))) {
+            val output = java.io.StringWriter()
+            picocli.CommandLine(c).usage(java.io.PrintWriter(output))
+            assertThat(output.toString().replace(Regex("\\s+"), " ")).contains("--test-email", "actual owners")
+        }
+    }
+
+    @Test fun `S3 test email bypasses import and removes the downloaded temporary file`() {
+        val mappings = io.mockk.mockk<UserMappingCliService>(relaxed = true)
+        val s3 = io.mockk.mockk<com.secman.cli.service.S3DownloadService>(relaxed = true)
+        val downloaded = java.nio.file.Files.createTempFile("test-welcome-", ".csv")
+        io.mockk.every { mappings.authenticate(any(), any(), any()) } returns java.util.UUID.randomUUID().toString()
+        io.mockk.every { s3.downloadToTempFile(any(), any(), any(), any(), any(), any(), any()) } returns downloaded
+        val c = ImportS3Command(s3, mappings).apply {
+            parent = io.mockk.mockk(relaxed = true)
+            bucket = "example-accounts"
+            key = "accounts.json"
+            onboardingMode = ImportCommand.OnboardingMode.WELCOME_ONLY
+            testEmail = "test@example.test"
+        }
+        try {
+            c.run()
+            io.mockk.verify(exactly = 1) { mappings.initHttpClient(any(), any()) }
+            io.mockk.verify(exactly = 1) { mappings.authenticate(any(), any(), any()) }
+            io.mockk.verify(exactly = 1) { mappings.testWelcomeFromFile(downloaded.toString(), any(), "test@example.test", any(), any()) }
+            io.mockk.confirmVerified(mappings)
+            assertThat(java.nio.file.Files.exists(downloaded)).isFalse()
+        } finally { java.nio.file.Files.deleteIfExists(downloaded) }
+    }
+
 }

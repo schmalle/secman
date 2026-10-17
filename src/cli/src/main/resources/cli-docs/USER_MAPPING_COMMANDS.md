@@ -1221,3 +1221,51 @@ use a valid `--aws-profile`, then rerun. The CLI does not renew vault credential
 or change AWS policies. `import-s3` exits 2 on this error before importing rows or
 sending owner mail. S3 download errors identify HeadObject or GetObject and retain
 AWS's error code and request ID.
+
+### One welcome email per owner per import
+
+Welcome mail is grouped by trimmed, case-insensitive owner email within each
+import. One message lists all that owner's newly discovered accounts; a later
+import with additional new accounts may send another welcome. Dry runs print
+one `MAIL` line per recipient and the complete account list. Retries use the same
+grouped notification. Assessment and questionnaire messages stay account-specific.
+See [the complete welcome-mail contract](ACCOUNT_ONBOARDING.md#one-welcome-email-per-owner-per-import)
+for template placeholders, delivery status, and retry rules.
+
+### Send one test welcome email
+
+Use `--test-email ADDRESS` with `--onboarding-mode WELCOME_ONLY` to send one
+sample of the configured welcome email without importing any mappings:
+
+```bash
+./scripts/secman manage-user-mappings import-s3 \
+  --bucket example-accounts --key accounts.json \
+  --onboarding-mode WELCOME_ONLY --test-email person@example.com
+# Local CSV and JSON files support the same option:
+./scripts/secman manage-user-mappings import --file mappings.csv \
+  --onboarding-mode WELCOME_ONLY --test-email person@example.com
+```
+
+The first normalized owner alphabetically in the validated file supplies the
+sample; its distinct account IDs are sorted and grouped in one message. Only
+the supplied test recipient receives it, with `[TEST]` in the subject and an
+administrator notice in both bodies. Known accounts can be sampled too.
+No mappings, assessments, questionnaire tokens, or production welcome-delivery
+records are created or changed. No valid AWS group means no email is sent.
+Files must be nonempty and at most 10MB; the sampled group is limited to 200
+accounts. Validation errors refuse the send instead of sampling a partial file.
+
+Remove `--dry-run` when using `--test-email`: the combination is rejected so a
+dry run continues to guarantee no email. Assessment modes, `--start-risk-assessment`,
+`--no-welcome-email`, `--createnotify`, `--notify-address`, and `--risk-usecase`
+cannot be combined with the test option. The S3 statistics flag `--send-email`
+is also incompatible. ADMIN access is required; test sends
+share the existing simulation rate limit. `SENT` confirms SMTP acceptance, not
+inbox delivery. Failed or uncertain delivery returns a nonzero exit code and
+is never automatically retried.
+
+The CLI calls `POST /api/account-onboarding/welcome-test` with `recipient` and
+`accountIds`. This dedicated route returns 404 on an older backend rather than
+silently sending a single-account simulation. Deploy/restart the updated backend
+before using the option. Existing simulation commands and import behavior are
+unchanged when the option is absent.

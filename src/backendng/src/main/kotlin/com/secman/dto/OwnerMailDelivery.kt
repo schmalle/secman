@@ -8,5 +8,6 @@ data class OwnerMailDelivery(
     val status: String = "SKIPPED",
     val notificationId: Long? = null,
     val retryable: Boolean = false,
-    val errorCode: String? = null
+    val errorCode: String? = null,
+    val accountIds: List<String> = emptyList()
 )

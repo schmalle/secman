@@ -28,7 +28,8 @@ import org.apache.commons.csv.CSVParser
 @Singleton
 class UserMappingCliService(
     private val validator: UserMappingValidator,
-    private val javaHttpClientFactory: CliJavaHttpClientFactory
+    private val javaHttpClientFactory: CliJavaHttpClientFactory,
+    private val onboarding: AccountOnboardingCliService
 ) {
     private val log = LoggerFactory.getLogger(UserMappingCliService::class.java)
     private val objectMapper = jacksonObjectMapper()
@@ -424,6 +425,40 @@ class UserMappingCliService(
             onboarding = bulkResponse.onboarding,
             workgroupLinks = bulkResponse.workgroupLinks
         )
+    }
+
+    data class WelcomeTestSample(val owner: String, val accountIds: List<String>)
+
+    internal fun selectWelcomeTestSample(parsed: ParseResult): WelcomeTestSample? {
+        require(parsed.errors.isEmpty()) { "Mapping file contains validation errors; no test email sent" }
+        val groups = parsed.entries.mapNotNull { entry ->
+            val account = entry["awsAccountId"] as? String ?: return@mapNotNull null
+            val owner = (entry["email"] as? String)?.trim()?.lowercase(java.util.Locale.ROOT) ?: return@mapNotNull null
+            if (!validator.validateEmail(owner) || !validator.validateAwsAccountId(account)) return@mapNotNull null
+            owner to account
+        }.groupBy({ it.first }, { it.second }).toSortedMap()
+        val first = groups.entries.firstOrNull() ?: return null
+        return WelcomeTestSample(first.key, first.value.distinct().sorted())
+    }
+
+    fun testWelcomeFromFile(filePath: String, format: String, recipient: String, backendUrl: String, authToken: String) {
+        val file = File(filePath)
+        require(file.isFile && file.length() in 1..(10L * 1024 * 1024)) { "Mapping file must be nonempty and at most 10MB" }
+        val sample = selectWelcomeTestSample(parseLocalMappingFile(filePath, format))
+        if (sample == null) {
+            println("No valid AWS owner/account group found; no test email sent.")
+            return
+        }
+        require(sample.accountIds.size <= 200) { "The sampled owner has more than 200 accounts; use a smaller sample file" }
+        println("TEST EMAIL: $recipient")
+        println("Sampled owner: ${sample.owner}")
+        println("Accounts: ${sample.accountIds.joinToString(", ")}")
+        onboarding.initHttpClient(backendUrl, insecureMode)
+        val outcome = onboarding.testWelcome(backendUrl, authToken, recipient.trim(), sample.accountIds)
+        println("Delivery: ${outcome["status"]}${outcome["errorCode"]?.let { " ($it)" } ?: ""}")
+        println("No mappings, assessments, invites, or production delivery records were changed.")
+        check(outcome["status"] == "SENT") { "Test delivery failed or is uncertain. Inspect provider evidence before trying again." }
+        println("SMTP accepted the test email; inbox delivery is not confirmed.")
     }
 
     // --- File parsing (kept in CLI for Cloud Custodian format support) ---

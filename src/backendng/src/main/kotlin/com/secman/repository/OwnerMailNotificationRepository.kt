@@ -21,6 +21,13 @@ interface OwnerMailNotificationRepository : JpaRepository<OwnerMailNotification,
     """, nativeQuery = true)
     fun reserve(eventKey: String, accountId: String, email: String, now: LocalDateTime): Int
 
+    @Query(value = """
+        INSERT IGNORE INTO owner_mail_notification
+            (event_key, aws_account_id, aws_account_ids, owner_email, status, created_at, updated_at)
+        VALUES (:eventKey, :accountId, :accountIds, :email, 'PENDING', :now, :now)
+    """, nativeQuery = true)
+    fun reserveGroup(eventKey: String, accountId: String, accountIds: String, email: String, now: LocalDateTime): Int
+
     @Query("""
         UPDATE OwnerMailNotification n SET n.status = 'PENDING', n.claimedAt = :now, n.updatedAt = :now,
             n.errorCode = NULL
@@ -38,7 +45,7 @@ interface OwnerMailNotificationRepository : JpaRepository<OwnerMailNotification,
     fun finish(id: Long, status: String, errorCode: String?, messageId: String?, now: LocalDateTime): Int
 
     @Query("""
-        UPDATE OwnerMailNotification n SET n.ownerEmail = NULL, n.awsAccountId = NULL,
+        UPDATE OwnerMailNotification n SET n.ownerEmail = NULL, n.awsAccountId = NULL, n.awsAccountIds = NULL,
             n.errorCode = NULL, n.providerMessageId = NULL, n.claimedAt = NULL
         WHERE n.createdAt <= :cutoff AND n.ownerEmail IS NOT NULL
     """)

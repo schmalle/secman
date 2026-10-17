@@ -13,6 +13,7 @@ data class OwnerMailNotification(
     @Column(nullable = false, unique = true, length = 64)
     var eventKey: String = "",
     @Column(length = 12) var awsAccountId: String? = null,
+    @Column(columnDefinition = "TEXT") var awsAccountIds: String? = null,
     @Column(length = 255) var ownerEmail: String? = null,
     @Column(nullable = false, length = 16) var status: String = "PENDING",
     @Column(length = 64) var errorCode: String? = null,
