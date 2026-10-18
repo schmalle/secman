@@ -1,8 +1,9 @@
-import { Fragment, useState, useEffect } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import { useClientRoles } from '../utils/useClientAuth';
 import { isAdmin } from '../utils/permissions';
 import { clearSelectedReleaseId, readSelectedReleaseId } from '../utils/selectedRelease';
+import RequirementComments from './RequirementComments';
 import ReleaseIndicator from './ReleaseIndicator';
 import ReleaseSelector from './ReleaseSelector';
 import HtmlEditor from './admin/HtmlEditor';
@@ -22,6 +23,7 @@ interface Norm {
 
 interface Requirement {
     id?: number;
+    snapshotId?: number;
     internalId?: string;
     revision?: number;
     idRevision?: string;
@@ -96,6 +98,7 @@ export default function RequirementManagement() {
     const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
     const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
     const [isViewingHistorical, setIsViewingHistorical] = useState(false);
+    const requirementsRequest = useRef(0);
     const [expandedRequirementIds, setExpandedRequirementIds] = useState<Set<number>>(new Set());
     // Feature 078: Track if editing should be blocked (ARCHIVED/ACTIVE releases)
     const isEditingBlocked = selectedRelease !== null &&
@@ -123,7 +126,6 @@ export default function RequirementManagement() {
 
     // Fetch requirements, use cases, and norms from backend
     useEffect(() => {
-        fetchRequirements();
         fetchAllUseCases();
         fetchAllNorms();
     }, []);
@@ -161,10 +163,12 @@ export default function RequirementManagement() {
     }, [requirements, filterUseCaseId, filterNormId]);
 
     const fetchRequirements = async () => {
+        const request = ++requirementsRequest.current;
         try {
             if (selectedReleaseId !== null) {
                 // Feature 067: Fetch historical requirements from release snapshot
                 const response = await authenticatedGet(`/api/releases/${selectedReleaseId}/requirements?pageSize=10000`);
+                if (request !== requirementsRequest.current) return;
                 if (!response.ok) {
                     // Checked before parsing: a 404 body has no `.data`, so parsing it produced an
                     // empty snapshot list that rendered as a valid-looking (but empty) historical
@@ -177,10 +181,12 @@ export default function RequirementManagement() {
                     return;
                 }
                 const data = await response.json();
+                if (request !== requirementsRequest.current) return;
                 // Transform snapshot data to requirement format
                 const snapshots = Array.isArray(data) ? data : (data.data || []);
                 const transformedRequirements: Requirement[] = snapshots.map((snapshot: any) => ({
                     id: snapshot.originalRequirementId,
+                    snapshotId: snapshot.id,
                     internalId: snapshot.internalId,
                     revision: snapshot.revision,
                     idRevision: snapshot.idRevision || `${snapshot.internalId}.${snapshot.revision}`,
@@ -198,16 +204,19 @@ export default function RequirementManagement() {
             } else {
                 // Fetch current requirements
                 const response = await authenticatedGet('/api/requirements');
+                if (request !== requirementsRequest.current) return;
                 if (!response.ok) {
                     setRequirements([]);
                     setIsViewingHistorical(false);
                     return;
                 }
                 const data = await response.json();
+                if (request !== requirementsRequest.current) return;
                 setRequirements(Array.isArray(data) ? data : []);
                 setIsViewingHistorical(false);
             }
         } catch (error) {
+            if (request !== requirementsRequest.current) return;
             console.error('Error fetching requirements:', error);
             setRequirements([]);
         }
@@ -1035,7 +1044,7 @@ export default function RequirementManagement() {
                             </thead>
                             <tbody>
                                 {filteredRequirements.map(req => {
-                                    const hasExtra = requirementHasExtraContent(req);
+                                    const hasExtra = requirementHasExtraContent(req) || req.id !== undefined;
                                     const isExpanded = req.id !== undefined && expandedRequirementIds.has(req.id);
                                     const detailColSpan = isEditingBlocked ? 3 : 4;
                                     return (
@@ -1141,6 +1150,16 @@ export default function RequirementManagement() {
                                                                 </>
                                                             )}
                                                         </dl>
+                                                        {req.id !== undefined && (selectedReleaseId === null || req.snapshotId !== undefined) && (
+                                                            <RequirementComments
+                                                                scope={selectedReleaseId === null ? 'REQUIREMENT' : 'SNAPSHOT'}
+                                                                targetId={selectedReleaseId === null ? req.id : req.snapshotId!}
+                                                                revision={selectedReleaseId === null ? req.revision : undefined}
+                                                                context={selectedRelease
+                                                                    ? `Snapshot of ${req.internalId || req.shortreq} in release ${selectedRelease.version}`
+                                                                    : `${req.idRevision || req.internalId || req.shortreq} (current requirement)`}
+                                                            />
+                                                        )}
                                                     </td>
                                                 </tr>
                                             )}
@@ -1152,6 +1171,9 @@ export default function RequirementManagement() {
                     </div>
                 </div>
             </div>
+
+            {selectedRelease && <RequirementComments scope="RELEASE" targetId={selectedRelease.id}
+                context={`Release ${selectedRelease.version}: ${selectedRelease.name}`} />}
 
             {/* Back to Home button */}
             <div className="row mt-4">

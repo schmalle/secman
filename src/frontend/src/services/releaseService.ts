@@ -142,6 +142,7 @@ export interface ReviewPageData {
 
 export interface RequirementSnapshot {
     id: number;
+    revision: number;
     releaseId: number;
     originalRequirementId: number;
     shortreq: string;

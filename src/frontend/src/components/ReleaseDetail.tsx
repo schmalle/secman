@@ -18,6 +18,7 @@ import { canDeleteRelease } from '../utils/permissions';
 import ReleaseStatusActions from './ReleaseStatusActions';
 import ReleaseDeleteConfirm from './ReleaseDeleteConfirm';
 import Toast from './Toast';
+import RequirementComments from './RequirementComments';
 import RichContent from './RichContent';
 import { formatServerDateTime } from '../utils/dateUtils';
 
@@ -29,12 +30,13 @@ interface SnapshotDetailModalProps {
     snapshot: RequirementSnapshot | null;
     isOpen: boolean;
     onClose: () => void;
+    releaseVersion: string;
 }
 
 /**
  * Modal for displaying complete snapshot details
  */
-const SnapshotDetailModal: React.FC<SnapshotDetailModalProps> = ({ snapshot, isOpen, onClose }) => {
+const SnapshotDetailModal: React.FC<SnapshotDetailModalProps> = ({ snapshot, isOpen, onClose, releaseVersion }) => {
     if (!isOpen || !snapshot) {
         return null;
     }
@@ -122,6 +124,8 @@ const SnapshotDetailModal: React.FC<SnapshotDetailModalProps> = ({ snapshot, isO
                                 <dt className="col-sm-3">Original ID:</dt>
                                 <dd className="col-sm-9">{snapshot.originalRequirementId}</dd>
                             </dl>
+                            <RequirementComments scope="SNAPSHOT" targetId={snapshot.id} revision={snapshot.revision}
+                                context={`Requirement ${snapshot.shortreq} in release ${releaseVersion}`} />
                         </div>
 
                         {/* Footer */}
@@ -492,6 +496,9 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
                 </div>
             </div>
 
+            <RequirementComments scope="RELEASE" targetId={release.id}
+                context={`Release ${release.version}: ${release.name}`} />
+
             {/* Requirement Snapshots Section */}
             <div className="card">
                 <div className="card-header">
@@ -618,6 +625,7 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
 
             {/* Snapshot Detail Modal */}
             <SnapshotDetailModal
+                releaseVersion={release.version}
                 snapshot={selectedSnapshot}
                 isOpen={showSnapshotModal}
                 onClose={handleModalClose}
