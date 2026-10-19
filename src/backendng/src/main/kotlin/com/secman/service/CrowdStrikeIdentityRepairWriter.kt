@@ -20,7 +20,8 @@ open class CrowdStrikeIdentityRepairWriter(
     private val identities: CrowdStrikeAssetIdentityRepository,
     private val products: InstalledProductRepository,
     private val replacements: CrowdStrikeDeviceReplacementService,
-    private val importer: CrowdStrikeVulnerabilityImportService
+    private val importer: CrowdStrikeVulnerabilityImportService,
+    private val requests: CrowdStrikeRepairRequestStore
 ) {
     @Transactional
     open fun preview(request: CrowdStrikeIdentityReconcileRequest, batches: List<CrowdStrikeVulnerabilityBatchDto>,
@@ -38,7 +39,7 @@ open class CrowdStrikeIdentityRepairWriter(
         identities.findByAssetIdIn(listOf(request.assetId)).forEach(identities::delete)
         em.flush()
         products.deleteByAssetId(request.assetId)
-        val operationId = UUID.randomUUID().toString()
+        val operationId = request.requestId ?: UUID.randomUUID().toString()
         // Refresh the retained machine first. All legacy CrowdStrike severities are replaced;
         // manual findings and every existing asset relationship stay on that machine.
         batches.sortedBy { if (it.cloudInstanceId == expected.instance) 0 else 1 }.forEach { batch ->
@@ -54,35 +55,37 @@ open class CrowdStrikeIdentityRepairWriter(
                 actor = actor.replace('\r', '_').replace('\n', '_').take(255), reason = request.reason.trim()))
         }
         em.flush()
-        return response(request, batches, false)
+        val result = response(request, batches, false).copy(findingsFetched = true, requestId = request.requestId)
+        request.requestId?.let { requests.succeed(it, result) }
+        return result
     }
 
     private fun validate(request: CrowdStrikeIdentityReconcileRequest, batches: List<CrowdStrikeVulnerabilityBatchDto>,
         expected: LegacyCrowdStrikeAssetState, lock: Boolean) {
         val source = if (lock) em.find(Asset::class.java, request.assetId, LockModeType.PESSIMISTIC_WRITE)
             else em.find(Asset::class.java, request.assetId)
-        requireNotNull(source) { "Source asset changed; preview again" }
+        if (source == null) throw CrowdStrikeIdentityConflict("SOURCE_CHANGED", "Source asset disappeared; discover again", request.assetId)
         em.refresh(source)
-        require(LegacyCrowdStrikeAssetState(source.cloudAccountId, source.cloudInstanceId, source.updatedAt) == expected) {
-            "Source asset changed during Falcon fetch; preview again"
-        }
+        if (LegacyCrowdStrikeAssetState(source.cloudAccountId, source.cloudInstanceId, source.updatedAt) != expected)
+            throw CrowdStrikeIdentityConflict("SOURCE_CHANGED", "Stored account or instance changed during Falcon fetch; preview again", request.assetId)
         val bound = identities.findByAssetIdIn(listOf(request.assetId))
         bound.forEach(em::refresh)
-        require(bound.map { it.crowdStrikeAid }.toSet() == request.expectedAids && bound.all {
+        if (!(bound.map { it.crowdStrikeAid }.toSet() == request.expectedAids && bound.all {
             it.falconFirstSeenAt == null && it.falconLastSeenAt == null && it.identityObservedAt == null
-        }) { "Source bindings changed during Falcon fetch; preview again" }
+        })) throw CrowdStrikeIdentityConflict("BINDINGS_CHANGED", "Stored AID bindings changed during Falcon fetch; preview again", request.assetId)
         require(batches.map { it.deviceSelection?.selected?.aid }.toSet() == request.expectedAids &&
             batches.size == request.expectedAids.size && batches.map { it.cloudInstanceId }.distinct().size == batches.size &&
             batches.count { it.cloudInstanceId == expected.instance } == 1 &&
             batches.all { it.cloudAccountId == expected.account }) { "Invalid identity split" }
         batches.forEach { batch ->
             val owners = owners(batch)
-            require(owners.size <= 1) { "Incoming instance has multiple stored owners" }
+            if (owners.size > 1) throw CrowdStrikeIdentityConflict("DESTINATION_AMBIGUOUS", "Incoming instance has multiple stored owners", request.assetId,
+                instanceId = batch.cloudInstanceId, aid = batch.deviceSelection?.selected?.aid)
             owners.forEach { id ->
                 if (lock) em.find(Asset::class.java, id, LockModeType.PESSIMISTIC_WRITE)
-                require(id == request.assetId || identities.findByAssetIdIn(listOf(id)).isEmpty()) {
-                    "Destination already has Falcon bindings; separate review is required"
-                }
+                if (id != request.assetId && identities.findByAssetIdIn(listOf(id)).isNotEmpty())
+                    throw CrowdStrikeIdentityConflict("DESTINATION_ALREADY_BOUND", "Destination already has Falcon bindings; separate review is required", request.assetId,
+                        instanceId = batch.cloudInstanceId, aid = batch.deviceSelection?.selected?.aid)
             }
         }
     }

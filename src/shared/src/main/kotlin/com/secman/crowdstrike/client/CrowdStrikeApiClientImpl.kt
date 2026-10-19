@@ -77,6 +77,14 @@ open class CrowdStrikeApiClientImpl(
         return queryDeviceVulnerabilities(hostname, null, false, config)
     }
 
+    override fun resolveDeviceRecords(aids: Set<String>, config: FalconConfigDto): List<CrowdStrikeDeviceRecord> {
+        require(aids.size in 1..100 && aids.all { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) }) { "Invalid device IDs" }
+        return resolveImportMetadata(aids.sorted(), config).map { (aid, md) ->
+            CrowdStrikeDeviceRecord(aid, firstNonBlank(md.hostname, md.cloudInstanceId).orEmpty(), md.cloudInstanceId,
+                md.cloudAccountId, md.adDomain, md.firstSeen, md.lastSeen, md.productType)
+        }
+    }
+
     override fun queryDeviceVulnerabilities(hostname: String?, aid: String?, allMatches: Boolean,
         config: FalconConfigDto): CrowdStrikeQueryResponse {
         require(!hostname.isNullOrBlank() || aid != null) { "Hostname or AID is required" }

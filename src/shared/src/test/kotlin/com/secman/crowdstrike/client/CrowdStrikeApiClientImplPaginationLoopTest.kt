@@ -99,6 +99,28 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
     private fun spotlightCalls(requests: List<HttpRequest<Any>>) =
         requests.count { it.uri.toString().contains("/spotlight/combined/vulnerabilities/v1") }
 
+    @Test
+    fun `metadata only lookup returns every AID without calling Spotlight`() {
+        val requests = stubSpotlightPages(emptyList(), listOf("aid-one", "aid-two"))
+        val records = client.resolveDeviceRecords(setOf("aid-one", "aid-two"), config)
+        assertThat(records.map { it.aid }).containsExactlyInAnyOrder("aid-one", "aid-two")
+        assertThat(records).allMatch { it.firstSeen != null && it.cloudAccountId == "123456789012" }
+        assertThat(spotlightCalls(requests)).isZero()
+        assertThatThrownBy { client.resolveDeviceRecords(setOf("bad'filter"), config) }.isInstanceOf(IllegalArgumentException::class.java)
+    }
+
+    @Test
+    fun `metadata lookup preserves missing enrollment evidence for precise classification`() {
+        val requests = mutableListOf<HttpRequest<Any>>()
+        every { blockingClient.exchange(capture(requests), Map::class.java) } returns HttpResponse.ok(mapOf(
+            "resources" to listOf(mapOf("device_id" to "aid-one", "hostname" to "server01",
+                "instance_id" to "i-0123456789abcdef0"))))
+        val record = client.resolveDeviceRecords(setOf("aid-one"), config).single()
+        assertThat(record.firstSeen).isNull()
+        assertThat(record.cloudAccountId).isNull()
+        assertThat(spotlightCalls(requests)).isZero()
+    }
+
     // --- queryBatchVulnerabilities (driven via queryVulnerabilitiesByDeviceIdsDetailed) ---
 
     @Test

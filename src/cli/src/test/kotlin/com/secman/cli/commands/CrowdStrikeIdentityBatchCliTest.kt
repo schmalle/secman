@@ -25,11 +25,13 @@ class CrowdStrikeIdentityBatchCliTest {
     }
 
     private fun run(pages: (String) -> Any, repair: (JsonNode) -> Pair<Int, Any>, apply: Boolean = false,
-        after: Long = 0): Triple<JsonNode, List<JsonNode>, List<String>> {
+        after: Long = 0, lookup: ((String, Map<String, JsonNode>) -> Pair<Int, Any>)? = null): Triple<JsonNode, List<JsonNode>, List<String>> {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         val token = UUID.randomUUID().toString()
         val queries = mutableListOf<String>()
         var logins = 0
+        val posted = linkedMapOf<String, JsonNode>()
+        val handlerErrors = mutableListOf<Throwable>()
         fun respond(exchange: com.sun.net.httpserver.HttpExchange, status: Int, body: Any) {
             val bytes = mapper.writeValueAsBytes(body)
             exchange.responseHeaders.add("Content-Type", "application/json")
@@ -42,13 +44,25 @@ class CrowdStrikeIdentityBatchCliTest {
             respond(exchange, 200, emptyMap<String, Any>())
         }
         server.createContext("/api/crowdstrike/identity-reconcile") { exchange ->
+            try {
             if (exchange.requestHeaders.getFirst("Authorization") != "Bearer $token") respond(exchange, 403, emptyMap<String, Any>())
+            else if (exchange.requestMethod == "GET" && exchange.requestURI.path.contains("/requests/")) {
+                val id = exchange.requestURI.path.substringAfterLast('/')
+                val (status, body) = lookup?.invoke(id, posted) ?: (404 to emptyMap<String, Any>())
+                respond(exchange, status, body)
+            }
             else if (exchange.requestMethod == "GET") {
                 queries.add(exchange.requestURI.rawQuery)
                 respond(exchange, 200, pages(exchange.requestURI.rawQuery))
             } else {
-                val (status, body) = repair(mapper.readTree(exchange.requestBody))
+                val request = mapper.readTree(exchange.requestBody)
+                posted[request.path("requestId").asText()] = request
+                val (status, body) = repair(request)
                 respond(exchange, status, body)
+            }
+            } catch (e: Throwable) {
+                handlerErrors.add(e)
+                respond(exchange, 500, emptyMap<String, Any>())
             }
         }
         server.start()
@@ -60,7 +74,11 @@ class CrowdStrikeIdentityBatchCliTest {
             CommandLine(command).out = PrintWriter(output)
             val summary = command.submit(URI("http://127.0.0.1:${server.address.port}"), "admin", UUID.randomUUID().toString())
             assertThat(logins).isEqualTo(1)
-            val events = output.toString().lineSequence().filter(String::isNotBlank).map(mapper::readTree).toList()
+            assertThat(handlerErrors).isEmpty()
+            val allEvents = output.toString().lineSequence().filter(String::isNotBlank).map(mapper::readTree).toList()
+            assertThat(allEvents.filter { it.path("type").asText() == "request" }.map { it.path("requestId").asText() })
+                .containsExactlyElementsOf(posted.keys)
+            val events = allEvents.filter { it.path("type").asText() == "candidate" }
             return Triple(summary, events, queries.toList())
         } finally { server.stop(0) }
     }
@@ -82,7 +100,7 @@ class CrowdStrikeIdentityBatchCliTest {
             }
         })
         assertThat(calls).containsExactly(42, 43, 44, 45)
-        assertThat(events.map { it.path("status").asText() }).containsExactly("PREVIEWED", "REJECTED", "FAILED", "ALREADY_RESOLVED")
+        assertThat(events.map { it.path("status").asText() }).containsExactly("PREVIEWED", "REJECTED", "UNKNOWN", "ALREADY_RESOLVED")
         assertThat(summary.path("complete").asBoolean()).isTrue()
         assertThat(summary.path("discovered").asLong()).isEqualTo(4)
         assertThat(summary.path("unresolved").asLong()).isEqualTo(2)
@@ -151,5 +169,54 @@ class CrowdStrikeIdentityBatchCliTest {
         cli.err = PrintWriter(StringWriter())
         assertThat(cli.execute("--all-candidates", "--asset-id", "42", "--reason", "Verified device recovery")).isEqualTo(2)
         assertThat(cli.execute("--all-candidates", "--batch-size", "101", "--reason", "Verified device recovery")).isEqualTo(2)
+    }
+
+    @Test
+    fun `specific rejection code explanation and AID reach the candidate output`() {
+        val (summary, events) = run(pages = { page(listOf(42), 42, false) }, repair = {
+            409 to mapOf("errorCode" to "DEVICE_ACCOUNT_MISSING", "error" to "Falcon device has no AWS account ID", "aid" to "aid-b-42")
+        })
+        assertThat(events.single().path("errorCode").asText()).isEqualTo("DEVICE_ACCOUNT_MISSING")
+        assertThat(events.single().path("message").asText()).isEqualTo("Falcon device has no AWS account ID")
+        assertThat(events.single().path("aid").asText()).isEqualTo("aid-b-42")
+        assertThat(summary.path("resumeAfterId").asLong()).isZero()
+    }
+
+    @Test
+    fun `gateway timeout remains UNKNOWN while backend has no terminal result`() {
+        val (summary, events) = run(pages = { page(listOf(42), 42, false) }, repair = { 504 to emptyMap<String, Any>() },
+            lookup = { id, posted ->
+                200 to mapOf("requestId" to id, "assetId" to posted.getValue(id).path("assetId").asLong(),
+                    "dryRun" to true, "state" to "RUNNING", "httpStatus" to 202)
+            })
+        assertThat(events.single().path("status").asText()).isEqualTo("UNKNOWN")
+        assertThat(events.single().path("requestId").asText()).isNotBlank()
+        assertThat(summary.path("totals").path("FAILED").asLong()).isZero()
+        assertThat(summary.path("resumeAfterId").asLong()).isZero()
+    }
+
+    @Test
+    fun `timeout recovers a committed result by status lookup without resubmitting a write`() {
+        var writes = 0
+        val (summary, events) = run(pages = { page(listOf(42), 42, false) }, repair = {
+            writes++
+            504 to emptyMap<String, Any>()
+        }, apply = true, lookup = { id, posted ->
+            200 to mapOf("requestId" to id, "assetId" to 42, "dryRun" to false, "state" to "REPAIRED", "httpStatus" to 200,
+                "report" to success(posted.getValue(id)))
+        })
+        assertThat(writes).isEqualTo(1)
+        assertThat(events.single().path("status").asText()).isEqualTo("REPAIRED")
+        assertThat(summary.path("unresolved").asLong()).isZero()
+    }
+
+    @Test
+    fun `status lookup can confirm a failed request instead of guessing from gateway response`() {
+        val (summary, events) = run(pages = { page(listOf(42), 42, false) }, repair = { 502 to emptyMap<String, Any>() },
+            lookup = { id, _ -> 200 to mapOf("requestId" to id, "assetId" to 42, "dryRun" to true, "state" to "FAILED",
+                "httpStatus" to 502, "errorCode" to "REPAIR_EXECUTION_FAILED", "message" to "Provider metadata lookup failed") })
+        assertThat(events.single().path("status").asText()).isEqualTo("FAILED")
+        assertThat(events.single().path("errorCode").asText()).isEqualTo("REPAIR_EXECUTION_FAILED")
+        assertThat(summary.path("unresolved").asLong()).isEqualTo(1)
     }
 }

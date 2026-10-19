@@ -1,7 +1,6 @@
 package com.secman.controller
 
 import com.secman.dto.CrowdStrikeIdentityReconcileRequest
-import com.secman.service.CrowdStrikeIdentityReconcileService
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
 import io.micronaut.http.annotation.Body
@@ -9,6 +8,7 @@ import io.micronaut.http.annotation.Controller
 import io.micronaut.http.annotation.Post
 import io.micronaut.http.annotation.Get
 import io.micronaut.http.annotation.QueryValue
+import io.micronaut.http.annotation.PathVariable
 import io.micronaut.http.exceptions.HttpStatusException
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
@@ -21,10 +21,23 @@ import org.slf4j.LoggerFactory
 @Secured("ADMIN")
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class CrowdStrikeIdentityReconcileController(
-    private val service: CrowdStrikeIdentityReconcileService,
+    private val service: com.secman.service.CrowdStrikeRepairRequestService,
     private val candidates: com.secman.service.CrowdStrikeIdentityCandidateService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    @Get("/requests/{requestId}")
+    open fun requestStatus(@PathVariable requestId: String, authentication: Authentication): HttpResponse<*> = try {
+        HttpResponse.ok(service.status(requestId, authentication))
+    } catch (e: HttpStatusException) {
+        HttpResponse.status<Any>(e.status)
+    } catch (e: IllegalArgumentException) {
+        HttpResponse.badRequest(mapOf("error" to "A valid UUID request ID is required"))
+    } catch (e: Exception) {
+        log.error("Falcon repair status actor={} requestId={} outcome=failed",
+            authentication.name.replace('\r', '_').replace('\n', '_'), requestId.replace('\r', '_').replace('\n', '_'), e)
+        HttpResponse.serverError(mapOf("error" to "Repair status could not be retrieved; outcome remains unconfirmed"))
+    }
 
     @Get("/candidates")
     open fun discover(@QueryValue(defaultValue = "0") afterId: Long,
@@ -43,20 +56,24 @@ open class CrowdStrikeIdentityReconcileController(
 
     @Post
     open fun reconcile(@Body @Valid request: CrowdStrikeIdentityReconcileRequest, authentication: Authentication): HttpResponse<*> = try {
-        HttpResponse.ok(service.reconcile(request, authentication))
+        val status = service.execute(request, authentication)
+        if (status.report != null) HttpResponse.ok(status.report)
+        else HttpResponse.status<Map<String, Any?>>(HttpStatus.valueOf(if (status.state == "RUNNING") 409 else status.httpStatus))
+            .body(mapOf("requestId" to status.requestId, "assetId" to status.assetId, "aid" to status.aid,
+                "errorCode" to if (status.state == "RUNNING") "REQUEST_IN_PROGRESS" else status.errorCode,
+                "error" to if (status.state == "RUNNING") "This request is already running; query its status instead of resubmitting" else status.message))
     } catch (e: HttpStatusException) {
         HttpResponse.status<Any>(e.status)
     } catch (e: IllegalArgumentException) {
         log.warn("Falcon identity repair actor={} assetId={} outcome=rejected-preserved",
             authentication.name.replace('\r', '_').replace('\n', '_'), request.assetId, e)
-        val resolved = (e as? com.secman.service.CrowdStrikeIdentityConflict)?.code == "ALREADY_RESOLVED"
+        val conflict = e as? com.secman.service.CrowdStrikeIdentityConflict
         HttpResponse.status<Map<String, String>>(HttpStatus.CONFLICT).body(mapOf(
-            "errorCode" to if (resolved) "ALREADY_RESOLVED" else "IDENTITY_REJECTED",
-            "error" to if (resolved) "Source asset now has one verified binding; no repair was performed." else
-                "Identity split could not be verified or stored state changed; stored data was preserved. Review Falcon metadata and preview again."))
+            "errorCode" to (conflict?.code ?: "IDENTITY_REJECTED"),
+            "error" to (conflict?.message ?: "Invalid identity-repair request; existing inventory was preserved")))
     } catch (e: Exception) {
         log.error("Falcon identity repair actor={} assetId={} outcome=failed-preserved",
             authentication.name.replace('\r', '_').replace('\n', '_'), request.assetId, e)
-        HttpResponse.serverError(mapOf("error" to "Identity repair failed; stored data was preserved."))
+        HttpResponse.serverError(mapOf("error" to "Identity repair outcome could not be confirmed; query its request status."))
     }
 }
