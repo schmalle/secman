@@ -37,7 +37,12 @@ class CrowdStrikeSyncService(
         require(hostname.matches(Regex("[A-Za-z0-9_.-]{1,255}"))) { "Invalid hostname" }
         val config = queries.getConfiguration()
         // A stored instance ID may be precisely the stale value this synchronization repairs.
-        val response = if (asset == null && !instance.isNullOrBlank()) client.queryVulnerabilitiesByInstanceId(instance, config)
+        val boundAid = asset?.id?.let { identities.findByAssetIdIn(listOf(it)).singleOrNull()?.crowdStrikeAid }
+        require(request.aid == null || request.aid.matches(Regex("[A-Za-z0-9_-]{1,64}"))) { "Invalid AID" }
+        require(asset == null || request.aid == null || boundAid == request.aid) { "AID does not match selected asset" }
+        val exactAid = boundAid ?: request.aid
+        val response = if (exactAid != null) client.queryDeviceVulnerabilities(null, exactAid, false, config)
+            else if (asset == null && !instance.isNullOrBlank()) client.queryVulnerabilitiesByInstanceId(instance, config)
             else client.queryAllVulnerabilities(hostname, config)
         require(response.failedAids.isEmpty()) { "Incomplete Falcon snapshot; existing data was preserved" }
         val device = requireNotNull(response.devices.singleOrNull()) { "System does not resolve to one Falcon machine" }
@@ -46,7 +51,9 @@ class CrowdStrikeSyncService(
             require(asset.cloudAccountId.isNullOrBlank() || asset.cloudAccountId.equals(device.cloudAccountId, ignoreCase = true)) {
                 "Falcon account conflicts with the selected asset"
             }
-            require(asset.cloudInstanceId.equals(device.instanceId, ignoreCase = true) ||
+            require((!asset.cloudInstanceId.isNullOrBlank() && !asset.cloudAccountId.isNullOrBlank() &&
+                asset.cloudInstanceId.equals(device.instanceId, ignoreCase = true) &&
+                asset.cloudAccountId.equals(device.cloudAccountId, ignoreCase = true)) ||
                 identities.findByAssetIdIn(listOf(requireNotNull(asset.id))).any { it.crowdStrikeAid == selection.selected.aid }) {
                 "Falcon device does not match the selected asset identity"
             }

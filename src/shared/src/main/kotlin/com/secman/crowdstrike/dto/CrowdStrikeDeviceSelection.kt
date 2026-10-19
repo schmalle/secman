@@ -58,21 +58,17 @@ fun selectLatestCrowdStrikeDevices(records: List<CrowdStrikeDeviceRecord>): List
         }
         return current
     }
-    val accountsByHostname = records.groupBy { it.hostnameScope().take(2) }.mapValues { (_, group) ->
-        group.map { it.cloudAccountId.orEmpty().trim().lowercase() }.filter(String::isNotBlank).distinct()
-    }
     val owners = mutableMapOf<List<String>, Int>()
     records.forEachIndexed { index, device ->
         val scope = device.hostnameScope()
-        // Missing account metadata is compatible only with one unambiguous hostname account.
-        val account = scope.last().ifBlank { accountsByHostname.getValue(scope.take(2)).singleOrNull().orEmpty() }
+        val account = scope.last()
         // A reused hostname is not proof that two cloud instances are the same machine.
         // Records without an instance ID must not bridge otherwise independent instances.
         val instance = device.instanceId?.trim()?.takeIf(String::isNotBlank)
-        val keys = if (instance != null) {
+        val keys = if (instance != null && account.isNotBlank()) {
             listOf(listOf("instance", instance.lowercase(), account))
         } else {
-            listOf(listOf("hostname") + scope.take(2) + account)
+            listOf(listOf("aid", device.aid))
         }
         keys.forEach { key ->
             owners.putIfAbsent(key, index)?.let { previous -> parents[root(index)] = root(previous) }
@@ -81,12 +77,22 @@ fun selectLatestCrowdStrikeDevices(records: List<CrowdStrikeDeviceRecord>): List
     return records.indices.groupBy(::root).values.map { indices ->
         val group = indices.map(records::get)
         require(group.size <= 101) { "Too many Falcon device identities for one hostname" }
-        val ordered = group.sortedWith(compareByDescending<CrowdStrikeDeviceRecord> { it.firstSeen }
-            .thenByDescending { it.lastSeen ?: Instant.MIN })
-        val selected = ordered.first()
-        require(ordered.drop(1).none { it.firstSeen == selected.firstSeen && it.lastSeen == selected.lastSeen }) {
-            "Ambiguous latest Falcon device timestamp"
-        }
-        CrowdStrikeDeviceSelection(selected, ordered.drop(1))
+        val selected = if (group.size == 1) group.single() else selectMostRecentlySeenCrowdStrikeDevice(group)
+        CrowdStrikeDeviceSelection(selected, group.filter { it.aid != selected.aid }.sortedByDescending { it.lastSeen })
     }
+}
+
+/** Contact recency chooses a query default, never establishes machine identity. */
+fun selectMostRecentlySeenCrowdStrikeDevice(records: List<CrowdStrikeDeviceRecord>): CrowdStrikeDeviceRecord {
+    require(records.isNotEmpty()) { "No Falcon device candidates" }
+    val now = Instant.now()
+    require(records.all { it.lastSeen != null && it.firstSeen != null &&
+        !it.lastSeen.isAfter(now) && !it.lastSeen.isBefore(it.firstSeen) }) {
+        "Incomplete or invalid Falcon device contact timestamp"
+    }
+    val ordered = records.sortedByDescending { it.lastSeen }
+    require(ordered.size == 1 || ordered[0].lastSeen != ordered[1].lastSeen) {
+        "Ambiguous latest Falcon device contact timestamp; select an AID explicitly"
+    }
+    return ordered.first()
 }

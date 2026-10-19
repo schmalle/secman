@@ -1,27 +1,58 @@
 # CrowdStrike Vulnerability Import
 
-## Current Falcon enrollment per machine
+## Independent devices and duplicate hostnames
 
-Interactive lookup, single-host synchronization and bulk imports use the same
-selection: maximum Falcon `first_seen`, then maximum `last_seen` for an enrollment
-time tie, within one machine identity. A reused hostname across separate instances,
-accounts or FQDN/domain identities is ambiguous for interactive lookup. Supply the
-asset ID/instance instead. All case variants and full-name aliases are discovered
-before selection. Missing enrollment timestamps, incomplete discovery and tied
-ranking fail closed; a failed winner never falls back to an older enrollment.
+A hostname is a searchable label, not a unique machine identity. Two Falcon AIDs
+may share the same hostname, domain and account and remain separate SecMan assets.
+Each asset keeps its own findings, addresses, snapshots, permissions and history.
+Devices without verified cloud instance/account continuity remain separate by AID.
+A shared hostname or IP never authorizes merging or retiring another device.
 
-Full hostnames are compared without case sensitivity, within the same AD-domain
-and cloud-account scope. Short names in different FQDNs stay separate. Aliases for
-the same cloud instance and account are ranked together even across AD-domain
-changes during enrollment. Bulk vulnerability
-imports enumerate the requested device types without an activity filter, select the
-winner, then apply `--last-seen-days` to that winner. This retains older AIDs as
-cleanup evidence without querying their vulnerabilities.
-Records without a cloud account join the sole known account for their full hostname
-and AD domain. They never bridge two conflicting known accounts.
+Only records reporting the same non-empty cloud instance and account are automatic
+replacement candidates. Within that identity, latest valid Falcon `last_seen`
+selects the active enrollment; `first_seen` remains enrollment continuity evidence.
+Missing contact timestamps, future contacts, contacts preceding enrollment, and
+latest-contact ties reject selection when ranking is necessary. An explicit AID
+lookup does not require ranking against unrelated devices. A failed selected fetch
+never falls back to another device. Stale responses cannot overwrite newer contact
+or identity observations.
+
+A hostname-only interactive query defaults to the AID with the most recent valid
+contact and reports the other matching identities. This preference does not retire
+them. If contact ordering changes, the default may change while asset IDs remain
+stable. Asset-scoped queries and synchronization use that asset's stored AID.
+For explicit CLI selection:
+
+```bash
+./scripts/secman query servers --hostnames ARCGIS
+./scripts/secman query servers --hostnames ARCGIS --all-matches
+./scripts/secman query servers --aid <falcon-aid>
+```
+
+Add `--save` to import the selected devices. Bulk imports preserve all independent
+AIDs, including complete zero-finding snapshots; incomplete fetches preserve stored
+findings. Activity filters apply per independent identity after selection.
+
+Admins can use `GET /api/crowdstrike/devices?hostname=ARCGIS&allMatches=true`
+or `GET /api/crowdstrike/devices?aid=<aid>` for explicit live queries.
+Other users use the authorized `/api/vulnerabilities?assetId=<id>` path.
+The inventory shows SecMan IDs and AIDs alongside contact and cloud metadata;
+links and actions address the SecMan asset ID.
+
+## Legacy conflict review
+
+`GET /api/crowdstrike/identity-preview?hostname=ARCGIS` is ADMIN-only and read-only.
+It returns up to 101 matching stored assets, their AIDs and cloud metadata, with
+`BOUND_DEVICE_PRESERVE`, `LEGACY_UNBOUND_REVIEW`, `MULTIPLE_BINDINGS_REVIEW`, or
+`UNVERIFIED_BINDING_REVIEW`. Compare this inventory with the explicit live-device
+query before repairing old bindings. More matches require narrowing the review.
+The preview does not prove supersession or perform repairs. Existing ambiguous
+bindings, account/domain conflicts and instance-change enrollment mismatches still
+require evidence and review; this change does not silently repair all legacy
+production errors. No migration or bulk rewrite of existing assets is required.
 
 If Falcon omits a cloud device's hostname, its instance ID supplies the asset name
-and it still participates in selection with named aliases of that instance.
+and it participates in selection with named aliases only when the same instance and account are verified.
 Devices lacking both names and instance IDs are excluded only after Falcon confirms
 they have no open findings; otherwise the import stops before replacement.
 

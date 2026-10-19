@@ -98,36 +98,89 @@ open class CrowdStrikeController(
         if (!authentication.roles.contains("ADMIN") && selected == null) {
             if (identifier.isNullOrBlank()) return HttpResponse.badRequest(mapOf("error" to "System is required"))
             val asset = if (InputDetectionUtils.isAwsInstanceId(identifier)) assetRepository.findByCloudInstanceIdIgnoreCase(identifier)
-                else assetRepository.findByCrowdStrikeHostnameIgnoreCase(identifier) ?: assetRepository.findByNameIgnoreCase(identifier)
+                else {
+                    val candidates = assetRepository.findCrowdStrikeReplacementCandidates(identifier,
+                        io.micronaut.data.model.Pageable.from(0, 102))
+                    if (candidates.totalSize > 101) return HttpResponse.badRequest(mapOf("error" to "Use an asset ID"))
+                    candidates.content.filter { it.id?.let { id -> assetFilterService.canAccessAsset(id, authentication) } == true }
+                        .maxByOrNull { it.crowdStrikeAgentSeenAt ?: java.time.LocalDateTime.MIN }
+                }
             if (asset?.id == null || !assetFilterService.canAccessAsset(requireNotNull(asset.id), authentication)) {
                 return HttpResponse.notFound<Any>()
             }
             selected = asset
             identifier = asset.cloudInstanceId ?: asset.crowdStrikeHostname ?: asset.name
         }
-        val grantedAids = if (selected != null && !authentication.roles.contains("ADMIN")) {
+        val grantedAids = if (selected != null) {
             identityRepository.findByAssetIdIn(listOf(requireNotNull(selected.id))).map { it.crowdStrikeAid }.toSet()
         } else emptySet()
-        var result = queryVulnerabilities(identifier, severity, product, limit, page, force)
-        var body = result.body() as? CrowdStrikeQueryResponse ?: return result
-        if (selected != null && body.dataSource == "DATABASE" && body.assetId != selected.id) {
-            queryService.invalidateAllCachedQueries()
-            result = queryVulnerabilities(identifier, severity, product, limit, page, force)
-            body = result.body() as? CrowdStrikeQueryResponse ?: return result
-            if (body.dataSource == "DATABASE" && body.assetId != selected.id) return HttpResponse.notFound<Any>()
+        if (selected != null) {
+            if ((limit != null && limit !in 1..20000) || (page != null && page < 0))
+                return HttpResponse.badRequest(mapOf("error" to "Invalid pagination"))
+            return try {
+                val exact = queryService.queryAsset(selected, grantedAids.singleOrNull(), force, severity, product,
+                    limit ?: 20000, page ?: 0) ?: return HttpResponse.notFound<Any>()
+                if (!com.secman.service.AssetCurrentnessPolicy.includes(exact.observedAt?.let {
+                        java.time.LocalDateTime.ofInstant(it, java.time.ZoneOffset.UTC)
+                    })) return HttpResponse.notFound<Any>()
+                if (exact.assetId != selected.id) return HttpResponse.notFound<Any>()
+                if (exact.dataSource == "LIVE_API" && (exact.selectedAid !in grantedAids ||
+                    (!selected.cloudAccountId.isNullOrBlank() && !selected.cloudAccountId.equals(exact.cloudAccountId, true))))
+                    return HttpResponse.notFound<Any>()
+                HttpResponse.ok(exact.copy(assetId = selected.id, matchingDevices = emptySet()))
+            } catch (e: Exception) {
+                log.warn("Exact Falcon lookup actor={} assetId={} outcome=failed", authentication.name.replace('\r', '_').replace('\n', '_'), selected.id)
+                HttpResponse.notFound<Any>()
+            }
         }
-        if (selected != null && !selected.cloudAccountId.isNullOrBlank() && body.dataSource == "LIVE_API" &&
-            !selected.cloudAccountId.equals(body.cloudAccountId, ignoreCase = true)) return HttpResponse.notFound<Any>()
-        if (selected != null && !authentication.roles.contains("ADMIN") && body.dataSource == "LIVE_API") {
-            val stableCloudIdentity = !selected.cloudInstanceId.isNullOrBlank() && !selected.cloudAccountId.isNullOrBlank() &&
-                selected.cloudInstanceId.equals(body.instanceId, ignoreCase = true) &&
-                selected.cloudAccountId.equals(body.cloudAccountId, ignoreCase = true)
-            if (body.selectedAid !in grantedAids && !stableCloudIdentity) return HttpResponse.notFound<Any>()
-        }
+        val result = queryVulnerabilities(identifier, severity, product, limit, page, force)
+        val body = result.body() as? CrowdStrikeQueryResponse ?: return result
         if (!com.secman.service.AssetCurrentnessPolicy.includes(body.observedAt?.let {
                 java.time.LocalDateTime.ofInstant(it, java.time.ZoneOffset.UTC)
             })) return HttpResponse.notFound<Any>()
-        return HttpResponse.ok(body.copy(assetId = selected?.id ?: body.assetId))
+        return HttpResponse.ok(body)
+    }
+
+    /** Provider-wide discovery is reserved for admins; asset lookups use the scoped endpoint. */
+    @Get("/crowdstrike/devices")
+    @Secured("ADMIN")
+    open fun queryDevices(@QueryValue hostname: String?, @QueryValue aid: String? = null,
+        @QueryValue(defaultValue = "false") allMatches: Boolean = false): HttpResponse<*> = try {
+        require(aid == null || aid.matches(Regex("[A-Za-z0-9_-]{1,64}"))) { "Invalid AID" }
+        require(!(aid != null && allMatches)) { "Choose an AID or all matches" }
+        val name = hostname?.let(::sanitizeHostname)
+        require(name != null || aid != null) { "Hostname or AID is required" }
+        HttpResponse.ok(queryService.queryDevicesLive(name, aid, allMatches))
+    } catch (e: IllegalArgumentException) {
+        HttpResponse.badRequest(mapOf("error" to "Invalid device selection"))
+    } catch (e: Exception) {
+        log.warn("Falcon explicit device query outcome=failed", e)
+        HttpResponse.status<Any>(HttpStatus.BAD_GATEWAY)
+    }
+
+    /** Read-only preview: never moves bindings or deletes legacy records. */
+    @Get("/crowdstrike/identity-preview")
+    @Secured("ADMIN")
+    open fun previewIdentities(@QueryValue hostname: String): HttpResponse<*> {
+        val name = try { sanitizeHostname(hostname) } catch (e: IllegalArgumentException) {
+            return HttpResponse.badRequest(mapOf("error" to "Invalid hostname"))
+        }
+        val candidates = assetRepository.findCrowdStrikeReplacementCandidates(name, io.micronaut.data.model.Pageable.from(0, 102))
+        if (candidates.totalSize > 101) return HttpResponse.badRequest(mapOf("error" to "Too many matches; use asset IDs"))
+        val bindings = if (candidates.content.isEmpty()) emptyList() else
+            identityRepository.findByAssetIdIn(candidates.content.map { requireNotNull(it.id) })
+        return HttpResponse.ok(candidates.content.map { asset ->
+            val owned = bindings.filter { it.asset.id == asset.id }
+            mapOf("assetId" to asset.id, "hostname" to (asset.crowdStrikeHostname ?: asset.name),
+                "instanceId" to asset.cloudInstanceId, "accountId" to asset.cloudAccountId,
+                "aids" to owned.map { it.crowdStrikeAid }, "lastSeen" to asset.crowdStrikeAgentSeenAt,
+                "classification" to when {
+                    owned.isEmpty() -> "LEGACY_UNBOUND_REVIEW"
+                    owned.size > 1 -> "MULTIPLE_BINDINGS_REVIEW"
+                    owned.single().falconFirstSeenAt == null -> "UNVERIFIED_BINDING_REVIEW"
+                    else -> "BOUND_DEVICE_PRESERVE"
+                })
+        })
     }
 
     open fun queryVulnerabilities(

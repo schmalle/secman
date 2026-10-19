@@ -62,6 +62,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
     private fun metadataResponse(vararg deviceIds: String, sameHostname: Boolean = false) = mapOf(
         "resources" to deviceIds.mapIndexed { index, id ->
             mapOf("device_id" to id, "hostname" to if (sameHostname || deviceIds.size == 1) "server01" else "host-$id",
+                "instance_id" to if (sameHostname) "i-shared" else "i-$id", "service_provider_account_id" to "123456789012",
                 "local_ip" to "10.1.2.3", "first_seen" to Instant.parse("2026-01-01T00:00:00Z").plusSeconds(index.toLong()).toString(),
                 "last_seen" to Instant.now().toString())
         }
@@ -300,7 +301,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
             when {
                 uri.contains("/devices/combined/devices/v1") -> HttpResponse.ok(combinedDeviceResponse(*ids.toTypedArray()))
                 uri.contains("/devices/entities/devices/v2") -> HttpResponse.ok(mapOf("resources" to ids.mapIndexed { i, id ->
-                    mapOf("device_id" to id, "hostname" to "alias-$i", "instance_id" to "i-shared", "first_seen" to Instant.parse("2026-01-01T00:00:00Z").plusSeconds(i.toLong()).toString(), "last_seen" to Instant.now().toString())
+                    mapOf("device_id" to id, "hostname" to "alias-$i", "instance_id" to "i-shared", "service_provider_account_id" to "123456789012", "first_seen" to Instant.parse("2026-01-01T00:00:00Z").plusSeconds(i.toLong()).toString(), "last_seen" to Instant.now().toString())
                 }))
                 uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
                 uri.contains("/spotlight/") -> HttpResponse.ok(spotlightPage(listOf(vulnResource("winner", "aid-2")), null, 1))
@@ -688,10 +689,10 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
                     HttpResponse.ok(combinedDeviceResponse("old", "winner"))
                 firstArg<HttpRequest<Any>>().uri.toString().contains("/devices/entities/") ->
                     HttpResponse.ok(mapOf("resources" to listOf(
-                        mapOf("device_id" to "old", "hostname" to "old-server", "instance_id" to "i-shared",
-                            "first_seen" to "2026-01-01T00:00:00Z"),
-                        mapOf("device_id" to "winner", "instance_id" to "i-shared",
-                            "first_seen" to "2026-02-01T00:00:00Z")
+                        mapOf("device_id" to "old", "hostname" to "old-server", "instance_id" to "i-shared", "service_provider_account_id" to "123456789012",
+                            "first_seen" to "2026-01-01T00:00:00Z", "last_seen" to "2026-02-01T00:00:00Z"),
+                        mapOf("device_id" to "winner", "instance_id" to "i-shared", "service_provider_account_id" to "123456789012",
+                            "first_seen" to "2026-02-01T00:00:00Z", "last_seen" to "2026-03-01T00:00:00Z")
                     )))
                 else -> HttpResponse.ok(spotlightPage(emptyList(), null, 0))
             }
@@ -798,7 +799,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
             when {
                 uri.contains("/devices/combined/") -> HttpResponse.ok(combinedDeviceResponse(*ids.toTypedArray()))
                 uri.contains("/devices/entities/") -> HttpResponse.ok(mapOf("resources" to ids.mapIndexed { index, id ->
-                    mapOf("device_id" to id, "hostname" to if (index == 0) "old-alias" else "new-alias", "instance_id" to "i-shared", "first_seen" to Instant.parse("2026-01-01T00:00:00Z").plusSeconds(index.toLong()).toString(),
+                    mapOf("device_id" to id, "hostname" to if (index == 0) "old-alias" else "new-alias", "instance_id" to "i-shared", "service_provider_account_id" to "123456789012", "first_seen" to Instant.parse("2026-01-01T00:00:00Z").plusSeconds(index.toLong()).toString(),
                         "last_seen" to if (index == 0) "2026-01-01T00:00:00Z" else "2026-02-01T00:00:00Z")
                 }))
                 uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
@@ -858,26 +859,27 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
     }
 
     @Test
-    fun `hostname query refuses to choose between nineteen independent cloud instances`() {
+    fun `hostname query selects latest contact and preserves independent instances`() {
         val records = (0 until 19).map { index -> mapOf<String, Any>(
             "device_id" to "aid-$index", "hostname" to "server01",
             "instance_id" to "i-${index.toString().padStart(17, '0')}", "service_provider" to "AWS",
             "first_seen" to "2026-01-01T00:00:00Z",
             "last_seen" to Instant.parse("2026-01-02T00:00:00Z").plusSeconds(index.toLong()).toString()) }
         val requests = stubHostnameDevices(records)
-        assertThatThrownBy { client.queryVulnerabilities("server01", config) }
-            .isInstanceOf(com.secman.crowdstrike.exception.CrowdStrikeException::class.java)
-            .hasMessageContaining("multiple machines")
-        assertThat(spotlightCalls(requests)).isZero()
+        val response = client.queryVulnerabilities("server01", config)
+        assertThat(response.devices.single().crowdStrikeAid).isEqualTo("aid-18")
+        assertThat(response.devices.single().deviceSelection!!.superseded).isEmpty()
+        assertThat(response.matchingDevices).hasSize(19)
+        assertThat(spotlightCalls(requests)).isEqualTo(1)
     }
 
     @Test
-    fun `hostname lookup uses the same newest enrollment rule as imports`() {
+    fun `hostname lookup chooses latest contact regardless of enrollment date`() {
         stubHostnameDevices(listOf(
             mapOf("device_id" to "aid-1", "hostname" to "server01", "first_seen" to "2026-01-03T00:00:00Z", "last_seen" to "2026-01-03T00:00:00Z"),
             mapOf("device_id" to "aid-2", "hostname" to "SERVER01", "first_seen" to "2026-01-01T00:00:00Z", "last_seen" to "2026-01-04T00:00:00Z"),
-            mapOf("device_id" to "aid-3", "hostname" to "server01", "first_seen" to "2026-01-02T00:00:00Z", "last_seen" to "2026-01-04T00:00:00Z")))
-        assertThat(client.getDeviceIdByHostname("server01", token)).isEqualTo("aid-1")
+            mapOf("device_id" to "aid-3", "hostname" to "server01", "first_seen" to "2026-01-02T00:00:00Z", "last_seen" to "2026-01-03T12:00:00Z")))
+        assertThat(client.getDeviceIdByHostname("server01", token)).isEqualTo("aid-2")
     }
 
     @Test
@@ -890,6 +892,48 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
                 .isInstanceOf(com.secman.crowdstrike.exception.CrowdStrikeException::class.java)
             assertThat(spotlightCalls(requests)).isZero()
         }
+    }
+
+    @Test
+    fun `ARCGIS independent AIDs support latest default exact selection and all matches`() {
+        val records = listOf(
+            mapOf<String, Any>("device_id" to "aid-latest", "hostname" to "ARCGIS", "external_ip" to "136.226.53.104",
+                "first_seen" to "2025-01-22T11:49:02Z", "last_seen" to "2026-01-19T18:00:52Z"),
+            mapOf<String, Any>("device_id" to "aid-other", "hostname" to "ARCGIS", "external_ip" to "136.226.53.109",
+                "first_seen" to "2025-01-22T07:55:52Z", "last_seen" to "2026-01-19T17:50:30Z"))
+        for (ordered in listOf(records, records.reversed())) {
+            stubHostnameDevices(ordered)
+            val latest = client.queryVulnerabilities("ARCGIS", config)
+            assertThat(latest.devices.single().crowdStrikeAid).isEqualTo("aid-latest")
+            assertThat(latest.devices.single().deviceSelection!!.superseded).isEmpty()
+            val all = client.queryDeviceVulnerabilities("ARCGIS", null, true, config)
+            assertThat(all.devices.map { it.crowdStrikeAid }).containsExactlyInAnyOrder("aid-latest", "aid-other")
+            assertThat(all.devices.flatMap { it.deviceSelection!!.superseded }).isEmpty()
+        }
+        val requests = stubHostnameDevices(listOf(records.last()))
+        val exact = client.queryDeviceVulnerabilities(null, "aid-other", false, config)
+        assertThat(exact.devices.single().crowdStrikeAid).isEqualTo("aid-other")
+        assertThat(requests.none { it.uri.toString().contains("/devices/queries/") }).isTrue()
+    }
+
+    @Test
+    fun `summary counts independent same hostname AIDs separately`() {
+        every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } answers {
+            val uri = firstArg<HttpRequest<Any>>().uri.toString()
+            when {
+                uri.contains("/devices/combined/") -> HttpResponse.ok(combinedDeviceResponse("one", "two"))
+                uri.contains("/devices/entities/") -> HttpResponse.ok(mapOf("resources" to listOf("one", "two").map { aid ->
+                    mapOf("device_id" to aid, "hostname" to "ARCGIS", "first_seen" to "2026-01-01T00:00:00Z",
+                        "last_seen" to "2026-02-01T00:00:00Z")
+                }))
+                uri.contains("/network-address-history/") -> HttpResponse.ok(mapOf("resources" to emptyList<Any>()))
+                uri.contains("/spotlight/") -> HttpResponse.ok(spotlightPage(listOf(vulnResource("v-one", "one"), vulnResource("v-two", "two")), null, 2))
+                else -> error("Unexpected request: $uri")
+            }
+        }
+        val summary = client.queryServersWithFiltersSummary("SERVER", "HIGH", 0, config, 100, 0, 200, 30)
+        assertThat(summary.hostCounts).hasSize(2)
+        assertThat(summary.totalVulnerabilities).isEqualTo(2)
     }
 
 }

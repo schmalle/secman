@@ -9,6 +9,7 @@
  * Matches backend CrowdStrikeVulnerabilityDto
  */
 export interface CrowdStrikeVulnerabilityDto {
+    crowdStrikeAid?: string | null;
     id: string;
     hostname: string;
     ip: string | null;
@@ -50,6 +51,7 @@ export interface CrowdStrikeQueryResponse {
     dataSource?: 'DATABASE' | 'LIVE_API';
     assetId?: number | null;
     selectedAid?: string | null;
+    matchingDevices?: { hostname?: string; crowdStrikeAid?: string; instanceId?: string; cloudAccountId?: string; ip?: string; lastSeen?: string }[];
     snapshotStatus?: 'VERIFIED' | 'PARTIAL' | 'UNVERIFIED' | 'LIVE_COMPLETE' | 'INCOMPLETE';
     snapshotCoverage?: string[];
     /**
@@ -69,6 +71,7 @@ export interface CrowdStrikeSaveRequest {
     vulnerabilities: CrowdStrikeVulnerabilityDto[];
     instanceId?: string; // T050: Optional instance ID for asset enrichment
     assetId?: number | null;
+    aid?: string | null;
 }
 
 /**
@@ -101,7 +104,8 @@ export async function queryVulnerabilities(
     page: number = 0,
     limit: number = 20000,
     severity: string = 'HIGH,CRITICAL',
-    assetId?: number | null
+    assetId?: number | null,
+    aid?: string | null
 ): Promise<CrowdStrikeQueryResponse> {
     console.log('[CrowdStrikeService] queryVulnerabilities called');
     console.log('[CrowdStrikeService] Hostname:', hostname);
@@ -113,7 +117,9 @@ export async function queryVulnerabilities(
     const pageParam = `&page=${page}&limit=${limit}`;
     const severityParam = severity ? `&severity=${encodeURIComponent(severity)}` : '';
     const assetParam = assetId ? `&assetId=${assetId}` : '';
-    const url = `/api/vulnerabilities?hostname=${encodeURIComponent(hostname)}${forceParam}${pageParam}${severityParam}${assetParam}`;
+    const url = aid
+        ? `/api/crowdstrike/devices?aid=${encodeURIComponent(aid)}`
+        : `/api/vulnerabilities?hostname=${encodeURIComponent(hostname)}${forceParam}${pageParam}${severityParam}${assetParam}`;
     console.log('[CrowdStrikeService] Calling API:', url);
 
     try {
@@ -217,7 +223,7 @@ export async function saveVulnerabilities(
                 'Content-Type': 'application/json'
             },
             credentials: 'include',  // Send HttpOnly cookie for authentication
-            body: JSON.stringify({ hostname: request.hostname, instanceId: request.instanceId, assetId: request.assetId })
+            body: JSON.stringify({ hostname: request.hostname, instanceId: request.instanceId, assetId: request.assetId, aid: request.aid })
         });
 
         console.log('[CrowdStrikeService] Response status:', response.status);

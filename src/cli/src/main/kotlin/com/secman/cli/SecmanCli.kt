@@ -107,6 +107,10 @@ class SecmanCli {
                             serversCommand.hostnames = args[i + 1].split(",").map { it.trim() }
                             i++
                         }
+                        args[i] == "--aid" && i + 1 < args.size -> {
+                            serversCommand.aid = args[++i]
+                        }
+                        args[i] == "--all-matches" -> serversCommand.allMatches = true
                         args[i] == "--device-type" -> {
                             // Check if next arg exists and is not another flag
                             if (i + 1 < args.size && !args[i + 1].startsWith("--")) {
@@ -530,7 +534,9 @@ class SecmanCli {
                 Usage: secman query servers [options]
 
                 Options:
-                  --hostnames <list>       Comma-separated list of hostnames (default: all devices)
+                  --hostnames <list>       Comma-separated hostnames; defaults to latest contact
+                  --all-matches            Query every independent AID for --hostnames
+                  --aid <id>               Query one exact Falcon AID
                   --device-type <type>     Device scope: SERVER, DOMAIN_CONTROLLER, SERVER_FAMILY,
                                            WORKSTATION, or ALL (default: SERVER)
                   --severity <levels>      Severity filter (default: HIGH,CRITICAL)

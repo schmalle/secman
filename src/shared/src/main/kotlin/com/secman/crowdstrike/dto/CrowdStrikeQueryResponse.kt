@@ -45,6 +45,7 @@ data class CrowdStrikeQueryResponse(
     /** A partial lookup is displayable but must never replace a stored snapshot. */
     val failedAids: Set<String> = emptySet(),
     val devices: Set<QueriedHost> = emptySet(),
+    val matchingDevices: Set<QueriedHost> = emptySet(),
 
     /**
      * List of vulnerabilities found (empty if none)

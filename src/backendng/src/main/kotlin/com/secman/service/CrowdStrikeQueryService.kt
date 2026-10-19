@@ -49,9 +49,27 @@ open class CrowdStrikeQueryService(
     private val assetRepository: AssetRepository,
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val vulnerabilityExceptionRepository: VulnerabilityExceptionRepository,
-    private val snapshotRepository: com.secman.repository.CrowdStrikeSnapshotRepository
+    private val snapshotRepository: com.secman.repository.CrowdStrikeSnapshotRepository,
+    private val identityRepository: com.secman.repository.CrowdStrikeAssetIdentityRepository
 ) {
     private val log = LoggerFactory.getLogger(CrowdStrikeQueryService::class.java)
+
+    /** Caller must authorize the asset before using this exact-identity path. */
+    open fun queryAsset(asset: Asset, aid: String?, force: Boolean, severity: String?, product: String?,
+        limit: Int, page: Int): CrowdStrikeQueryResponse? {
+        if (!force) queryFromDatabaseAsset(asset, limit, page)?.let {
+            return applyExceptions(applyFilters(it, severity, product))
+        }
+        if (aid == null) return null
+        val live = queryDevicesLive(null, aid, false, severity, product)
+        require(live.selectedAid == aid) { "Falcon response does not match requested AID" }
+        return live.copy(assetId = asset.id, matchingDevices = emptySet())
+    }
+
+    open fun queryDevicesLive(hostname: String?, aid: String?, allMatches: Boolean,
+        severity: String? = null, product: String? = null): CrowdStrikeQueryResponse =
+        applyExceptions(applyFilters(apiClient.queryDeviceVulnerabilities(hostname, aid, allMatches,
+            getConfiguration()).toBackendResponse(), severity, product))
 
     /**
      * Query vulnerabilities with caching
@@ -387,11 +405,16 @@ open class CrowdStrikeQueryService(
      * Returns null if no asset or no vulnerabilities found.
      */
     private fun queryFromDatabaseByHostname(hostname: String, limit: Int, page: Int = 0): CrowdStrikeQueryResponse? {
-        val asset = assetRepository.findByCrowdStrikeHostnameIgnoreCase(hostname)
-            ?: assetRepository.findByNameIgnoreCase(hostname)
-            ?: return null
-        val assetId = asset.id ?: return null
+        val candidates = assetRepository.findCrowdStrikeReplacementCandidates(hostname, Pageable.from(0, 102))
+        require(candidates.totalSize <= 101) { "Too many hostname matches; use an asset ID" }
+        val ordered = candidates.content.sortedByDescending { it.crowdStrikeAgentSeenAt ?: LocalDateTime.MIN }
+        if (ordered.size > 1 && ordered[0].crowdStrikeAgentSeenAt == ordered[1].crowdStrikeAgentSeenAt) return null
+        val asset = ordered.firstOrNull() ?: return null
+        return queryFromDatabaseAsset(asset, limit, page)
+    }
 
+    private fun queryFromDatabaseAsset(asset: Asset, limit: Int, page: Int): CrowdStrikeQueryResponse? {
+        val assetId = asset.id ?: return null
         val vulns = vulnerabilityRepository.findByAssetId(assetId, Pageable.from(page, limit))
         val snapshots = snapshotRepository.findCurrentByAssetId(assetId)
         if (vulns.content.isEmpty() && snapshots.isEmpty()) return null
@@ -587,27 +610,24 @@ open class CrowdStrikeQueryService(
             .findByExpirationDateIsNullOrExpirationDateGreaterThan(LocalDateTime.now())
         if (activeExceptions.isEmpty()) return response
 
-        // Resolve the real asset so ASSET/IP/OS/AWS_ACCOUNT-scoped exceptions still apply on the
-        // live view. Fall back to a transient asset carrying what the response already knows so
-        // GLOBAL-scoped subject exceptions (the common case) still match when the asset is unknown
-        // (a genuinely never-imported host queried live). type/owner are never read by
-        // VulnerabilityException.scopeMatches — placeholders are safe.
-        val asset = response.instanceId?.let { assetRepository.findByCloudInstanceIdIgnoreCase(it) }
-            ?: assetRepository.findByCrowdStrikeHostnameIgnoreCase(response.hostname)
-            ?: assetRepository.findByNameIgnoreCase(response.hostname)
-            ?: Asset(
-                name = response.hostname,
-                type = "SERVER",
-                owner = "",
-                // First row can be missing local_ip while a sibling row carries it - take the
-                // first non-blank so IP-scoped exceptions still match (see resolveHostIp).
-                ip = response.vulnerabilities.firstNotNullOfOrNull { v -> v.ip?.takeIf { it.isNotBlank() } },
-                cloudInstanceId = response.instanceId,
-                cloudAccountId = response.cloudAccountId
-            )
+        val aids = (response.vulnerabilities.mapNotNull { it.crowdStrikeAid } + listOfNotNull(response.selectedAid)).distinct()
+        val byAid = if (aids.isEmpty()) emptyMap() else aids.chunked(1000)
+            .flatMap { identityRepository.findByCrowdStrikeAidIn(it) }.associate { it.crowdStrikeAid to it.asset }
+        val explicitAsset = response.assetId?.let { assetRepository.findById(it).orElse(null) }
+        // Legacy responses may have no AID. Only an unambiguous stored name is usable.
+        val legacyAsset = if (aids.isEmpty() && explicitAsset == null) {
+            val candidates = assetRepository.findCrowdStrikeReplacementCandidates(response.hostname, Pageable.from(0, 2))
+            candidates.content.singleOrNull()?.takeIf { candidates.totalSize == 1L }
+        } else null
 
         val now = LocalDateTime.now()
         val mapped = response.vulnerabilities.map { dto ->
+            val aid = dto.crowdStrikeAid ?: response.selectedAid
+            val device = response.matchingDevices.firstOrNull { it.crowdStrikeAid == aid }
+            val asset = byAid[aid] ?: explicitAsset ?: legacyAsset ?: Asset(
+                name = device?.hostname ?: dto.hostname, type = "SERVER", owner = "", ip = dto.ip,
+                cloudInstanceId = device?.instanceId ?: response.instanceId,
+                cloudAccountId = device?.cloudAccountId ?: response.cloudAccountId)
             // Transient row carrying only the fields VulnerabilityException.subjectMatches reads
             // (vulnerabilityId + vulnerableProductVersions); scopeMatches reads asset fields.
             val transient = Vulnerability(
@@ -639,6 +659,7 @@ private fun com.secman.crowdstrike.dto.CrowdStrikeQueryResponse.toBackendRespons
         instanceId = this.instanceId ?: devices.singleOrNull()?.instanceId,
         cloudAccountId = devices.singleOrNull()?.cloudAccountId,
         selectedAid = devices.singleOrNull()?.crowdStrikeAid,
+        matchingDevices = matchingDevices,
         snapshotStatus = if (failedAids.isEmpty()) "LIVE_COMPLETE" else "INCOMPLETE",
         snapshotCoverage = if (failedAids.isEmpty()) CrowdStrikeSnapshotService.SEVERITIES else emptyList(),
         deviceCount = this.deviceCount,
@@ -655,7 +676,8 @@ private fun com.secman.crowdstrike.dto.CrowdStrikeQueryResponse.toBackendRespons
                 detectedAt = shared.detectedAt,
                 status = shared.status,
                 hasException = shared.hasException,
-                exceptionReason = shared.exceptionReason
+                exceptionReason = shared.exceptionReason,
+                crowdStrikeAid = shared.crowdStrikeAid
             )
         },
         totalCount = visible.size,
@@ -663,7 +685,11 @@ private fun com.secman.crowdstrike.dto.CrowdStrikeQueryResponse.toBackendRespons
         // toBackendResponse is only ever called on the live-Falcon fallthrough paths
         // (queryVulnerabilities / queryByInstanceId), so these rows are not persisted.
         dataSource = "LIVE_API",
-        notice = if (failedAids.isEmpty()) null else "Incomplete CrowdStrike lookup: ${failedAids.size} device(s) failed; findings are partial."
+        notice = when {
+            failedAids.isNotEmpty() -> "Incomplete CrowdStrike lookup: ${failedAids.size} device(s) failed; findings are partial."
+            matchingDevices.size > devices.size -> "Multiple systems share this hostname. Showing the AID with the latest Falcon contact; other systems are preserved."
+            else -> null
+        }
     )
 }
 

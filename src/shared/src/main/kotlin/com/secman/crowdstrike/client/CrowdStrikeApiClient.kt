@@ -73,6 +73,13 @@ data class StreamingImportResult(
  * Defines contract for querying CrowdStrike Spotlight API for vulnerabilities
  */
 interface CrowdStrikeApiClient {
+    /** Explicit identity selection or all independent matches; default remains latest contact. */
+    fun queryDeviceVulnerabilities(hostname: String?, aid: String?, allMatches: Boolean,
+        config: FalconConfigDto): CrowdStrikeQueryResponse {
+        require(aid == null && !allMatches) { "Explicit device queries are unsupported" }
+        return queryVulnerabilities(requireNotNull(hostname), config)
+    }
+
     /**
      * Query vulnerabilities for a specific hostname
      *

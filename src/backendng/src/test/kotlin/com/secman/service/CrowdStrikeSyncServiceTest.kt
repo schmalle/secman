@@ -73,7 +73,7 @@ class CrowdStrikeSyncServiceTest {
         every { identities.findByAssetIdIn(listOf(1L)) } returns listOf(com.secman.domain.CrowdStrikeAssetIdentity(
             asset = asset, crowdStrikeAid = device.aid, sourceHostname = asset.name))
         every { queries.getConfiguration() } returns mockk()
-        every { client.queryAllVulnerabilities(asset.name, any()) } returns CrowdStrikeQueryResponse(asset.name,
+        every { client.queryDeviceVulnerabilities(null, device.aid, false, any()) } returns CrowdStrikeQueryResponse(asset.name,
             vulnerabilities = emptyList(), totalCount = 0, queriedAt = LocalDateTime.now(),
             devices = setOf(QueriedHost(asset.name, device.instanceId, device.aid, cloudAccountId = device.cloudAccountId,
                 deviceSelection = CrowdStrikeDeviceSelection(device))))

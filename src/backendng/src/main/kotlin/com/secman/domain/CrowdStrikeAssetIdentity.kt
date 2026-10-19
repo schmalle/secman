@@ -29,6 +29,7 @@ data class CrowdStrikeAssetIdentity(
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "asset_id", nullable = false)
+    @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
     var asset: Asset,
 
     @Column(name = "crowdstrike_aid", nullable = false, length = 64)
