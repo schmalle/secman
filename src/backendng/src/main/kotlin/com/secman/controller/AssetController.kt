@@ -158,10 +158,12 @@ open class AssetController(
         val type: String,
         val falconLastSeen: java.time.Instant?,
         val falconProductType: String?,
-        val crowdStrikeLastImportedAt: java.time.Instant? = null
+        val crowdStrikeLastImportedAt: java.time.Instant? = null,
+        val crowdStrikeAids: List<String> = emptyList()
     ) {
         companion object {
-            fun from(asset: Asset, addresses: List<String>) = AssetOverviewRow(
+            fun from(asset: Asset, addresses: List<String>, aids: List<String> = emptyList()) = AssetOverviewRow(
+                crowdStrikeAids = aids.sorted(),
                 assetId = requireNotNull(asset.id),
                 name = asset.name,
                 ipAddress = asset.ip,
@@ -371,7 +373,7 @@ open class AssetController(
 
         return HttpResponse.ok(
             AssetOverviewResponse(
-                items = result.assets.map { AssetOverviewRow.from(it, result.ipAddresses[it.id].orEmpty()) },
+                items = result.assets.map { AssetOverviewRow.from(it, result.ipAddresses[it.id].orEmpty(), result.aids[it.id].orEmpty()) },
                 matchingCount = result.total,
                 page = page,
                 pageSize = pageSize,

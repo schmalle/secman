@@ -30,6 +30,7 @@ interface Asset {
   id?: number;
   name: string;
   crowdStrikeHostname?: string;
+  crowdStrikeAids?: string[];
   nameOverridden?: boolean;
   nameOverriddenAt?: string;
   nameOverriddenBy?: string;
@@ -1082,6 +1083,8 @@ const AssetManagement: React.FC = () => {
                         <tr key={asset.id}>
                           <td>
                             {asset.name}
+                            <small className="d-block text-muted">SecMan #{asset.id}</small>
+                            {asset.crowdStrikeAids?.map(aid => <code className="d-block small" key={aid}>AID: {aid}</code>)}
                             {asset.falconProductType === 'Domain Controller' && <span className="badge bg-secondary ms-2">Domain controller</span>}
                             {asset.falconLastSeen && <small className="d-block text-muted">Falcon last contact: {new Date(asset.falconLastSeen).toLocaleString()}</small>}
                             {asset.crowdStrikeLastImportedAt && <small className="d-block text-muted">Last imported into SecMan: {new Date(asset.crowdStrikeLastImportedAt).toLocaleString()}</small>}
@@ -1139,7 +1142,7 @@ const AssetManagement: React.FC = () => {
                                 </button>
                               )}
                               <a
-                                href={`/vulnerabilities/system?hostname=${encodeURIComponent(asset.name)}`}
+                                href={`/vulnerabilities/system?assetId=${asset.id}`}
                                 className="btn btn-sm btn-outline-danger"
                                 title="Show vulnerabilities in CrowdStrike"
                               >

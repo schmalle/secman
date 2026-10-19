@@ -47,6 +47,13 @@ class CrowdStrikeQueryServiceTest {
         falconConfigRepository = mockk()
         assetRepository = mockk()
         every { assetRepository.findByCrowdStrikeHostnameIgnoreCase(any()) } returns null
+        every { assetRepository.findById(any()) } returns Optional.empty()
+        every { assetRepository.findCrowdStrikeReplacementCandidates(any(), any()) } answers {
+            val name = firstArg<String>()
+            val found = assetRepository.findByCrowdStrikeHostnameIgnoreCase(name) ?: assetRepository.findByNameIgnoreCase(name)
+            val rows = listOfNotNull(found)
+            Page.of(rows, Pageable.from(0, 102), rows.size.toLong())
+        }
         vulnerabilityRepository = mockk()
         vulnerabilityExceptionRepository = mockk()
         service = CrowdStrikeQueryService(
@@ -55,6 +62,7 @@ class CrowdStrikeQueryServiceTest {
             assetRepository,
             vulnerabilityRepository,
             vulnerabilityExceptionRepository,
+            mockk(relaxed = true),
             mockk(relaxed = true)
         )
     }
@@ -360,6 +368,31 @@ class CrowdStrikeQueryServiceTest {
         val response = service.queryVulnerabilitiesLive("partial-host")
         assertThat(response.notice).contains("Incomplete CrowdStrike lookup", "1 device(s)", "partial")
         assertThat(response.vulnerabilities).hasSize(1)
+    }
+
+    @Test
+    fun `same hostname AIDs receive only their own asset scoped exceptions`() {
+        val one = asset("ARCGIS")
+        val two = one.copy(id = 2L)
+        val identities = mockk<com.secman.repository.CrowdStrikeAssetIdentityRepository>()
+        every { identities.findByCrowdStrikeAidIn(any()) } returns listOf(
+            com.secman.domain.CrowdStrikeAssetIdentity(asset = one, crowdStrikeAid = "aid-one", sourceHostname = "ARCGIS"),
+            com.secman.domain.CrowdStrikeAssetIdentity(asset = two, crowdStrikeAid = "aid-two", sourceHostname = "ARCGIS"))
+        val scoped = CrowdStrikeQueryService(apiClient, falconConfigRepository, assetRepository,
+            vulnerabilityRepository, vulnerabilityExceptionRepository, mockk(relaxed = true), identities)
+        every { falconConfigRepository.findActiveConfig() } returns Optional.of(FalconConfig(clientId = "cid", clientSecret = "secret"))
+        every { apiClient.queryDeviceVulnerabilities("ARCGIS", null, true, any()) } returns sharedResponse(
+            sharedVuln("CVE-2026-10001", "product").copy(id = "one", hostname = "ARCGIS", crowdStrikeAid = "aid-one"),
+            sharedVuln("CVE-2026-10001", "product").copy(id = "two", hostname = "ARCGIS", crowdStrikeAid = "aid-two"))
+        every { vulnerabilityExceptionRepository.findByExpirationDateIsNullOrExpirationDateGreaterThan(any()) } returns listOf(
+            VulnerabilityException(subject = VulnerabilityException.Subject.CVE, scope = VulnerabilityException.Scope.ASSET,
+                subjectValue = "CVE-2026-10001", assetId = 1L, reason = "Only first device", createdBy = "admin"))
+        val response = scoped.queryDevicesLive("ARCGIS", null, true)
+        assertThat(response.vulnerabilities.single { it.crowdStrikeAid == "aid-one" }.hasException).isTrue()
+        assertThat(response.vulnerabilities.single { it.crowdStrikeAid == "aid-two" }.hasException).isFalse()
+        assertThat(response.vulnerabilities.single { it.crowdStrikeAid == "aid-two" }.exceptionReason).isNull()
+        verify(exactly = 0) { assetRepository.findByCrowdStrikeHostnameIgnoreCase(any()) }
+        verify(exactly = 0) { assetRepository.findByCloudInstanceIdIgnoreCase(any()) }
     }
 
 }

@@ -87,6 +87,7 @@ data class CrowdStrikeQueryResponse(
     val notice: String? = null,
     val assetId: Long? = null,
     val selectedAid: String? = null,
+    val matchingDevices: Set<com.secman.crowdstrike.client.QueriedHost> = emptySet(),
     val snapshotStatus: String = "UNVERIFIED",
     val snapshotCoverage: List<String> = emptyList(),
     /** Observation evidence lets cached lookup results expire at the 72-hour boundary. */

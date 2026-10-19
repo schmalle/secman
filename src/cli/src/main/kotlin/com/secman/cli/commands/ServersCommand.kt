@@ -61,6 +61,8 @@ class ServersCommand {
     private val cliHttpClient: CliHttpClient by lazy { appContext.getBean(CliHttpClient::class.java) }
 
     var hostnames: List<String>? = null
+    var aid: String? = null
+    var allMatches: Boolean = false
     var deviceType: String = "SERVER"
     var severity: String = "HIGH,CRITICAL"
     var minDaysOpen: Int = 30
@@ -78,6 +80,10 @@ class ServersCommand {
 
     fun execute(): Int {
         return try {
+            require(!(aid != null && allMatches)) { "Use --aid or --all-matches, not both" }
+            require(!allMatches || !hostnames.isNullOrEmpty()) { "--all-matches requires --hostnames" }
+            require(aid == null || hostnames.isNullOrEmpty()) { "Use --aid or --hostnames, not both" }
+            val explicitDevices = aid != null || allMatches
             val parsedDeviceType = try {
                 DeviceType.fromString(deviceType)
             } catch (e: IllegalArgumentException) {
@@ -146,7 +152,7 @@ class ServersCommand {
             }
 
             // When --save is specified and no specific hostnames, use streaming mode
-            if (save && hostnames.isNullOrEmpty()) {
+            if (save && hostnames.isNullOrEmpty() && !explicitDevices) {
                 return com.secman.cli.service.CrowdStrikeImportSession(cliHttpClient, resolvedBackendUrl,
                     requireNotNull(authToken), refreshToken = {
                         cliHttpClient.authenticate(System.getenv("SECMAN_ADMIN_NAME"),
@@ -381,7 +387,7 @@ class ServersCommand {
             }
 
             // When no specific hostnames: use streaming summary
-            if (hostnames.isNullOrEmpty()) {
+            if (hostnames.isNullOrEmpty() && !explicitDevices) {
                 val summary = apiClient.queryServersWithFiltersSummary(
                     deviceType = deviceType,
                     severity = severity,
@@ -432,7 +438,20 @@ class ServersCommand {
             if (lastSeenDays > 0 || parsedDeviceType != DeviceType.SERVER) {
                 System.out.println("Note: --device-type and --last-seen-days are ignored with --hostnames (hosts are resolved directly)")
             }
-            val response = apiClient.queryServersWithFilters(
+            val response = if (explicitDevices) {
+                val responses = (hostnames ?: listOf<String?>(null)).map { name ->
+                    apiClient.queryDeviceVulnerabilities(name, aid, allMatches, config)
+                }
+                responses.first().copy(
+                    vulnerabilities = responses.flatMap { it.vulnerabilities }.filter { row ->
+                        severity.split(",").any { it.trim().equals(row.severity, true) } &&
+                            (save || parseDaysOpenToInt(row.daysOpen) >= minDaysOpen)
+                    },
+                    devices = responses.flatMap { it.devices }.toSet(),
+                    matchingDevices = responses.flatMap { it.matchingDevices }.toSet(),
+                    failedAids = responses.flatMap { it.failedAids }.toSet()
+                )
+            } else apiClient.queryServersWithFilters(
                 hostnames = hostnames,
                 deviceType = deviceType,
                 severity = severity,
@@ -442,6 +461,12 @@ class ServersCommand {
                 lastSeenDays = lastSeenDays
             )
 
+            response.devices.forEach { device ->
+                System.out.println("  Device: ${device.hostname} AID=${device.crowdStrikeAid} instance=${device.instanceId ?: "-"} lastSeen=${device.lastSeen ?: "unknown"}")
+            }
+            if (response.matchingDevices.size > response.devices.size) {
+                System.out.println("Additional hostname matches exist; use --all-matches or --aid to select explicitly.")
+            }
             if (response.failedAids.isNotEmpty()) {
                 System.err.println("Incomplete lookup for ${response.failedAids.size} device(s); existing findings preserved")
             }
@@ -449,6 +474,7 @@ class ServersCommand {
             System.out.println("Found ${response.vulnerabilities.size} vulnerabilities across ${parsedDeviceType.displayName()}")
 
             val vulnerabilitiesByHostname = response.vulnerabilities.groupBy { it.hostname }
+            val vulnerabilitiesByDevice = response.vulnerabilities.groupBy { it.crowdStrikeAid ?: it.hostname }
 
             // Per-host status: distinguish "unknown to Falcon" from "resolved, 0 matching
             // rows" — before, both collapsed into the same silent count=0/exit-0.
@@ -474,7 +500,7 @@ class ServersCommand {
                 return if (response.failedAids.isEmpty()) 0 else 2
             }
 
-            System.out.println("${parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }} with vulnerabilities: ${vulnerabilitiesByHostname.size}")
+            System.out.println("${parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }} with vulnerabilities: ${vulnerabilitiesByDevice.size}")
 
             if (verbose) {
                 vulnerabilitiesByHostname.forEach { (hostname, vulns) ->
@@ -482,10 +508,10 @@ class ServersCommand {
                 }
             }
 
-            val hostsWithOverdue = vulnerabilitiesByHostname.count { (_, vulns) ->
+            val hostsWithOverdue = vulnerabilitiesByDevice.count { (_, vulns) ->
                 vulns.any { parseDaysOpenToInt(it.daysOpen) > overdueThreshold }
             }
-            val totalHosts = vulnerabilitiesByHostname.size
+            val totalHosts = vulnerabilitiesByDevice.size
             val hostsWithoutOverdue = totalHosts - hostsWithOverdue
             val overduePercent = hostsWithOverdue * 100.0 / totalHosts
             System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days) ---")
@@ -493,7 +519,7 @@ class ServersCommand {
             System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $hostsWithoutOverdue of $totalHosts")
 
             if (dryRun) {
-                System.out.println("\n[DRY-RUN MODE] Would import ${vulnerabilitiesByHostname.size} ${parsedDeviceType.displayName()} with ${response.vulnerabilities.size} vulnerabilities")
+                System.out.println("\n[DRY-RUN MODE] Would import ${vulnerabilitiesByDevice.size} ${parsedDeviceType.displayName()} with ${response.vulnerabilities.size} vulnerabilities")
                 return if (response.failedAids.isEmpty()) 0 else 2
             }
 

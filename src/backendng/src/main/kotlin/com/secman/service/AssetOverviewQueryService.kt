@@ -19,7 +19,7 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
     )
 
     /** A page of assets plus the exact matching row count. */
-    data class Result(val assets: List<Asset>, val total: Long, val ipAddresses: Map<Long, List<String>> = emptyMap())
+    data class Result(val assets: List<Asset>, val total: Long, val ipAddresses: Map<Long, List<String>> = emptyMap(), val aids: Map<Long, List<String>> = emptyMap())
 
     /** Applies access IDs before database pagination; null IDs mean a globally authorized caller. */
     @Suppress("UNCHECKED_CAST")
@@ -41,7 +41,13 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
             ).setParameter("ids", assets.map { requireNotNull(it.id) }).resultList as List<Array<Any>>
             addressRows.groupBy({ (it[0] as Number).toLong() }, { it[1] as String })
         }
-        return Result(assets, (count.singleResult as Number).toLong(), addresses)
+        val aids = if (assets.isEmpty()) emptyMap() else {
+            val identityRows = entityManager.createNativeQuery(
+                "SELECT asset_id, crowdstrike_aid FROM crowdstrike_asset_identity WHERE asset_id IN (:ids)"
+            ).setParameter("ids", assets.map { requireNotNull(it.id) }).resultList as List<Array<Any>>
+            identityRows.groupBy({ (it[0] as Number).toLong() }, { it[1] as String })
+        }
+        return Result(assets, (count.singleResult as Number).toLong(), addresses, aids)
     }
 
     private fun bind(query: jakarta.persistence.Query, ids: Set<Long>?, filters: Filters, cutoff: java.time.LocalDateTime) {

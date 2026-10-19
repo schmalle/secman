@@ -8,6 +8,7 @@ import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.crowdstrike.dto.InstalledProductDto
 import com.secman.crowdstrike.dto.CrowdStrikeDeviceRecord
 import com.secman.crowdstrike.dto.CrowdStrikeDeviceSelection
+import com.secman.crowdstrike.dto.selectMostRecentlySeenCrowdStrikeDevice
 import com.secman.crowdstrike.dto.selectLatestCrowdStrikeDevices
 import com.secman.crowdstrike.exception.CrowdStrikeException
 import com.secman.crowdstrike.exception.NotFoundException
@@ -73,17 +74,32 @@ open class CrowdStrikeApiClientImpl(
      * @throws CrowdStrikeException for other API errors
      */
     override fun queryVulnerabilities(hostname: String, config: FalconConfigDto): CrowdStrikeQueryResponse {
-        require(hostname.isNotBlank()) { "Hostname cannot be blank" }
+        return queryDeviceVulnerabilities(hostname, null, false, config)
+    }
 
-        log.info("Querying CrowdStrike for vulnerabilities: hostname={}", hostname)
+    override fun queryDeviceVulnerabilities(hostname: String?, aid: String?, allMatches: Boolean,
+        config: FalconConfigDto): CrowdStrikeQueryResponse {
+        require(!hostname.isNullOrBlank() || aid != null) { "Hostname or AID is required" }
+        require(aid == null || aid.matches(Regex("[A-Za-z0-9_-]{1,64}"))) { "Invalid Falcon AID" }
+        require(!(aid != null && allMatches)) { "Choose an AID or all matches" }
+        val label = hostname ?: requireNotNull(aid)
+        log.info("Querying CrowdStrike devices: input={}, allMatches={}", label, allMatches)
 
         return try {
             // Authenticate
             val token = getAuthToken(config)
 
-            val discoveredIds = getDeviceIdsByHostname(hostname, token)
-            if (discoveredIds.isEmpty()) throw NotFoundException("Hostname not found in CrowdStrike: $hostname")
-            val metadata = selectCurrentHostnameDevice(hostname, discoveredIds, resolveImportMetadata(discoveredIds, config))
+            val discoveredIds = aid?.let(::listOf) ?: getDeviceIdsByHostname(label, token)
+            if (discoveredIds.isEmpty()) throw NotFoundException("Hostname not found in CrowdStrike: $label")
+            val resolved = resolveImportMetadata(discoveredIds, config)
+            val matching = if (aid != null) resolved else resolved.filter { (_, md) ->
+                md.hostname.equals(label, ignoreCase = true) ||
+                    (!label.contains('.') && md.hostname?.substringBefore(".").equals(label, ignoreCase = true))
+            }
+            if (matching.isEmpty()) throw NotFoundException("Device not found in CrowdStrike")
+            if (discoveredIds.any { it !in resolved }) throw CrowdStrikeException("Incomplete Falcon device metadata")
+            val metadata = if (aid != null || allMatches) selectImportDevices(matching.keys.toList(), matching)
+                else selectCurrentHostnameDevice(label, discoveredIds, resolved)
             val deviceIds = metadata.keys.toList()
 
             val vulnerabilityDtos = mutableListOf<CrowdStrikeVulnerabilityDto>()
@@ -92,7 +108,7 @@ open class CrowdStrikeApiClientImpl(
             deviceIds.forEach { deviceId ->
                 try {
                     // Query Spotlight API - pass hostname so it can be included in results
-                    vulnerabilityDtos.addAll(querySpotlightApi(deviceId, hostname, token))
+                    vulnerabilityDtos.addAll(querySpotlightApi(deviceId, metadata.getValue(deviceId).hostname ?: label, token))
                 } catch (e: Exception) {
                     failedAids.add(deviceId)
                     log.warn("Failed to query vulnerabilities for device {} of hostname '{}': {}",
@@ -107,12 +123,13 @@ open class CrowdStrikeApiClientImpl(
                 hostname, deviceIds.size, merged.size, failedAids.size)
 
             CrowdStrikeQueryResponse(
-                hostname = hostname,
+                hostname = metadata.values.singleOrNull()?.hostname ?: label,
+                matchingDevices = matching.map { (id, md) -> md.toQueriedHost(id) }.toSet(),
                 vulnerabilities = merged,
                 totalCount = merged.size,
                 deviceCount = deviceIds.size,
                 failedAids = failedAids,
-                devices = deviceIds.map { id -> metadata[id]?.toQueriedHost(id) ?: QueriedHost(hostname, null, id) }.toSet(),
+                devices = deviceIds.map { id -> metadata[id]?.toQueriedHost(id) ?: QueriedHost(label, null, id) }.toSet(),
                 queriedAt = LocalDateTime.now()
             )
         } catch (e: CrowdStrikeException) {
@@ -193,6 +210,7 @@ open class CrowdStrikeApiClientImpl(
         val notFoundHostnames = mutableListOf<String>()
         val failedAids = mutableSetOf<String>()
         val queriedDevices = mutableSetOf<QueriedHost>()
+        val matchingDevices = mutableSetOf<QueriedHost>()
 
         // If specific hostnames provided, query each one
         if (!hostnames.isNullOrEmpty()) {
@@ -212,6 +230,7 @@ open class CrowdStrikeApiClientImpl(
                     val response = queryVulnerabilities(hostname, config)
                     failedAids.addAll(response.failedAids)
                     queriedDevices.addAll(response.devices)
+                    matchingDevices.addAll(response.matchingDevices)
                     // Filter by severity and days open
                     val filtered = response.vulnerabilities.filter { vuln ->
                         val severityMatches = severity.split(",").any {
@@ -283,6 +302,7 @@ open class CrowdStrikeApiClientImpl(
             notFoundHostnames = notFoundHostnames,
             failedAids = failedAids,
             devices = queriedDevices,
+            matchingDevices = matchingDevices,
             queriedAt = LocalDateTime.now()
         )
     }
@@ -736,7 +756,7 @@ open class CrowdStrikeApiClientImpl(
                 limit = limit
             )
 
-            batchVulns.groupBy { it.hostname }.forEach { (host, vulns) ->
+            batchVulns.groupBy { row -> row.crowdStrikeAid?.let { "${row.hostname} [AID: $it]" } ?: row.hostname }.forEach { (host, vulns) ->
                 hostCounts.merge(host, vulns.size) { a, b -> a + b }
                 if (vulns.any { parseDaysOpen(it.daysOpen) > overdueThreshold }) {
                     overdueHosts.add(host)
@@ -1963,7 +1983,7 @@ open class CrowdStrikeApiClientImpl(
             cloudAccountId, adDomain, osVersion, ip, lastSeen, selection, ipAddresses)
     }
 
-    /** Resolve one machine, then use the same enrollment ranking as fleet imports. */
+    /** Prefer latest contact without retiring independently identified machines. */
     private fun selectCurrentHostnameDevice(
         hostname: String, ids: List<String>, metadata: Map<String, DeviceMetadata>
     ): Map<String, DeviceMetadata> {
@@ -1974,9 +1994,14 @@ open class CrowdStrikeApiClientImpl(
         }
         if (matching.isEmpty()) throw NotFoundException("Hostname not found in CrowdStrike: $hostname")
         val selected = selectImportDevices(matching.keys.toList(), matching)
-        if (selected.size != 1) throw CrowdStrikeException(
-            "Hostname resolves to multiple machines; use an instance ID or an authorized asset lookup")
-        return selected
+        val winner = try {
+            selectMostRecentlySeenCrowdStrikeDevice(selected.values.map { requireNotNull(it.selection).selected })
+        } catch (e: IllegalArgumentException) {
+            throw CrowdStrikeException("Cannot select hostname by latest contact; select an AID explicitly", e)
+        }
+        log.info("Hostname query selected aid={}, lastSeen={}, matches={}, reason=latest-falcon-contact",
+            winner.aid, winner.lastSeen, matching.size)
+        return selected.filterKeys { it == winner.aid }
     }
 
     private fun selectImportDevices(

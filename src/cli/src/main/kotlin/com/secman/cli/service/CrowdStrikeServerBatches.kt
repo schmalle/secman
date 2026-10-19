@@ -14,21 +14,18 @@ fun buildCrowdStrikeServerBatches(
     val byAid = devices.mapNotNull { device -> device.crowdStrikeAid?.let { it to device } }.toMap()
     fun deviceIdentity(device: QueriedHost): String = device.deviceSelection?.selected?.let {
         "selected:${it.aid}"
-    } ?: identityForLegacyDevice(device.hostname, device.instanceId)
+    } ?: device.crowdStrikeAid?.let { "aid:$it" } ?: identityForLegacyDevice(device.hostname, device.instanceId)
     fun rowIdentity(row: CrowdStrikeVulnerabilityDto): String {
         val device = byAid[row.crowdStrikeAid]
-        return device?.let(::deviceIdentity) ?: identityForLegacyDevice(row.hostname, row.cloudInstanceId)
+        return device?.let(::deviceIdentity) ?: row.crowdStrikeAid?.let { "aid:$it" } ?: identityForLegacyDevice(row.hostname, row.cloudInstanceId)
     }
     val devicesByIdentity = devices.groupBy(::deviceIdentity)
-    val failedNames = devices.filter { it.crowdStrikeAid in failedAids }
-        .mapNotNull { it.hostname?.trim()?.substringBefore(".")?.lowercase() }.toSet()
     val failedIdentities = devices.filter { it.crowdStrikeAid in failedAids }
         .map(::deviceIdentity).toSet()
     val findingsByIdentity = rows.groupBy(::rowIdentity)
     return (findingsByIdentity.keys + devicesByIdentity.keys).associateWith { findingsByIdentity[it].orEmpty() }.filter { (key, findings) ->
         key !in failedIdentities && findings.none {
-            it.crowdStrikeAid in failedAids || it.hostname.trim().substringBefore(".").lowercase() in failedNames ||
-                byAid[it.crowdStrikeAid]?.hostname?.trim()?.substringBefore(".")?.lowercase() in failedNames
+            it.crowdStrikeAid in failedAids
         }
     }.mapValues { (key, findings) ->
         val siblings = devicesByIdentity[key].orEmpty()

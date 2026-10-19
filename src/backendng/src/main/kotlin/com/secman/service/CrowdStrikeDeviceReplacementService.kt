@@ -152,8 +152,15 @@ class CrowdStrikeDeviceReplacementService(
         }
         // A hostname-only record is not evidence for a separately identified cloud instance.
         // A matching AID still enters through identities and must pass every identity guard.
-        val matchingHostnameCandidates = hostnameCandidates.filter {
-            compatible(it) && (selected.instanceId.isNullOrBlank() || !it.cloudInstanceId.isNullOrBlank())
+        // Names discover legacy records but never prove that another AID is this machine.
+        val boundHostnameIds = if (hostnameCandidates.isEmpty()) emptySet() else
+            identityRepository.findByAssetIdIn(hostnameCandidates.map { requireNotNull(it.id) })
+                .map { it.asset.id }.toSet()
+        val matchingHostnameCandidates = hostnameCandidates.filter { asset ->
+            compatible(asset) && asset.id !in boundHostnameIds &&
+                !selected.instanceId.isNullOrBlank() && !selected.cloudAccountId.isNullOrBlank() &&
+                asset.cloudInstanceId.equals(selected.instanceId, ignoreCase = true) &&
+                asset.cloudAccountId.equals(selected.cloudAccountId, ignoreCase = true)
         }
         val candidates = (identities.filterNot { it in relocatedBindings }.map { it.asset } + matchingHostnameCandidates +
             instanceCandidates.filter(::compatible)).distinctBy { it.id }
@@ -170,13 +177,11 @@ class CrowdStrikeDeviceReplacementService(
         require(identities.filterNot { it in relocatedBindings }.all { binding -> current.any { it.crowdStrikeAid == binding.crowdStrikeAid && it.asset.id == binding.asset.id } }) {
             "Falcon identity changed while acquiring replacement locks"
         }
-        val newestStored = current.maxOfOrNull { it.falconFirstSeenAt ?: LocalDateTime.MIN }
         val incomingFirst = LocalDateTime.ofInstant(requireNotNull(selected.firstSeen), ZoneOffset.UTC)
-        require(newestStored == null || incomingFirst >= newestStored) { "An older Falcon enrollment cannot replace the current device" }
         val storedWinner = current.firstOrNull { it.crowdStrikeAid == selected.aid }
         val observed = LocalDateTime.ofInstant(selection.observedAt, ZoneOffset.UTC)
         require(!selection.observedAt.isAfter(java.time.Instant.now().plusSeconds(60))) { "Future identity observation" }
-        if (storedWinner?.identityObservedAt?.let { it > observed || (changingInstance && it == observed) } == true ||
+        if (current.any { it.identityObservedAt?.let { prior -> prior > observed || (changingInstance && prior == observed) } == true } ||
             (changingInstance && storedWinner?.falconLastSeenAt?.let { prior ->
                 selected.lastSeen == null || LocalDateTime.ofInstant(selected.lastSeen, ZoneOffset.UTC) < prior
             } == true)) {
@@ -186,10 +191,13 @@ class CrowdStrikeDeviceReplacementService(
         if (changingInstance && (current.size != 1 || current.single().crowdStrikeAid != selected.aid))
             throw CrowdStrikeIdentityConflict("UNEXPLAINED_AID", "An instance change requires one current Falcon binding")
         require(current.none { binding ->
-            binding.crowdStrikeAid != selected.aid && binding.falconFirstSeenAt == incomingFirst &&
+            binding.crowdStrikeAid != selected.aid &&
                 (binding.falconLastSeenAt ?: LocalDateTime.MIN) >=
                 (selected.lastSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) } ?: LocalDateTime.MIN)
         }) { "An older or tied Falcon device cannot replace the current device" }
+        require(current.none { binding -> binding.falconLastSeenAt?.let { prior ->
+            selected.lastSeen == null || LocalDateTime.ofInstant(selected.lastSeen, ZoneOffset.UTC) < prior
+        } == true }) { "An older Falcon device contact cannot overwrite newer data" }
         if (storedWinner?.falconFirstSeenAt != null) {
             require(storedWinner.falconFirstSeenAt == incomingFirst) { "Falcon enrollment timestamp changed for an existing device" }
         }

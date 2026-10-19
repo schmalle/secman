@@ -28,10 +28,10 @@ class CrowdStrikeDeviceReplacementServiceTest {
     private val em = mockk<EntityManager>(relaxed = true)
     private val products = mockk<com.secman.repository.InstalledProductRepository>(relaxed = true)
     private val service = CrowdStrikeDeviceReplacementService(assets, identities, products, deletion, em)
-    private val older = CrowdStrikeDeviceRecord("aid-old", "server.example.test", firstSeen = Instant.parse("2026-01-01T00:00:00Z"))
-    private val newest = older.copy(aid = "aid-new", firstSeen = Instant.parse("2026-02-01T00:00:00Z"))
+    private val older = CrowdStrikeDeviceRecord("aid-old", "server.example.test", instanceId = "i-shared", cloudAccountId = "account-a", firstSeen = Instant.parse("2026-01-01T00:00:00Z"), lastSeen = Instant.parse("2026-01-02T00:00:00Z"))
+    private val newest = older.copy(aid = "aid-new", firstSeen = Instant.parse("2026-02-01T00:00:00Z"), lastSeen = Instant.parse("2026-02-02T00:00:00Z"))
     private val selection = CrowdStrikeDeviceSelection(newest, listOf(older))
-    private val batch = CrowdStrikeVulnerabilityBatchDto(newest.hostname, null, null, null, null, null, null,
+    private val batch = CrowdStrikeVulnerabilityBatchDto(newest.hostname, null, newest.cloudAccountId, newest.instanceId, null, null, null,
         vulnerabilities = emptyList(), crowdStrikeAids = setOf(newest.aid), deviceSelection = selection)
 
     private fun stub(vararg bindings: CrowdStrikeAssetIdentity) {
@@ -42,7 +42,10 @@ class CrowdStrikeDeviceReplacementServiceTest {
         every { em.createNativeQuery(match { it.contains("SELECT id FROM asset") }) } returns owners
         every { assets.findCrowdStrikeReplacementCandidates(any(), any()) } returns
             Page.of(candidates, Pageable.from(0, 102), candidates.size.toLong())
-        every { identities.findByCrowdStrikeAidIn(any()) } returns bindings.toList()
+        every { identities.findByCrowdStrikeAidIn(any()) } answers {
+            val aids = firstArg<Collection<String>>()
+            bindings.filter { it.crowdStrikeAid in aids }
+        }
         every { identities.findByAssetIdIn(any()) } answers {
             val ids = firstArg<Collection<Long>>()
             bindings.filter { it.asset.id in ids }
@@ -164,7 +167,7 @@ class CrowdStrikeDeviceReplacementServiceTest {
             cloudInstanceId = "i-0123456789abcdef0", cloudAccountId = "123456789012", adDomain = "old.test")
         val retired = older.copy(instanceId = "i-0123456789abcdef1", cloudAccountId = oldAsset.cloudAccountId,
             lastSeen = Instant.parse("2026-03-01T00:00:00Z"))
-        val selected = retired.copy(aid = newest.aid, firstSeen = newest.firstSeen)
+        val selected = retired.copy(aid = newest.aid, firstSeen = newest.firstSeen, lastSeen = retired.lastSeen!!.plusSeconds(1))
         val binding = CrowdStrikeAssetIdentity(asset = oldAsset, crowdStrikeAid = retired.aid,
             sourceHostname = retired.hostname, falconFirstSeenAt = LocalDateTime.ofInstant(retired.firstSeen, ZoneOffset.UTC))
         stub(binding)
@@ -196,16 +199,16 @@ class CrowdStrikeDeviceReplacementServiceTest {
         val binding = CrowdStrikeAssetIdentity(asset = oldAsset, crowdStrikeAid = retired.aid,
             sourceHostname = retired.hostname, falconFirstSeenAt = LocalDateTime.ofInstant(retired.firstSeen, ZoneOffset.UTC))
         stub(binding)
-        listOf(retired.copy(cloudAccountId = "other-account"), retired.copy(lastSeen = null),
-            retired.copy(firstSeen = retired.firstSeen!!.plusSeconds(1))).forEach { old ->
-            val selected = old.copy(aid = newest.aid, firstSeen = newest.firstSeen)
+        listOf(retired.copy(cloudAccountId = "other-account"),
+            retired.copy(firstSeen = retired.firstSeen!!.plusSeconds(1), lastSeen = retired.lastSeen!!.plusSeconds(1))).forEach { old ->
+            val selected = old.copy(aid = newest.aid, firstSeen = newest.firstSeen, lastSeen = old.lastSeen!!.plusSeconds(1))
             val evidence = CrowdStrikeDeviceSelection(selected, listOf(old))
             val payload = incomingBatch(selected).copy(deviceSelection = evidence)
             assertThatThrownBy { service.prepare(payload, evidence) }
                 .isInstanceOf(CrowdStrikeIdentityConflict::class.java).extracting("code")
                 .isEqualTo("SUPERSEDED_IDENTITY_CONFLICT")
         }
-        val selected = retired.copy(aid = newest.aid, firstSeen = newest.firstSeen)
+        val selected = retired.copy(aid = newest.aid, firstSeen = newest.firstSeen, lastSeen = retired.lastSeen!!.plusSeconds(1))
         val evidence = CrowdStrikeDeviceSelection(selected, listOf(retired))
         every { identities.findByAssetIdIn(listOf(1L)) } returns listOf(binding, binding.copy(crowdStrikeAid = "unverified"))
         assertThatThrownBy { service.prepare(incomingBatch(selected).copy(deviceSelection = evidence), evidence) }
@@ -233,8 +236,8 @@ class CrowdStrikeDeviceReplacementServiceTest {
             falconFirstSeenAt = LocalDateTime.ofInstant(newest.firstSeen, ZoneOffset.UTC).plusDays(1))
         stub(binding)
         assertThatThrownBy { service.prepare(batch, selection) }.isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("older Falcon enrollment")
-        stub(binding.copy(crowdStrikeAid = "unverified"))
+            .hasMessageContaining("enrollment timestamp changed")
+        stub(binding, binding.copy(crowdStrikeAid = "unverified"))
         assertThatThrownBy { service.prepare(batch, selection) }.isInstanceOf(IllegalArgumentException::class.java)
             .hasMessageContaining("unverified")
         verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any()) }
@@ -268,6 +271,30 @@ class CrowdStrikeDeviceReplacementServiceTest {
         service.finish(requireNotNull(replacement.asset), replacement, selection, "test-admin")
         verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any()) }
         verify { identities.delete(any()) }
+    }
+
+    @Test
+    fun `independent AID with same hostname creates separate asset and reimport keeps its binding`() {
+        val other = Asset(id = 20L, name = "ARCGIS", type = "SERVER", owner = "Human owner")
+        val incoming = newest.copy(hostname = "ARCGIS", instanceId = null, cloudAccountId = null)
+        val evidence = CrowdStrikeDeviceSelection(incoming)
+        val incomingBatch = batch.copy(hostname = "ARCGIS", cloudInstanceId = null, cloudAccountId = null,
+            crowdStrikeAids = setOf(incoming.aid), deviceSelection = evidence)
+        val otherBinding = CrowdStrikeAssetIdentity(asset = other, crowdStrikeAid = "aid-other", sourceHostname = "ARCGIS")
+        stub(otherBinding)
+        val fresh = service.prepare(incomingBatch, evidence)
+        assertThat(fresh.asset).isNull()
+        assertThat(fresh.duplicates).isEmpty()
+        val mine = other.copy(id = 21L)
+        val binding = otherBinding.copy(asset = mine, crowdStrikeAid = incoming.aid,
+            falconFirstSeenAt = LocalDateTime.ofInstant(incoming.firstSeen, ZoneOffset.UTC))
+        stub(otherBinding, binding)
+        val repeat = service.prepare(incomingBatch, evidence)
+        assertThat(repeat.asset).isSameAs(mine)
+        assertThat(repeat.duplicates).isEmpty()
+        service.finish(mine, repeat, evidence, "admin")
+        verify(exactly = 0) { identities.delete(otherBinding) }
+        verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any()) }
     }
 
 }

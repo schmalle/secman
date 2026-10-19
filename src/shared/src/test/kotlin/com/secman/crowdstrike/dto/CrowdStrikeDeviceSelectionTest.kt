@@ -7,84 +7,56 @@ import java.time.Instant
 
 class CrowdStrikeDeviceSelectionTest {
     private val first = Instant.parse("2026-01-01T00:00:00Z")
-    private fun device(index: Int) = CrowdStrikeDeviceRecord("aid-$index", "server.example.test",
-        firstSeen = first.plusSeconds(index.toLong()), lastSeen = first.plusSeconds(100))
+    private fun device(index: Int) = CrowdStrikeDeviceRecord("aid-$index", "ARCGIS",
+        firstSeen = first.plusSeconds(index.toLong()), lastSeen = first.plusSeconds(100L + index))
 
     @Test
-    fun `nineteen enrollments select one newest device regardless of response order`() {
-        val records = (1..19).map(::device).reversed()
-        val selection = selectLatestCrowdStrikeDevices(records).single()
-        assertThat(selection.selected.aid).isEqualTo("aid-19")
-        assertThat(selection.superseded.map { it.aid }).containsExactlyElementsOf((18 downTo 1).map { "aid-$it" })
+    fun `same hostname without machine continuity preserves every AID even with tied contacts`() {
+        val records = (1..19).map { device(it).copy(lastSeen = first.plusSeconds(500)) }
+        for (ordered in listOf(records, records.reversed())) {
+            val selections = selectLatestCrowdStrikeDevices(ordered)
+            assertThat(selections.map { it.selected.aid }).containsExactlyInAnyOrderElementsOf(records.map { it.aid })
+            assertThat(selections.flatMap { it.superseded }).isEmpty()
+        }
     }
 
     @Test
-    fun `newest enrollment wins even when an older device checked in later`() {
+    fun `hostname recency chooses older enrollment without establishing replacement`() {
         val older = device(1).copy(lastSeen = first.plusSeconds(500))
-        assertThat(selectLatestCrowdStrikeDevices(listOf(older, device(2))).single().selected.aid).isEqualTo("aid-2")
+        assertThat(selectMostRecentlySeenCrowdStrikeDevice(listOf(device(2), older))).isEqualTo(older)
+        assertThat(selectLatestCrowdStrikeDevices(listOf(device(2), older))).hasSize(2)
     }
 
     @Test
-    fun `last seen breaks an enrollment timestamp tie`() {
-        val older = device(1).copy(firstSeen = device(2).firstSeen, lastSeen = first.plusSeconds(10))
-        assertThat(selectLatestCrowdStrikeDevices(listOf(older, device(2))).single().selected.aid).isEqualTo("aid-2")
-    }
-
-    @Test
-    fun `equal timestamps and missing timestamps fail closed`() {
-        assertThatThrownBy { selectLatestCrowdStrikeDevices(listOf(device(1), device(1).copy(aid = "other"))) }
-            .isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("Ambiguous")
-        assertThatThrownBy { selectLatestCrowdStrikeDevices(listOf(device(1), device(2).copy(firstSeen = null))) }
-            .isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("Incomplete")
-    }
-
-    @Test
-    fun `short name collisions and account or domain differences remain independent`() {
-        val records = listOf(device(1).copy(cloudAccountId = "account-a"),
-            device(2).copy(hostname = "server.other.test", cloudAccountId = "account-a"),
-            device(3).copy(cloudAccountId = "account-b"), device(4).copy(adDomain = "other.test", cloudAccountId = "account-a"))
-        assertThat(selectLatestCrowdStrikeDevices(records)).hasSize(4)
-    }
-
-    @Test
-    fun `missing account records join the sole known hostname account but never bridge conflicting accounts`() {
-        val records = (1..19).map { device(it).copy(cloudAccountId = if (it <= 4) null else "account-a") }
-        val selection = selectLatestCrowdStrikeDevices(records).single()
-        assertThat(selection.selected.aid).isEqualTo("aid-19")
-        assertThat(selection.superseded).hasSize(18)
-        val conflicting = listOf(device(1), device(2).copy(cloudAccountId = "account-a"),
-            device(3).copy(cloudAccountId = "account-b"))
-        assertThat(selectLatestCrowdStrikeDevices(conflicting)).hasSize(3)
-    }
-
-    @Test
-    fun `cloud instance aliases stay together across domain joins but accounts stay separate`() {
+    fun `known instance and account establish continuity across hostname and domain changes`() {
         val old = device(1).copy(instanceId = "i-shared", cloudAccountId = "account-a", adDomain = "old.test")
-        val newest = device(2).copy(hostname = "new-name", instanceId = "i-shared", cloudAccountId = "account-a")
-        val otherAccount = device(3).copy(instanceId = "i-shared", cloudAccountId = "account-b")
-        val selections = selectLatestCrowdStrikeDevices(listOf(old, newest, otherAccount))
-        assertThat(selections).hasSize(2)
-        assertThat(selections.first { it.selected.aid == newest.aid }.superseded).containsExactly(old)
+        val latest = device(2).copy(hostname = "renamed", instanceId = "i-shared", cloudAccountId = "ACCOUNT-A")
+        val selection = selectLatestCrowdStrikeDevices(listOf(latest, old)).single()
+        assertThat(selection.selected).isEqualTo(latest)
+        assertThat(selection.superseded).containsExactly(old)
     }
 
     @Test
-    fun `hostname comparison is case insensitive and cloud aliases keep one winner`() {
-        val older = device(1).copy(hostname = "OLD.example.test", instanceId = "i-shared", cloudAccountId = "account-a")
-        val newer = device(2).copy(instanceId = "i-shared", cloudAccountId = "ACCOUNT-A")
-        assertThat(selectLatestCrowdStrikeDevices(listOf(older, newer)).single().selected).isEqualTo(newer)
-        assertThat(selectLatestCrowdStrikeDevices(listOf(device(1), device(2).copy(hostname = "SERVER.EXAMPLE.TEST"))))
-            .hasSize(1)
-    }
-    @Test
-    fun `reused hostname does not collapse different cloud instances or bridge missing instance metadata`() {
-        val firstInstance = device(1).copy(instanceId = "i-first", cloudAccountId = "account-a")
-        val secondInstance = device(2).copy(instanceId = "i-second", cloudAccountId = "account-a")
-        val unknownInstance = device(3).copy(cloudAccountId = "account-a")
-        val reenrolled = device(4).copy(instanceId = "i-first", cloudAccountId = "account-a")
-        val selected = selectLatestCrowdStrikeDevices(listOf(firstInstance, secondInstance, unknownInstance, reenrolled))
-        assertThat(selected).hasSize(3)
-        assertThat(selected.first { it.selected == reenrolled }.superseded).containsExactly(firstInstance)
-        assertThat(selected.flatMap { it.superseded }).doesNotContain(secondInstance, unknownInstance)
+    fun `different instances accounts or missing account never bridge identities`() {
+        val one = device(1).copy(instanceId = "i-one", cloudAccountId = "account-a")
+        val two = device(2).copy(instanceId = "i-two", cloudAccountId = "account-a")
+        val unknown = device(3).copy(instanceId = "i-one")
+        val otherAccount = device(4).copy(instanceId = "i-one", cloudAccountId = "account-b")
+        val noInstance = device(5).copy(cloudAccountId = "account-a")
+        assertThat(selectLatestCrowdStrikeDevices(listOf(one, two, unknown, otherAccount, noInstance))).hasSize(5)
     }
 
+    @Test
+    fun `query default rejects tied missing future and pre-enrollment contact`() {
+        val one = device(1)
+        for (other in listOf(device(2).copy(lastSeen = one.lastSeen), device(2).copy(lastSeen = null),
+            device(2).copy(lastSeen = Instant.now().plusSeconds(3600)), device(2).copy(lastSeen = first))) {
+            assertThatThrownBy { selectMostRecentlySeenCrowdStrikeDevice(listOf(one, other)) }
+                .isInstanceOf(IllegalArgumentException::class.java)
+        }
+        assertThatThrownBy { selectLatestCrowdStrikeDevices(listOf(one, one)) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+        assertThatThrownBy { selectLatestCrowdStrikeDevices(listOf(one.copy(firstSeen = null))) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+    }
 }

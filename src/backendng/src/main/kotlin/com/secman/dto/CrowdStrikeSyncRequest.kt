@@ -10,5 +10,7 @@ data class CrowdStrikeSyncRequest(
     val hostname: String,
     val assetId: Long? = null,
     @field:Size(max = 255)
-    val instanceId: String? = null
+    val instanceId: String? = null,
+    @field:Size(max = 64)
+    val aid: String? = null
 )
