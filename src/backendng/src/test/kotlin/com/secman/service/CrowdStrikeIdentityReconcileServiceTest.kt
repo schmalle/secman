@@ -49,6 +49,8 @@ class CrowdStrikeIdentityReconcileServiceTest {
         }
         every { client.queryDeviceVulnerabilities(null, "aid-a", false, any()) } returns response(a)
         every { client.queryDeviceVulnerabilities(null, "aid-b", false, any()) } returns response(b)
+        every { client.resolveDeviceRecords(request.expectedAids, any()) } returns listOf(a, b)
+        every { writer.preview(any(), any(), any()) } returns CrowdStrikeIdentityReconcileResponse(1, true, emptyList())
     }
 
     @Test
@@ -72,6 +74,7 @@ class CrowdStrikeIdentityReconcileServiceTest {
         assertThat(service.reconcile(request, admin).dryRun).isTrue()
         verify(exactly = 0) { writer.repair(any(), any(), any(), any()) }
         verify(exactly = 0) { refresh.requestDeferredRefresh(any()) }
+        verify(exactly = 0) { client.queryDeviceVulnerabilities(any(), any(), any(), any()) }
     }
 
     @Test
@@ -81,17 +84,18 @@ class CrowdStrikeIdentityReconcileServiceTest {
         assertThatThrownBy { service.reconcile(request.copy(dryRun = false), admin) }.isInstanceOf(IllegalArgumentException::class.java)
         every { client.queryDeviceVulnerabilities(null, "aid-b", false, any()) } returns response(b.copy(cloudAccountId = "999999999999"))
         assertThatThrownBy { service.reconcile(request.copy(dryRun = false), admin) }.isInstanceOf(IllegalArgumentException::class.java)
-        verify { writer wasNot Called }
+        verify(exactly = 0) { writer.repair(any(), any(), any(), any()) }
     }
 
     @Test
     fun `same instance missing enrollment and future contact cannot authorize a split`() {
         stub()
         listOf(b.copy(instanceId = a.instanceId), b.copy(firstSeen = null), b.copy(lastSeen = Instant.now().plusSeconds(600))).forEach { bad ->
-            every { client.queryDeviceVulnerabilities(null, "aid-b", false, any()) } returns response(bad)
+            every { client.resolveDeviceRecords(request.expectedAids, any()) } returns listOf(a, bad)
             assertThatThrownBy { service.reconcile(request, admin) }.isInstanceOf(IllegalArgumentException::class.java)
         }
         verify { writer wasNot Called }
+        verify(exactly = 0) { client.queryDeviceVulnerabilities(any(), any(), any(), any()) }
     }
 
     @Test
@@ -129,5 +133,46 @@ class CrowdStrikeIdentityReconcileServiceTest {
         }
         verify { client wasNot Called }
         verify { writer wasNot Called }
+    }
+
+    @Test
+    fun `metadata failures expose specific AID and reason before any findings download`() {
+        stub()
+        val cases = listOf(
+            b.copy(instanceId = null) to "DEVICE_INSTANCE_MISSING",
+            b.copy(cloudAccountId = null) to "DEVICE_ACCOUNT_MISSING",
+            b.copy(cloudAccountId = "999999999999") to "CLOUD_ACCOUNT_CONFLICT",
+            b.copy(instanceId = a.instanceId) to "SAME_INSTANCE_ENROLLMENTS",
+            b.copy(firstSeen = null) to "ENROLLMENT_TIMESTAMP_MISSING",
+            b.copy(lastSeen = null) to "CONTACT_TIMESTAMP_INVALID")
+        cases.forEach { (device, code) ->
+            every { client.resolveDeviceRecords(request.expectedAids, any()) } returns listOf(a, device)
+            assertThatThrownBy { service.reconcile(request, admin) }.isInstanceOfSatisfying(CrowdStrikeIdentityConflict::class.java) {
+                assertThat(it.code).isEqualTo(code)
+                if (code != "SAME_INSTANCE_ENROLLMENTS") assertThat(it.aid).isEqualTo("aid-b")
+            }
+        }
+        verify(exactly = 0) { client.queryDeviceVulnerabilities(any(), any(), any(), any()) }
+        verify { writer wasNot Called }
+    }
+
+    @Test
+    fun `preview marks finding counts unknown and never fabricates a clean snapshot`() {
+        stub()
+        every { writer.preview(any(), any(), any()) } returns CrowdStrikeIdentityReconcileResponse(1, true, listOf(
+            com.secman.dto.CrowdStrikeReconciledDevice("aid-a", a.instanceId!!, a.cloudAccountId!!, 1, 0)))
+        val result = service.reconcile(request, admin)
+        assertThat(result.findingsFetched).isFalse()
+        assertThat(result.devices.single().findings).isNull()
+        verify(exactly = 0) { client.queryDeviceVulnerabilities(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `apply refuses identities changed after metadata classification`() {
+        stub()
+        every { client.queryDeviceVulnerabilities(null, "aid-b", false, any()) } returns response(b.copy(firstSeen = b.firstSeen!!.plusSeconds(1)))
+        assertThatThrownBy { service.reconcile(request.copy(dryRun = false), admin) }
+            .isInstanceOfSatisfying(CrowdStrikeIdentityConflict::class.java) { assertThat(it.code).isEqualTo("IDENTITY_CHANGED_DURING_FETCH") }
+        verify(exactly = 0) { writer.repair(any(), any(), any(), any()) }
     }
 }

@@ -73,6 +73,10 @@ data class StreamingImportResult(
  * Defines contract for querying CrowdStrike Spotlight API for vulnerabilities
  */
 interface CrowdStrikeApiClient {
+    /** Device entities only: never calls Spotlight or infers absence as retirement. */
+    fun resolveDeviceRecords(aids: Set<String>, config: FalconConfigDto): List<com.secman.crowdstrike.dto.CrowdStrikeDeviceRecord> =
+        throw UnsupportedOperationException("Metadata-only device lookup is unsupported")
+
     /** Explicit identity selection or all independent matches; default remains latest contact. */
     fun queryDeviceVulnerabilities(hostname: String?, aid: String?, allMatches: Boolean,
         config: FalconConfigDto): CrowdStrikeQueryResponse {

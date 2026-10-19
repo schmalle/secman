@@ -1289,5 +1289,24 @@ with `--all-candidates`.
 previews an ADMIN-only split of independent EC2 devices incorrectly bound to one
 unverified legacy asset. Add `--apply` to commit after reviewing the preview.
 The backend refetches all devices and applies the complete repair atomically.
+Preview checks metadata without downloading Spotlight findings; `findings: null`
+with `findingsFetched: false` means the count is unknown. Apply fetches and validates
+complete findings. Rejections include a specific `errorCode`, explanation and
+affected `aid` when available.
+
+Each repair prints a UUID `requestId` before submission (automatic mode: stdout
+JSON line; manual mode: stderr). After a gateway/transport error, the CLI checks
+durable status once and reports `UNKNOWN` if no terminal outcome can be confirmed.
+It never automatically resubmits a write. Check a saved request ID separately:
+
+```bash
+./scripts/secman reconcile-crowdstrike-identities --request-status <request-uuid>
+```
+
+This ADMIN-only lookup needs no reason and cannot be combined with repair options.
+`RUNNING` may indicate active or interrupted work; inspect backend/audit evidence
+before retrying an unconfirmed request. A committed repair has an atomic
+`REPAIRED` status. Confirmed `PREVIEWED`/`REPAIRED` or `ALREADY_RESOLVED` lookups exit 0;
+other outcomes exit 1.
 See [CrowdStrike identity recovery](CROWDSTRIKE_IMPORT.md#repair-independent-ec2-devices-bound-to-one-legacy-asset)
 for prerequisites, preservation rules, audit evidence and failure handling.

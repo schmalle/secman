@@ -12,7 +12,6 @@
       <change afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/system_review.py" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_javascript.py" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_system_review.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/CROWDSTRIKE_IMPORT.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/CROWDSTRIKE_IMPORT.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/CLAUDE.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/docs/FIX_PRS.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/docs/FIX_PRS.md" afterDir="false" />
@@ -365,7 +364,7 @@
       <workItem from="1784549193229" duration="856000" />
       <workItem from="1785321009839" duration="66000" />
       <workItem from="1791893953553" duration="7000" />
-      <workItem from="1792433833462" duration="597000" />
+      <workItem from="1792433833462" duration="602000" />
     </task>
     <task id="LOCAL-00001" summary="added source of testdata">
       <option name="closed" value="true" />

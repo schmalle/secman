@@ -25,6 +25,7 @@ class CrowdStrikeIdentityRepairIntegrationTest {
     @Inject lateinit var em: EntityManager
     @Inject lateinit var tx: io.micronaut.transaction.TransactionOperations<org.hibernate.Session>
     @Inject lateinit var discovery: CrowdStrikeIdentityCandidateService
+    @Inject lateinit var requests: CrowdStrikeRepairRequestStore
 
     private data class Fixture(val request: CrowdStrikeIdentityReconcileRequest,
         val batches: List<CrowdStrikeVulnerabilityBatchDto>, val state: LegacyCrowdStrikeAssetState)
@@ -146,6 +147,41 @@ class CrowdStrikeIdentityRepairIntegrationTest {
     }
 
     @Test
+    fun `request completion and repair audit commit atomically and replay cannot overwrite outcomes`() {
+        val f = fixture()
+        val request = f.request.copy(requestId = UUID.randomUUID().toString())
+        assertThat(requests.start(request, "test-admin").claimed).isTrue()
+        assertThat(requests.start(request, "test-admin").claimed).isFalse()
+        assertThat(requests.status(request.requestId!!)!!.state).isEqualTo("RUNNING")
+        val result = writer.repair(request, f.batches, f.state, "test-admin")
+        val status = requests.status(request.requestId!!)!!
+        assertThat(status.state).isEqualTo("REPAIRED")
+        assertThat(status.report!!.devices.map { it.assetId }).isEqualTo(result.devices.map { it.assetId })
+        requests.fail(request.requestId!!, 502, "FAILED_AFTER_COMMIT", "Must not replace success", null)
+        assertThat(requests.status(request.requestId!!)!!.state).isEqualTo("REPAIRED")
+        assertThatThrownBy { requests.start(request.copy(reason = "Different recovery reason"), "test-admin") }
+            .isInstanceOfSatisfying(CrowdStrikeIdentityConflict::class.java) { assertThat(it.code).isEqualTo("REQUEST_ID_CONFLICT") }
+        val audit = tx.executeRead {
+            em.createNativeQuery("SELECT DISTINCT operation_id FROM crowdstrike_identity_repair WHERE source_asset_id = :id")
+                .setParameter("id", request.assetId).resultList
+        }
+        assertThat(audit).containsExactly(request.requestId)
+    }
+
+    @Test
+    fun `rolled back second device cannot leave a successful durable request marker`() {
+        val f = fixture()
+        val request = f.request.copy(requestId = UUID.randomUUID().toString())
+        requests.start(request, "test-admin")
+        val invalid = f.batches.last().copy(vulnerabilities = listOf(VulnerabilityDto("CVE-2026-2000", "INVALID", "Product", 0)))
+        assertThatThrownBy { writer.repair(request, listOf(f.batches.first(), invalid), f.state, "test-admin") }
+            .isInstanceOf(CrowdStrikeIdentityConflict::class.java)
+        assertThat(requests.status(request.requestId!!)!!.state).isEqualTo("RUNNING")
+        assertThat(identities.findByAssetIdIn(listOf(request.assetId))).hasSize(2)
+        assertThat(count("SELECT COUNT(*) FROM crowdstrike_identity_repair WHERE source_asset_id = :id", request.assetId)).isZero()
+    }
+
+    @Test
     fun `candidate discovery is bounded and keyset paging survives an earlier repair`() {
         val first = fixture()
         val second = fixture()
@@ -182,6 +218,36 @@ class CrowdStrikeIdentityRepairIntegrationTest {
     @Inject lateinit var users: UserRepository
 
     @Test
+    fun `HTTP rejections expose safe specific reasons and durable status without fetching findings`() {
+        val f = fixture()
+        tx.executeWrite {
+            val asset = assets.findById(f.request.assetId).orElseThrow()
+            asset.cloudAccountId = null
+            assets.update(asset)
+        }
+        val name = "repair-diagnostics-${UUID.randomUUID()}"
+        users.save(com.secman.testutil.TestDataFactory.createAdminUser(username = name, email = "$name@example.test"))
+        val token = com.secman.testutil.TestAuthHelper.getAuthToken(http, name)
+        val request = f.request.copy(requestId = UUID.randomUUID().toString(), dryRun = true)
+        repeat(2) {
+            assertThatThrownBy {
+                http.toBlocking().exchange(io.micronaut.http.HttpRequest.POST("/api/crowdstrike/identity-reconcile", request).bearerAuth(token), Map::class.java)
+            }.isInstanceOfSatisfying(io.micronaut.http.client.exceptions.HttpClientResponseException::class.java) {
+                assertThat(it.status.code).isEqualTo(409)
+                val body = it.response.getBody(Map::class.java).orElseThrow()
+                assertThat(body["errorCode"]).isEqualTo("SOURCE_ACCOUNT_MISSING")
+                assertThat(body["requestId"]).isEqualTo(request.requestId)
+                assertThat(body["error"]).isEqualTo("Stored asset has no AWS account ID")
+            }
+        }
+        val status = http.toBlocking().retrieve(io.micronaut.http.HttpRequest.GET<Any>(
+            "/api/crowdstrike/identity-reconcile/requests/${request.requestId}").bearerAuth(token), Map::class.java)
+        assertThat(status["state"]).isEqualTo("REJECTED")
+        assertThat(status["errorCode"]).isEqualTo("SOURCE_ACCOUNT_MISSING")
+        assertThat(identities.findByAssetIdIn(listOf(request.assetId))).hasSize(2)
+    }
+
+    @Test
     fun `HTTP discovery preserves empty arrays validates pages and reports already resolved repairs`() {
         val f = fixture()
         writer.repair(f.request, f.batches, f.state, "test-admin")
@@ -215,6 +281,12 @@ class CrowdStrikeIdentityRepairIntegrationTest {
         val request = CrowdStrikeIdentityReconcileRequest(1, setOf("aid-a", "aid-b"), "Verified independent instances")
         assertThatThrownBy {
             http.toBlocking().exchange(io.micronaut.http.HttpRequest.POST("/api/crowdstrike/identity-reconcile", request).bearerAuth(token), String::class.java)
+        }.isInstanceOfSatisfying(io.micronaut.http.client.exceptions.HttpClientResponseException::class.java) {
+            assertThat(it.status.code).isEqualTo(403)
+        }
+        assertThatThrownBy {
+            http.toBlocking().exchange(io.micronaut.http.HttpRequest.GET<Any>("/api/crowdstrike/identity-reconcile/requests/${UUID.randomUUID()}")
+                .bearerAuth(token), String::class.java)
         }.isInstanceOfSatisfying(io.micronaut.http.client.exceptions.HttpClientResponseException::class.java) {
             assertThat(it.status.code).isEqualTo(403)
         }

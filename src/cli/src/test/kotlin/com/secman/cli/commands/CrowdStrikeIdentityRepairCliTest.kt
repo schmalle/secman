@@ -53,6 +53,11 @@ class CrowdStrikeIdentityRepairCliTest {
             exchange.responseBody.use { it.write("{}".toByteArray()) }
         }
         server.createContext("/api/crowdstrike/identity-reconcile") { exchange ->
+            if (exchange.requestMethod == "GET") {
+                exchange.sendResponseHeaders(404, -1)
+                exchange.close()
+                return@createContext
+            }
             assertThat(exchange.requestHeaders.getFirst("Authorization")).isEqualTo("Bearer $token")
             val body = mapper.readTree(exchange.requestBody)
             received.add(body)
@@ -77,9 +82,18 @@ class CrowdStrikeIdentityRepairCliTest {
             assertThat(received.map { it.path("expectedAids").map { aid -> aid.asText() }.toSet() })
                 .allMatch { it == setOf("aid-a", "aid-b") }
             malformed = true
-            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException::class.java) { command.submit(origin, "admin", password) }
+            org.junit.jupiter.api.Assertions.assertThrows(com.secman.cli.service.RepairRequestUnknown::class.java) { command.submit(origin, "admin", password) }
         } finally {
             server.stop(0)
         }
+    }
+
+    @Test
+    fun `request status accepts only UUID and cannot be combined with apply`() {
+        val command = ReconcileCrowdStrikeIdentitiesCommand(jacksonObjectMapper())
+        val cli = CommandLine(command)
+        cli.err = PrintWriter(StringWriter())
+        assertThat(cli.execute("--request-status", "invalid")).isEqualTo(2)
+        assertThat(cli.execute("--request-status", java.util.UUID.randomUUID().toString(), "--apply")).isEqualTo(2)
     }
 }

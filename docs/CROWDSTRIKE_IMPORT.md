@@ -56,8 +56,10 @@ production errors. No migration or bulk rewrite of existing assets is required.
 Use `reconcile-crowdstrike-identities` for an asset with 2..20 unverified legacy
 AID bindings when Falcon confirms distinct EC2 instances. The command defaults to
 a read-only preview. It calls the ADMIN-only
-`POST /api/crowdstrike/identity-reconcile` endpoint; the backend fetches complete,
-unfiltered findings and enrollment metadata for every explicitly expected AID.
+`POST /api/crowdstrike/identity-reconcile` endpoint. Preview fetches device metadata
+and checks enrollment, account, instance and destination ownership before any
+Spotlight download. Apply repeats these checks, then fetches complete, unfiltered
+findings for every expected AID and revalidates identity before committing.
 No SQL edits or invented Falcon timestamps are needed.
 
 For automatic discovery across the inventory, omit asset IDs and AIDs:
@@ -95,12 +97,13 @@ calls the existing repair endpoint separately for each candidate. There is no
 fleet-wide transaction. A rejected or failed candidate leaves that asset unchanged
 and does not stop unrelated repairs. Authentication loss stops the run. Complete
 discovery failure also stops the run without undoing earlier committed repairs.
-An unconfirmed response or transport error is reported as `UNKNOWN`; inspect the
-backend audit before deciding whether it committed. No failed write is retried
-automatically by the CLI.
+After a gateway error or lost response, the CLI performs one read-only lookup of
+the durable request status. A confirmed terminal result is reported normally;
+an unconfirmed outcome is `UNKNOWN`. No write is retried automatically.
 
-Automatic mode writes one JSON object per line: a `type: candidate` event for each
-attempt, followed by a `type: summary` event. Candidate statuses are `PREVIEWED`,
+Automatic mode writes one JSON object per line: a `type: request`, `status: STARTED`
+event containing the client-generated `requestId` before each POST, a
+`type: candidate` result, and finally a `type: summary` event. Candidate statuses are `PREVIEWED`,
 `REPAIRED`, `REJECTED`, `ALREADY_RESOLVED`, `FAILED`, and `UNKNOWN`.
 `ALREADY_RESOLVED` means the source now has one verified binding and no repair was
 performed for this request; it does not independently certify every former device.
@@ -138,7 +141,10 @@ include every previewed candidate.
 
 Replace the placeholders with the complete AIDs from the identity preview.
 Review each returned AID, instance, account, destination asset ID and supported
-finding count. A null destination means the apply operation will create an asset.
+finding count when available. Preview returns `findings: null` and
+`findingsFetched: false`: no findings were downloaded, so null does not mean zero.
+Apply returns actual counts and `findingsFetched: true`. A null destination means
+the apply operation will create an asset.
 Use the same command with `--apply` to commit. Every apply refetches provider
 evidence and revalidates stored state; a preview does not reserve identities.
 Credentials use `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` through the existing secret
@@ -152,7 +158,8 @@ The REST body is:
   "assetId": 42,
   "expectedAids": ["first-aid", "second-aid"],
   "reason": "Confirmed two independent EC2 instances in Falcon",
-  "dryRun": true
+  "dryRun": true,
+  "requestId": "a6b2f8aa-340b-47dc-a09f-80c21f6bb9e2"
 }
 ```
 
@@ -168,7 +175,8 @@ The operation requires all of the following:
 - Every instance is distinct, and exactly one matches the source's stored instance.
 - No destination has multiple stored owners or unrelated Falcon bindings.
 - Every provider query and snapshot is complete, within the configured sensor
-  retention policy, and accepted by the normal import validation.
+  retention policy, and accepted by the normal import validation. Findings
+  completeness is checked during apply, not the metadata-only preview.
 
 The source asset keeps its ID, instance, owner, display-name override, workgroups,
 manual findings and other inventory relationships. New assets receive no copied
@@ -184,17 +192,60 @@ Binding changes, per-device findings, snapshot provenance and append-only
 `crowdstrike_identity_repair` audit rows commit in one transaction. Failure on any
 device rolls back the entire repair, including changes already staged for another
 device. Audit rows record operation ID, actor, reason, source/destination IDs, AID,
-instance/account and Falcon timestamps. Migration V293 adds only this audit table;
-it does not repair or delete production data. Cache invalidation and deferred view
+instance/account and Falcon timestamps. Migration V293 adds this audit table;
+V294 adds durable request tracking. Neither repairs or deletes production inventory.
+Cache invalidation and deferred view
 refresh are requested after commit; refresh failures are logged separately.
 
-HTTP 409 means identity evidence was rejected or stored state changed; review the
-backend rejection log and preview again. 403 denies non-admin callers, 404 masks
-unavailable assets, and 500 reports an unsuccessful repair without exposing provider
-or database internals. A transport timeout has an uncertain outcome: inspect the
-audit table before retrying. Repeating the original split after success is rejected
-because the multi-binding precondition no longer holds; ordinary per-device imports
-remain repeatable and retain their separate asset IDs.
+HTTP 409 returns a safe `errorCode`, explanation, `requestId` and, where relevant,
+the affected `aid`. The CLI preserves these fields in its candidate output.
+Common classifications are:
+
+| Code | Meaning / next action |
+|---|---|
+| `SOURCE_ACCOUNT_MISSING`, `SOURCE_ACCOUNT_INVALID`, `SOURCE_INSTANCE_MISSING`, `SOURCE_NOT_EC2` | Stored inventory lacks valid EC2/account evidence. Review the source asset. |
+| `DEVICE_ACCOUNT_MISSING`, `DEVICE_INSTANCE_MISSING`, `DEVICE_INSTANCE_INVALID` | Falcon metadata lacks valid evidence for the reported AID. |
+| `CLOUD_ACCOUNT_CONFLICT` | Falcon and stored accounts differ. Review ownership; hostname equality cannot authorize a move. |
+| `SAME_INSTANCE_ENROLLMENTS` | Several AIDs represent enrollments of the same instance. This independent-instance split does not apply. |
+| `ENROLLMENT_TIMESTAMP_MISSING`, `CONTACT_TIMESTAMP_INVALID`, `SENSOR_RETENTION_EXCLUDED` | Enrollment/contact evidence is absent, invalid or outside retention. |
+| `RETAINED_INSTANCE_NOT_FOUND` | No device matches the source's stored instance. |
+| `DESTINATION_AMBIGUOUS`, `DESTINATION_ALREADY_BOUND` | Destination ownership needs review. |
+| `BINDINGS_CHANGED`, `SOURCE_CHANGED`, `VERIFIED_BINDING_PRESENT` | Stored state no longer meets recovery preconditions. Preview again or review verified history. |
+| `INCOMPLETE_FINDINGS`, `IDENTITY_CHANGED_DURING_FETCH`, `STALE_DEVICE_OBSERVATION` | Apply could not establish a complete, consistent snapshot. Existing data is preserved. |
+
+403 denies non-admin callers and 404 masks unavailable assets. Unexpected failures
+use safe messages; provider/database details remain in server logs correlated by
+request ID. HTTP 504 alone does not establish whether a repair committed.
+
+Check a request without resubmitting its repair:
+
+```bash
+./scripts/secman reconcile-crowdstrike-identities \
+  --request-status a6b2f8aa-340b-47dc-a09f-80c21f6bb9e2
+```
+
+`--request-status` accepts no repair/discovery options or reason. It calls the
+ADMIN-only `GET /api/crowdstrike/identity-reconcile/requests/{requestId}` and exits
+0 for `PREVIEWED`/`REPAIRED` or `ALREADY_RESOLVED`, 1 otherwise. Status includes request ID, asset ID,
+mode, timestamps, safe rejection details and the completed report when available.
+Manual repair emits its initial request event to stderr; automatic mode emits it
+to stdout. Preserve that event even if the process is interrupted.
+
+The server commits `RUNNING` before provider I/O. `REPAIRED` and its report commit
+in the same transaction as the inventory repair and audit rows. `PREVIEWED`,
+`REJECTED` and `FAILED` are also durable terminal states. `RUNNING` can mean work
+is active or was interrupted by a backend restart; it is not a liveness guarantee.
+A missing status or `RUNNING` leaves the outcome unconfirmed: inspect correlated
+backend/audit evidence before retrying. This is synchronous execution with durable
+tracking, not a background job queue. Request records persist until an explicit
+retention mechanism is introduced.
+
+REST callers may supply a UUID `requestId`; the CLI always does. Omitting it lets
+the server generate one, which cannot be recovered by the caller if the entire
+response is lost. Reusing the same ID, actor and payload returns the stored result
+or `REQUEST_IN_PROGRESS` without executing again; different payloads/actors return
+`REQUEST_ID_CONFLICT`. Repeating a completed split with a new ID no longer meets
+the multi-binding precondition. Ordinary per-device imports remain repeatable.
 
 Legacy upload payloads cannot create multiple AID bindings or silently replace an
 existing multi-AID binding. Normal imports report AID and instance alongside each
