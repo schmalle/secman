@@ -9,6 +9,10 @@ import io.micronaut.http.exceptions.HttpStatusException
 import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Inject
 import jakarta.persistence.EntityManager
+import com.secman.dto.mcp.McpExecutionContext
+import com.secman.mcp.tools.GetUserAccessOverviewTool
+import com.secman.mcp.tools.McpToolResult
+import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
@@ -24,6 +28,7 @@ class UserAccessOverviewIntegrationTest : BaseIntegrationTest() {
     @Inject lateinit var domainGrants: WorkgroupAdDomainRepository
     @Inject lateinit var sharing: AwsAccountSharingRepository
     @Inject lateinit var entityManager: EntityManager
+    @Inject lateinit var tool: GetUserAccessOverviewTool
 
     private fun user(label: String, roles: MutableSet<User.Role> = mutableSetOf(User.Role.USER, User.Role.VULN)): User {
         val name = "access-$label-${System.nanoTime()}"
@@ -130,6 +135,40 @@ class UserAccessOverviewIntegrationTest : BaseIntegrationTest() {
         assertThat(report.assets.map { it.id }).containsExactly(scoped.id)
         assertThat(report.vulnerabilityAccess).isFalse()
         assertThat(service.overview(user("empty").email, 0, 100).totalAssets).isZero()
+    }
+
+    @Test
+    fun `account and domain summaries count current assets while preserving empty grants`() = runBlocking<Unit> {
+        val target = user("currentness")
+        val group = groups.save(Workgroup(name = "currentness-${System.nanoTime()}"))
+        target.workgroups.add(group)
+        users.update(target)
+        mapping(target, "111111111111", "mixed.example")
+        mapping(target, "222222222222", "stale.example")
+        val current = asset("current", "111111111111", "mixed.example")
+        for ((account, domain) in listOf("111111111111" to "mixed.example", "222222222222" to "stale.example", "333333333333" to "partial-stale.example")) {
+            assets.update(asset("stale", account, domain, group).apply {
+                verifiedObservedAt = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusHours(73)
+            })
+        }
+        entityManager.flush()
+        val report = service.overview(target.email, 0, 100)
+        assertThat(report.assets.map { it.id }).containsExactly(current.id)
+        assertThat(report.awsAccounts.single { it.value == "111111111111" }.visibleAssetCount).isEqualTo(1)
+        assertThat(report.adDomains.single { it.value == "mixed.example" }.visibleAssetCount).isEqualTo(1)
+        assertThat(report.awsAccounts.single { it.value == "222222222222" }.visibleAssetCount).isZero()
+        assertThat(report.awsAccounts.single { it.value == "222222222222" }.wholeScopeAccess).isTrue()
+        assertThat(report.adDomains.single { it.value == "stale.example" }.visibleAssetCount).isZero()
+        assertThat(report.awsAccounts.map { it.value }).doesNotContain("333333333333")
+        assertThat(report.adDomains.map { it.value }).doesNotContain("partial-stale.example")
+        val admin = user("current-admin", mutableSetOf(User.Role.ADMIN))
+        val global = service.overview(admin.email, 0, 500)
+        assertThat(global.awsAccounts.map { it.value }).doesNotContain("222222222222", "333333333333")
+        val context = McpExecutionContext.forDelegatedUser(1, "test", admin.id!!, admin.email, admin.username,
+            setOf("ADMIN"), setOf(McpPermission.USER_ACTIVITY), true, null, null)
+        val result = tool.execute(mapOf("email" to "  ${target.email.uppercase()}  "), context) as McpToolResult.Success
+        val mcpReport = result.content as com.secman.dto.UserAccessOverview
+        assertThat(mcpReport.copy(generatedAt = report.generatedAt)).isEqualTo(report)
     }
 
     @Test

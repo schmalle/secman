@@ -3,6 +3,7 @@ package com.secman.service
 import com.secman.domain.User
 import com.secman.dto.*
 import com.secman.repository.AssetAccessSql
+import com.secman.repository.AssetCurrentnessSql
 import com.secman.repository.UserRepository
 import io.micronaut.http.HttpStatus
 import io.micronaut.http.exceptions.HttpStatusException
@@ -67,10 +68,10 @@ open class UserAccessOverviewService(
         // Aggregate distinct scope values in SQL; never load the entire asset inventory for counts.
         val scope = if (global.isNotEmpty()) "TRUE" else "a.id IN (${AssetAccessSql.IDS})"
         val counts = rows("""
-            SELECT 'AWS', a.cloud_account_id, COUNT(*) FROM asset a
+            SELECT 'AWS', a.cloud_account_id, COUNT(*) FROM ${AssetCurrentnessSql.ASSETS} a
             WHERE $scope AND a.cloud_account_id IS NOT NULL AND a.cloud_account_id <> '' GROUP BY a.cloud_account_id
             UNION ALL
-            SELECT 'AD', LOWER(a.ad_domain), COUNT(*) FROM asset a
+            SELECT 'AD', LOWER(a.ad_domain), COUNT(*) FROM ${AssetCurrentnessSql.ASSETS} a
             WHERE $scope AND a.ad_domain IS NOT NULL AND a.ad_domain <> '' GROUP BY LOWER(a.ad_domain)
         """, if (global.isEmpty()) user else null)
         val accountIds = (counts.filter { it[0] == "AWS" }.map { it[1] as String } +

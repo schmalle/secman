@@ -51,6 +51,158 @@ bindings, account/domain conflicts and instance-change enrollment mismatches sti
 require evidence and review; this change does not silently repair all legacy
 production errors. No migration or bulk rewrite of existing assets is required.
 
+### Repair independent EC2 devices bound to one legacy asset
+
+Use `reconcile-crowdstrike-identities` for an asset with 2..20 unverified legacy
+AID bindings when Falcon confirms distinct EC2 instances. The command defaults to
+a read-only preview. It calls the ADMIN-only
+`POST /api/crowdstrike/identity-reconcile` endpoint; the backend fetches complete,
+unfiltered findings and enrollment metadata for every explicitly expected AID.
+No SQL edits or invented Falcon timestamps are needed.
+
+For automatic discovery across the inventory, omit asset IDs and AIDs:
+
+```bash
+# Discover candidates and validate each repair without changing data
+./scripts/secman reconcile-crowdstrike-identities \
+  --all-candidates \
+  --reason 'Reconcile legacy Falcon identity bindings'
+
+# Discover and apply each verified repair
+./scripts/secman reconcile-crowdstrike-identities \
+  --all-candidates --apply \
+  --reason 'Reconcile legacy Falcon identity bindings'
+```
+
+`--all-candidates` is mutually exclusive with `--asset-id` and `--expected-aids`.
+It discovers assets with 2..20 bindings whose Falcon enrollment/contact and
+identity-observation timestamps are all null. Discovery is local evidence only;
+each candidate must still pass the complete server-side provider and repair
+validation described below. Assets with verified bindings or more than 20 AIDs
+remain outside this automatic recovery and require separate review.
+
+The ADMIN-only `GET /api/crowdstrike/identity-reconcile/candidates` accepts
+`afterId` (default 0), `limit` (default 50, range 1..100), and optional `throughId`.
+It returns `candidates[]` (`assetId`, `hostname`, `expectedAids`), `nextAfterId`,
+`hasMore`, and `throughId`. The first page captures the highest inventory asset ID;
+the CLI reuses it for later pages. New assets above that boundary are handled on
+the next invocation. Pages advance by scanned asset ID rather than offset, so
+repairs removing earlier candidates do not skip later ones. Concurrently resolved
+rows can produce an empty advancing page, which the CLI follows normally.
+
+The CLI uses one authenticated session, fetches one bounded page at a time, and
+calls the existing repair endpoint separately for each candidate. There is no
+fleet-wide transaction. A rejected or failed candidate leaves that asset unchanged
+and does not stop unrelated repairs. Authentication loss stops the run. Complete
+discovery failure also stops the run without undoing earlier committed repairs.
+An unconfirmed response or transport error is reported as `UNKNOWN`; inspect the
+backend audit before deciding whether it committed. No failed write is retried
+automatically by the CLI.
+
+Automatic mode writes one JSON object per line: a `type: candidate` event for each
+attempt, followed by a `type: summary` event. Candidate statuses are `PREVIEWED`,
+`REPAIRED`, `REJECTED`, `ALREADY_RESOLVED`, `FAILED`, and `UNKNOWN`.
+`ALREADY_RESOLVED` means the source now has one verified binding and no repair was
+performed for this request; it does not independently certify every former device.
+The summary includes per-status `totals`, `discovered`, `unresolved`, `complete`,
+`throughId`, `lastScannedAssetId`, and `resumeAfterId`. `complete` describes
+enumeration, not universal repair success. Exit 0 requires complete enumeration
+and zero unresolved candidates; exit 1 reports incomplete processing or any
+rejection/failure/unknown result. Invalid command arguments exit 2. No candidates
+produces an empty successful summary and no repair requests.
+
+`--batch-size` changes the discovery page size (default 50, range 1..100).
+`--after-id` resumes after the given inventory ID. Every candidate event carries
+`resumeAfterId`, the last checkpoint before the first unresolved result; it never
+advances past a failure. Save stdout if a durable record is needed:
+
+```bash
+./scripts/secman reconcile-crowdstrike-identities \
+  --all-candidates --apply --batch-size 25 --after-id 0 \
+  --reason 'Reconcile legacy Falcon identity bindings' > identity-recovery.jsonl
+```
+
+After interruption, reuse the last reported `resumeAfterId` with `--after-id`.
+Earlier repaired assets no longer qualify for discovery. Starting again from 0
+also works and revisits unresolved candidates; it does not duplicate completed
+splits. Resume captures a fresh upper inventory boundary. A preview checkpoint
+is not an approval or reservation for a later apply run: start apply from 0 to
+include every previewed candidate.
+
+```bash
+./scripts/secman reconcile-crowdstrike-identities \
+  --asset-id 42 \
+  --expected-aids <first-aid>,<second-aid> \
+  --reason 'Confirmed two independent EC2 instances in Falcon'
+```
+
+Replace the placeholders with the complete AIDs from the identity preview.
+Review each returned AID, instance, account, destination asset ID and supported
+finding count. A null destination means the apply operation will create an asset.
+Use the same command with `--apply` to commit. Every apply refetches provider
+evidence and revalidates stored state; a preview does not reserve identities.
+Credentials use `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` through the existing secret
+provider, and the backend origin uses `SECMAN_HOST`, `SECMAN_BACKEND_URL`, or
+`--backend-url`. The CLI uses TLS verification and does not follow redirects.
+
+The REST body is:
+
+```json
+{
+  "assetId": 42,
+  "expectedAids": ["first-aid", "second-aid"],
+  "reason": "Confirmed two independent EC2 instances in Falcon",
+  "dryRun": true
+}
+```
+
+The operation requires all of the following:
+
+- The expected AID set exactly matches the source asset's current bindings.
+- Every binding has null Falcon first-seen, last-seen and identity-observation
+  timestamps. Verified bindings require a separate review; this recovery does not
+  override established enrollment history.
+- Each AID reports a valid EC2 instance, valid enrollment/contact timestamps and
+  the same nonempty 12-digit AWS account as the stored asset. Missing or conflicting
+  accounts stop the operation; hostname equality cannot authorize a cross-account move.
+- Every instance is distinct, and exactly one matches the source's stored instance.
+- No destination has multiple stored owners or unrelated Falcon bindings.
+- Every provider query and snapshot is complete, within the configured sensor
+  retention policy, and accepted by the normal import validation.
+
+The source asset keeps its ID, instance, owner, display-name override, workgroups,
+manual findings and other inventory relationships. New assets receive no copied
+manual grants or relationships; normal account/domain access rules still apply.
+An existing unbound asset with the exact account and instance can be reused while
+preserving its own relationships. An already bound destination is rejected for
+review. All old mixed CrowdStrike findings on the source are replaced by its own
+device's freshly fetched findings, including a verified zero result. Source software
+inventory is invalidated and must be repopulated by the normal product import;
+ambiguous software rows are not moved by hostname.
+
+Binding changes, per-device findings, snapshot provenance and append-only
+`crowdstrike_identity_repair` audit rows commit in one transaction. Failure on any
+device rolls back the entire repair, including changes already staged for another
+device. Audit rows record operation ID, actor, reason, source/destination IDs, AID,
+instance/account and Falcon timestamps. Migration V293 adds only this audit table;
+it does not repair or delete production data. Cache invalidation and deferred view
+refresh are requested after commit; refresh failures are logged separately.
+
+HTTP 409 means identity evidence was rejected or stored state changed; review the
+backend rejection log and preview again. 403 denies non-admin callers, 404 masks
+unavailable assets, and 500 reports an unsuccessful repair without exposing provider
+or database internals. A transport timeout has an uncertain outcome: inspect the
+audit table before retrying. Repeating the original split after success is rejected
+because the multi-binding precondition no longer holds; ordinary per-device imports
+remain repeatable and retain their separate asset IDs.
+
+Legacy upload payloads cannot create multiple AID bindings or silently replace an
+existing multi-AID binding. Normal imports report AID and instance alongside each
+rejection; structured outcomes also include `aid` and `accountId`. Failed-device
+counts use device outcomes rather than deduplicated hostnames. Single-host query
+age statistics are saved only when every selected device successfully imports;
+a fetched-findings summary is not a persistence success signal.
+
 If Falcon omits a cloud device's hostname, its instance ID supplies the asset name
 and it participates in selection with named aliases only when the same instance and account are verified.
 Devices lacking both names and instance IDs are excluded only after Falcon confirms
@@ -580,7 +732,10 @@ replacement. Reconciliation resolves stable identities first and permits short-n
 fallback only when exactly one compatible asset exists. Ambiguous matches are
 excluded from both stale deletion and agent-seen stamping, with a warning. Existing
 source/severity restrictions, timestamp fences and deletion safety brakes still apply.
-No existing AID mapping is automatically moved between assets.
+Normal imports do not move an existing AID mapping between independent assets.
+The explicit ADMIN legacy-repair command described above can split unverified
+multi-AID bindings after refetching and validating every device; `--all-candidates`
+automates candidate selection, while `--apply` remains required to commit repairs.
 
 An ADMIN import may correct an existing asset's EC2 instance ID when the current
 Falcon AID and verified enrollment first-seen timestamp are unchanged, the AWS

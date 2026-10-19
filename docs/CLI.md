@@ -95,6 +95,16 @@ Full env reference: `docs/ENVIRONMENT.md`.
 ./scripts/user-access-overview-aws.sh --email user@example.com --format json
 ```
 
+To show only AWS account information:
+
+```bash
+./scripts/secman user-access-overview --email person@example.com --format json |
+  jq '{user, globalAccess, awsAccounts}'
+```
+
+The report describes SecMan visibility, not AWS IAM login or role access. The MCP
+counterpart is `get_user_access_overview`; both use the same backend service.
+
 Requires an ADMIN caller. Reports the target user's visible assets, AWS accounts,
 AD domains and grant reasons, including grants with no matching assets. The
 command retrieves all asset pages and separates asset visibility from permission
@@ -1259,3 +1269,25 @@ The CLI calls `POST /api/account-onboarding/welcome-test` with `recipient` and
 silently sending a single-account simulation. Deploy/restart the updated backend
 before using the option. Existing simulation commands and import behavior are
 unchanged when the option is absent.
+## Repair legacy CrowdStrike identity bindings
+
+Discover all eligible assets without knowing their IDs or AIDs:
+
+```bash
+./scripts/secman reconcile-crowdstrike-identities --all-candidates \
+  --reason 'Reconcile legacy Falcon identity bindings'
+```
+
+Add `--apply` to commit independently verified repairs. Automatic mode emits JSON
+lines with each result and final totals; any unresolved candidate or incomplete
+discovery exits 1. `--batch-size 1..100` bounds discovery pages, and `--after-id`
+accepts the reported `resumeAfterId` checkpoint after interruption. Default mode
+is read-only preview. Manual `--asset-id` / `--expected-aids` cannot be combined
+with `--all-candidates`.
+
+`./scripts/secman reconcile-crowdstrike-identities --asset-id <id> --expected-aids <aid1>,<aid2> --reason '<audit reason>'`
+previews an ADMIN-only split of independent EC2 devices incorrectly bound to one
+unverified legacy asset. Add `--apply` to commit after reviewing the preview.
+The backend refetches all devices and applies the complete repair atomically.
+See [CrowdStrike identity recovery](CROWDSTRIKE_IMPORT.md#repair-independent-ec2-devices-bound-to-one-legacy-asset)
+for prerequisites, preservation rules, audit evidence and failure handling.
