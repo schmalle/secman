@@ -30,6 +30,7 @@ import com.secman.cli.commands.SendEolNotificationsCommand
 import com.secman.cli.commands.SendExceptionExpiryRemindersCommand
 import com.secman.cli.commands.ServersCommand
 import com.secman.cli.commands.UserAccessOverviewCommand
+import com.secman.cli.commands.ReconcileCrowdStrikeIdentitiesCommand
 import io.micronaut.configuration.picocli.PicocliRunner
 import io.micronaut.context.ApplicationContext
 import org.slf4j.LoggerFactory
@@ -55,6 +56,7 @@ class SecmanCli {
             args.isEmpty() || args[0] == "--help" || args[0] == "-h" -> showHelp()
             args[0] == "help" -> {
                 when {
+                    args.getOrNull(1) == "reconcile-crowdstrike-identities" -> runPicocli(ReconcileCrowdStrikeIdentitiesCommand::class.java, arrayOf("reconcile-crowdstrike-identities", "--help"))
                     args.getOrNull(1) == "user-access-overview" -> runPicocli(UserAccessOverviewCommand::class.java, arrayOf("user-access-overview", "--help"))
                     args.size > 2 && args[1] == "query" && args[2] == "servers" -> showCommandHelp("query-servers")
                     args.size > 2 && args[1] == "manage-user-mappings" && args[2] == "s3" -> showCommandHelp("manage-user-mappings-s3")
@@ -324,6 +326,9 @@ class SecmanCli {
             args[0] == "user-access-overview" -> {
                 runPicocli(UserAccessOverviewCommand::class.java, args)
             }
+            args[0] == "reconcile-crowdstrike-identities" -> {
+                runPicocli(ReconcileCrowdStrikeIdentitiesCommand::class.java, args)
+            }
             args[0] == "send-eol-notifications" -> {
                 runPicocli(SendEolNotificationsCommand::class.java, args)
             }
@@ -391,6 +396,7 @@ class SecmanCli {
               End of Life:
                 eol-sync               Download the EOL catalogue and re-match secman's inventory (ADMIN)
                 user-access-overview   Explain a user's assets, AWS accounts and AD domains (ADMIN)
+                reconcile-crowdstrike-identities  Preview/repair legacy multi-AID assets (ADMIN)
                 send-eol-notifications  Email account owners about upcoming end-of-life software (ADMIN)
 
               User & Access Management:

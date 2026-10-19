@@ -1,4 +1,4 @@
-# User access overview
+# User access overview via CLI, REST and MCP
 
 `user-access-overview` is a read-only ADMIN diagnostic for a user's effective
 asset scope. Domains mean AD domains; accounts mean AWS accounts. The caller
@@ -48,7 +48,9 @@ Other authenticated vulnerability-related endpoints may have different role gate
 Each entry has a stable `value`, optional account `displayName`,
 `visibleAssetCount`, `wholeScopeAccess`, and grant `reasons`. An entry with
 `wholeScopeAccess: false` represents metadata on visible assets and does not
-authorize the entire account/domain. A grant with count zero remains listed.
+authorize the entire account/domain. A grant with count zero remains listed. Counts and asset-derived scope entries
+use the same inclusive UTC 72-hour observation policy as the asset pages; older
+stored assets do not increase counts or introduce account/domain entries.
 Global roles have whole-scope authority for represented scopes. Multiple grant
 reasons are retained; assets and scopes are deduplicated and sorted.
 
@@ -90,3 +92,62 @@ adds no migration, dependency, feature flag, or existing API contract change.
 The bootstrap variables above supply the existing test bootstrapper from the
 vault credentials. Disabling Gradle's configuration cache prevents reuse of a
 previous disposable schema's test-process environment.
+
+## AWS accounts by email
+
+This report describes access within SecMan. It does not query AWS IAM or IAM
+Identity Center, verify console login, or test role assumption. Global roles
+can access accounts beyond those currently represented in SecMan inventory;
+the enumerated list is not a complete AWS organization directory.
+
+```bash
+./scripts/secman user-access-overview --email person@example.com --format json |
+  jq '{user, globalAccess, awsAccounts}'
+```
+
+Use `wholeScopeAccess`, rather than a positive asset count, to determine whether
+an entry represents an account-wide grant. A workgroup asset or AD-domain grant
+may expose only some assets within an AWS account. Unknown emails are errors;
+future mappings without a registered user can be inspected separately with
+`list_user_mappings`, which uses a partial email filter and is not an effective
+access report.
+
+## MCP
+
+`get_user_access_overview` is the read-only counterpart to the CLI and REST
+report. Send requests to `POST /mcp` with `Content-Type: application/json`, a
+valid `X-MCP-API-Key`, and `X-MCP-User-Email` identifying the **calling ADMIN**.
+The API key needs delegation enabled, an allowed caller domain, and
+`USER_ACTIVITY` permission. The target email is a separate tool argument;
+setting it does not impersonate the target or require their credentials.
+An admin API key cannot bypass the delegated user's ADMIN role check.
+
+After normal MCP initialization, call:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "get_user_access_overview",
+    "arguments": {"email": "person@example.com", "page": 0, "size": 100}
+  }
+}
+```
+
+`email` is required and is an exact match after trimming and case normalization.
+`page` is a zero-based integer (default 0); `size` is an integer from 1 to 500
+(default 100). The page offset must fit a signed 32-bit integer. The response
+contains the existing REST report fields described above, including summary
+metadata for the full scope and only the requested asset page. Fetch pages
+`0` through `totalPages - 1` to collect all assets; an empty scope has zero pages.
+Unlike the CLI's assembled result, an MCP page does not contain `complete: true`.
+Live-read consistency limitations apply to MCP as well as REST.
+
+Errors include `DELEGATION_REQUIRED`, `AUTHORIZATION_ERROR` for a non-ADMIN
+caller, `INVALID_ARGUMENT` for invalid email/pagination, `NOT_FOUND` for an
+unknown target, and `INTERNAL_ERROR` for unexpected failures. Authentication
+and permission failures can be rejected by the MCP transport before execution.
+Detailed internal errors are logged server-side, never returned by this tool.
+See [MCP setup](MCP_CLIENT_SETUP.md) for client configuration and initialization.

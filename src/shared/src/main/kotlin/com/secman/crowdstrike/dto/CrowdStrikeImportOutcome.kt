@@ -22,5 +22,7 @@ data class CrowdStrikeHostImportOutcome(
     val instanceId: String? = null,
     val errorCode: String? = null,
     val message: String? = null,
-    val coverage: CrowdStrikeFindingCoverage? = null
+    val coverage: CrowdStrikeFindingCoverage? = null,
+    val aid: String? = null,
+    val accountId: String? = null
 )

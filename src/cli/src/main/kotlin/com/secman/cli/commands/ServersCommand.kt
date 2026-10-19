@@ -31,6 +31,11 @@ import org.slf4j.LoggerFactory
 class ServersCommand {
     companion object {
         private const val MAX_RETAINED_ERRORS = 100
+
+        internal fun canCaptureAgeSnapshot(result: com.secman.cli.service.BatchStorageResult, failedFetches: Int): Boolean =
+            failedFetches == 0 && result.errors.isEmpty() && result.serversProcessed > 0 &&
+                result.serversCreated + result.serversUpdated == result.serversProcessed &&
+                result.hostOutcomes.none { it.status !in setOf("CREATED", "UPDATED") }
     }
 
     private val log = LoggerFactory.getLogger(ServersCommand::class.java)
@@ -299,7 +304,12 @@ class ServersCommand {
                         System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $totalSystemsWithOverdueVulns of $totalServersProcessed (${String.format("%.1f", percent)}%)")
                         System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of $totalServersProcessed")
 
-                        captureSnapshotViaHttp(resolvedBackendUrl, totalServersProcessed, totalSystemsWithOverdueVulns, overdueThreshold)
+                        if (totalErrorCount == 0 && totalRetentionSkipped == 0 &&
+                            totalServersCreated + totalServersUpdated == totalServersProcessed) {
+                            captureSnapshotViaHttp(resolvedBackendUrl, totalServersProcessed, totalSystemsWithOverdueVulns, overdueThreshold)
+                        } else {
+                            System.out.println("Age statistics not saved: some devices were not successfully imported.")
+                        }
                     }
 
                     // Reconcile silent-remediation gap: hosts that had HIGH/CRITICAL findings in
@@ -558,7 +568,11 @@ class ServersCommand {
                 System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $systemsWithOverdueVulns of ${result.serversProcessed} (${String.format("%.1f", percent)}%)")
                 System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of ${result.serversProcessed}")
 
-                captureSnapshotViaHttp(resolvedBackendUrl, result.serversProcessed, systemsWithOverdueVulns, overdueThreshold)
+                if (canCaptureAgeSnapshot(result, response.failedAids.size)) {
+                    captureSnapshotViaHttp(resolvedBackendUrl, result.serversProcessed, systemsWithOverdueVulns, overdueThreshold)
+                } else {
+                    System.out.println("Age statistics not saved: some devices were not successfully imported. The summary above describes fetched findings.")
+                }
             }
 
             if (result.errors.isNotEmpty()) {
@@ -659,8 +673,11 @@ class ServersCommand {
                 "/api/vulnerability-statistics/age-snapshot-from-data",
                 requestBody,
                 authToken
-            )
-            System.out.println("Vulnerability age snapshot saved.")
+            ) ?: run {
+                log.warn("Age statistics were not saved: backend did not confirm snapshot capture")
+                return
+            }
+            System.out.println("Vulnerability age statistics saved separately from device findings.")
         } catch (e: Exception) {
             log.warn("Failed to capture vulnerability age snapshot via HTTP", e)
         }

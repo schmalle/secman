@@ -206,8 +206,9 @@ class CrowdStrikeInstanceTransitionIntegrationTest {
         findings.save(Vulnerability(asset = former, vulnerabilityId = "MANUAL-KEEP", cvssSeverity = "HIGH",
             source = "MANUAL", scanTimestamp = LocalDateTime.now()))
         val moved = original.copy(instanceId = "i-" + UUID.randomUUID().toString().replace("-", "").take(17),
-            adDomain = null, lastSeen = Instant.now())
-        val selected = moved.copy(aid = UUID.randomUUID().toString().replace("-", ""), firstSeen = original.firstSeen!!.plusSeconds(60))
+            adDomain = null, lastSeen = Instant.now().minusSeconds(2))
+        val selected = moved.copy(aid = UUID.randomUUID().toString().replace("-", ""), firstSeen = original.firstSeen!!.plusSeconds(60),
+            lastSeen = moved.lastSeen!!.plusSeconds(1))
         deviceAids.add(selected.aid)
         val payload = batch(selected).copy(deviceSelection = CrowdStrikeDeviceSelection(selected, listOf(moved)))
         repeat(2) { importer.importVulnerabilitiesForServer(payload, "test-admin", true) }

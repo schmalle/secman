@@ -230,7 +230,7 @@ class CrowdStrikeDeviceReplacementService(
             }), canonical?.cloudInstanceId?.takeIf { changingInstance }, relocatedBindings)
     }
 
-    private fun lockIdentity(selection: CrowdStrikeDeviceSelection) {
+    internal fun lockIdentity(selection: CrowdStrikeDeviceSelection) {
         val records = listOf(selection.selected) + selection.superseded
         val stored = identityRepository.findByCrowdStrikeAidIn(records.map { it.aid })
         val keys = (records.flatMap { device ->

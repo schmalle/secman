@@ -258,3 +258,12 @@ Consult these guides for task-level inputs and examples:
 | Desktop client cannot start the bridge | Use absolute paths for `pass-cli`, `npx`, and `secmanpp.env`; authenticate `pass-cli`; then restart the desktop application. |
 | Claude custom connector cannot authenticate | Use Claude Code or the Claude Desktop local bridge until SecMan supports MCP OAuth. |
 
+
+## Inspect an email address's AWS account access
+
+Use `get_user_access_overview` with a `USER_ACTIVITY` API key and an ADMIN
+caller in `X-MCP-User-Email`. Supply the inspected person's email in the tool's
+`email` argument. The tool explains effective SecMan access, including partial
+asset visibility, account-wide grants, and access reasons. See
+[CLI, REST and MCP access overview](USER_ACCESS_OVERVIEW.md#mcp) for the request,
+response fields, pagination, errors and AWS IAM limitations.
