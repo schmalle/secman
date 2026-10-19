@@ -29,11 +29,7 @@ data class CrowdStrikeQueryResponse(
     val instanceId: String? = null,
 
     /**
-     * Number of CrowdStrike devices whose rows are merged into this response
-     *
-     * Typically 1, 2+ for instance lifecycle transitions or re-imaged/re-enrolled
-     * hosts (one hostname, several aids). Populated for both instance-ID (Feature
-     * 041) and hostname queries; null only for legacy callers that never set it.
+     * Number of selected current devices. Superseded enrollments are excluded.
      */
     val deviceCount: Int? = null,
 

@@ -155,3 +155,7 @@ tables as a rollback shortcut; their foreign keys intentionally retain history.
   link, not finding or asset detail.
 - Relay/iOS exposes only aggregate integration counts under an `ADMIN` policy;
   snapshot schema version remains 2 because the new section is additive.
+
+## Current asset visibility
+
+Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.

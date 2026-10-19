@@ -22,7 +22,8 @@ open class CrowdStrikeStaleAssetCleanupScheduler(
     @Inject private val auditService: CrowdStrikeCleanupAuditService,
     @Value("\${secman.crowdstrike.cleanup.enabled:false}") private val enabled: Boolean,
     @Value("\${secman.crowdstrike.cleanup.stale-days:30}") private val staleDays: Int,
-    @Value("\${secman.crowdstrike.cleanup.max-delete-percent:10}") private val maxDeletePercent: Int
+    @Value("\${secman.crowdstrike.cleanup.max-delete-percent:10}") private val maxDeletePercent: Int,
+    @Value("\${secman.crowdstrike.cleanup.basis:import-inactivity}") private val basis: String = "import-inactivity"
 ) {
     private val logger = LoggerFactory.getLogger(CrowdStrikeStaleAssetCleanupScheduler::class.java)
 
@@ -81,7 +82,8 @@ open class CrowdStrikeStaleAssetCleanupScheduler(
             days = staleDays,
             dryRun = false,
             triggeredBy = triggeredBy,
-            maxDeletePercent = maxDeletePercent
+            maxDeletePercent = maxDeletePercent,
+            basis = com.secman.service.CrowdStrikeCleanupBasis.parse(basis)
             // includeLegacy intentionally omitted -> falls back to the configured
             // default, exactly as the scheduler has always done.
         )

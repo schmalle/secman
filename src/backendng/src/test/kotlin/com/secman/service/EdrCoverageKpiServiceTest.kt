@@ -87,12 +87,12 @@ class EdrCoverageKpiServiceTest {
 
     @Test
     fun `recalculate computes 100 percent when every EC2 instance was seen recently`() {
-        every { assetRepository.countAllAwsAssetsWithInstanceId() } returns 4L
+        every { assetRepository.countCurrentAwsAssetsWithInstanceId() } returns 4L
         every { assetRepository.countEc2AssetsExcludedByNoEdrException() } returns 0L
         every { assetRepository.countEc2AssetsWithFreshCrowdStrikeAgent(any()) } returns 4L
 
         val jsonSlot = slot<String>()
-        every { cacheRepository.upsertByCacheKey(EdrCoverageKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
+        every { cacheRepository.upsertByCacheKey(EdrCoverageKpiService.CACHE_KEY, capture(jsonSlot), any(), any(), any()) } returns 1
 
         service.recalculate()
 
@@ -109,12 +109,12 @@ class EdrCoverageKpiServiceTest {
      */
     @Test
     fun `NO_EDR exemptions leave the denominator and are reported separately`() {
-        every { assetRepository.countAllAwsAssetsWithInstanceId() } returns 10L
+        every { assetRepository.countCurrentAwsAssetsWithInstanceId() } returns 10L
         every { assetRepository.countEc2AssetsExcludedByNoEdrException() } returns 2L
         every { assetRepository.countEc2AssetsWithFreshCrowdStrikeAgent(any()) } returns 8L
 
         val jsonSlot = slot<String>()
-        every { cacheRepository.upsertByCacheKey(EdrCoverageKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
+        every { cacheRepository.upsertByCacheKey(EdrCoverageKpiService.CACHE_KEY, capture(jsonSlot), any(), any(), any()) } returns 1
 
         service.recalculate()
 
@@ -128,12 +128,12 @@ class EdrCoverageKpiServiceTest {
 
     @Test
     fun `recalculate rounds the percentage to one decimal`() {
-        every { assetRepository.countAllAwsAssetsWithInstanceId() } returns 3L
+        every { assetRepository.countCurrentAwsAssetsWithInstanceId() } returns 3L
         every { assetRepository.countEc2AssetsExcludedByNoEdrException() } returns 0L
         every { assetRepository.countEc2AssetsWithFreshCrowdStrikeAgent(any()) } returns 2L
 
         val jsonSlot = slot<String>()
-        every { cacheRepository.upsertByCacheKey(EdrCoverageKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
+        every { cacheRepository.upsertByCacheKey(EdrCoverageKpiService.CACHE_KEY, capture(jsonSlot), any(), any(), any()) } returns 1
 
         service.recalculate()
 
@@ -142,10 +142,10 @@ class EdrCoverageKpiServiceTest {
 
     @Test
     fun `recalculate reports zero without dividing when there are no EC2 instances`() {
-        every { assetRepository.countAllAwsAssetsWithInstanceId() } returns 0L
+        every { assetRepository.countCurrentAwsAssetsWithInstanceId() } returns 0L
 
         val jsonSlot = slot<String>()
-        every { cacheRepository.upsertByCacheKey(EdrCoverageKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
+        every { cacheRepository.upsertByCacheKey(EdrCoverageKpiService.CACHE_KEY, capture(jsonSlot), any(), any(), any()) } returns 1
 
         service.recalculate()
 
@@ -162,11 +162,11 @@ class EdrCoverageKpiServiceTest {
      */
     @Test
     fun `recalculate swallows repository failures and leaves the previous cache in place`() {
-        every { assetRepository.countAllAwsAssetsWithInstanceId() } throws RuntimeException("database on fire")
+        every { assetRepository.countCurrentAwsAssetsWithInstanceId() } throws RuntimeException("database on fire")
 
         service.recalculate()
 
-        verify(exactly = 0) { cacheRepository.upsertByCacheKey(any(), any(), any(), any()) }
+        verify(exactly = 0) { cacheRepository.upsertByCacheKey(any(), any(), any(), any(), any()) }
     }
 
     /**
@@ -175,11 +175,11 @@ class EdrCoverageKpiServiceTest {
      */
     @Test
     fun `an exemption count larger than the population floors the denominator at zero`() {
-        every { assetRepository.countAllAwsAssetsWithInstanceId() } returns 2L
+        every { assetRepository.countCurrentAwsAssetsWithInstanceId() } returns 2L
         every { assetRepository.countEc2AssetsExcludedByNoEdrException() } returns 5L
 
         val jsonSlot = slot<String>()
-        every { cacheRepository.upsertByCacheKey(EdrCoverageKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
+        every { cacheRepository.upsertByCacheKey(EdrCoverageKpiService.CACHE_KEY, capture(jsonSlot), any(), any(), any()) } returns 1
 
         service.recalculate()
 

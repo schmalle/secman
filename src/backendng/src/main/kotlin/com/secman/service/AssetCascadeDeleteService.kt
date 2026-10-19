@@ -83,7 +83,7 @@ open class AssetCascadeDeleteService(
             AssetNotFoundException(assetId)
         }
 
-        val vulnCount = vulnerabilityRepository.countByAssetId(assetId).toInt()
+        val vulnCount = vulnerabilityRepository.countAllStoredByAssetId(assetId).toInt()
         val exceptionCount = exceptionRepository.findByScopeAndAssetId(
             VulnerabilityException.Scope.ASSET,
             assetId
@@ -126,7 +126,8 @@ open class AssetCascadeDeleteService(
         assetId: Long,
         username: String,
         forceTimeout: Boolean = false,
-        bulkOperationId: String? = null
+        bulkOperationId: String? = null,
+        cleanupEligibility: ((Asset) -> Boolean)? = null
     ): CascadeDeletionResultDto {
         log.info("Starting cascade deletion for asset $assetId by user $username (forceTimeout=$forceTimeout)")
 
@@ -150,6 +151,10 @@ open class AssetCascadeDeleteService(
 
             log.debug("Acquired pessimistic lock on asset $assetId")
 
+            if (cleanupEligibility != null) entityManager.refresh(asset, LockModeType.PESSIMISTIC_WRITE)
+            if (cleanupEligibility != null && !cleanupEligibility(asset)) {
+                throw CleanupEligibilityChangedException()
+            }
             val assetName = asset.name
 
             // Step 2: Collect IDs before deletion (for audit log)
@@ -173,9 +178,9 @@ open class AssetCascadeDeleteService(
                 log.info("Deleted ${exceptionIds.size} ASSET-type exceptions for asset $assetId")
             }
 
-            // 3c: Delete vulnerabilities (existing cascade from Asset should handle this, but explicit deletion for clarity)
+            // 3c: Physical cleanup must include findings hidden by snapshot/severity visibility.
             if (vulnIds.isNotEmpty()) {
-                vulnerabilityRepository.deleteByAssetId(assetId)
+                vulnerabilityRepository.deleteAllStoredByAssetId(assetId)
                 log.info("Deleted ${vulnIds.size} vulnerabilities for asset $assetId")
             }
 
@@ -222,6 +227,9 @@ open class AssetCascadeDeleteService(
                 auditId = auditLogId
             )
 
+        } catch (e: CleanupEligibilityChangedException) {
+            log.info("Cleanup asset={} outcome=retained reason=eligibility-changed", assetId)
+            throw e
         } catch (e: PessimisticLockException) {
             log.error("Asset $assetId is locked by another transaction", e)
             throw e
@@ -241,29 +249,30 @@ open class AssetCascadeDeleteService(
      * Count exception requests for an asset (via vulnerability references)
      */
     private fun countExceptionRequestsByAssetId(assetId: Long): Int {
-        // Use native query to count exception requests that reference this asset's vulnerabilities
-        val count = entityManager.createQuery(
+        // Join stored rows directly so requests linked to hidden findings are included.
+        val count = entityManager.createNativeQuery(
             """
-            SELECT COUNT(r) FROM VulnerabilityExceptionRequest r
-            WHERE r.vulnerability.asset.id = :assetId
-            """, Long::class.java
+            SELECT COUNT(*) FROM vulnerability_exception_request r
+            JOIN vulnerability v ON v.id = r.vulnerability_id
+            WHERE v.asset_id = :assetId
+            """
         )
             .setParameter("assetId", assetId)
             .singleResult
 
-        return count.toInt()
+        return (count as Number).toInt()
     }
 
     /**
      * Get vulnerability IDs for an asset
      */
     private fun getVulnerabilityIdsByAssetId(assetId: Long): List<Long> {
-        return entityManager.createQuery(
-            "SELECT v.id FROM Vulnerability v WHERE v.asset.id = :assetId",
-            Long::class.java
+        return entityManager.createNativeQuery(
+            "SELECT id FROM vulnerability WHERE asset_id = :assetId"
         )
             .setParameter("assetId", assetId)
             .resultList
+            .map { (it as Number).toLong() }
     }
 
     /**
@@ -280,14 +289,16 @@ open class AssetCascadeDeleteService(
      * Get exception request IDs for an asset (via vulnerability references)
      */
     private fun getExceptionRequestIdsByAssetId(assetId: Long): List<Long> {
-        return entityManager.createQuery(
+        return entityManager.createNativeQuery(
             """
-            SELECT r.id FROM VulnerabilityExceptionRequest r
-            WHERE r.vulnerability.asset.id = :assetId
-            """, Long::class.java
+            SELECT r.id FROM vulnerability_exception_request r
+            JOIN vulnerability v ON v.id = r.vulnerability_id
+            WHERE v.asset_id = :assetId
+            """
         )
             .setParameter("assetId", assetId)
             .resultList
+            .map { (it as Number).toLong() }
     }
 
     /**
@@ -385,3 +396,6 @@ open class AssetCascadeDeleteService(
         )
     }
 }
+
+/** The locked asset no longer satisfies the original cleanup policy. */
+class CleanupEligibilityChangedException : RuntimeException("Asset retained after eligibility changed")

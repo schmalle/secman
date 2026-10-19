@@ -47,7 +47,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
     @Query(
         """
         SELECT f FROM EolFinding f
-        WHERE f.assetId IN (:assetIds)
+        WHERE f.assetId IN (:assetIds) AND f.assetId IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND f.status IN (:statuses)
           AND (:search IS NULL OR :search = ''
                OR LOWER(f.componentName) LIKE LOWER(CONCAT('%', :search, '%'))
@@ -72,7 +72,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
     @Query(
         """
         SELECT COUNT(f) FROM EolFinding f
-        WHERE f.assetId IN (:assetIds)
+        WHERE f.assetId IN (:assetIds) AND f.assetId IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND f.status IN (:statuses)
           AND (:search IS NULL OR :search = ''
                OR LOWER(f.componentName) LIKE LOWER(CONCAT('%', :search, '%'))
@@ -95,7 +95,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
     @Query(
         """
         SELECT f.status, COUNT(f) FROM EolFinding f
-        WHERE f.assetId IN (:assetIds)
+        WHERE f.assetId IN (:assetIds) AND f.assetId IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         GROUP BY f.status
         """
@@ -105,7 +105,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
     @Query(
         """
         SELECT COUNT(DISTINCT f.assetId) FROM EolFinding f
-        WHERE f.assetId IN (:assetIds)
+        WHERE f.assetId IN (:assetIds) AND f.assetId IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         """
     )
@@ -116,7 +116,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
         """
         SELECT COALESCE(f.cloudAccountId, ''), f.status, COUNT(f)
         FROM EolFinding f
-        WHERE f.assetId IN (:assetIds)
+        WHERE f.assetId IN (:assetIds) AND f.assetId IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         GROUP BY COALESCE(f.cloudAccountId, ''), f.status
         """
@@ -128,7 +128,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
         """
         SELECT f.componentName, f.eolProductKey, f.eolCycle, f.status, COUNT(DISTINCT f.assetId)
         FROM EolFinding f
-        WHERE f.assetId IN (:assetIds)
+        WHERE f.assetId IN (:assetIds) AND f.assetId IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         GROUP BY f.componentName, f.eolProductKey, f.eolCycle, f.status
         ORDER BY COUNT(DISTINCT f.assetId) DESC, f.componentName ASC
@@ -163,7 +163,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
                COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.eolCycle END)
         FROM EolFinding f
         WHERE f.assetId IS NOT NULL
-          AND f.assetId IN (:assetIds)
+          AND f.assetId IN (:assetIds) AND f.assetId IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         GROUP BY f.componentName
         HAVING COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.assetId END) > 0
@@ -191,7 +191,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
                COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.APPROACHING_EOL THEN f.assetId END),
                COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.eolCycle END)
         FROM EolFinding f
-        WHERE f.assetId IS NOT NULL
+        WHERE f.assetId IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         GROUP BY f.componentName
         HAVING COUNT(DISTINCT CASE WHEN f.status = com.secman.domain.EolStatus.EOL THEN f.assetId END) > 0
@@ -204,7 +204,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
     @Query(
         """
         SELECT f FROM EolFinding f
-        WHERE f.assetId = :assetId
+        WHERE f.assetId = :assetId AND f.assetId IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
         ORDER BY f.eolDate ASC, f.componentName ASC
         """
@@ -219,7 +219,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
     @Query(
         """
         SELECT f FROM EolFinding f
-        WHERE f.assetId IN (:assetIds)
+        WHERE f.assetId IN (:assetIds) AND f.assetId IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND f.assetId IS NOT NULL
           AND f.componentName = :product
           AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
@@ -231,7 +231,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
     @Query(
         """
         SELECT COUNT(f) FROM EolFinding f
-        WHERE f.assetId IN (:assetIds)
+        WHERE f.assetId IN (:assetIds) AND f.assetId IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND f.assetId IS NOT NULL
           AND f.componentName = :product
           AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
@@ -248,7 +248,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
     @Query(
         """
         SELECT DISTINCT f.assetId FROM EolFinding f
-        WHERE f.assetId IN (:assetIds)
+        WHERE f.assetId IN (:assetIds) AND f.assetId IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND f.assetId IS NOT NULL
           AND f.componentName = :product
           AND f.productClass <> com.secman.domain.ProductClass.INSTALLER_ARTIFACT
@@ -302,6 +302,7 @@ interface EolFindingRepository : JpaRepository<EolFinding, Long> {
         """
         SELECT f FROM EolFinding f
         WHERE f.subjectType <> com.secman.domain.EolSubjectType.REPOSITORY_COMPONENT
+          AND f.assetId IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND f.eolDate IS NOT NULL
           AND f.eolDate >= :from
           AND f.eolDate <= :to

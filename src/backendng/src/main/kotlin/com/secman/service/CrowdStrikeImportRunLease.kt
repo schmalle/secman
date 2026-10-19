@@ -11,12 +11,18 @@ class CrowdStrikeImportRunLease {
     internal var clock: Clock = Clock.systemUTC()
     private data class Run(val id: String, val owner: String, var expiresAt: Instant)
     private var run: Run? = null
+    private var lastSuccessfulCompletion: Instant? = null
+    private var cleanupActive = false
+    private var activeWrites = 0
+    private data class FinishedRun(val owner: String, val status: String)
+    private val finishedRuns = linkedMapOf<String, FinishedRun>()
 
     @Synchronized
     fun start(owner: String): String {
-        check(active() == null) { "An import run is already active" }
+        check(active() == null && !cleanupActive) { "An import or cleanup is already active" }
         val id = UUID.randomUUID().toString()
         run = Run(id, owner, clock.instant().plusSeconds(600))
+        lastSuccessfulCompletion = null
         return id
     }
 
@@ -33,13 +39,51 @@ class CrowdStrikeImportRunLease {
     }
 
     @Synchronized
-    fun finish(id: String, owner: String) {
+    fun finish(id: String, owner: String, successful: Boolean = false) {
+        if (finishedStatus(id, owner) != null) return
         requireOwner(id, owner)
         run = null
+        lastSuccessfulCompletion = if (successful) clock.instant() else null
+        finishedRuns[id] = FinishedRun(owner, if (successful) "COMPLETED" else "FAILED")
+        // Keep retries idempotent without retaining an unbounded run history.
+        if (finishedRuns.size > 100) finishedRuns.remove(finishedRuns.keys.first())
     }
 
     @Synchronized
+    fun finishedStatus(id: String, owner: String): String? =
+        finishedRuns[id]?.takeIf { it.owner == owner }?.status
+
+    @Synchronized
+    fun activeExpiresAt(): Instant? = active()?.expiresAt
+
+    @Synchronized
     fun activeRunId(): String? = active()?.id
+
+    @Synchronized
+    fun tryBeginCleanup(): Boolean {
+        if (active() != null || cleanupActive || activeWrites > 0) return false
+        cleanupActive = true
+        return true
+    }
+
+    @Synchronized
+    fun finishCleanup() { cleanupActive = false }
+
+    fun <T> withImportWrite(action: () -> T): T {
+        synchronized(this) {
+            check(!cleanupActive) { "CrowdStrike cleanup is active; retry import after it completes" }
+            activeWrites++
+        }
+        return try { action() } finally { synchronized(this) { activeWrites-- } }
+    }
+
+    @Synchronized
+    fun cleanupBlockedReason(): String? = when {
+        active() != null -> "A CrowdStrike import is active"
+        lastSuccessfulCompletion == null -> "No successful complete CLI import has been observed since backend startup"
+        lastSuccessfulCompletion!!.isBefore(clock.instant().minusSeconds(86400)) -> "The last successful complete CLI import is older than 24 hours"
+        else -> null
+    }
 
     private fun active(): Run? {
         if (run?.expiresAt?.isAfter(clock.instant()) == false) run = null

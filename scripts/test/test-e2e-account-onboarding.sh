@@ -102,6 +102,7 @@ RELEASE_NAME="${E2E_PREFIX}release"
 # Synthetic accounts, one per phase. All share the shape 87[0-9] + 6-digit timestamp +
 # "000", which is what the cleanup sweep matches on — keep any new account in that shape.
 WELCOME_ACCOUNT="870${SUFFIX}000"
+WELCOME_SECOND_ACCOUNT="877${SUFFIX}000"
 LEGACY_ACCOUNT="871${SUFFIX}000"   # bare --start-risk-assessment (compatibility gate)
 GUIDED_ACCOUNT="872${SUFFIX}000"
 NOMATCH_ACCOUNT="873${SUFFIX}000"
@@ -525,8 +526,22 @@ count_assessments_for() {
 phase_welcome_only() {
     phase "CLI: WELCOME_ONLY sends a welcome mail and starts nothing"
     write_mapping_file "$WELCOME_ACCOUNT"
+    printf '%s,AWS_ACCOUNT,%s\n' "$OWNER_EMAIL" "$WELCOME_SECOND_ACCOUNT" >> "$WORK_DIR/mappings.csv"
 
-    local out rc
+    local out rc preview records
+    preview=$(java -jar "$CLI_JAR" manage-user-mappings import \
+        --file "$WORK_DIR/mappings.csv" --onboarding-mode WELCOME_ONLY --dry-run \
+        --username "$SECMAN_ADMIN_NAME" --password "$SECMAN_ADMIN_PASS" \
+        --backend-url "$BASE_URL" 2>&1)
+    [[ "$(echo "$preview" | grep -c '^  MAIL ')" == 1 ]] \
+        && log_pass "two new accounts preview exactly one welcome email" \
+        || log_fail "grouped dry run did not preview one email"
+    [[ "$preview" == *"$WELCOME_ACCOUNT"* && "$preview" == *"$WELCOME_SECOND_ACCOUNT"* ]] \
+        && log_pass "grouped dry run reports both accounts" || log_fail "grouped preview omitted an account"
+    records=$(MYSQL_PWD="$DB_PASS" mariadb -h "$DB_HOST" -u "$DB_USER" "$DB_NAME" -N -B \
+        -e "SELECT COUNT(*) FROM owner_mail_notification")
+    [[ "$records" == 0 ]] && log_pass "grouped dry run creates no delivery record" \
+        || log_fail "dry run persisted a delivery record"
     set +e
     out=$(java -jar "$CLI_JAR" manage-user-mappings import \
         --file "$WORK_DIR/mappings.csv" \
@@ -541,6 +556,50 @@ phase_welcome_only() {
         && log_pass "printout names the mode" || log_fail "printout does not name WELCOME_ONLY"
     echo "$out" | grep -q "welcome mail sent" \
         && log_pass "welcome mail reported as sent" || log_fail "no welcome mail reported"
+
+    [[ "$(echo "$out" | grep -c '^  MAIL ')" == 1 ]] \
+        && log_pass "two new accounts produce one CLI mail outcome" || log_fail "duplicate mail outcomes"
+    records=$(MYSQL_PWD="$DB_PASS" mariadb -h "$DB_HOST" -u "$DB_USER" "$DB_NAME" -N -B \
+        -e "SELECT COUNT(*) FROM owner_mail_notification WHERE status='SENT' AND aws_account_ids='$WELCOME_ACCOUNT,$WELCOME_SECOND_ACCOUNT'")
+    [[ "$records" == 1 ]] && log_pass "one SMTP-accepted notification covers both new accounts" \
+        || log_fail "expected one sent grouped notification, found $records"
+
+    java -jar "$CLI_JAR" manage-user-mappings import \
+        --file "$WORK_DIR/mappings.csv" --onboarding-mode WELCOME_ONLY \
+        --username "$SECMAN_ADMIN_NAME" --password "$SECMAN_ADMIN_PASS" \
+        --backend-url "$BASE_URL" > "$WORK_DIR/welcome-replay.log" 2>&1
+    records=$(MYSQL_PWD="$DB_PASS" mariadb -h "$DB_HOST" -u "$DB_USER" "$DB_NAME" -N -B \
+        -e "SELECT COUNT(*) FROM owner_mail_notification")
+    [[ "$records" == 1 ]] && log_pass "reimport does not create another welcome notification" \
+        || log_fail "reimport created another welcome notification"
+
+    local test_out test_rc state_before state_after
+    state_before=$(MYSQL_PWD="$DB_PASS" mariadb -h "$DB_HOST" -u "$DB_USER" "$DB_NAME" -N -B \
+        -e "SELECT (SELECT COUNT(*) FROM user_mapping),(SELECT COUNT(*) FROM owner_mail_notification),(SELECT COUNT(*) FROM account_onboarding_invite),(SELECT COUNT(*) FROM risk_assessment)")
+    test_out=$(java -jar "$CLI_JAR" manage-user-mappings import \
+        --file "$WORK_DIR/mappings.csv" --onboarding-mode WELCOME_ONLY --test-email "$PLAIN_EMAIL" \
+        --username "$SECMAN_ADMIN_NAME" --password "$SECMAN_ADMIN_PASS" --backend-url "$BASE_URL" 2>&1)
+    [[ "$test_out" == *"Delivery: SENT"* && "$test_out" == *"TEST EMAIL: $PLAIN_EMAIL"* ]] \
+        && log_pass "test email to the supplied address is SMTP accepted even for known accounts" \
+        || log_fail "test email was not accepted"
+    [[ "$test_out" == *"Accounts: $WELCOME_ACCOUNT, $WELCOME_SECOND_ACCOUNT"* ]] \
+        && log_pass "test email covers both sampled accounts" || log_fail "test sample omitted an account"
+    state_after=$(MYSQL_PWD="$DB_PASS" mariadb -h "$DB_HOST" -u "$DB_USER" "$DB_NAME" -N -B \
+        -e "SELECT (SELECT COUNT(*) FROM user_mapping),(SELECT COUNT(*) FROM owner_mail_notification),(SELECT COUNT(*) FROM account_onboarding_invite),(SELECT COUNT(*) FROM risk_assessment)")
+    [[ "$state_before" == "$state_after" ]] && log_pass "test email leaves mappings and production onboarding records unchanged" \
+        || log_fail "test email changed production state"
+    set +e
+    java -jar "$CLI_JAR" manage-user-mappings import --file "$WORK_DIR/mappings.csv" \
+        --onboarding-mode WELCOME_ONLY --test-email "$PLAIN_EMAIL" --dry-run > "$WORK_DIR/test-email-conflict.log" 2>&1
+    test_rc=$?
+    set -e
+    [[ "$test_rc" == 2 ]] && log_pass "test email plus dry-run is refused before authentication or sending" \
+        || log_fail "test email plus dry-run returned $test_rc instead of 2"
+    local denied; denied=$(curl -sS -o "$WORK_DIR/test-mail-denied.json" -w '%{http_code}' -b "$OWNER_COOKIE_JAR" \
+        -H 'Content-Type: application/json' -X POST "$BASE_URL/api/account-onboarding/welcome-test" \
+        --data "$(jq -nc --arg e "$PLAIN_EMAIL" --arg a "$WELCOME_ACCOUNT" '{recipient:$e,accountIds:[$a]}')")
+    [[ "$denied" == 403 ]] && log_pass "test welcome endpoint refuses non-admin access" \
+        || log_fail "test welcome endpoint allowed non-admin access ($denied)"
 
     local count; count=$(count_assessments_for "$WELCOME_ACCOUNT")
     [[ "$count" == "0" ]] && log_pass "no risk assessment started" \

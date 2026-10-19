@@ -22,10 +22,12 @@ class OwnerMailDeliveryIntegrationTest : BaseIntegrationTest() {
         val pool = Executors.newFixedThreadPool(4)
         try {
             val reservations = (1..4).map { pool.submit<Int> {
-                repository.reserve(key, "123456789012", "owner@example.test", now)
+                repository.reserveGroup(key, "123456789012", "123456789012,123456789013", "owner@example.test", now)
             } }
             assertEquals(1, reservations.sumOf { it.get(20, TimeUnit.SECONDS) })
-            val id = repository.findByEventKey(key).orElseThrow().id!!
+            val stored = repository.findByEventKey(key).orElseThrow()
+            assertEquals("123456789012,123456789013", stored.awsAccountIds)
+            val id = stored.id!!
             val claims = (1..4).map { pool.submit<Int> { repository.claim(id, false, now, now.minusDays(90)) } }
             assertEquals(1, claims.sumOf { it.get(20, TimeUnit.SECONDS) })
             repository.finish(id, "FAILED", "NO_ACTIVE_PROVIDER", null, now)
@@ -41,12 +43,13 @@ class OwnerMailDeliveryIntegrationTest : BaseIntegrationTest() {
         val created = LocalDateTime.now().minusDays(91)
         val key = OwnerMailDeliveryService.eventKey("123456789012", "old-${System.nanoTime()}@example.test")
         val row = repository.save(OwnerMailNotification(eventKey = key, awsAccountId = "123456789012",
-            ownerEmail = "old@example.test", status = "SENT", providerMessageId = "message", errorCode = "old",
+            awsAccountIds = "123456789012,123456789013", ownerEmail = "old@example.test", status = "SENT", providerMessageId = "message", errorCode = "old",
             createdAt = created, updatedAt = created))
         service.redactExpired()
         val redacted = repository.findById(row.id!!).orElseThrow()
         assertNull(redacted.ownerEmail)
         assertNull(redacted.awsAccountId)
+        assertNull(redacted.awsAccountIds)
         assertNull(redacted.providerMessageId)
         assertNull(redacted.errorCode)
         assertEquals("SENT", redacted.status)

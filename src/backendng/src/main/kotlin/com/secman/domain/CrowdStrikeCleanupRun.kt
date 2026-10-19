@@ -19,6 +19,7 @@ enum class CrowdStrikeCleanupStatus {
     SUCCESS,
     PARTIAL,
     ABORTED_SAFETY_BRAKE,
+    ABORTED_IMPORT_HEALTH,
     FAILED
 }
 
@@ -81,5 +82,14 @@ data class CrowdStrikeCleanupRun(
     var durationMs: Long? = null,
 
     @Column(name = "error_message", length = 1000)
-    var errorMessage: String? = null
+    var errorMessage: String? = null,
+
+    @Column(name = "basis", nullable = false, length = 32)
+    var basis: String = "import-inactivity",
+
+    @Column(name = "cutoff_utc")
+    var cutoffUtc: java.time.Instant? = null,
+
+    @Column(name = "skipped_count", nullable = false)
+    var skippedCount: Int = 0
 )

@@ -249,6 +249,7 @@ open class MaterializedViewRefreshService(
             log.info("Async refresh job completed: jobId={}, durationMs={}", jobId, job.durationMs)
         } catch (e: Exception) {
             log.error("Async refresh job failed: jobId={}, error={}", jobId, e.message, e)
+            pendingTriggerReason.compareAndSet(null, "Retry failed refresh ${job.id}")
             job.markFailed(e.message ?: "Unknown error")
             refreshJobRepository.update(job)
 
@@ -308,11 +309,10 @@ open class MaterializedViewRefreshService(
 
         // Step 3: Mark job as completed
         job.updateProgress(rowsWritten)
+        // Derived projections are part of this job's freshness boundary.
+        refreshDerivedData()
         job.markCompleted()
         selfProvider.get().updateJob(job)
-
-        // Step 4 & 5: Refresh derived data (statistics cache + heatmap)
-        refreshDerivedData()
 
         // Publish completion event
         publishProgressEvent(job,
@@ -367,40 +367,47 @@ open class MaterializedViewRefreshService(
      * own bounded query instead.
      */
     private fun refreshDerivedData() {
+        val failures = mutableListOf<Exception>()
         try {
             log.info("Refreshing vulnerability statistics cache after materialized view refresh")
-            vulnerabilityStatisticsCacheService.refreshCache()
+            vulnerabilityStatisticsCacheService.refreshCache(requireSuccess = true)
         } catch (e: Exception) {
-            log.error("Statistics cache refresh failed (non-fatal): {}", e.message, e)
+            failures.add(e)
+            log.error("Statistics cache refresh failed: {}", e.message, e)
         }
 
         try {
             log.info("Refreshing asset heatmap after materialized view refresh")
             assetHeatmapService.recalculateHeatmap()
         } catch (e: Exception) {
-            log.error("Asset heatmap refresh failed (non-fatal): {}", e.message, e)
+            failures.add(e)
+            log.error("Asset heatmap refresh failed: {}", e.message, e)
         }
 
         try {
             log.info("Warming admin not-excepted vulnerability count cache after materialized view refresh")
             vulnerabilityService.getCachedNotExceptedCountAdmin()
         } catch (e: Exception) {
+            failures.add(e)
             log.error("Not-excepted count cache warm failed (non-fatal): {}", e.message, e)
         }
 
         try {
             log.info("Recalculating AWS clean-server KPI after materialized view refresh")
-            awsCleanServerKpiService.recalculate()
+            awsCleanServerKpiService.recalculate(requireSuccess = true)
         } catch (e: Exception) {
-            log.error("AWS clean-server KPI recalculation failed (non-fatal): {}", e.message, e)
+            failures.add(e)
+            log.error("AWS clean-server KPI recalculation failed: {}", e.message, e)
         }
 
         try {
             log.info("Recalculating EDR coverage KPI after materialized view refresh")
             edrCoverageKpiService.recalculate()
         } catch (e: Exception) {
-            log.error("EDR coverage KPI recalculation failed (non-fatal): {}", e.message, e)
+            failures.add(e)
+            log.error("EDR coverage KPI recalculation failed: {}", e.message, e)
         }
+        if (failures.isNotEmpty()) throw IllegalStateException("Derived data refresh was incomplete", failures.first())
     }
 
     /**

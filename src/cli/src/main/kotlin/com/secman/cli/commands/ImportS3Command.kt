@@ -21,9 +21,8 @@ import jakarta.inject.Singleton
  *
  * AWS Credential Resolution (highest priority first):
  *   1. Explicit CLI flags: --aws-access-key-id + --aws-secret-access-key [+ --aws-session-token]
- *   2. Environment variables: AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY [+ AWS_SESSION_TOKEN]
- *   3. Named profile: --aws-profile (reads ~/.aws/credentials)
- *   4. Default credential chain: IAM role, SSO, etc.
+ *   2. Named profile: --aws-profile (overrides environment credentials)
+ *   3. SDK default credential chain: environment, configured profiles, IAM role, etc.
  *
  * CSV Format:
  *   email,type,value
@@ -63,7 +62,16 @@ import jakarta.inject.Singleton
             "Ready workgroups are enabled on import, overriding manual disables; incomplete groups stay disabled and safety limits apply. " +
             "Invalid cov:owner values fall back to a valid top-level email for mapping only, never for ownership."
     ],
-    mixinStandardHelpOptions = true
+    mixinStandardHelpOptions = true,
+    footer = [
+        "",
+        "Welcome every mapped owner of each brand-new AWS account using the configured welcome template:",
+        "  secman manage-user-mappings import-s3 --onboarding-mode WELCOME_ONLY --dry-run",
+        "  secman manage-user-mappings import-s3 --onboarding-mode WELCOME_ONLY",
+        "Bucket/key default to AWS_ACCOUNT_BUCKET_NAME / AWS_ACCOUNT_BUCKET_KEY_NAME.",
+        "Known accounts do not trigger welcome mail, including newly added owners of known accounts.",
+        "Dry run saves nothing and sends no mail. FAILED or PENDING delivery exits with code 1."
+    ]
 )
 class ImportS3Command(
     private val s3DownloadService: S3DownloadService,
@@ -92,7 +100,7 @@ class ImportS3Command(
 
     @Option(
         names = ["--aws-profile"],
-        description = ["AWS credential profile name (default: use default credential chain)"]
+        description = ["AWS credential profile (overrides environment credentials; explicit credential flags take priority)"]
     )
     var awsProfile: String? = null
 
@@ -129,7 +137,7 @@ class ImportS3Command(
 
     @Option(
         names = ["--dry-run"],
-        description = ["Validate file without creating mappings"]
+        description = ["Preview mappings and owner emails without saving data or contacting the mail provider"]
     )
     var dryRun: Boolean = false
 
@@ -176,13 +184,32 @@ class ImportS3Command(
         names = ["--onboarding-mode"],
         description = [
             "What to do for the owner of every brand-new AWS account this import introduces. " +
-                "WELCOME_ONLY sends a welcome mail only. DIRECT also starts a risk assessment " +
+                "WELCOME_ONLY sends one welcome email per owner per import, listing all their new accounts. DIRECT also starts a risk assessment " +
                 "for --risk-usecase. GUIDED mails the owner a one-time link and creates the " +
                 "assessment from their answers. Valid values: \${COMPLETION-CANDIDATES}. " +
                 "Default: saved backend settings with --createnotify, otherwise none."
         ]
     )
     var onboardingMode: ImportCommand.OnboardingMode? = null
+
+    @Option(
+        names = ["--test-email"],
+        description = ["Send one [TEST] welcome email to this address using the first owner group in the file. " +
+            "Requires --onboarding-mode WELCOME_ONLY. No import is saved and actual owners are not contacted. " +
+            "Cannot be combined with --dry-run, --no-welcome-email, or import notification/assessment options."]
+    )
+    var testEmail: String? = null
+
+    fun validateTestEmailOptions(): String? {
+        val recipient = testEmail ?: return null
+        if (recipient.trim().length > 255 || !com.secman.cli.service.UserMappingValidator().validateEmail(recipient.trim())) return "--test-email requires one valid email address"
+        if (dryRun) return "--test-email cannot be combined with --dry-run; dry-run never sends email"
+        if (onboardingMode != ImportCommand.OnboardingMode.WELCOME_ONLY || startRiskAssessment || welcomeEmail == false ||
+            createnotify || sendEmail || notifyAddress != null || riskUseCase != null) {
+            return "--test-email requires --onboarding-mode WELCOME_ONLY without assessment, notification, or --no-welcome-email options"
+        }
+        return null
+    }
 
     @Option(
         names = ["--welcome-email"],
@@ -230,6 +257,7 @@ class ImportS3Command(
         var tempFilePath: java.nio.file.Path? = null
 
         try {
+            validateTestEmailOptions()?.let { System.err.println(it); System.exit(2); return }
             println("=".repeat(60))
             println("Import User Mappings from S3")
             println("=".repeat(60))
@@ -320,10 +348,10 @@ class ImportS3Command(
                 println("S3 Endpoint: $resolvedEndpointUrl")
             }
 
-            // Resolve AWS credentials: CLI args take priority, then env vars
-            val resolvedAccessKeyId = awsAccessKeyId ?: System.getenv("AWS_ACCESS_KEY_ID")
-            val resolvedSecretAccessKey = awsSecretAccessKey ?: System.getenv("AWS_SECRET_ACCESS_KEY")
-            val resolvedSessionToken = awsSessionToken ?: System.getenv("AWS_SESSION_TOKEN")
+            // Leave environment resolution to the SDK so --aws-profile takes precedence.
+            val resolvedAccessKeyId = awsAccessKeyId
+            val resolvedSecretAccessKey = awsSecretAccessKey
+            val resolvedSessionToken = awsSessionToken
 
             if (resolvedAccessKeyId != null) {
                 println("AWS Credentials: explicit (access key ${resolvedAccessKeyId.take(4)}...)")
@@ -336,7 +364,7 @@ class ImportS3Command(
             println("Format: $format")
             when (effectiveMode()) {
                 ImportCommand.OnboardingMode.WELCOME_ONLY ->
-                    println("Onboarding: WELCOME_ONLY (welcome mail to each new account owner)")
+                    println("Onboarding: WELCOME_ONLY (one welcome mail per owner per import)")
                 ImportCommand.OnboardingMode.DIRECT -> {
                     val label = if (onboardingMode == null) "DIRECT (via --start-risk-assessment)" else "DIRECT"
                     println("Onboarding: $label (use case '$riskUseCase', deadline $riskDeadlineDays day(s))")
@@ -351,6 +379,7 @@ class ImportS3Command(
             if (dryRun) {
                 println("Mode: DRY-RUN (validation only, no changes will be made)")
             }
+            if (testEmail != null) println("Mode: TEST EMAIL (one sample only; no import will be saved)")
             println()
 
             // Download from S3
@@ -366,6 +395,15 @@ class ImportS3Command(
             )
             println("Download complete.")
             println()
+
+            testEmail?.let { recipient ->
+                try {
+                    userMappingCliService.testWelcomeFromFile(tempFilePath.toString(), format, recipient, backendUrl, token)
+                } finally {
+                    tempFilePath?.let { java.nio.file.Files.deleteIfExists(it) }
+                }
+                return
+            }
 
             // Execute import via HTTP
             val result = userMappingCliService.importMappingsFromFile(
@@ -444,15 +482,24 @@ class ImportS3Command(
                     } else {
                         println("Onboarding (${result.onboarding.size}):")
                     }
+                    val welcomeMails = result.onboarding.filter { it.welcomeEmail["status"] in setOf("WOULD_SEND", "SENT", "FAILED", "PENDING") }
+                        .distinctBy { it.ownerEmail.trim().lowercase(java.util.Locale.ROOT) }
+                    println("${if (dryRun) "Would send" else "Welcome deliveries:"} ${welcomeMails.size} welcome email(s) to ${welcomeMails.size} distinct owner(s).")
+                    welcomeMails.forEach { ob ->
+                        val accounts = ob.welcomeEmail["accountIds"] ?: listOf(ob.awsAccountId)
+                        println("  MAIL    ${ob.ownerEmail} -> ${ob.welcomeEmail["status"]} (notification=${ob.welcomeEmail["notificationId"] ?: "-"}, retryable=${ob.welcomeEmail["retryable"] ?: false})")
+                        println("          Accounts: $accounts")
+                    }
                     result.onboarding.forEach { ob ->
                         val where = "${ob.awsAccountId}  ${ob.ownerEmail}"
-                        if (ob.welcomeEmail.isNotEmpty()) {
-                            println("  MAIL    $where -> ${ob.welcomeEmail["status"]}${if (ob.welcomeEmailSent) " — welcome mail sent" else ""} (notification=${ob.welcomeEmail["notificationId"] ?: "-"}, retryable=${ob.welcomeEmail["retryable"] ?: false})")
-                        }
                         when {
                             ob.error != null -> {
                                 onboardingFailures++
                                 println("  FAILED  $where: ${ob.error}")
+                            }
+                            ob.welcomeDeliveryNeedsAttention -> {
+                                onboardingFailures++
+                                println("  MAIL ATTENTION $where -> welcome delivery failed or is uncertain; inspect the notification before retrying")
                             }
                             // A skip is an idempotent no-op, never a failure.
                             ob.skipped ->
@@ -562,10 +609,7 @@ class ImportS3Command(
             // Exit code 2: fatal S3 error
             println()
             System.err.println("ERROR: ${e.message}")
-            System.err.println()
-            System.err.println("Usage: manage-user-mappings import-s3 --bucket <bucket-name> --key <object-key>")
-            System.err.println("  The --bucket value must be a plain S3 bucket name (e.g. 'my-bucket'),")
-            System.err.println("  not a URL or ARN.")
+
             System.exit(2)
         } catch (e: IllegalArgumentException) {
             // Exit code 2: configuration/argument error

@@ -1,3 +1,4 @@
+import { markAssetObserved } from './helpers/isolated-target';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { requireIsolatedTarget } from './helpers/isolated-target';
 
@@ -139,6 +140,7 @@ async function createFixture(request: APIRequestContext): Promise<FixtureState> 
   });
   await expectOk(assetResponse, 'create risk-assessment asset');
   const assetBody = await assetResponse.json();
+  markAssetObserved(assetBody.id);
 
   const useCaseBody = await createUseCase(request, runId);
 

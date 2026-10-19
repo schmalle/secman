@@ -15,7 +15,6 @@ import com.secman.security.hasRole
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.data.model.Page
 import io.micronaut.data.model.Pageable
-import io.micronaut.data.model.Sort
 import jakarta.inject.Singleton
 
 /** Shared asset visibility policy for REST, MCP and derived resources. */
@@ -35,10 +34,10 @@ open class AssetFilterService(
     /** Database pagination using the same live predicates as the ID-based policy. */
     fun getAccessibleAssetPage(authentication: Authentication, page: Int, size: Int): Page<Asset> {
         return if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
-            assetRepository.findAll(Pageable.from(page, size, Sort.of(Sort.Order.asc("id"))))
+            assetRepository.findCurrent(Pageable.from(page, size))
         } else {
             // The native query supplies its own stable ordering; adding a sort duplicates ORDER BY.
-            assetRepository.findAccessibleAssetPage(getUserId(authentication), requireNotNull(getUserEmail(authentication)), Pageable.from(page, size))
+            assetRepository.findCurrentAccessiblePage(getUserId(authentication), requireNotNull(getUserEmail(authentication)), Pageable.from(page, size))
         }
     }
 
@@ -46,7 +45,7 @@ open class AssetFilterService(
     fun getAccessibleAssets(authentication: Authentication): List<Asset> {
         // ADMIN and SECCHAMPION have universal access
         if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
-            return assetRepository.findAll()
+            return assetRepository.findCurrent()
         }
 
         return getAccessibleAssetsForScopedUser(authentication)
@@ -54,7 +53,7 @@ open class AssetFilterService(
 
     fun getScopedAccessibleAssetIds(authentication: Authentication): Set<Long> {
         if (authentication.hasRole("ADMIN")) {
-            return assetRepository.findAllIds().toSet()
+            return assetRepository.findCurrentIds().toSet()
         }
         return getAccessibleAssetsForScopedUser(authentication).mapNotNull { it.id }.toSet()
     }
@@ -80,11 +79,11 @@ open class AssetFilterService(
      */
     fun getAccessibleAssetIds(authentication: Authentication): Set<Long> {
         if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
-            return assetRepository.findAllIds().toSet()
+            return assetRepository.findCurrentIds().toSet()
         }
         val email = getUserEmail(authentication)
         return if (email != null) {
-            assetRepository.findAccessibleAssetIds(getUserId(authentication), email).toSet()
+            currentIds(assetRepository.findAccessibleAssetIds(getUserId(authentication), email))
         } else {
             getAccessibleAssetsForScopedUser(authentication).mapNotNull { it.id }.toSet()
         }
@@ -95,7 +94,7 @@ open class AssetFilterService(
         val normalizedDomain = domain?.takeIf { it.isNotBlank() }
         if (normalizedDomain == null && !awsHosted) return getAccessibleAssetIds(authentication)
         if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
-            return assetRepository.findIdsWithStatisticsFilters(normalizedDomain, awsHosted).toSet()
+            return currentIds(assetRepository.findIdsWithStatisticsFilters(normalizedDomain, awsHosted))
         }
         return getAccessibleAssetIds(authentication).chunked(1000).flatMap { ids ->
             assetRepository.findIdsWithStatisticsFiltersForAssets(ids, normalizedDomain, awsHosted)
@@ -111,7 +110,7 @@ open class AssetFilterService(
      * @return List of accessible assets (already distinct and sorted)
      */
     private fun getAccessibleAssetsUnified(userId: Long, userEmail: String): List<Asset> {
-        return assetRepository.findAccessibleAssets(userId, userEmail)
+        return assetRepository.findAccessibleAssetIds(userId, userEmail).chunked(1000).flatMap { assetRepository.findByIdIn(it, Pageable.UNPAGED).content }.sortedBy { it.name }
     }
 
     /**
@@ -122,7 +121,7 @@ open class AssetFilterService(
      * @param userEmail The user's email (nullable)
      * @return List of accessible assets (deduplicated and sorted)
      */
-    private fun getAccessibleAssetsMultiQuery(userId: Long, userEmail: String?): List<Asset> {
+    private fun getAccessibleAssetsMultiQuery(userId: Long, userEmail: String?, currentOnly: Boolean = true): List<Asset> {
         val directAssets = assetRepository.findAccessibleByWorkgroupMembership(userId)
         val personalAccounts = userEmail?.let(userMappingRepository::findDistinctAwsAccountIdByEmail).orEmpty()
         val personalDomains = userEmail?.let(userMappingRepository::findDistinctDomainByEmail).orEmpty()
@@ -133,7 +132,10 @@ open class AssetFilterService(
             .map { it.lowercase() }.distinct()
         val accountAssets = if (accountIds.isEmpty()) emptyList() else assetRepository.findByCloudAccountIdIn(accountIds)
         val domainAssets = if (domains.isEmpty()) emptyList() else assetRepository.findByAdDomainInIgnoreCase(domains)
-        return (directAssets + accountAssets + domainAssets).distinctBy { it.id }.sortedBy { it.name }
+        val candidates = (directAssets + accountAssets + domainAssets).distinctBy { it.id }
+        if (!currentOnly) return candidates.sortedBy { it.name }
+        val current = currentIds(candidates.mapNotNull { it.id })
+        return candidates.filter { it.id in current }.sortedBy { it.name }
     }
 
     // getAccessibleVulnerabilities was deleted here: it had no callers, and both of its
@@ -144,9 +146,6 @@ open class AssetFilterService(
 
     /** A scan is visible only when all its linked assets are visible. */
     fun getAccessibleScans(authentication: Authentication): List<Scan> {
-        if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
-            return scanRepository.findAll()
-        }
         val assetIds = getAccessibleAssetIds(authentication)
         if (assetIds.isEmpty()) return emptyList()
         return scanRepository.findFullyAccessibleScans(assetIds)
@@ -183,8 +182,26 @@ open class AssetFilterService(
         }
 
         // Check if asset is in user's accessible assets
-        return getAccessibleAssetIds(authentication).contains(assetId)
+        val email = getUserEmail(authentication)
+        return if (email != null) assetId in assetRepository.findAccessibleAssetIds(getUserId(authentication), email)
+        else getAccessibleAssetsMultiQuery(getUserId(authentication), null, currentOnly = false).any { it.id == assetId }
     }
+
+    /** Storage scope for scanners and reconciliation; freshness is not authorization. */
+    fun getAuthorizedAssetIds(authentication: Authentication): Set<Long> {
+        if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION"))
+            return assetRepository.findAllIds().toSet()
+        val email = getUserEmail(authentication)
+        return if (email != null) assetRepository.findAccessibleAssetIds(getUserId(authentication), email).toSet()
+        else getAccessibleAssetsMultiQuery(getUserId(authentication), null, currentOnly = false).mapNotNull { it.id }.toSet()
+    }
+
+    /** Read guard: grants stay independent so ingestion can re-observe hidden assets. */
+    fun canReadCurrentAsset(assetId: Long, authentication: Authentication): Boolean =
+        canAccessAsset(assetId, authentication) && assetRepository.countCurrentById(assetId) > 0
+
+    private fun currentIds(ids: Collection<Long>): Set<Long> = ids.chunked(1000)
+        .flatMap { assetRepository.findCurrentIdsIn(it) }.toSet()
 
     /**
      * Get vulnerabilities for a specific asset (with access control)
@@ -196,7 +213,7 @@ open class AssetFilterService(
      */
     fun getAssetVulnerabilities(assetId: Long, authentication: Authentication): List<Vulnerability> {
         // First check if user can access the asset
-        if (!canAccessAsset(assetId, authentication)) {
+        if (!canReadCurrentAsset(assetId, authentication)) {
             return emptyList()
         }
 

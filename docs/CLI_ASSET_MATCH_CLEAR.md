@@ -158,6 +158,30 @@ candidate list regardless of percentage.
 The shared `pass-cli` convention applies — fetch secrets from Proton Pass,
 never hardcode.
 
+`./scripts/secman` and `./scripts/secmancli` load these AWS variables from
+`secmanpp.env` through Proton Pass:
+
+| Variable | Field in `Test/SECMAN` |
+|---|---|
+| `AWS_ACCESS_KEY_ID` | `SECMAN_AWS_ACCESS_KEY_ID` |
+| `AWS_SECRET_ACCESS_KEY` | `SECMAN_AWS_SECRET_ACCESS_KEY` |
+| `AWS_SESSION_TOKEN` | `SECMAN_AWS_ACCESS_TOKEN` |
+| `AWS_REGION` | `SECMAN_AWS_REGION` |
+| `AWS_ASSET_BUCKET_NAME` | `AWS_ASSET_BUCKET_NAME` |
+| `AWS_ASSET_BUCKET_KEY_NAME` | `AWS_ASSET_BUCKET_KEY_NAME` |
+
+With these fields configured, no AWS flags or manual exports are needed:
+
+```bash
+./scripts/secman asset-match-clear --dry-run
+```
+
+Review the preview before running `./scripts/secman asset-match-clear`, which
+deletes unmatched assets in the snapshot's accounts. Command-line options such
+as `--bucket`, `--key`, and `--aws-region` override environment values. Keep
+`pass://` references in the environment file rather than passing them as flags;
+`pass-cli` resolves environment values before launching Java.
+
 ## IAM permissions
 
 Attach to the AWS principal running the CLI:
@@ -168,15 +192,15 @@ Attach to the AWS principal running the CLI:
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:HeadObject"],
+      "Action": ["s3:GetObject"],
       "Resource": "arn:aws:s3:::<AWS_ASSET_BUCKET_NAME>/<key-prefix>/*"
     }
   ]
 }
 ```
 
-`s3:HeadObject` is optional but recommended — it lets the CLI reject files
-that exceed the 10 MB cap before downloading them.
+`s3:GetObject` also authorizes HeadObject, which checks the 10 MB size cap
+before downloading. There is no separate `s3:HeadObject` IAM action.
 
 ## Exit codes
 
@@ -224,7 +248,7 @@ auto-raise the threshold — investigate the source snapshot first.
 | Symptom | Cause / Fix |
 |---|---|
 | `S3 bucket required. Use --bucket …` | Set `AWS_ASSET_BUCKET_NAME` or pass `--bucket`. |
-| `S3 error: Access denied` | Add `s3:GetObject` (and ideally `s3:HeadObject`) to the IAM role. |
+| `S3 error: Access denied` | Check the selected identity, exact key, IAM and bucket policy. HeadObject uses `s3:GetObject`; a missing key can return 403 without `s3:ListBucket`. |
 | `S3 error: File … not found` | Wrong key, or the upstream job hasn't written today's snapshot yet. |
 | `Snapshot root is not a JSON array` | Snapshot must be a top-level JSON array, not an object. |
 | `Snapshot has no usable (accountId, resourceId) entries` | Every row was missing one of the two required fields. |

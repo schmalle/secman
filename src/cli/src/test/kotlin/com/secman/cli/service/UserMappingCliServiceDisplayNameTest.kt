@@ -14,7 +14,7 @@ import java.nio.file.Files
  */
 class UserMappingCliServiceDisplayNameTest {
 
-    private val service = UserMappingCliService(UserMappingValidator(), CliJavaHttpClientFactory())
+    private val service = UserMappingCliService(UserMappingValidator(), CliJavaHttpClientFactory(), io.mockk.mockk())
 
     @Test
     fun `status diagnostics survive response parsing and old responses retain defaults`() {

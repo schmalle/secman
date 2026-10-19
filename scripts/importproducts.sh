@@ -13,4 +13,5 @@ if [ ! -f "$JAR_PATH" ]; then
     exit 1
 fi
 
+# Product uploads resolve stored assets and do not by themselves refresh observation evidence.
 pass-cli run --env-file "$REPO_ROOT/secmanpp.env" -- java -Xmx4g -Xms2g -jar ./src/cli/build/libs/cli-0.1.0-all.jar installed-products --device-type SERVER_FAMILY

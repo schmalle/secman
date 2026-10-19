@@ -114,7 +114,7 @@ data class User(
      * - REPORT: Receives CLI-triggered email notifications (outdated assets, vulnerabilities)
      */
     enum class Role {
-        USER, ADMIN, VULN, RELEASE_MANAGER, REQ, RISK, SECCHAMPION, REQADMIN, REPORT
+        USER, ADMIN, VULN, RELEASE_MANAGER, REQ, RISK, SECCHAMPION, REQADMIN, REPORT, BETA
     }
 
     /**

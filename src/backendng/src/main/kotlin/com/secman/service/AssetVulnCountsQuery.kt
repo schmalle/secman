@@ -128,7 +128,7 @@ class AssetVulnCountsQuery(
                     SELECT 1 FROM vulnerability_exception e WHERE ${ExceptionMatchSql.EXCEPTION_MATCH}
                 ) AND COALESCE(v.first_seen_at, v.scan_timestamp) < :thresholdDate
                     THEN 1 ELSE 0 END) as non_excepted_overdue_count
-            FROM vulnerability v
+            FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
             JOIN asset a ON v.asset_id = a.id
             WHERE v.asset_id IN (:assetIds)
             GROUP BY v.asset_id

@@ -845,12 +845,14 @@ open class ImportController(
                             description = ""
                         )
                         newAsset.lastSeen = host.timestamp
+                        if (host.timestampVerified) newAsset.recordObservation(host.timestamp)
                         val saved = assetRepository.save(newAsset)
                         assetsCreated++
                         saved
                     } else {
                         // Update lastSeen
                         existingAsset.lastSeen = host.timestamp
+                        if (host.timestampVerified) existingAsset.recordObservation(host.timestamp)
                         assetRepository.save(existingAsset)
                         assetsUpdated++
                         existingAsset
@@ -898,6 +900,7 @@ open class ImportController(
             log.info("Successfully imported Masscan scan: {} assets created, {} updated, {} ports imported",
                      assetsCreated, assetsUpdated, portsImported)
 
+            assetRepository.invalidateCurrentInventoryCaches()
             HttpResponse.ok(MasscanImportResponse(
                 message = "Imported $portsImported ports across $assetsCreated new assets" +
                          (if (assetsUpdated > 0) ", updated $assetsUpdated existing asset${if (assetsUpdated > 1) "s" else ""}" else ""),

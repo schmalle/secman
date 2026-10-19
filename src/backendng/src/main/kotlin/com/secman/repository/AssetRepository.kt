@@ -11,6 +11,35 @@ import java.util.Optional
 @Repository
 interface AssetRepository : JpaRepository<Asset, Long> {
 
+    @io.micronaut.data.annotation.Query("SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL)
+    fun findCurrent(): List<Asset>
+
+    @io.micronaut.data.annotation.Query("SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND LOWER(a.adDomain) IN (:domains)")
+    fun findCurrentByDomains(domains: List<String>): List<Asset>
+
+    @io.micronaut.data.annotation.Query(value = "SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " ORDER BY a.id", countQuery = "SELECT COUNT(a) FROM Asset a WHERE " + AssetCurrentnessSql.JPQL)
+    fun findCurrent(pageable: Pageable): Page<Asset>
+
+    @io.micronaut.data.annotation.Query(value = AssetCurrentnessSql.IDS, nativeQuery = true)
+    fun findCurrentIds(): List<Long>
+
+    @io.micronaut.data.annotation.Query(value = "SELECT COUNT(*) FROM " + AssetCurrentnessSql.ASSETS + " a", nativeQuery = true)
+    fun countCurrent(): Long
+
+    @io.micronaut.data.annotation.Query(value = "SELECT id FROM asset WHERE id IN (:ids) AND " + AssetCurrentnessSql.CURRENT, nativeQuery = true)
+    fun findCurrentIdsIn(ids: Collection<Long>): List<Long>
+
+    @io.micronaut.data.annotation.Query(value = "SELECT COUNT(*) FROM asset WHERE id = :id AND " + AssetCurrentnessSql.CURRENT, nativeQuery = true)
+    fun countCurrentById(id: Long): Long
+
+    @io.micronaut.data.annotation.Query(value = "UPDATE vulnerability_statistics_cache SET valid_until = NULL", nativeQuery = true)
+    fun invalidateCurrentInventoryCaches(): Int
+
+    @io.micronaut.data.annotation.Query(value = "SELECT a.* FROM asset a WHERE a.id IN (" + AssetAccessSql.IDS + ") AND a.id IN (" + AssetCurrentnessSql.IDS + ") ORDER BY a.id",
+        countQuery = "SELECT COUNT(*) FROM asset a WHERE a.id IN (" + AssetAccessSql.IDS + ") AND a.id IN (" + AssetCurrentnessSql.IDS + ")", nativeQuery = true)
+    fun findCurrentAccessiblePage(userId: Long, userEmail: String, pageable: Pageable): Page<Asset>
+
+
     /**
      * All asset ids as a projection — for the ADMIN/SECCHAMPION short-circuit paths in
      * AssetFilterService that only need id sets. Avoids materializing the full table
@@ -166,27 +195,24 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      */
     fun findByCloudInstanceIdIgnoreCase(cloudInstanceId: String): Asset?
 
+    @io.micronaut.data.annotation.Query("SELECT a FROM Asset a WHERE LOWER(a.cloudInstanceId) IN (:instanceIds)")
+    fun findByNormalizedCloudInstanceIdIn(instanceIds: Collection<String>): List<Asset>
+
+    @io.micronaut.data.annotation.Query("""
+        SELECT a FROM Asset a WHERE a.crowdStrikeLastImportedAt IS NOT NULL
+            OR a.owner = :ownerLiteral
+    """, countQuery = "SELECT COUNT(a) FROM Asset a WHERE a.crowdStrikeLastImportedAt IS NOT NULL OR a.owner = :ownerLiteral")
+    fun findCleanupPopulation(ownerLiteral: String, pageable: io.micronaut.data.model.Pageable): io.micronaut.data.model.Page<Asset>
+
     fun findByCrowdStrikeLastImportedAtBefore(cutoff: LocalDateTime): List<Asset>
 
-    /**
-     * Stale-asset cleanup rule A, agent-seen aware: stale by
-     * `crowdStrikeLastImportedAt` AND not recently confirmed as a managed device
-     * via `crowdStrikeAgentSeenAt`.
-     *
-     * `crowdStrikeLastImportedAt` alone is a false staleness signal: it is only
-     * written for hosts that returned findings, so a fully-patched host with a
-     * healthy Falcon sensor never sets it and ages into the delete window while
-     * being demonstrably alive. `crowdStrikeAgentSeenAt` is stamped for the whole
-     * Stage-1 queried population on every reconcile (see stampCrowdStrikeAgentSeenAt)
-     * and is therefore the EDR-presence veto: an asset CrowdStrike reported within
-     * the window is never a cleanup candidate.
-     */
+    /** Retention candidates require both an old import and old or unknown provider contact. */
     @io.micronaut.data.annotation.Query("""
         SELECT a FROM Asset a
         WHERE a.crowdStrikeLastImportedAt < :cutoff
-          AND (a.crowdStrikeAgentSeenAt IS NULL OR a.crowdStrikeAgentSeenAt < :cutoff)
+          AND (a.crowdStrikeAgentSeenAt IS NULL OR a.crowdStrikeAgentSeenAt < :agentCutoff)
     """)
-    fun findCrowdStrikeStaleExcludingAgentSeen(cutoff: LocalDateTime): List<Asset>
+    fun findCrowdStrikeStaleExcludingAgentSeen(cutoff: LocalDateTime, agentCutoff: LocalDateTime): List<Asset>
 
     /**
      * Record that CrowdStrike reported these assets as managed devices.
@@ -294,6 +320,18 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     """)
     fun countAllAwsAssetsWithInstanceId(): Long
 
+    @io.micronaut.data.annotation.Query("SELECT COUNT(a) FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.cloudInstanceId IS NOT NULL AND TRIM(a.cloudInstanceId) <> ''")
+    fun countCurrentAwsAssetsWithInstanceId(): Long
+
+    @io.micronaut.data.annotation.Query("""
+        SELECT COUNT(a) FROM Asset a
+        WHERE ${AssetCurrentnessSql.JPQL} AND a.cloudInstanceId IS NOT NULL AND a.cloudInstanceId <> ''
+          AND a.crowdStrikeAgentSeenAt >= :seenTodayStart
+          AND a.crowdStrikeAgentSeenAt < :seenTodayEnd
+    """)
+    fun countAwsAssetsSeenToday(seenTodayStart: LocalDateTime, seenTodayEnd: LocalDateTime): Long
+
+
     /**
      * EDR-coverage KPI: EC2 instances excluded from the denominator by an approved,
      * still-active "No EDR possible" exception.
@@ -305,7 +343,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      */
     @io.micronaut.data.annotation.Query(
         value = """
-            SELECT COUNT(*) FROM asset a
+            SELECT COUNT(*) FROM ${AssetCurrentnessSql.ASSETS} a
             WHERE a.cloud_instance_id IS NOT NULL
               AND a.cloud_instance_id <> ''
               AND EXISTS (
@@ -330,7 +368,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      */
     @io.micronaut.data.annotation.Query(
         value = """
-            SELECT COUNT(*) FROM asset a
+            SELECT COUNT(*) FROM ${AssetCurrentnessSql.ASSETS} a
             WHERE a.cloud_instance_id IS NOT NULL
               AND a.cloud_instance_id <> ''
               AND a.crowdstrike_agent_seen_at IS NOT NULL
@@ -379,6 +417,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     /**
      * Find assets by name with pagination support (partial match, case-insensitive)
      */
+    @io.micronaut.data.annotation.Query(value = "SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND LOWER(a.name) LIKE LOWER(CONCAT('%', :name, '%'))" + " ORDER BY a.name, a.id", countQuery = "SELECT COUNT(a) FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND LOWER(a.name) LIKE LOWER(CONCAT('%', :name, '%'))")
     fun findByNameContainingIgnoreCase(name: String, pageable: Pageable): Page<Asset>
 
     /**
@@ -390,8 +429,9 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      *
      * @param ids The asset IDs the caller may see (must be non-empty; callers short-circuit
      *            on an empty set before querying)
-     * @param pageable Pagination parameters; pass a name sort for deterministic paging
+     * @param pageable Pagination parameters; the query orders by name and ID
      */
+    @io.micronaut.data.annotation.Query(value = "SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.id IN (:ids)" + " ORDER BY a.name, a.id", countQuery = "SELECT COUNT(a) FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.id IN (:ids)")
     fun findByIdIn(ids: Collection<Long>, pageable: Pageable): Page<Asset>
 
     /**
@@ -403,6 +443,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * @param name Case-insensitive fragment matched against the asset name
      * @param pageable Pagination parameters
      */
+    @io.micronaut.data.annotation.Query(value = "SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.id IN (:ids) AND LOWER(a.name) LIKE LOWER(CONCAT('%', :name, '%'))" + " ORDER BY a.name, a.id", countQuery = "SELECT COUNT(a) FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.id IN (:ids) AND LOWER(a.name) LIKE LOWER(CONCAT('%', :name, '%'))")
     fun findByIdInAndNameContainingIgnoreCase(
         ids: Collection<Long>,
         name: String,
@@ -433,16 +474,22 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     // results in Kotlin. Each filter needs two forms: one restricted to the caller's accessible
     // ids, one unrestricted for ADMIN.
 
+    @io.micronaut.data.annotation.Query(value = "SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.type = :type" + " ORDER BY a.name, a.id", countQuery = "SELECT COUNT(a) FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.type = :type")
     fun findByType(type: String, pageable: Pageable): Page<Asset>
 
+    @io.micronaut.data.annotation.Query(value = "SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.id IN (:ids) AND a.type = :type" + " ORDER BY a.name, a.id", countQuery = "SELECT COUNT(a) FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.id IN (:ids) AND a.type = :type")
     fun findByIdInAndType(ids: Collection<Long>, type: String, pageable: Pageable): Page<Asset>
 
+    @io.micronaut.data.annotation.Query(value = "SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.owner = :owner" + " ORDER BY a.name, a.id", countQuery = "SELECT COUNT(a) FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.owner = :owner")
     fun findByOwner(owner: String, pageable: Pageable): Page<Asset>
 
+    @io.micronaut.data.annotation.Query(value = "SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.id IN (:ids) AND a.owner = :owner" + " ORDER BY a.name, a.id", countQuery = "SELECT COUNT(a) FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.id IN (:ids) AND a.owner = :owner")
     fun findByIdInAndOwner(ids: Collection<Long>, owner: String, pageable: Pageable): Page<Asset>
 
+    @io.micronaut.data.annotation.Query(value = "SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND LOWER(a.ip) LIKE LOWER(CONCAT('%', :ip, '%'))" + " ORDER BY a.name, a.id", countQuery = "SELECT COUNT(a) FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND LOWER(a.ip) LIKE LOWER(CONCAT('%', :ip, '%'))")
     fun findByIpContainingIgnoreCase(ip: String, pageable: Pageable): Page<Asset>
 
+    @io.micronaut.data.annotation.Query(value = "SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.id IN (:ids) AND LOWER(a.ip) LIKE LOWER(CONCAT('%', :ip, '%'))" + " ORDER BY a.name, a.id", countQuery = "SELECT COUNT(a) FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.id IN (:ids) AND LOWER(a.ip) LIKE LOWER(CONCAT('%', :ip, '%'))")
     fun findByIdInAndIpContainingIgnoreCase(
         ids: Collection<Long>,
         ip: String,
@@ -453,8 +500,10 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * `groups` is a comma-separated String column, so "contains" is a LIKE match rather than a
      * collection membership test — same semantics as the unpaged findByGroupsContaining above.
      */
+    @io.micronaut.data.annotation.Query(value = "SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.groups LIKE CONCAT('%', :group, '%')" + " ORDER BY a.name, a.id", countQuery = "SELECT COUNT(a) FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.groups LIKE CONCAT('%', :group, '%')")
     fun findByGroupsContaining(group: String, pageable: Pageable): Page<Asset>
 
+    @io.micronaut.data.annotation.Query(value = "SELECT a FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.id IN (:ids) AND a.groups LIKE CONCAT('%', :group, '%')" + " ORDER BY a.name, a.id", countQuery = "SELECT COUNT(a) FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.id IN (:ids) AND a.groups LIKE CONCAT('%', :group, '%')")
     fun findByIdInAndGroupsContaining(
         ids: Collection<Long>,
         group: String,
@@ -524,7 +573,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     @io.micronaut.data.annotation.Query("""
         SELECT DISTINCT a.adDomain
         FROM Asset a
-        WHERE a.adDomain IS NOT NULL
+        WHERE ${AssetCurrentnessSql.JPQL} AND a.adDomain IS NOT NULL
         AND a.adDomain != ''
         ORDER BY a.adDomain
     """)
@@ -539,7 +588,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     @io.micronaut.data.annotation.Query("""
         SELECT DISTINCT a.cloudAccountId
         FROM Asset a
-        WHERE a.cloudAccountId IS NOT NULL
+        WHERE ${AssetCurrentnessSql.JPQL} AND a.cloudAccountId IS NOT NULL
         AND a.cloudAccountId != ''
         ORDER BY a.cloudAccountId
     """)
@@ -554,7 +603,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     @io.micronaut.data.annotation.Query("""
         SELECT DISTINCT a.osVersion
         FROM Asset a
-        WHERE a.osVersion IS NOT NULL
+        WHERE ${AssetCurrentnessSql.JPQL} AND a.osVersion IS NOT NULL
         AND a.osVersion != ''
         ORDER BY a.osVersion
     """)
@@ -602,6 +651,15 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     """)
     fun findPotentialCrowdStrikeMatches(name: String): List<Asset>
 
+    @io.micronaut.data.annotation.Query(value = """
+        SELECT a FROM Asset a
+        WHERE LOWER(COALESCE(a.crowdStrikeHostname, a.name)) = LOWER(:hostname)
+    """, countQuery = """
+        SELECT COUNT(a) FROM Asset a
+        WHERE LOWER(COALESCE(a.crowdStrikeHostname, a.name)) = LOWER(:hostname)
+    """)
+    fun findCrowdStrikeReplacementCandidates(hostname: String, pageable: Pageable): Page<Asset>
+
     // Feature 054: Products Overview - Asset queries by product
 
     /**
@@ -617,14 +675,14 @@ interface AssetRepository : JpaRepository<Asset, Long> {
         value = """
             SELECT DISTINCT a FROM Asset a
             JOIN Vulnerability v ON v.asset.id = a.id
-            WHERE v.vulnerableProductVersions = :product
+            WHERE ${AssetCurrentnessSql.JPQL} AND v.vulnerableProductVersions = :product
             AND a.id IN :accessibleAssetIds
             ORDER BY a.name ASC
         """,
         countQuery = """
             SELECT COUNT(DISTINCT a.id) FROM Asset a
             JOIN Vulnerability v ON v.asset.id = a.id
-            WHERE v.vulnerableProductVersions = :product
+            WHERE ${AssetCurrentnessSql.JPQL} AND v.vulnerableProductVersions = :product
             AND a.id IN :accessibleAssetIds
         """
     )
@@ -646,13 +704,13 @@ interface AssetRepository : JpaRepository<Asset, Long> {
         value = """
             SELECT DISTINCT a FROM Asset a
             JOIN Vulnerability v ON v.asset.id = a.id
-            WHERE v.vulnerableProductVersions = :product
+            WHERE ${AssetCurrentnessSql.JPQL} AND v.vulnerableProductVersions = :product
             ORDER BY a.name ASC
         """,
         countQuery = """
             SELECT COUNT(DISTINCT a.id) FROM Asset a
             JOIN Vulnerability v ON v.asset.id = a.id
-            WHERE v.vulnerableProductVersions = :product
+            WHERE ${AssetCurrentnessSql.JPQL} AND v.vulnerableProductVersions = :product
         """
     )
     fun findAssetsByProductForAll(
@@ -675,7 +733,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     @io.micronaut.data.annotation.Query("""
         SELECT DISTINCT a FROM Asset a
         JOIN Vulnerability v ON v.asset.id = a.id
-        WHERE v.vulnerableProductVersions = :product
+        WHERE ${AssetCurrentnessSql.JPQL} AND v.vulnerableProductVersions = :product
         AND a.id IN :accessibleAssetIds
         ORDER BY a.name ASC
     """)
@@ -694,7 +752,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     @io.micronaut.data.annotation.Query("""
         SELECT DISTINCT a FROM Asset a
         JOIN Vulnerability v ON v.asset.id = a.id
-        WHERE v.vulnerableProductVersions = :product
+        WHERE ${AssetCurrentnessSql.JPQL} AND v.vulnerableProductVersions = :product
         ORDER BY a.name ASC
     """)
     fun findAssetsByProductForAllNoLimit(product: String): List<Asset>

@@ -4,21 +4,21 @@ Security requirement, vulnerability and risk management platform.
 
 ## Stack
 
-- Backend: Kotlin 2.4.20 / Java 25, Micronaut 5.2, Hibernate JPA → `src/backendng/`
-- Frontend: Astro 7.3 + React 19 islands, Axios, JWT in the HttpOnly `secman_auth` cookie → `src/frontend/`
+- Backend: Kotlin 2.4.21 / Java 25, Micronaut 5.2.2, Hibernate JPA → `src/backendng/`
+- Frontend: Astro 7.3.8 + React 19 islands, Axios, JWT in the HttpOnly `secman_auth` cookie → `src/frontend/`
 - CLI: Kotlin + Picocli 4.7.7, AWS SDK v2 → `src/cli/`
 - Mobile relay: Go 1.24, **zero third-party dependencies** (stdlib only, incl. its own RFC 8555 ACME client) → `src/relay/`
 - DB: MariaDB 11.4, Flyway + Hibernate auto-migration
-- Build: Gradle 9.8.0 (Kotlin DSL)
+- Build: Gradle 9.8.1 (Kotlin DSL)
 - MCP: Streamable HTTP / JSON-RPC 2.0. `X-MCP-User-Email` header is **mandatory** on `tools/list` and `tools/call` (only `initialize` and `ping` exempt).
 
 ## Roles (RBAC)
 
-`USER`, `ADMIN`, `VULN`, `RELEASE_MANAGER`, `REQ`, `REQADMIN`, `RISK`, `SECCHAMPION`, `REPORT`.
+`USER`, `ADMIN`, `VULN`, `RELEASE_MANAGER`, `REQ`, `REQADMIN`, `RISK`, `SECCHAMPION`, `REPORT`, `BETA`. BETA is additive feature eligibility only; ADMIN and SECCHAMPION are implicitly eligible. Existing object scopes still apply.
 
 ## Tooling Conventions (canonical, do not deviate)
 
-- **Branch**: `dev` is the default and only branch for agent-authored commits unless the user explicitly names another branch. Verify the current branch before editing and before committing; never commit directly to `main` or `master` by inference. Each repository under `extensions/` is independent and must pass the same check locally.
+- **Branch**: `dev` is the integration branch. Agents may work and commit on `dev` or on `task/<name>` branches created from `dev` for isolated parallel work. Verify the branch and its base before editing and before committing. Never commit directly to `main` or `master` unless explicitly instructed. Each repository under `extensions/` is independent and must pass the same check locally. Do not merge, push, or commit unrelated work by inference.
 - **Scripts**: `./scripts/` only.
 - **Skills — two harness trees, one skill set**: every skill exists twice, once per agent harness. `.claude/skills/` is what **Claude Code** loads; `.agents/skills/` is what **Codex** (and other `AGENTS.md`-driven agents) load. They are two renderings of the same skill, not two skills.
   - **Two-way sync is mandatory.** *Whichever* tree an agent edits — Claude Code editing `.claude/skills/`, Codex editing `.agents/skills/` — the same change must land in the counterpart file **in the same commit**. There is no "port it later"; a commit that touches one tree only is incomplete. This applies to every `*.md` under the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
@@ -49,6 +49,8 @@ Security requirement, vulnerability and risk management platform.
 
 Creator, uploader, and owner remain metadata. They grant no access. Workgroup hierarchy does not propagate membership.
 
+Current operational inventory additionally requires verified observation within the inclusive UTC 72-hour window. Falcon-managed assets use actual sensor contact; other assets use `verified_observed_at`. Stored-record authorization and scanner ingestion remain independent. See `docs/CURRENT_ASSETS.md`.
+
 Authoritative filter: `AssetFilterService`. MCP and heatmap reuse it; SQL entity and ID queries share `AssetAccessSql`. `getScopedAccessibleAssetIds()` retains its ADMIN-only global shortcut for scoped notifications.
 
 ADMIN and SECCHAMPION manage grants and delete assets. Ordinary users edit visible asset details; creation requires atomic placement in an enabled directly joined group. Account/domain/workgroup changes require grant-management authority. Personal mappings, user administration, and canonical workgroup owner remain ADMIN-only.
@@ -60,15 +62,16 @@ See `docs/AUTHORIZATION_REWORK.md` for assessment assignments, contribution hist
 | Group | Endpoints | Roles |
 |---|---|---|
 | Auth | `POST /api/auth/login`, `GET /oauth/{authorize,callback}` | public |
-| Import | `POST /api/import/{upload-xlsx, upload-nmap-xml, upload-vulnerability-xlsx, upload-user-mappings[-csv], upload-assets-xlsx}` | ADMIN |
-| Assets | `GET/POST /api/assets`, `DELETE /api/assets/bulk` (ADMIN), `GET /api/assets/export` | mixed |
+| Import | `POST /api/import/{upload-xlsx, upload-vulnerability-xlsx, upload-user-mappings[-csv], upload-assets-xlsx}`; `POST /api/scan/upload-nmap` | ADMIN |
+| Assets | `GET/POST /api/assets`, `DELETE /api/assets/bulk` (ADMIN/SECCHAMPION), `GET /api/assets/export` | mixed |
 | Vulns | `GET /api/vulnerabilities/current`; export job: `POST /api/vulnerabilities/export` → `GET .../{jobId}/{status,download}`, `DELETE .../{jobId}`; history `GET .../export/history` (ADMIN/VULN/SECCHAMPION); `GET /api/vulnerability-exceptions`; `POST /api/vulnerability-exception-requests`; `GET .../pending/count`; SSE `GET /api/exception-badge-updates` | mixed |
 | Outdated | `GET /api/outdated-assets[/{id}[/vulnerabilities]]`, `.../{last-refresh,count}`; `POST /api/materialized-view-refresh/trigger` (ADMIN); SSE `GET .../progress`; `GET .../status,history` | mixed |
 | Workgroups | `GET/POST /api/workgroups` (ADMIN), `POST /api/workgroups/{id}/{users,assets}` (ADMIN), `GET/POST/DELETE /api/workgroups/{id}/aws-accounts`, `GET/POST/DELETE /api/workgroups/{id}/ad-domains` | ADMIN/member-scoped |
 | Releases | `GET/POST/DELETE /api/releases[/{id}]` (ADMIN/REQADMIN to write), `GET /api/releases/compare`. Statuses: PREPARATION→ALIGNMENT→ACTIVE→ARCHIVED | mixed |
+| Requirement comments | `GET/POST /api/requirement-comments/{scope}/{targetId}`, `DELETE .../{commentId}`; comments visible/deletable only by author or ADMIN/SECCHAMPION; archived releases reject new comments — `docs/REQUIREMENT_COMMENTS.md` | ADMIN/REQ/SECCHAMPION; additionally REQADMIN/RELEASE_MANAGER for release/snapshot |
 | Public Standard Download | `GET /api/requirements/export/{docx,xlsx}` with optional `standard`/`standardId` + `release`/`releaseId` (`release=latest` → ACTIVE release, 404 if none); `GET /api/standards/public` (slim `{id,name}` list). All `IS_ANONYMOUS` by explicit decision — `docs/PUBLIC_STANDARD_DOWNLOAD.md` | public |
 | Export Templates | `GET /api/requirement-export-templates[/latest]` (auth); `GET .../example`, `POST /api/requirement-export-templates`, `POST .../validate`, `GET .../{id}[/download,/usage]`, `POST .../{id}/{activate,deactivate}`, `DELETE .../{id}` (ADMIN/REQADMIN). Company Word template for requirement exports — `docs/REQUIREMENT_EXPORT_TEMPLATES.md` | mixed |
-| CrowdStrike | `POST/GET /api/crowdstrike/{servers/import,vulnerabilities/save,vulnerabilities}` (ADMIN/VULN); `GET /api/crowdstrike/last-checkin` (PUBLIC, `text/plain` ISO-8601 or `"never"`); stale-asset cleanup `GET /api/crowdstrike/cleanup/{config,runs}` + `POST .../run-now` (ADMIN) — `run-now` replays the 02:30 scheduled policy **with the safety brake**, unlike the brake-free `POST /api/assets/delete-not-seen-by-crowdstrike`; see `docs/ENVIRONMENT.md` §CrowdStrike stale-asset cleanup | mixed |
+| CrowdStrike | `POST/GET /api/crowdstrike/{servers/import,vulnerabilities/save,vulnerabilities}` (ADMIN/VULN); authoritative refresh `POST /api/crowdstrike/vulnerabilities/sync` (ADMIN); `GET /api/crowdstrike/last-checkin` (PUBLIC, `text/plain` ISO-8601 or `"never"`); stale-asset cleanup `GET /api/crowdstrike/cleanup/{config,runs}` + `POST .../run-now` (ADMIN) — `run-now` replays the 02:30 scheduled policy **with the safety brake**, unlike the brake-free `POST /api/assets/delete-not-seen-by-crowdstrike`; see `docs/ENVIRONMENT.md` §CrowdStrike stale-asset cleanup | mixed |
 | User Mappings | `GET /api/user-mappings/{current,applied-history}`, `POST/PUT/DELETE /api/user-mappings[/{id}]`; `POST /api/user-mappings/link-workgroup-accounts` (links AWS accounts to the workgroup named `aws-<display name>`, creating it when missing — `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`) | ADMIN |
 | AWS Sharing | `GET/POST /api/aws-account-sharing`, `DELETE .../{id}` | ADMIN |
 | Heatmap | `GET /api/vulnerability-heatmap`; `POST .../refresh` (ADMIN); `GET /api/external/vulnerability-heatmap` (API-key, CORS) | mixed |
@@ -82,7 +85,9 @@ See `docs/AUTHORIZATION_REWORK.md` for assessment assignments, contribution hist
 | Chat Notifications | `GET /api/notification-events` (event catalogue); `GET/PUT /api/slack/settings`, `POST .../test`; `GET/PUT /api/telegram/settings`, `POST .../test` (self-scoped); `GET/PUT /api/slack/config`, `POST .../test`, `GET/PUT /api/telegram/config` (ADMIN) | mixed |
 | CLI | `POST /api/vulnerabilities/cli-add` (ADMIN/VULN; auto-creates asset) | ADMIN/VULN |
 | Integrations | `/api/integrations/v1`: `GET /summary`, `/findings[/{id}[/attachments/{attachmentId}]]`, `/runs[/{id}]` (asset-scoped); web inventory `GET /web-exposure/summary`, `/web-exposures`, `/web-components` (ADMIN/VULN/SECCHAMPION, asset-scoped); `POST /runs` (assigned service user + asset access); `/scanners` configuration and target binding (ADMIN). MCP mirrors subject/run, findings, exposure, and component reads; `docs/INTEGRATION_RESULTS.md` | mixed |
+| AI Buddy | `GET /api/ai-buddy/capabilities`; `POST /api/ai-buddy/assets/{assetId}/jobs`; `GET .../{jobId}` and `.../{jobId}/report`; `DELETE .../{jobId}`. Authenticated entry points; live BETA eligibility, job ownership, and asset access are enforced in the service. Setup preflight is `POST /api/translation-config/ai-buddy/setup` (ADMIN). See `docs/AI_BUDDY.md` | mixed |
 | Account Onboarding | `GET/POST/PUT/DELETE /api/account-onboarding/questions[/{id}[/choices[/{cid}]]]`, `.../rules[/{id}]`, `GET .../rules/{coverage,matrix}`, `POST .../rules/preview`, `POST .../simulate` (ADMIN/SECCHAMPION); public single-use token `GET/POST /api/public/account-onboarding/{token}` | ADMIN/SECCHAMPION + public |
+| Welcome email test | `POST /api/account-onboarding/welcome-test` (`recipient`, `accountIds`): one sample, no import or production notification writes | ADMIN |
 | Product Classification | `GET/POST /api/product-classification/rules`, `PUT/DELETE .../rules/{id}`, `POST .../test`, `POST .../reclassify`, `GET .../stats` (ADMIN). Marks installer/setup payloads so vuln + EOL reads can hide them — `docs/CROWDSTRIKE_IMPORT.md` | ADMIN |
 | Mobile Relay | `GET /api/relay/{status,sections,devices,identities}`, `POST /api/relay/{publish,enrollments,revocations,identities,principals/publish}`, `DELETE /api/relay/identities/{id}` | ADMIN |
 
@@ -120,7 +125,7 @@ private addresses only), or neither.
 
 `/testsuite` runs every tier above plus the frontend build gate, `check-skill-sync.sh`,
 the OWASP and code-hygiene gate self-tests and the coverage report in one pass. It never starts the
-stack, so it does not discharge principle 5 or the principle-7 gates.
+stack. Full build/startup and E2E gates belong to `/finalizer` (principles 5 and 7), once per combined change before merge.
 
 CrowdStrike monitoring: `src/clinotify/check_crowdstrike_checkin.py` polls `/api/crowdstrike/last-checkin` and Telegrams when stale. Stdlib-only.
 
@@ -134,16 +139,18 @@ CrowdStrike monitoring: `src/clinotify/check_crowdstrike_checkin.py` polls `/api
    intermittent `Duplicate entry '<n>' for key 'PRIMARY'`. See `docs/ARCHITECTURE.md`
    §Entity id generation.
 4. Always write tests. Source of truth for credentials and URLs is `pass-cli`.
-5. **A change is complete only when** `./gradlew build` is clean **AND** `./scripts/startbackenddev.sh` starts cleanly. Compile-clean ≠ runtime-clean (Micronaut bean wiring, Flyway, SessionFactory only check at startup). Stop the backend after verifying.
-5a-relay. **Relay changes (`src/relay/`) are complete only when** `cd src/relay && go build ./... && go vet ./... && gofmt -l . && go test ./...` are all clean. It is a separate Go module: `./gradlew build` does not compile it and will not catch a break. It has **no third-party dependencies by contract** — adding one needs a stated reason in the PR body, the same bar as `src/clinotify`.
-5a. **Frontend changes are complete only when** `cd src/frontend && npm ci && npm run build` exits 0. TypeScript errors, missing imports, and broken Astro/React components are caught here — do not skip this step for any frontend file edit.
+5. **Workers validate their scope; the finalizer validates the combined change.** Workers add regression tests, run affected unit/integration tests and module compilation, and report **ready for integration**, with checks run and deferred gates. They do not run a whole-repository build or start the shared stack merely to finish a task. `/finalizer` owns the full build/test tier and clean backend startup before merge. Backend tests use `./scripts/runbackendtests.sh` and its disposable database; run `./gradlew build` inside the runner in database-only mode. Clean startup is verified by the full-stack disposable runner using `./scripts/startbackenddev.sh`; preserve the regular 8080/4321 stack. Compile-clean ≠ runtime-clean (Micronaut bean wiring, Flyway, SessionFactory only check at startup).
+5a-relay. **Finalization of relay changes (`src/relay/`) requires** `cd src/relay && go build ./... && go vet ./... && gofmt -l . && go test ./...` are all clean. It is a separate Go module: `./gradlew build` does not compile it and will not catch a break. It has **no third-party dependencies by contract** — adding one needs a stated reason in the PR body, the same bar as `src/clinotify`.
+5a. **Frontend workers run affected tests and `npm run build` in their own workspace.** Install dependencies when missing or the lockfile changed. `/finalizer` runs `cd src/frontend && npm ci && npm test && npm run build` once for the combined frontend change. TypeScript errors, missing imports, and broken Astro/React components must be resolved before integration.
 5b. **Backend contract changes are complete only when the `extensions/` clients are updated in the same change.** Renaming a path, renaming or retyping a request/response field, tightening `@Secured`, or altering the auth scheme breaks those clients **silently** — nothing in this build compiles or tests against them, so the failure surfaces in production, not in CI. See **Extension Clients** for the surface and the verification rules. `/finalizer` automates the check.
 6. Normal-stack tests route HTTP through `SECMAN_HOST` (from `pass-cli`). Database-mutating E2E tests use only the URLs and restricted database supplied by `./scripts/test/run-isolated-e2e.sh`; never hardcode a test URL in a driver.
-7. **Mandatory post-change E2E gates** (in addition to build + startup):
-   - **`/e2ejs`** must report **0 JS errors** for both admin and normal-user runs against `SECMAN_HOST`. RBAC 403s on role-gated endpoints and documented 404s (e.g., `/api/wg-vulns`, `/api/domain-vulns` for users without mappings) are NOT JS errors. A page that throws or logs `console.error` IS — fix before merge.
+7. **Mandatory finalizer E2E gates**, once for the combined change before merge, rather than after every worker task or implementation step:
+   - **`/e2ejs`** must report **0 JS errors** for both admin and normal-user runs against the disposable runner’s frontend URL. RBAC 403s on role-gated endpoints and documented 404s (e.g., `/api/wg-vulns`, `/api/domain-vulns` for users without mappings) are NOT JS errors. A page that throws or logs `console.error` IS — fix before merge.
    - **`/e2evulnexception`** must run the full vuln + exception lifecycle (MCP + UI, setup + teardown) with **0 failures**.
 
-   Doc-only edits outside `src/`, `tests/`, `scripts/` may skip the gates — state so explicitly. Otherwise both gates are non-negotiable.
+   `/finalizer` owns both gates for changes under `src/`, `tests/`, or `scripts/`, plus feature-specific E2E when the changed behavior requires it. Workers may run a targeted E2E to reproduce or verify their change; this does not trigger both universal gates. Documentation-only changes outside those directories may skip runtime gates with an explicit scope reason. Explicit requests to run test skills still run the requested suites.
+
+   Parallel workers use separate workspaces and agreed file/contract ownership. Integrate their changes before finalization; freeze the integration workspace during runtime validation. Full-stack E2E sessions are serialized by the runner’s host-wide reservation. Database-only tests may run in separate workspaces; never run concurrent clean/build/startup operations in one checkout. **Ready for integration** is distinct from **ready to merge**: only successful finalization establishes merge readiness. Reuse gate evidence only for identical code, test selection, dependencies and relevant configuration; record the revision, dirty-tree fingerprint if applicable, commands, outcomes and log paths. A fix invalidates evidence for the gates it can affect.
 
 ## OWASP Top 10 Compliance (mandatory)
 
@@ -298,8 +305,15 @@ and Flyway history but no application rows, and starts a separate stack on
 18080/14321. It cleans verified abandoned test schemas before a new run and
 removes its own schema on exit. Direct driver calls fail closed. Do not delete
 an unverified legacy fixture merely because its name matches a test prefix.
-The normal 8080/4321 cold-start and stop rules below apply to read-only skills;
-the isolated runner owns the lifecycle for mutating skills.
+The page scanner also uses the disposable runner because it provisions a user.
+Full-stack runs reserve `/tmp/secman-e2e-<uid>.lock` atomically across worktrees
+before port checks or database changes. A busy reservation exits 2; retry after
+the owner finishes. EXIT/INT/TERM release it after cleanup. A crash or SIGKILL
+may leave a reservation: verify its owner PID and that no isolated test processes
+remain before removing it. Never automatically reclaim a stale reservation.
+Database-only runs need no port reservation. The normal 8080/4321 cold-start and
+stop rules below apply only to explicitly requested read-only skills; workers
+preserve that stack. The isolated runner owns the lifecycle for mutating skills.
 
 Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`, `/e2eeol`, `/account-onboarding`, `/aws-account-workgroup-import`, `/importtest`, `/crowdstrike-vuln-match` skills.
 
@@ -313,14 +327,14 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-10-04*
+*Last updated: 2026-10-18*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **Current asset visibility (2026-10-14)** — operational inventory now requires verified observation within an inclusive UTC 72-hour window for every role and asset-derived surface. Falcon contact remains authoritative for Falcon-managed assets; other assets use `verified_observed_at`, while stored authorization and ingestion remain separate. See `docs/CURRENT_ASSETS.md` and `docs/CHANGELOG.md`.
+
 - **MCP vulnerability query E2E regression (2026-09-27)** — the automatically discovered Playwright suite now verifies MCP discovery, severity-array schema, filtering, pagination, hydrated asset names, and delegated non-admin authorization on both HTTP transports. It uses only disposable-runner data and generated API keys. See `docs/CHANGELOG.md`.
 
 - **Guest invitation E2E regression (2026-09-27)** — `assessment-guest-invitation.spec.ts` now proves loopback delivery plus anonymous questionnaire load, save, reload, and submit. The public page uses the current token-bound response contract and does not mount the login-only attachment widget. See `docs/CHANGELOG.md`.
-
-- **Respondent invitation compatibility (2026-09-27)** — `/respond/:token` uses the public layout while expiry, revocation, and assignment-scope checks remain server-enforced; the numeric assessment-response route is constrained to avoid token collisions. Migration V282 preserves legacy values while allowing current token creation to deliver external respondent notifications. See `docs/CHANGELOG.md`.

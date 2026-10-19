@@ -1,14 +1,10 @@
 ---
 name: e2ejs
 description: >
-  JavaScript error scanner that visits all application pages and fixes errors.
-  Starts local backend and frontend dev servers, then scans them via the shared
-  URL https://secman.covestro.net (port 443), which resolves to 127.0.0.1 on
-  this host. Runs the scanner twice per iteration — once as admin
-  (SECMAN_ADMIN_NAME / SECMAN_ADMIN_PASS) and once as a normal user
-  (SECMAN_USER_NAME / SECMAN_USER_PASS) — and iteratively fixes every page
-  error in either role, restarting the backend after each fix. All
-  credentials and the host URL come from Proton Pass. Use this skill when the
+  JavaScript error scanner that visits every application page as admin and a
+  normal user, using the isolated disposable stack. Iteratively fixes page
+  errors within the shared retry budget. Use during finalization or when a
+  focused browser scan is needed. Credentials come from Proton Pass. Use this skill when the
   user says "run js error scanner", "scan pages for errors", "e2ejs", "check
   all pages", "fix js errors", or similar.
 context: fork
@@ -33,18 +29,15 @@ context: fork
 > The direct 8080/4321 cold-start and persistent-user provisioning instructions
 > below are superseded. Do not create a scanner user in the current database.
 
-You are an orchestration agent that brings up the full-stack development
-environment on loopback, scans every application page **via the shared URL
-`https://secman.covestro.net` (port 443)** as **two different users in
-sequence — admin first, then a normal user**, and **iteratively fixes every
-failure** until all pages are clean for both roles or you've exhausted the
-retry budget.
+You are an orchestration agent that brings up the disposable full-stack
+environment, scans every application page as **two different users in sequence
+— admin first, then a normal user**, and **iteratively fixes every failure**
+until all pages are clean for both roles or you've exhausted the retry budget.
 
 > **Read `../_shared/stack-lifecycle.md` in full before touching the stack.** It
-> defines the cold-start sequence, port-bind liveness, credentials, logging and
-> the 5-iteration budget this skill assumes. Note this skill's one deviation:
-> functional checks go through `https://secman.covestro.net`, not `SECMAN_HOST`
-> directly — see below.
+> defines the disposable-stack lifecycle, credentials, logging and the
+> 5-iteration budget this skill assumes. The database-safety override above
+> supersedes the regular-stack lifecycle below.
 
 ## Dual-Role Run
 
@@ -61,8 +54,9 @@ Each call to `tests/js-error-scanner-pp.sh` performs two scanner passes back-to-
    password both surface as a login failure, so check existence before
    suspecting vault drift.
 
-Both passes hit the **same** host URL pulled from
-`pass://Test/SECMAN/SECMAN_HOST` (must be HTTPS — `https://secman.covestro.net`).
+Both passes hit the **same isolated frontend URL** supplied by the runner. The
+regular-stack host URL instructions below are superseded by the database-safety
+override above.
 
 The wrapper resolves all four credentials + host + TLS flag in a **single**
 `pass-cli run` so the user is prompted at most once per scanner invocation.
@@ -89,14 +83,12 @@ frontend configured to listen on `:443` directly).
 
 Rules:
 
-- The scanner URL is **always** `https://secman.covestro.net`. Do not target
-  `http://localhost:4321`, `http://localhost:8080`, or any other variant.
-- Always export `SECMAN_BACKEND_URL=https://secman.covestro.net` before
-  invoking the scanner. The wrapper enforces this host as policy and exits 2 on
-  a non-compliant value (`tests/js-error-scanner-pp.sh:8-12`); its old local
-  auto-detection branch is disabled for policy compliance (`:15`).
-- Do **NOT** set `SECMAN_INSECURE=true`. The shared hostname must present a
-  valid certificate end-to-end — if TLS verification fails, fix the cert /
+- The isolated scanner URL is the runner-provided frontend URL. Do not target
+  the regular 8080/4321 stack or a production-like host.
+- `SECMAN_BACKEND_URL` must equal the runner-provided frontend URL; the wrapper
+  checks this against the isolated runner marker before scanning.
+- Do **NOT** set `SECMAN_INSECURE=true`. The isolated test endpoint follows the
+  runner's TLS policy; if the configured test transport fails, fix the test setup /
   proxy setup rather than disabling verification.
 - Local services **are** started (they serve the traffic behind the shared
   URL), but they must **never** be addressed directly by the scanner.

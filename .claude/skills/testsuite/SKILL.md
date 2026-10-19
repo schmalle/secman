@@ -11,8 +11,8 @@ description: >
   the user says "run the tests", "run the test suite", "testsuite", "unit tests",
   "are the tests green", "test coverage", "check coverage", "where are we
   untested", "gradle test", "npm test", or asks what still needs test coverage.
-  This is the fast tier only — it does not replace the mandatory `/e2ejs` and
-  `/e2evulnexception` gates, which need a running stack.
+  This is the fast tier only. `/finalizer` owns the full build/startup and
+  `/e2ejs` / `/e2evulnexception` gates for the combined change before merge.
 context: fork
 ---
 
@@ -37,10 +37,9 @@ context: fork
 You run every test in this repo that does **not** need a running backend and
 frontend, fix what fails, and then tell the user where the coverage actually is.
 
-The fast tier is worth having its own skill because the two mandatory E2E gates
-(`/e2ejs`, `/e2evulnexception`) are slow, need `pass-cli`, and answer a different
-question. They prove the assembled system works. This tier proves the units do,
-and it is where a coverage gap is visible at all.
+The fast tier covers units and database-backed integration behavior. `/finalizer`
+owns the slower assembled-system build/startup and E2E gates once for the combined
+change before merge; focused worker runs do not trigger those gates.
 
 ## Scope fence
 
@@ -51,13 +50,12 @@ and `./scripts/test-coverage-report.sh`.
 
 **Out of scope:** starting the backend or frontend, `/e2ejs`,
 `/e2evulnexception`, Playwright under `tests/e2e/`, and anything that imports
-data. Do not start the stack. The one interaction with the running stack is the
-opposite: you must **stop** it (step 1), because the integration tests bind 8080.
+data. Do not start or stop the regular stack; integration tests use a disposable
+database and a separate Micronaut context.
 
-If the work being tested touched `src/`, close your report by reminding the user
-that CLAUDE.md's gates — `./gradlew build` clean, a clean
-`./scripts/startbackenddev.sh`, `/e2ejs`, `/e2evulnexception` — still apply. Do
-not run them here.
+Report focused validation as **ready for integration**. `/finalizer` owns
+the combined-change build/startup and E2E gates before merge. Do not trigger
+those gates merely because this skill tested or fixed a worker task.
 
 ---
 
@@ -118,6 +116,7 @@ All three matter and they fail differently:
 ./scripts/check-skill-sync.sh
 ./scripts/test/owasp-check-test.sh
 ./scripts/test/humanizer-scan-test.sh
+./scripts/test/full-stack-lock-test.sh
 ```
 
 The two trees — `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex) —
@@ -134,6 +133,10 @@ repo's *approved* pattern for the same risk and asserts the rule stays silent.
 It runs entirely inside a throwaway git repo under `/tmp` and touches nothing
 here. Treat a failure as a real regression: a scanner rule that stopped matching
 reports OK forever and nobody finds out.
+
+`full-stack-lock-test.sh` verifies atomic reservation, contention failure,
+cleanup after an early exit, stale-lock preservation and subsequent reuse without
+starting services or accessing MariaDB.
 
 `humanizer-scan-test.sh` is the same arrangement for `./scripts/humanizer-scan.sh`,
 the code-hygiene gate behind `/humanizer`. It asserts both directions per rule —
@@ -213,7 +216,7 @@ Report once, at the end:
 3. **What is still red**, and why, if you exhausted the iteration budget.
 4. **Coverage table** from step 6, with the understatement caveat.
 5. **The next three targets** worth testing, chosen by the step 8 ranking.
-6. If `src/` changed: the reminder that the E2E gates still apply.
+6. State that `/finalizer` owns combined-change merge gates; this report is ready for integration.
 
 State plainly what did not run. An environment that could not reach the test
 database, or a Gradle distribution that could not be downloaded, means the

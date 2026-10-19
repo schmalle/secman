@@ -39,5 +39,6 @@ data class CrowdStrikeSaveResponse(
      * List of errors encountered during save (if any)
      */
     @field:NotNull
-    val errors: List<String> = emptyList()
+    val errors: List<String> = emptyList(),
+    val hostOutcomes: List<com.secman.crowdstrike.dto.CrowdStrikeHostImportOutcome> = emptyList()
 )

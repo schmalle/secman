@@ -40,11 +40,29 @@ class CrowdStrikeImportRunIntegrationTest : BaseIntegrationTest() {
         val runId = post(endpoint, adminToken).body()!!["runId"].toString()
         try {
             denied(endpoint, otherToken, HttpStatus.CONFLICT)
+            try {
+                post(endpoint, adminToken)
+                error("Expected active-run conflict")
+            } catch (e: HttpClientResponseException) {
+                val body = e.response.getBody(Map::class.java).orElseThrow()
+                assertThat(body["error"]).isEqualTo("An import run is already active")
+                assertThat(java.time.Instant.parse(body["expiresAt"].toString())).isAfter(java.time.Instant.now())
+            }
             denied("$endpoint/$runId/heartbeat", otherToken, HttpStatus.CONFLICT)
             denied("$endpoint/$runId/finish?successful=true", otherToken, HttpStatus.CONFLICT)
             assertThat(post("$endpoint/$runId/heartbeat", adminToken).status).isEqualTo(HttpStatus.OK)
         } finally {
             assertThat(post("$endpoint/$runId/finish?successful=false", adminToken).body()!!["status"]).isEqualTo("FAILED")
+        }
+        assertThat(post("$endpoint/$runId/finish?successful=true", adminToken).body()!!["status"]).isEqualTo("FAILED")
+        denied("$endpoint/$runId/finish?successful=false", otherToken, HttpStatus.CONFLICT)
+        val nextRunId = post(endpoint, adminToken).body()!!["runId"].toString()
+        try {
+            assertThat(post("$endpoint/$runId/finish?successful=false", adminToken).body()!!["status"]).isEqualTo("FAILED")
+            assertThat(post("$endpoint/$nextRunId/heartbeat", adminToken).status).isEqualTo(HttpStatus.OK)
+            denied(endpoint, otherToken, HttpStatus.CONFLICT)
+        } finally {
+            post("$endpoint/$nextRunId/finish?successful=false", adminToken)
         }
         denied("$endpoint/$runId/heartbeat", adminToken, HttpStatus.CONFLICT)
     }

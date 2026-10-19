@@ -8,14 +8,19 @@ interface CleanupConfig {
     cron: string;
     // Feature 087.
     includeLegacy: boolean;
+    basis: string;
+    sensorRetentionDays: number;
 }
 
 interface CleanupRun {
     id: number;
-    status: 'SUCCESS' | 'PARTIAL' | 'ABORTED_SAFETY_BRAKE' | 'FAILED';
+    status: 'SUCCESS' | 'PARTIAL' | 'ABORTED_SAFETY_BRAKE' | 'ABORTED_IMPORT_HEALTH' | 'FAILED';
     triggeredBy: string;
     staleDays: number;
     cutoff: string;
+    cutoffUtc?: string;
+    basis: string;
+    skippedCount: number;
     candidateCount: number;
     deletedCount: number;
     errorCount: number;
@@ -33,6 +38,7 @@ const STATUS_BADGE: Record<CleanupRun['status'], string> = {
     SUCCESS: 'bg-success',
     PARTIAL: 'bg-warning text-dark',
     ABORTED_SAFETY_BRAKE: 'bg-danger',
+    ABORTED_IMPORT_HEALTH: 'bg-danger',
     FAILED: 'bg-danger'
 };
 
@@ -45,6 +51,8 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
     const [info, setInfo] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [days, setDays] = useState<number>(30);
+    const [basis, setBasis] = useState("import-inactivity");
+    const [preview, setPreview] = useState<any | null>(null);
     // Feature 087: legacy toggle. Initial state must come from the backend's
     // configured default (spec SC-006) — never hardcoded false.
     const [includeLegacy, setIncludeLegacy] = useState<boolean>(false);
@@ -89,7 +97,7 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
         };
     }, []);
 
-    const load = async () => {
+    const load = async (resetPolicy = true) => {
         try {
             setLoading(true);
             setError(null);
@@ -98,8 +106,10 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
                 axios.get<CleanupRun[]>('/api/crowdstrike/cleanup/runs?limit=20')
             ]);
             setConfig(cfgRes.data);
-            setDays(cfgRes.data.staleDays);
-            setIncludeLegacy(Boolean(cfgRes.data.includeLegacy));
+            if (resetPolicy) {
+                setDays(cfgRes.data.staleDays);
+                setIncludeLegacy(Boolean(cfgRes.data.includeLegacy));
+            }
             setRuns(runsRes.data);
         } catch (e: any) {
             setError(e.response?.data?.error || 'Failed to load cleanup data');
@@ -115,7 +125,7 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
                 ? '\n\nLegacy CrowdStrike rows (no import timestamp, owner = "CrowdStrike Import", no manual creator/scan uploader) are also included.'
                 : '';
             const ok = window.confirm(
-                `Delete all CrowdStrike-tracked assets not re-imported in the last ${days} days?\n\n` +
+                `Delete stale CrowdStrike assets using ${basis} and a ${days}-day threshold?\n\n` +
                 `This cascades to vulnerabilities, scan results, and workgroup links. ` +
                 `It cannot be undone. Run a dry-run first if you have not.` +
                 legacyNote
@@ -129,9 +139,11 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
             const res = await axios.post('/api/assets/delete-not-seen-by-crowdstrike', {
                 days,
                 dryRun,
-                includeLegacy
+                includeLegacy,
+                basis
             });
             const r = res.data || {};
+            setPreview(r);
             const verb = dryRun ? 'Dry-run' : 'Cleanup';
             const total = r.candidateCount ?? 0;
             const legacyN = r.legacyCandidateCount ?? 0;
@@ -146,7 +158,7 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
                 (errCount > 0 ? `, errors: ${errCount}` : '') +
                 (r.status ? ` (status: ${r.status})` : '')
             );
-            await load();
+            await load(false);
         } catch (e: any) {
             setError(e.response?.data?.error || 'Cleanup request failed');
         } finally {
@@ -187,9 +199,9 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
                 `deleted: ${r.deletedCount ?? 0}` +
                 (r.status ? ` (status: ${r.status})` : '') +
                 // A brake trip returns 200 and deletes nothing; say so, or it reads as a no-op bug.
-                (aborted ? ' — the safety brake stopped this run; nothing was deleted.' : '')
+                (aborted ? ' — a safety check stopped this run; nothing was deleted.' : '')
             );
-            await load();
+            await load(false);
         } catch (e: any) {
             setError(e.response?.data?.error || 'Scheduled cleanup request failed');
         } finally {
@@ -286,9 +298,36 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
                         </div>
 
                         <hr />
-
+                        <p className="text-muted">Scheduled policy: {config?.basis || 'import-inactivity'}.
+                            Sensor retention for imports: {config?.sensorRetentionDays ? `${config.sensorRetentionDays} days` : 'off'}.
+                            Manual and scan-owned assets are protected. Unknown contact is excluded in sensor mode.</p>
+                        {basis === 'sensor-contact' && config?.sensorRetentionDays !== days && (
+                            <p className="text-warning">The import retention window differs from this cleanup threshold.
+                                Subsequent imports may restore older Falcon records.</p>
+                        )}
+                        {preview && <div className="alert alert-info">
+                            <div>Policy: {preview.basis}; cutoff (UTC): {preview.cutoffUtc}; audit run: {preview.runId ?? 'preview'}</div>
+                            {Object.entries(preview.exclusions || {}).map(([reason, count]) =>
+                                <div key={reason}>Retained — {reason}: {String(count)}</div>)}
+                            {(preview.candidates || []).length > 0 && <div className="table-responsive mt-2">
+                                <p>Showing {preview.candidates.length} of {preview.candidateCount} candidates.</p>
+                                <table className="table table-sm">
+                                    <thead><tr><th>Asset</th><th>Falcon contact (UTC)</th><th>Last import (UTC)</th><th>Reason</th></tr></thead>
+                                    <tbody>{preview.candidates.map((candidate: any) => <tr key={candidate.assetId}>
+                                        <td>{candidate.name}</td><td>{candidate.falconLastContact || 'Unknown'}</td>
+                                        <td>{candidate.lastImportedAt || 'Unknown'}</td><td>{candidate.reason}</td>
+                                    </tr>)}</tbody>
+                                </table>
+                            </div>}
+                        </div>}
                         <div className="row g-2 align-items-end mb-3">
                             <div className="col-auto">
+                                <label className="form-label" htmlFor="csCleanupBasis">Cleanup policy</label>
+                                <select id="csCleanupBasis" className="form-select mb-2" value={basis}
+                                    onChange={e => { setBasis(e.target.value); setPreview(null); }} disabled={busy}>
+                                    <option value="import-inactivity">Import inactivity (recent imports retain assets)</option>
+                                    <option value="sensor-contact">Falcon sensor contact (recent imports do not retain assets)</option>
+                                </select>
                                 <label className="form-label">Stale days for manual run</label>
                                 <input
                                     type="number"
@@ -310,7 +349,7 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
                                         className="form-check-input"
                                         checked={includeLegacy}
                                         onChange={e => setIncludeLegacy(e.target.checked)}
-                                        disabled={busy}
+                                        disabled={busy || basis === "sensor-contact"}
                                     />
                                     <label className="form-check-label" htmlFor="csIncludeLegacyToggle">
                                         Include legacy CrowdStrike rows
@@ -356,9 +395,11 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
                                             <th>Started</th>
                                             <th>Status</th>
                                             <th>Trigger</th>
+                                            <th>Policy / cutoff (UTC)</th>
                                             <th className="text-end">Stale days</th>
                                             <th className="text-end">Candidates</th>
                                             <th className="text-end">Deleted</th>
+                                            <th className="text-end">Retained/skipped</th>
                                             <th className="text-end">Legacy (cand/del)</th>
                                             <th className="text-end">Errors</th>
                                             <th className="text-end">Duration</th>
@@ -382,9 +423,11 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
                                                         </span>
                                                     </td>
                                                     <td>{r.triggeredBy}</td>
+                                                    <td>{r.basis || "import-inactivity"}<br /><small>{r.cutoffUtc || "Unknown for historical run"}</small></td>
                                                     <td className="text-end">{r.staleDays}</td>
                                                     <td className="text-end">{r.candidateCount}</td>
                                                     <td className="text-end">{r.deletedCount}</td>
+                                                    <td className="text-end">{r.skippedCount ?? 0}</td>
                                                     <td className={`text-end ${legacyClass}`}>{lc}/{ld}</td>
                                                     <td className="text-end">{r.errorCount}</td>
                                                     <td className="text-end">

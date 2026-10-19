@@ -231,6 +231,7 @@ setup_testbed() {
             "$(jq -n --arg n "$name" --arg o "$SECMAN_ADMIN_NAME" --arg v "$os" \
                 '{name:$n,type:"SERVER",owner:$o,osVersion:$v,description:"e2e eol testbed"}')" >/dev/null
         [[ "$HTTP_STATUS" =~ ^20 ]] || { log_fail "Could not create asset $name (HTTP $HTTP_STATUS)"; exit 1; }
+        secman_test_mark_asset_observed "$(jq -r .id "$WORK_DIR/resp.json")"
         log_pass "Asset created: $name ($os)"
     done
 }

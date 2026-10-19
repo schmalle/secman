@@ -26,3 +26,13 @@ secman_test_require_isolated() {
         return 2
     fi
 }
+
+# Explicit evidence for a single ordinary inventory fixture, never all assets.
+secman_test_mark_asset_observed() {
+    local asset_id="${1:-}"
+    [[ "$asset_id" =~ ^[0-9]+$ ]] || return 2
+    secman_test_require_isolated || return 2
+    MYSQL_PWD="$DB_PASS" mariadb --batch --skip-column-names \
+        -h 127.0.0.1 -u "$DB_USER" "$SECMAN_TEST_ISOLATED_DB" \
+        -e "UPDATE asset SET verified_observed_at=UTC_TIMESTAMP(6) WHERE id=$asset_id"
+}

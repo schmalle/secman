@@ -41,7 +41,9 @@ open class CrowdStrikeCleanupController(
     @Value("\${secman.crowdstrike.cleanup.max-delete-percent:10}") private val maxDeletePercent: Int,
     // Feature 087: configured default for the legacy rule (rule B). Surfaced to
     // the admin UI so the toggle initial state matches the backend (spec SC-006).
-    @Value("\${secman.crowdstrike.cleanup.include-legacy:false}") private val includeLegacy: Boolean
+    @Value("\${secman.crowdstrike.cleanup.include-legacy:false}") private val includeLegacy: Boolean,
+    @Value("\${secman.crowdstrike.cleanup.basis:import-inactivity}") private val basis: String = "import-inactivity",
+    private val retentionPolicy: com.secman.service.CrowdStrikeRetentionPolicy = com.secman.service.CrowdStrikeRetentionPolicy()
 ) {
     private val log = LoggerFactory.getLogger(CrowdStrikeCleanupController::class.java)
 
@@ -55,7 +57,9 @@ open class CrowdStrikeCleanupController(
         val maxDeletePercent: Int,
         val cron: String,
         // Feature 087.
-        val includeLegacy: Boolean
+        val includeLegacy: Boolean,
+        val basis: String = "import-inactivity",
+        val sensorRetentionDays: Int = 0
     )
 
     @Get("/config")
@@ -66,7 +70,7 @@ open class CrowdStrikeCleanupController(
                 staleDays = staleDays,
                 maxDeletePercent = maxDeletePercent,
                 cron = "0 30 2 * * ?",
-                includeLegacy = includeLegacy
+                includeLegacy = includeLegacy, basis = basis, sensorRetentionDays = retentionPolicy.sensorRetentionDays
             )
         )
     }

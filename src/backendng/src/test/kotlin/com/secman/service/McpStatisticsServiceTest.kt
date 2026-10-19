@@ -30,8 +30,8 @@ class McpStatisticsServiceTest {
 
     @Test
     fun `global statistics include requested counts and seven day login activity`() {
-        every { assets.count() } returns 12
-        every { vulnerabilities.count() } returns 34
+        every { assets.countCurrent() } returns 12
+        every { vulnerabilities.countCurrent() } returns 34
         every { users.count() } returns 8
         every { users.countByLastLoginGreaterThanEqual(any<Instant>()) } returns 5
         every { users.countByLastLoginIsNull() } returns 2

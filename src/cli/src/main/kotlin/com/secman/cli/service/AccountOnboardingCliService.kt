@@ -80,6 +80,27 @@ class AccountOnboardingCliService(
         }
     }
 
+    fun testWelcome(backendUrl: String, authToken: String, recipient: String, accountIds: List<String>): Map<String, Any?> {
+        val request = java.net.http.HttpRequest.newBuilder()
+            .uri(URI.create("$backendUrl/api/account-onboarding/welcome-test"))
+            .header("Content-Type", "application/json")
+            .header("Authorization", "Bearer $authToken")
+            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(
+                mapOf("recipient" to recipient, "accountIds" to accountIds))))
+            .timeout(Duration.ofSeconds(120)).build()
+        val response = javaHttpClientFactory.create(insecureMode).send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+        when (response.statusCode()) {
+            200 -> Unit
+            400 -> throw IllegalArgumentException(errorMessageOf(response.body()) ?: "Invalid test email request")
+            401, 403 -> throw IllegalArgumentException("ADMIN authentication is required for test email")
+            404 -> throw IllegalArgumentException("Backend does not support --test-email; update and restart the backend")
+            429 -> throw IllegalStateException("Too many test emails. Try again later.")
+            else -> throw IllegalStateException("Test email request failed (HTTP ${response.statusCode()})")
+        }
+        @Suppress("UNCHECKED_CAST")
+        return objectMapper.readValue(response.body(), Map::class.java) as Map<String, Any?>
+    }
+
     /**
      * `POST /api/account-onboarding/simulate`.
      *

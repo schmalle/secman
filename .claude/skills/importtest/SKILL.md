@@ -259,10 +259,10 @@ graceful shutdown.
   exposed by the import. If the trace points outside `com.secman.*`
   (e.g. a Micronaut framework bug, a Flyway internal), surface it; do
   not attempt to patch third-party code.
-- **CLAUDE.md non-negotiables still apply**: `./gradlew build` must be
-  clean and the backend must boot cleanly after every fix. Compile-clean
-  ≠ runtime-clean — the very startup of the backend after a fix is part
-  of the loop.
+- Run focused regression tests and any affected-module compile for each fix,
+  then repeat the import. Do not run the whole-repository build after each
+  iteration. `/finalizer` owns the full build/startup gates once for the
+  integrated change before merge.
 
 ### Phase 4 — Teardown & Report
 

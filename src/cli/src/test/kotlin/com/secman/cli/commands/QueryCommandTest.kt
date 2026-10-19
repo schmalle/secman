@@ -13,6 +13,8 @@ import io.mockk.mockk
 import io.mockk.verify
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -67,7 +69,23 @@ class QueryCommandTest {
         every { auth.authenticate(any(), any(), any()) } returns UUID.randomUUID().toString()
         every { storage.storeServerVulnerabilities(any(), any(), any(), any(), any()) } returns
             BatchStorageResult(0, 0, 0, 0, 0, 0, listOf("identity conflict"), listOf("server-1"))
-        assertThat(cmd.execute()).isEqualTo(1)
+        val (exit, output) = outputOf(cmd)
+        assertThat(exit).isEqualTo(1)
+        assertThat(output).contains("Asset: UNCHANGED (save rejected)").doesNotContain("Asset: UPDATED")
+    }
+
+    @Test
+    fun `successful instance replacement reports committed identity and exclusions`() {
+        val cmd = command()
+        every { api.queryAllVulnerabilities(any(), any()) } returns response()
+        every { auth.authenticate(any(), any(), any()) } returns UUID.randomUUID().toString()
+        every { storage.storeServerVulnerabilities(any(), any(), any(), any(), any()) } returns
+            BatchStorageResult(1, 0, 1, 1, 0, 2, emptyList(), hostOutcomes = listOf(
+                com.secman.crowdstrike.dto.CrowdStrikeHostImportOutcome("server-1", "UPDATED", 1L, "i-old", "i-new",
+                    coverage = com.secman.crowdstrike.dto.CrowdStrikeFindingCoverage(3, 1, missingCve = 2))))
+        val (exit, output) = outputOf(cmd)
+        assertThat(exit).isZero()
+        assertThat(output).contains("Asset: UPDATED", "i-old -> i-new", "Provider findings fetched: 3", "Findings excluded: 2")
     }
 
     @Test
@@ -77,4 +95,51 @@ class QueryCommandTest {
         verify(exactly = 0) { api.queryAllVulnerabilities(any(), any()) }
         verify(exactly = 0) { storage.storeServerVulnerabilities(any(), any(), any(), any(), any()) }
     }
+    private fun outputOf(cmd: QueryCommand): Pair<Int, String> {
+        val original = System.out
+        val output = ByteArrayOutputStream()
+        return try {
+            System.setOut(PrintStream(output))
+            cmd.execute() to output.toString(Charsets.UTF_8)
+        } finally {
+            System.setOut(original)
+        }
+    }
+
+    @Test
+    fun `all failed devices report unavailable count and refuse saving`() {
+        val cmd = command()
+        every { api.queryAllVulnerabilities(any(), any()) } returns response(setOf("aid-one")).copy(
+            vulnerabilities = emptyList(), totalCount = 0, deviceCount = 1)
+        val (exit, output) = outputOf(cmd)
+        assertThat(exit).isEqualTo(2)
+        assertThat(output).contains("Vulnerability count unavailable: all 1 device queries failed")
+            .doesNotContain("Total vulnerabilities found", "No vulnerabilities to save")
+        verify(exactly = 0) { auth.authenticate(any(), any(), any()) }
+        verify(exactly = 0) { storage.storeServerVulnerabilities(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `mixed device results label the count partial and exit two without save`() {
+        val cmd = command().apply { save = false }
+        every { api.queryAllVulnerabilities(any(), any()) } returns response(setOf("aid-failed")).copy(
+            devices = setOf(QueriedHost("server-1", null, "aid-one"), QueriedHost("server-1", null, "aid-failed")),
+            deviceCount = 2)
+        val (exit, output) = outputOf(cmd)
+        assertThat(exit).isEqualTo(2)
+        assertThat(output).contains("Partial vulnerabilities found: 1 (1 device queries failed)")
+            .doesNotContain("Total vulnerabilities found", "count unavailable")
+    }
+
+    @Test
+    fun `complete zero result still reports valid zero`() {
+        val cmd = command().apply { save = false }
+        every { api.queryAllVulnerabilities(any(), any()) } returns response().copy(
+            vulnerabilities = emptyList(), totalCount = 0, deviceCount = 1)
+        val (exit, output) = outputOf(cmd)
+        assertThat(exit).isZero()
+        assertThat(output).contains("Total vulnerabilities found: 0")
+            .doesNotContain("Partial", "unavailable")
+    }
+
 }

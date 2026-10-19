@@ -6,7 +6,11 @@ import com.secman.dto.CleanupCandidateReason
 import com.secman.repository.AssetRepository
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
+import io.micronaut.data.model.Page
+import io.micronaut.data.model.Pageable
+import io.micronaut.data.model.Sort
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
@@ -23,6 +27,7 @@ class CrowdStrikeAssetCleanupServiceTest {
     private lateinit var service: CrowdStrikeAssetCleanupService
 
     private val clock = Clock.fixed(Instant.parse("2026-05-07T10:00:00Z"), ZoneOffset.UTC)
+    private val firstPage = Pageable.from(0, 200, Sort.of(Sort.Order.asc("id")))
 
     @BeforeEach
     fun setUp() {
@@ -32,11 +37,36 @@ class CrowdStrikeAssetCleanupServiceTest {
     }
 
     @Test
+    fun `local cleanup cutoff is converted to UTC for Falcon contact`() {
+        val berlinClock = clock.withZone(java.time.ZoneId.of("Europe/Berlin"))
+        val localCutoff = LocalDateTime.of(2026, 5, 4, 12, 0)
+        val utcCutoff = LocalDateTime.of(2026, 5, 4, 10, 0)
+        val stale = asset(1L, "stale-contact", localCutoff.minusDays(1)).apply {
+            crowdStrikeAgentSeenAt = utcCutoff.minusSeconds(1)
+        }
+        val recent = asset(2L, "contact-at-cutoff", localCutoff.minusDays(1)).apply {
+            crowdStrikeAgentSeenAt = utcCutoff
+        }
+        population(stale, recent)
+        val berlinService = CrowdStrikeAssetCleanupService(assetRepository, assetCascadeDeleteService, berlinClock)
+
+        val result = berlinService.cleanup(days = 3, dryRun = true, username = "admin", includeLegacy = false)
+
+        assertThat(result.cutoff).isEqualTo(localCutoff)
+        assertThat(result.cutoffUtc).isEqualTo(utcCutoff.toInstant(ZoneOffset.UTC))
+        assertThat(result.candidates.map { it.assetId }).containsExactly(1L)
+        assertThat(result.exclusions).containsEntry("RECENT_OR_FUTURE_SENSOR_CONTACT", 1L)
+    }
+
+    @Test
     fun `rejects non-positive day threshold`() {
-        assertThatThrownBy {
-            service.cleanup(days = 0, dryRun = true, username = "admin", includeLegacy = false)
-        }.isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("Days must be greater than zero")
+        for (days in listOf(-1, 0, 36501)) {
+            assertThatThrownBy {
+                service.cleanup(days = days, dryRun = true, username = "admin", includeLegacy = false)
+            }.isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessage("Days must be between 1 and 36500")
+        }
+        verify(exactly = 0) { assetRepository.findCleanupPopulation(any(), any()) }
     }
 
     @Test
@@ -44,7 +74,7 @@ class CrowdStrikeAssetCleanupServiceTest {
         // The audit service computes ONE cutoff per run and passes it here, so the
         // safety brake and the deletion select the same population.
         val override = LocalDateTime.of(2026, 1, 1, 0, 0)
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(override) } returns emptyList()
+        population(asset(1L, "before-cutoff", override.minusSeconds(1)), asset(2L, "at-cutoff", override))
 
         val result = service.cleanup(
             days = 30, dryRun = true, username = "admin",
@@ -52,15 +82,14 @@ class CrowdStrikeAssetCleanupServiceTest {
         )
 
         assertThat(result.cutoff).isEqualTo(override)
-        verify(exactly = 1) { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(override) }
+        assertThat(result.candidates.map { it.assetId }).containsExactly(1L)
+        verify(exactly = 1) { assetRepository.findCleanupPopulation(AssetOwners.CROWDSTRIKE_IMPORT, firstPage) }
     }
 
     @Test
     fun `dry run returns stale CrowdStrike assets without deleting them`() {
         val stale = asset(1L, "server-old", LocalDateTime.of(2026, 5, 1, 9, 0))
-        every {
-            assetRepository.findCrowdStrikeStaleExcludingAgentSeen(LocalDateTime.of(2026, 5, 4, 10, 0))
-        } returns listOf(stale)
+        population(stale)
 
         val result = service.cleanup(days = 3, dryRun = true, username = "admin", includeLegacy = false)
 
@@ -68,17 +97,17 @@ class CrowdStrikeAssetCleanupServiceTest {
         assertThat(result.candidateCount).isEqualTo(1)
         assertThat(result.deletedCount).isEqualTo(0)
         assertThat(result.candidates).extracting("name").containsExactly("server-old")
-        verify(exactly = 0) { assetCascadeDeleteService.deleteAsset(any(), any(), any(), any()) }
+        verify(exactly = 0) { assetCascadeDeleteService.deleteAsset(any(), any(), any(), any(), any()) }
     }
 
     @Test
     fun `delete mode deletes stale CrowdStrike assets through cascade service`() {
         val stale = asset(2L, "server-delete", LocalDateTime.of(2026, 4, 30, 10, 0))
+        population(stale)
+        val eligibility = slot<(Asset) -> Boolean>()
         every {
-            assetRepository.findCrowdStrikeStaleExcludingAgentSeen(LocalDateTime.of(2026, 5, 2, 10, 0))
-        } returns listOf(stale)
-        every {
-            assetCascadeDeleteService.deleteAsset(2L, "admin", forceTimeout = true, bulkOperationId = any())
+            assetCascadeDeleteService.deleteAsset(2L, "admin", forceTimeout = true, bulkOperationId = any(),
+                cleanupEligibility = capture(eligibility))
         } returns mockk(relaxed = true)
 
         val result = service.cleanup(days = 5, dryRun = false, username = "admin", includeLegacy = false)
@@ -88,14 +117,16 @@ class CrowdStrikeAssetCleanupServiceTest {
         assertThat(result.deletedCount).isEqualTo(1)
         assertThat(result.errors).isEmpty()
         verify(exactly = 1) {
-            assetCascadeDeleteService.deleteAsset(2L, "admin", forceTimeout = true, bulkOperationId = any())
+            assetCascadeDeleteService.deleteAsset(2L, "admin", forceTimeout = true, bulkOperationId = any(), cleanupEligibility = any())
         }
+        assertThat(eligibility.captured(stale)).isTrue()
+        assertThat(eligibility.captured(stale.copy(crowdStrikeLastImportedAt = LocalDateTime.now(clock)))).isFalse()
     }
 
     @Test
     fun `ignores assets without CrowdStrike import timestamp even if repository returns them`() {
         val withoutTimestamp = asset(3L, "manual-server", null)
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any()) } returns listOf(withoutTimestamp)
+        population(withoutTimestamp)
 
         val result = service.cleanup(days = 3, dryRun = true, username = "admin", includeLegacy = false)
 
@@ -107,12 +138,12 @@ class CrowdStrikeAssetCleanupServiceTest {
     fun `reports per asset deletion failures without aborting later deletions`() {
         val blocked = asset(4L, "server-blocked", LocalDateTime.of(2026, 4, 20, 10, 0))
         val deleted = asset(5L, "server-deleted", LocalDateTime.of(2026, 4, 21, 10, 0))
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any()) } returns listOf(blocked, deleted)
+        population(blocked, deleted)
         every {
-            assetCascadeDeleteService.deleteAsset(4L, "admin", forceTimeout = true, bulkOperationId = any())
+            assetCascadeDeleteService.deleteAsset(4L, "admin", forceTimeout = true, bulkOperationId = any(), cleanupEligibility = any())
         } throws IllegalStateException("referenced by risk")
         every {
-            assetCascadeDeleteService.deleteAsset(5L, "admin", forceTimeout = true, bulkOperationId = any())
+            assetCascadeDeleteService.deleteAsset(5L, "admin", forceTimeout = true, bulkOperationId = any(), cleanupEligibility = any())
         } returns mockk(relaxed = true)
 
         val result = service.cleanup(days = 10, dryRun = false, username = "admin", includeLegacy = false)
@@ -121,11 +152,15 @@ class CrowdStrikeAssetCleanupServiceTest {
         assertThat(result.deletedCount).isEqualTo(1)
         assertThat(result.errors).hasSize(1)
         assertThat(result.errors.first().assetName).isEqualTo("server-blocked")
-        assertThat(result.errors.first().message).contains("referenced by risk")
+        assertThat(result.errors.first().message).isEqualTo("Deletion failed; existing data was preserved. See backend log for details")
+        assertThat(result.errors.first().message).doesNotContain("referenced by risk")
+        verify(exactly = 1) {
+            assetCascadeDeleteService.deleteAsset(5L, "admin", forceTimeout = true, bulkOperationId = any(), cleanupEligibility = any())
+        }
     }
 
     // ---------- Feature 087 (rule B / legacy fence) ----------
-    // The unit tests below cover service-level flag gating, dedup, and
+    // The unit tests below cover service-level flag gating, pagination, and
     // response-field population. The actual JPQL fence (manualCreator,
     // scanUploader, COALESCE fall-through) is tested at the repository
     // level in AssetRepositoryLegacyStaleTest (T013, integration).
@@ -133,10 +168,7 @@ class CrowdStrikeAssetCleanupServiceTest {
     @Test
     fun `includeLegacy=true picks rule-B candidates with LEGACY_NULL_TIMESTAMP reason`() {
         val legacy = legacyAsset(10L, "legacy-host")
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any()) } returns emptyList()
-        every {
-            assetRepository.findLegacyCrowdStrikeStale(AssetOwners.CROWDSTRIKE_IMPORT, any())
-        } returns listOf(legacy)
+        population(legacy)
 
         val result = service.cleanup(days = 30, dryRun = true, username = "admin", includeLegacy = true)
 
@@ -154,52 +186,41 @@ class CrowdStrikeAssetCleanupServiceTest {
     @Test
     fun `includeLegacy=false ignores rule-B even if repository would return legacy assets`() {
         val legacy = legacyAsset(11L, "would-be-legacy")
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any()) } returns emptyList()
+        population(legacy)
 
         val result = service.cleanup(days = 30, dryRun = true, username = "admin", includeLegacy = false)
 
-        // Service must NOT call findLegacyCrowdStrikeStale when flag is off.
-        verify(exactly = 0) { assetRepository.findLegacyCrowdStrikeStale(any(), any()) }
         assertThat(result.candidateCount).isEqualTo(0)
         assertThat(result.legacyCandidateCount).isEqualTo(0)
-        // Reference legacy var so the compiler doesn't warn — confirms the
-        // legacy asset would have been visible if the repo were queried.
-        assertThat(legacy.id).isEqualTo(11L)
+        assertThat(result.exclusions).containsEntry("LEGACY_DISABLED", 1L)
     }
 
     @Test
-    fun `mixed batch with same id in both rules is deduped to a single candidate`() {
-        // Defensive belt-and-braces test: the JPQL predicates of rule A
-        // (timestamp < cutoff) and rule B (timestamp IS NULL) are mutually
-        // exclusive in SQL, so this state cannot arise in production. The
-        // service still de-duplicates by id to protect against future
-        // predicate widening — see spec FR-005 + clarification session.
-        val sharedId = 42L
-        val timestampStale = asset(sharedId, "shared-host", LocalDateTime.of(2026, 4, 1, 10, 0))
-        val legacyDup = legacyAsset(sharedId, "shared-host")
-
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any()) } returns listOf(timestampStale)
+    fun `paginated population includes candidates from both rules across page boundaries`() {
+        val timestampStale = (1L..200L).map { asset(it, "stale-$it", LocalDateTime.of(2026, 4, 1, 10, 0)) }
+        val legacy = legacyAsset(201L, "legacy-next-page")
+        val secondPage = Pageable.from(1, 200, Sort.of(Sort.Order.asc("id")))
+        every { assetRepository.findCleanupPopulation(AssetOwners.CROWDSTRIKE_IMPORT, firstPage) } returns
+            Page.of(timestampStale, firstPage, 201)
         every {
-            assetRepository.findLegacyCrowdStrikeStale(AssetOwners.CROWDSTRIKE_IMPORT, any())
-        } returns listOf(legacyDup)
+            assetRepository.findCleanupPopulation(AssetOwners.CROWDSTRIKE_IMPORT, secondPage)
+        } returns Page.of(listOf(legacy), secondPage, 201)
 
         val result = service.cleanup(days = 30, dryRun = true, username = "admin", includeLegacy = true)
 
-        // Deduped to one. Rule A is evaluated first, so the surviving
-        // candidate carries TIMESTAMP_STALE.
-        assertThat(result.candidates).hasSize(1)
-        assertThat(result.candidates.first().reason).isEqualTo(CleanupCandidateReason.TIMESTAMP_STALE)
-        assertThat(result.candidateCount).isEqualTo(1)
+        assertThat(result.candidateCount).isEqualTo(201)
+        assertThat(result.candidates.map { it.assetId }).containsExactlyElementsOf(1L..201L)
+        assertThat(result.candidates.take(200).map { it.reason }).containsOnly(CleanupCandidateReason.TIMESTAMP_STALE)
+        assertThat(result.candidates.last().reason).isEqualTo(CleanupCandidateReason.LEGACY_NULL_TIMESTAMP)
+        verify(exactly = 1) { assetRepository.findCleanupPopulation(AssetOwners.CROWDSTRIKE_IMPORT, firstPage) }
+        verify(exactly = 1) { assetRepository.findCleanupPopulation(AssetOwners.CROWDSTRIKE_IMPORT, secondPage) }
     }
 
     @Test
     fun `mixed batch with distinct ids surfaces both rules' candidates with their reasons`() {
         val timestampStale = asset(20L, "ts-host", LocalDateTime.of(2026, 4, 1, 10, 0))
         val legacy = legacyAsset(21L, "legacy-host")
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any()) } returns listOf(timestampStale)
-        every {
-            assetRepository.findLegacyCrowdStrikeStale(AssetOwners.CROWDSTRIKE_IMPORT, any())
-        } returns listOf(legacy)
+        population(timestampStale, legacy)
 
         val result = service.cleanup(days = 30, dryRun = true, username = "admin", includeLegacy = true)
 
@@ -216,12 +237,9 @@ class CrowdStrikeAssetCleanupServiceTest {
     fun `real run with legacy candidates populates legacyDeletedCount per rule attribution`() {
         val legacy1 = legacyAsset(100L, "legacy-a")
         val legacy2 = legacyAsset(101L, "legacy-b")
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any()) } returns emptyList()
+        population(legacy1, legacy2)
         every {
-            assetRepository.findLegacyCrowdStrikeStale(AssetOwners.CROWDSTRIKE_IMPORT, any())
-        } returns listOf(legacy1, legacy2)
-        every {
-            assetCascadeDeleteService.deleteAsset(any(), any(), any(), any())
+            assetCascadeDeleteService.deleteAsset(any(), any(), any(), any(), any())
         } returns mockk(relaxed = true)
 
         val result = service.cleanup(days = 30, dryRun = false, username = "admin", includeLegacy = true)
@@ -230,6 +248,11 @@ class CrowdStrikeAssetCleanupServiceTest {
         assertThat(result.deletedCount).isEqualTo(2)
         assertThat(result.legacyCandidateCount).isEqualTo(2)
         assertThat(result.legacyDeletedCount).isEqualTo(2)
+    }
+
+    private fun population(vararg assets: Asset) {
+        every { assetRepository.findCleanupPopulation(AssetOwners.CROWDSTRIKE_IMPORT, firstPage) } returns
+            Page.of(assets.toList(), firstPage, assets.size.toLong())
     }
 
     private fun asset(id: Long, name: String, importedAt: LocalDateTime?) =

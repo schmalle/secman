@@ -105,7 +105,7 @@ const AdminPage = () => {
                                 <i className="bi bi-translate me-2"></i>
                                 LLM Configuration
                             </h5>
-                            <p className="card-text">Configure OpenRouter API for document translation.</p>
+                            <p className="card-text">Configure shared OpenRouter settings for translation and AI buddy(beta).</p>
                             <a href="/admin/translation-config" className="btn btn-primary">
                                 Configure LLM
                             </a>

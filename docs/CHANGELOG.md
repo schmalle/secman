@@ -159,3 +159,7 @@ The full history. Every change is written here **verbatim** when it happens; CLA
 # Unreleased
 
 - **Dependency refresh and MCP vulnerability schema** — updated stable backend, CLI, and shared-library dependencies, and refreshed the Astro/frontend toolchain and patch releases. The npm lockfile also resolves the vulnerable transitive `devalue` package to 5.9.4. Corrected `get_vulnerabilities.severity` so its allowed values are declared for array items, matching the argument type expected by the tool. Backend/shared/CLI compilation and the frontend production build pass; E2E tests were not run.
+
+## Current asset visibility (2026-10-14)
+
+Operational inventory applies an inclusive UTC 72-hour observation window for every role, across REST, MCP, current vulnerability queries, exports and asset-derived reporting. Verified non-Falcon observations are separate from legacy import-updated lastSeen; Falcon contact remains authoritative for Falcon-managed assets. Cache entries expire when included assets age out, ingestion retains stored grants, and the regular import wrapper defaults and caps discovery to three days. Migration V290 backfills trustworthy evidence only. See CURRENT_ASSETS.md.

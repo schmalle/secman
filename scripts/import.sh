@@ -13,24 +13,35 @@ if [ ! -f "$JAR_PATH" ]; then
     exit 1
 fi
 
-# --last-seen-days widened from 1 to 30 so hosts that don't check into Falcon every
-# single day (stopped / intermittent EC2 instances) are still imported. A 1-day window
-# silently dropped any such host before its vulns were ever queried, leaving it invisible
-# to notify-user even though the live per-host lookup showed vulnerabilities. 30 aligns
-# with the notification overdue SLA. SERVER_FAMILY covers Falcon's separate Server and
-# Domain Controller categories without importing workstations.
+# Resolve vault settings before computing the discovery window. The isolated runner's
+# database is restored below because the vault may also contain normal-stack DB settings.
+if [[ "${SECMAN_IMPORT_ENV_READY:-}" != "1" ]]; then
+    exec pass-cli run --env-file "$REPO_ROOT/secmanpp.env" -- env SECMAN_IMPORT_ENV_READY=1 bash "$0" "$@"
+fi
+
+RETENTION_DAYS="${CROWDSTRIKE_SENSOR_RETENTION_DAYS:-0}"
+LAST_SEEN_DAYS="${CROWDSTRIKE_IMPORT_LAST_SEEN_DAYS:-3}"
+for value in "$RETENTION_DAYS" "$LAST_SEEN_DAYS"; do
+    if [[ ! "$value" =~ ^[0-9]{1,5}$ ]] || (( 10#$value > 36500 )); then
+        echo "Error: CrowdStrike contact windows must be integers between 0 and 36500" >&2
+        exit 1
+    fi
+done
+if (( 10#$LAST_SEEN_DAYS == 0 || 10#$LAST_SEEN_DAYS > 3 )); then
+    LAST_SEEN_DAYS=3
+fi
+if (( 10#$RETENTION_DAYS > 0 && 10#$RETENTION_DAYS < 10#$LAST_SEEN_DAYS )); then
+    LAST_SEEN_DAYS="$RETENTION_DAYS"
+fi
 if [[ -n "${SECMAN_TEST_ISOLATED_DB:-}" ]]; then
-    BASE_URL="${SECMAN_E2E_BACKEND_URL:-}"
+    export DB_NAME="$SECMAN_TEST_ISOLATED_DB"
+    export DB_CONNECT="$SECMAN_TEST_DB_CONNECT"
+    export DB_USERNAME="$SECMAN_TEST_DB_USERNAME" DB_USER="$SECMAN_TEST_DB_USERNAME"
+    export DB_PASSWORD="$SECMAN_TEST_DB_PASSWORD" DB_PASS="$SECMAN_TEST_DB_PASSWORD"
+    export SECMAN_BACKEND_URL="$SECMAN_E2E_BACKEND_URL"
+    BASE_URL="$SECMAN_E2E_BACKEND_URL"
     # shellcheck source=test/lib/isolated-target.sh
     source "$REPO_ROOT/scripts/test/lib/isolated-target.sh"
-    secman_test_require_isolated
-    pass-cli run --env-file "$REPO_ROOT/secmanpp.env" -- bash -c '
-        export DB_CONNECT="$SECMAN_TEST_DB_CONNECT"
-        export DB_USERNAME="$SECMAN_TEST_DB_USERNAME"
-        export DB_PASSWORD="$SECMAN_TEST_DB_PASSWORD"
-        export SECMAN_BACKEND_URL="$SECMAN_E2E_BACKEND_URL"
-        exec java -Xmx4g -Xms2g -jar ./src/cli/build/libs/cli-0.1.0-all.jar query servers --device-type SERVER_FAMILY --severity CRITICAL,HIGH --min-days-open 1 --save --last-seen-days 30
-    '
-else
-    pass-cli run --env-file "$REPO_ROOT/secmanpp.env" -- java -Xmx4g -Xms2g -jar ./src/cli/build/libs/cli-0.1.0-all.jar query servers --device-type SERVER_FAMILY --severity CRITICAL,HIGH --min-days-open 1 --save --last-seen-days 30
+    secman_test_require_isolated || exit 2
 fi
+exec java -Xmx4g -Xms2g -jar "$JAR_PATH" query servers --device-type SERVER_FAMILY --severity CRITICAL,HIGH --min-days-open 1 --save --last-seen-days "$LAST_SEEN_DAYS"

@@ -1,3 +1,4 @@
+import AiBuddyPanel from './AiBuddyPanel';
 /**
  * OutdatedAssetDetail Component
  *
@@ -201,6 +202,7 @@ const OutdatedAssetDetail: React.FC<OutdatedAssetDetailProps> = ({ assetId }) =>
       {/* Asset Details */}
       {!loading && !error && asset && (
         <>
+          <AiBuddyPanel assetId={assetId} />
           {/* Asset Summary Card */}
           <div className="card mb-4">
             <div className="card-header">

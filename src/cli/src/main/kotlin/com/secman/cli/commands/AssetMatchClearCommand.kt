@@ -97,7 +97,7 @@ class AssetMatchClearCommand : Runnable {
 
     @Option(
         names = ["--max-delete-percent"],
-        description = ["Abort if proposed deletions exceed N% of scoped AWS assets (default: 25, set 0 to disable)"]
+        description = ["Abort if proposed deletions exceed N%% of scoped AWS assets (default: 25, set 0 to disable)"]
     )
     var maxDeletePercent: Int = 25
 
@@ -219,7 +219,8 @@ class AssetMatchClearCommand : Runnable {
                 "accountIds" to parsed.accountIds.toList(),
                 "resourceIds" to parsed.resourceIds.toList(),
                 "dryRun" to dryRun,
-                "maxDeletePercent" to maxDeletePercent,
+                // The backend treats zero as a 0% limit; 100 disables its brake.
+                "maxDeletePercent" to if (maxDeletePercent == 0) 100 else maxDeletePercent,
                 "strict" to strict
             )
 

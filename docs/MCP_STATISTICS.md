@@ -150,3 +150,7 @@ failed tool call. Do not retry authorization or validation failures unchanged.
 - [Paperclip risk-assessment automation](PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md)
 - [Paperclip security-work management](PAPERCLIP.md)
 - [MCP risk-assessment lifecycle](MCP_RISK_ASSESSMENT_LIFECYCLE.md)
+
+## Current asset visibility
+
+Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.

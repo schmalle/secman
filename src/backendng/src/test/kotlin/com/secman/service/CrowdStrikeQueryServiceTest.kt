@@ -54,7 +54,8 @@ class CrowdStrikeQueryServiceTest {
             falconConfigRepository,
             assetRepository,
             vulnerabilityRepository,
-            vulnerabilityExceptionRepository
+            vulnerabilityExceptionRepository,
+            mockk(relaxed = true)
         )
     }
 
@@ -333,6 +334,22 @@ class CrowdStrikeQueryServiceTest {
         status = "open",
         hasException = false // shared client hardcodes this; applyExceptions must override it
     )
+    @Test
+    fun `live lookup only returns high and critical even when lower severities are requested`() {
+        every { falconConfigRepository.findActiveConfig() } returns Optional.of(FalconConfig(clientId = "cid", clientSecret = "secret"))
+        every { apiClient.queryAllVulnerabilities("severity-host", any()) } returns sharedResponse(
+            *listOf("CRITICAL", "High", "MEDIUM", "LOW", "INFORMATIONAL", "UNKNOWN").mapIndexed { i, severity ->
+                sharedVuln("CVE-2026-${10000 + i}", "Product", severity)
+            }.toTypedArray())
+        every { assetRepository.findByNameIgnoreCase(any()) } returns null
+        every { assetRepository.findByCloudInstanceIdIgnoreCase(any()) } returns null
+        every { vulnerabilityExceptionRepository.findByExpirationDateIsNullOrExpirationDateGreaterThan(any()) } returns emptyList()
+        val result = service.queryVulnerabilitiesLive("severity-host")
+        assertThat(result.vulnerabilities.map { it.severity }).containsExactly("CRITICAL", "High")
+        assertThat(result.totalCount).isEqualTo(2)
+        assertThat(service.queryVulnerabilitiesLive("severity-host", "LOW").totalCount).isZero()
+    }
+
     @Test
     fun `partial live Falcon response retains a visible warning`() {
         every { assetRepository.findByNameIgnoreCase("partial-host") } returns null

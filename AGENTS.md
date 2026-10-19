@@ -11,9 +11,7 @@
 
 ## Branch guardrail
 
-- `dev` is the default and only branch for agent-authored commits unless the user explicitly names another branch.
-- Before editing and again before committing, verify `git branch --show-current` is `dev`. Never commit directly to `main` or `master` by inference.
-- Repositories under `extensions/` are independent Git repositories; apply the same branch check inside each repository and commit there separately.
+- `dev` is the integration branch. Agents may work and commit on `dev` or on `task/<name>` branches created from `dev` for isolated parallel work. Verify the branch and its base before editing and before committing. Never commit directly to `main` or `master` unless explicitly instructed. Each repository under `extensions/` is independent and must pass the same check locally. Do not merge, push, or commit unrelated work by inference.
 
 ## Build, run, test
 - Backend dev: `./scripts/startbackenddev.sh` (canonical — wraps `gradle run` with `pass-cli`-resolved env).
@@ -47,10 +45,10 @@ the trees (`SKILL.md`, `_shared/`, `references/`), not just `SKILL.md`.
 | `secure-code` | Write code that satisfies OWASP Top 10:2021 by construction, then verify it (`./scripts/owasp-check.sh`) | no |
 | `humanizer` | Crisp comments, names a stranger can predict, screen-sized functions; verifies with `./scripts/humanizer-scan.sh` and proposes risky renames instead of applying them | no |
 | `optimizer` | Hot-path performance and copy-paste blocks; verifies with `./scripts/optimizer-scan.sh` and proposes extractions instead of applying them | no |
-| `finalizer` | Pre-merge pass: version/doc drift, `extensions/` contract drift, HIGH/CRITICAL security review, skill sync | docs only |
+| `finalizer` | Combined-change pre-merge pass: contracts, security, docs, build/startup, full E2E, skill sync | docs/extension fixes; disposable test DB only |
 | `testsuite` | Fast test tier (backend, CLI, frontend) + name-reference coverage gaps | no |
 | `integration-contract-test` | Shared v1 SecMan contract for GitHub, Visual, and Web checkers | no |
-| `e2ejs` | Scan every page for JS errors as admin *and* normal user | no |
+| `e2ejs` | Scan every page for JS errors as admin *and* normal user | disposable test DB only |
 | `e2evulnexception` | Full vuln + exception lifecycle over MCP and the UI | disposable test DB only |
 | `e2eexception` | Fast MCP-only exception smoke test | disposable test DB only |
 | `e2eeol` | Full end-of-life lifecycle: catalogue sync, matching, owner mail, top-10 repos, authz negatives | disposable test DB only |
@@ -94,7 +92,7 @@ subagents in `.claude/agents/`, which no skill spawns.
 - TS/TSX: 2-space indent, named exports, ESLint via `npm run lint`. Import order: external → internal → relative.
 
 ## Tests (mandatory)
-Always write tests for new code. JUnit 6 + Mockk for unit; integration tests run against an **external MariaDB** (no Docker/Testcontainers — removed from the build) via `BaseIntegrationTest`, using the disposable schema created by `./scripts/runbackendtests.sh`. Normal-stack HTTP checks use `SECMAN_HOST` from `pass-cli`; the isolated runner supplies its own loopback URLs. After **every** change, the `e2ejs` and `e2evulnexception` skills (§Skills) must exit clean (see `CLAUDE.md` principle 7).
+Always write tests for new code. JUnit 6 + Mockk for unit; integration tests run against an **external MariaDB** (no Docker/Testcontainers — removed from the build) via `BaseIntegrationTest`, using the disposable schema created by `./scripts/runbackendtests.sh`. Normal-stack HTTP checks use `SECMAN_HOST` from `pass-cli`; the isolated runner supplies its own loopback URLs. Workers run focused regression tests and affected-module checks, then report **ready for integration**. The `finalizer` owns the full build/startup checks, `e2ejs`, `e2evulnexception`, and applicable feature-specific E2E once for the combined change before merge (see `CLAUDE.md` principles 5–7). Explicit test requests still run the requested suites. Parallel workers use separate workspaces with agreed file/contract ownership; preserve the shared stack and serialize full-stack runs through the isolated runner. Only successful finalization establishes **ready to merge**.
 
 ## Commits / PRs
 - `type(scope): description` (Conventional Commits) or short `Type: Summary` form.

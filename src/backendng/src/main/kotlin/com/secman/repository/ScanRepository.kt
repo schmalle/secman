@@ -21,6 +21,7 @@ interface ScanRepository : JpaRepository<Scan, Long> {
      * Used for: User's scan history
      * Returns: Paginated list ordered by scanDate DESC
      */
+    @Query(value = "SELECT s FROM Scan s WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND s.uploadedBy = :uploadedBy ORDER BY s.scanDate DESC", countQuery = "SELECT COUNT(s) FROM Scan s WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND s.uploadedBy = :uploadedBy")
     fun findByUploadedByOrderByScanDateDesc(uploadedBy: String, pageable: Pageable): Page<Scan>
 
     /**
@@ -35,6 +36,7 @@ interface ScanRepository : JpaRepository<Scan, Long> {
      * Used for: Admin scan list view
      * Returns: Paginated list ordered by scanDate DESC
      */
+    @Query(value = "SELECT s FROM Scan s WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND 1=1 ORDER BY s.scanDate DESC", countQuery = "SELECT COUNT(s) FROM Scan s WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND 1=1")
     fun findAllOrderByScanDateDesc(pageable: Pageable): Page<Scan>
 
     // MCP Tool Support - Feature 006: Scan history queries with date filtering
@@ -43,12 +45,14 @@ interface ScanRepository : JpaRepository<Scan, Long> {
      * Find scans within a date range
      * Used for: MCP get_scans tool with date filtering
      */
+    @Query(value = "SELECT s FROM Scan s WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND s.scanDate BETWEEN :start AND :end ORDER BY s.scanDate DESC", countQuery = "SELECT COUNT(s) FROM Scan s WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND s.scanDate BETWEEN :start AND :end")
     fun findByScanDateBetween(start: LocalDateTime, end: LocalDateTime, pageable: Pageable): Page<Scan>
 
     /**
      * Find scans by scan type with pagination (alias for compatibility)
      * Used for: MCP get_scans tool
      */
+    @Query(value = "SELECT s FROM Scan s WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND s.scanType = :scanType ORDER BY s.scanDate DESC", countQuery = "SELECT COUNT(s) FROM Scan s WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND s.scanType = :scanType")
     fun findByScanType(scanType: String, pageable: Pageable): Page<Scan>
 
     // Workgroup-Based Access Control - Feature 008
@@ -59,7 +63,7 @@ interface ScanRepository : JpaRepository<Scan, Long> {
     //
     @Query("""
         SELECT s FROM Scan s
-        WHERE EXISTS (SELECT r.id FROM ScanResult r WHERE r.scan = s AND r.asset.id IN (:accessibleAssetIds))
+        WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND EXISTS (SELECT r.id FROM ScanResult r WHERE r.scan = s AND r.asset.id IN (:accessibleAssetIds))
           AND NOT EXISTS (SELECT r.id FROM ScanResult r WHERE r.scan = s
                           AND (r.asset IS NULL OR r.asset.id NOT IN (:accessibleAssetIds)))
         ORDER BY s.scanDate DESC
@@ -76,7 +80,7 @@ interface ScanRepository : JpaRepository<Scan, Long> {
         value = """
             SELECT DISTINCT s FROM Scan s
             JOIN s.results r
-            WHERE r.asset.id IN :accessibleAssetIds
+            WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND r.asset.id IN :accessibleAssetIds
             AND NOT EXISTS (SELECT hidden.id FROM ScanResult hidden WHERE hidden.scan = s
                             AND (hidden.asset IS NULL OR hidden.asset.id NOT IN (:accessibleAssetIds)))
             ORDER BY s.scanDate DESC
@@ -84,7 +88,7 @@ interface ScanRepository : JpaRepository<Scan, Long> {
         countQuery = """
             SELECT COUNT(DISTINCT s.id) FROM Scan s
             JOIN s.results r
-            WHERE r.asset.id IN :accessibleAssetIds
+            WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND r.asset.id IN :accessibleAssetIds
             AND NOT EXISTS (SELECT hidden.id FROM ScanResult hidden WHERE hidden.scan = s
                             AND (hidden.asset IS NULL OR hidden.asset.id NOT IN (:accessibleAssetIds)))
         """
@@ -95,7 +99,7 @@ interface ScanRepository : JpaRepository<Scan, Long> {
         value = """
             SELECT DISTINCT s FROM Scan s
             JOIN s.results r
-            WHERE r.asset.id IN :accessibleAssetIds
+            WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND r.asset.id IN :accessibleAssetIds
             AND NOT EXISTS (SELECT hidden.id FROM ScanResult hidden WHERE hidden.scan = s
                             AND (hidden.asset IS NULL OR hidden.asset.id NOT IN (:accessibleAssetIds)))
             AND s.scanType = :scanType
@@ -104,7 +108,7 @@ interface ScanRepository : JpaRepository<Scan, Long> {
         countQuery = """
             SELECT COUNT(DISTINCT s.id) FROM Scan s
             JOIN s.results r
-            WHERE r.asset.id IN :accessibleAssetIds
+            WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND r.asset.id IN :accessibleAssetIds
             AND NOT EXISTS (SELECT hidden.id FROM ScanResult hidden WHERE hidden.scan = s
                             AND (hidden.asset IS NULL OR hidden.asset.id NOT IN (:accessibleAssetIds)))
             AND s.scanType = :scanType
@@ -120,7 +124,7 @@ interface ScanRepository : JpaRepository<Scan, Long> {
         value = """
             SELECT DISTINCT s FROM Scan s
             JOIN s.results r
-            WHERE r.asset.id IN :accessibleAssetIds
+            WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND r.asset.id IN :accessibleAssetIds
             AND NOT EXISTS (SELECT hidden.id FROM ScanResult hidden WHERE hidden.scan = s
                             AND (hidden.asset IS NULL OR hidden.asset.id NOT IN (:accessibleAssetIds)))
             AND s.uploadedBy = :uploadedBy
@@ -129,7 +133,7 @@ interface ScanRepository : JpaRepository<Scan, Long> {
         countQuery = """
             SELECT COUNT(DISTINCT s.id) FROM Scan s
             JOIN s.results r
-            WHERE r.asset.id IN :accessibleAssetIds
+            WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND r.asset.id IN :accessibleAssetIds
             AND NOT EXISTS (SELECT hidden.id FROM ScanResult hidden WHERE hidden.scan = s
                             AND (hidden.asset IS NULL OR hidden.asset.id NOT IN (:accessibleAssetIds)))
             AND s.uploadedBy = :uploadedBy
@@ -145,7 +149,7 @@ interface ScanRepository : JpaRepository<Scan, Long> {
         value = """
             SELECT DISTINCT s FROM Scan s
             JOIN s.results r
-            WHERE r.asset.id IN :accessibleAssetIds
+            WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND r.asset.id IN :accessibleAssetIds
             AND NOT EXISTS (SELECT hidden.id FROM ScanResult hidden WHERE hidden.scan = s
                             AND (hidden.asset IS NULL OR hidden.asset.id NOT IN (:accessibleAssetIds)))
             AND s.scanDate BETWEEN :start AND :end
@@ -154,7 +158,7 @@ interface ScanRepository : JpaRepository<Scan, Long> {
         countQuery = """
             SELECT COUNT(DISTINCT s.id) FROM Scan s
             JOIN s.results r
-            WHERE r.asset.id IN :accessibleAssetIds
+            WHERE ${AssetCurrentnessSql.CURRENT_SCAN_JPQL} AND r.asset.id IN :accessibleAssetIds
             AND NOT EXISTS (SELECT hidden.id FROM ScanResult hidden WHERE hidden.scan = s
                             AND (hidden.asset IS NULL OR hidden.asset.id NOT IN (:accessibleAssetIds)))
             AND s.scanDate BETWEEN :start AND :end

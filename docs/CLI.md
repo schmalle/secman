@@ -161,7 +161,7 @@ stored matches and supports `--include-already-eol`, `--only-email`, and
 | `--severity` | `HIGH,CRITICAL` | `CRITICAL,HIGH,MEDIUM,LOW` |
 | `--device-type` | `SERVER` | `SERVER`, `DOMAIN_CONTROLLER`, `SERVER_FAMILY`, `WORKSTATION`, `ALL`; `SERVER_FAMILY` queries servers and domain controllers separately, while `ALL` also includes workstations. **Ignored with `--hostnames`.** |
 | `--min-days-open` | 30 | |
-| `--last-seen-days` | 0 (= all) | recent-checkin window; **ignored with `--hostnames`** |
+| `--last-seen-days` | 3 (0 = all) | recent-checkin window; **ignored with `--hostnames`** |
 | `--limit` | 800 | Spotlight page size |
 | `--save` | false | POST to backend |
 | `--username` / `--password` | — | required with `--save` |
@@ -322,6 +322,11 @@ Existing assets start with `crowdstrike_last_imported_at = NULL` after the schem
 
 ### `send-notifications` — outdated-asset & new-vuln emails
 
+Overdue reminders include only assets with actual Falcon sensor contact within the
+last 72 hours (inclusive), evaluated at notification time. Missing or future contact
+timestamps are excluded; SecMan import time does not establish eligibility.
+The MCP `send_outdated_notifications` tool applies the same recency rule.
+
 ```bash
 ./scripts/secman send-notifications --dry-run --verbose
 ./scripts/secman send-notifications --outdated-only
@@ -350,6 +355,12 @@ notified at most once per day regardless of how many recipients it reaches. An a
 with no recipients in any category is skipped (logged with `--verbose`).
 
 ### `send-notification-users` — per-AWS-account vulnerability emails
+
+All modes, including dry runs and verbose details, include only assets with actual
+Falcon sensor contact within the last 72 hours (inclusive). Missing or future contact
+timestamps are excluded; `last_seen` and import time are not used as fallbacks.
+Counts and affected accounts reflect only eligible assets. The same rule applies
+to the MCP vulnerability and patch notification tools.
 
 Finds AWS accounts whose EC2 assets have vulnerabilities open longer than
 `--days` (excluding active exceptions) and sends each recipient one consolidated
@@ -816,7 +827,7 @@ simulated account ID, and sends using the saved backend policy. See
 
 All three `*-s3` commands share AWS options: `--aws-region`, `--aws-profile`, `--aws-access-key-id`, `--aws-secret-access-key`, `--aws-session-token`, `--endpoint-url` (also `AWS_ENDPOINT_URL`, used for S3Mock/MinIO/LocalStack). 10 MB hard size limit. Default credential chain: env → `~/.aws/credentials` → IAM role → SSO.
 
-- **`import-s3`** — download AND POST to backend. Bucket/key from `--bucket`/`--key` or, when omitted, the `AWS_ACCOUNT_BUCKET_NAME` / `AWS_ACCOUNT_BUCKET_KEY_NAME` env vars (flags take priority). Needs `s3:GetObject` (+ `s3:HeadObject` for pre-download size check). Supports `--createnotify` / `--notify-new-accounts` / `--notify-address`, `--start-risk-assessment` / `--risk-usecase` / `--risk-deadline-days` and the `--onboarding-mode` / `--welcome-email` / `--questionnaire-expiry-days` set exactly like `import` (see above). Exit codes: `0` ok / `1` partial / `2` fatal S3/config / `3` unexpected. Detailed flags: `docs/S3_USER_MAPPING_IMPORT.md`.
+- **`import-s3`** — download AND POST to backend. Bucket/key from `--bucket`/`--key` or, when omitted, the `AWS_ACCOUNT_BUCKET_NAME` / `AWS_ACCOUNT_BUCKET_KEY_NAME` env vars (flags take priority). Needs `s3:GetObject` (also used for the HeadObject pre-download size check). Supports `--createnotify` / `--notify-new-accounts` / `--notify-address`, `--start-risk-assessment` / `--risk-usecase` / `--risk-deadline-days` and the `--onboarding-mode` / `--welcome-email` / `--questionnaire-expiry-days` set exactly like `import` (see above). Exit codes: `0` ok / `1` partial / `2` fatal S3/config / `3` unexpected. Detailed flags: `docs/S3_USER_MAPPING_IMPORT.md`.
 - **`download-s3`** — download only, no backend contact. `--bucket -b`, `--key -k`, `--output -o` required; `--force -f` to overwrite; `--quiet -q` (success/error stays on stderr). Parent dir must exist; verbatim copy.
 - **`print-s3`** — download + parse + print to stdout (temp file deleted). `--type AWS|DOMAIN|ALL` (default `AWS`); `--format TABLE|JSON|CSV`; `--file-format CSV|JSON|AUTO`; `--show-errors` to print parse errors to stderr; `--quiet` suppresses banner+summary (still on stderr). **stdout = mappings only**, safe to pipe through `diff`/`jq`/`awk`.
 
@@ -1173,3 +1184,78 @@ and welcome delivery are separate outcomes.
 For a retained FAILED record, an ADMIN can retry in Account onboarding or with
 MCP `retry_owner_mail_notification`. There is no new CLI retry switch. Records
 older than 90 days lose recipient metadata and are no longer retryable.
+
+## Current asset visibility
+
+Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.
+
+
+## Welcome every owner of a newly discovered AWS account
+
+```bash
+./scripts/secman manage-user-mappings import --file mappings.csv \
+  --onboarding-mode WELCOME_ONLY --dry-run
+./scripts/secman manage-user-mappings import --file mappings.csv \
+  --onboarding-mode WELCOME_ONLY
+# Same options for an S3 mapping upload (bucket/key from AWS_ACCOUNT_* env vars):
+./scripts/secman manage-user-mappings import-s3 \
+  --onboarding-mode WELCOME_ONLY --dry-run
+```
+
+ADMIN access and an active email provider are required for live delivery. The
+existing welcome template is configured in Account Onboarding. Each distinct
+mapped owner of a newly discovered AWS account is eligible; adding an owner to a
+known account does not trigger this event. Dry run saves nothing and contacts no
+mail provider. FAILED or uncertain PENDING welcome delivery exits with code 1,
+even if mappings were saved. Inspect the notification before retrying.
+
+See [recipient rules, template setup, delivery statuses, and retries](ACCOUNT_ONBOARDING.md#welcome-every-owner-of-a-newly-discovered-aws-account).
+Both `import --help` and `import-s3 --help` include welcome-only preview examples.
+
+### One welcome email per owner per import
+
+Welcome mail is grouped by trimmed, case-insensitive owner email within each
+import. One message lists all that owner's newly discovered accounts; a later
+import with additional new accounts may send another welcome. Dry runs print
+one `MAIL` line per recipient and the complete account list. Retries use the same
+grouped notification. Assessment and questionnaire messages stay account-specific.
+See [the complete welcome-mail contract](ACCOUNT_ONBOARDING.md#one-welcome-email-per-owner-per-import)
+for template placeholders, delivery status, and retry rules.
+
+### Send one test welcome email
+
+Use `--test-email ADDRESS` with `--onboarding-mode WELCOME_ONLY` to send one
+sample of the configured welcome email without importing any mappings:
+
+```bash
+./scripts/secman manage-user-mappings import-s3 \
+  --bucket example-accounts --key accounts.json \
+  --onboarding-mode WELCOME_ONLY --test-email person@example.com
+# Local CSV and JSON files support the same option:
+./scripts/secman manage-user-mappings import --file mappings.csv \
+  --onboarding-mode WELCOME_ONLY --test-email person@example.com
+```
+
+The first normalized owner alphabetically in the validated file supplies the
+sample; its distinct account IDs are sorted and grouped in one message. Only
+the supplied test recipient receives it, with `[TEST]` in the subject and an
+administrator notice in both bodies. Known accounts can be sampled too.
+No mappings, assessments, questionnaire tokens, or production welcome-delivery
+records are created or changed. No valid AWS group means no email is sent.
+Files must be nonempty and at most 10MB; the sampled group is limited to 200
+accounts. Validation errors refuse the send instead of sampling a partial file.
+
+Remove `--dry-run` when using `--test-email`: the combination is rejected so a
+dry run continues to guarantee no email. Assessment modes, `--start-risk-assessment`,
+`--no-welcome-email`, `--createnotify`, `--notify-address`, and `--risk-usecase`
+cannot be combined with the test option. The S3 statistics flag `--send-email`
+is also incompatible. ADMIN access is required; test sends
+share the existing simulation rate limit. `SENT` confirms SMTP acceptance, not
+inbox delivery. Failed or uncertain delivery returns a nonzero exit code and
+is never automatically retried.
+
+The CLI calls `POST /api/account-onboarding/welcome-test` with `recipient` and
+`accountIds`. This dedicated route returns 404 on an older backend rather than
+silently sending a single-account simulation. Deploy/restart the updated backend
+before using the option. Existing simulation commands and import behavior are
+unchanged when the option is absent.

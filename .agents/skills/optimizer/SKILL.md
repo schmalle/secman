@@ -229,8 +229,8 @@ A performance change is exactly the kind that compiles, passes, and is wrong.
 Run what your change touched — these are `CLAUDE.md` Principles 5, 5a and 5a-relay:
 
 ```bash
-./gradlew build                                   # any Kotlin/Java edit
-cd src/frontend && npm ci && npm run build        # any frontend edit
+./scripts/runbackendtests.sh --tests "*RelevantTest*" # focused backend coverage
+cd src/frontend && npm test && npm run build       # frontend unit/build checks
 cd src/relay && go build ./... && go vet ./... && gofmt -l . && go test ./...
 ./scripts/owasp-check.sh                          # you edited code; the gate is diff-scoped
 ./scripts/optimizer-scan.sh                       # confirm the findings are gone
@@ -241,17 +241,13 @@ must pass. It asserts both directions per rule — that a violation fires *and*
 that clean code stays silent — because a rule that quietly stopped firing looks
 exactly like a fast, clean repo.
 
-If you touched the backend, Principle 5 also requires
-`./scripts/startbackenddev.sh` to start cleanly (run it outside the sandbox —
-`sandbox_permissions: "require_escalated"`), then stop it. A query change that
-compiles can still fail Hibernate's parse at SessionFactory build, which only
-happens at startup.
-
-Frontend changes additionally need the Principle 7 gates: `/e2ejs` for both
-roles (hydration and timing changes are exactly what it catches) and
-`/e2evulnexception`. If you touched a query behind vulnerabilities or
-exceptions, run `ExceptedFlagSqlAgreementIntegrationTest` — the `excepted`
-semantics are pinned there and nowhere else.
+Workers run affected-module compilation and focused regression tests. The
+finalizer owns full build/startup and both universal E2E gates for the combined
+change before merge. A targeted runtime check is appropriate when needed to
+verify an optimization, using the disposable runner and preserving the regular
+stack. If you touched a query behind vulnerabilities or exceptions, run
+`ExceptedFlagSqlAgreementIntegrationTest` through `./scripts/runbackendtests.sh`
+— the `excepted` semantics are pinned there and nowhere else.
 
 Report in this shape, so the user can see what they still owe a decision on:
 
@@ -262,7 +258,8 @@ Measured    <what you actually measured, with the number>
 Applied     <n> queries, <n> round-trips, <n> extractions
 Proposed    <n> changes needing your call — awaiting an answer (listed below)
 Deferred    <n> REVIEW findings left alone — <one line each saying why>
-Verified    gradlew build ✓  optimizer-scan ✓  owasp-check ✓  <E2E gates>
+Verified    focused checks ✓  optimizer-scan ✓  owasp-check ✓
+Merge gates Finalizer pending
 OWASP       <categories touched> — clean
 ```
 

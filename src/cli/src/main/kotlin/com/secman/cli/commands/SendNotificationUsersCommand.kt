@@ -14,7 +14,7 @@ import jakarta.inject.Singleton
 @Singleton
 @Command(
     name = "send-notification-users",
-    description = ["Send vulnerability notification emails to users with affected AWS accounts"],
+    description = ["Send vulnerability notification emails for AWS assets seen by Falcon within the last 72 hours"],
     mixinStandardHelpOptions = true
 )
 class SendNotificationUsersCommand : Runnable {

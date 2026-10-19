@@ -245,6 +245,10 @@ open class AccountOnboardingService(
         }
         val assessmentByPair = riskAssessments.associateBy { it.awsAccountId to it.ownerEmail.lowercase() }
 
+        val accountsByOwner = newAccounts.flatMap { account ->
+            account.emails.map { it.trim().lowercase(java.util.Locale.ROOT) to account.awsAccountId }
+        }.groupBy({ it.first }, { it.second }).mapValues { (_, ids) -> ids.distinct().sorted() }
+        val welcomeByOwner = mutableMapOf<String, com.secman.dto.OwnerMailDelivery>()
         for (account in newAccounts) {
             for (ownerEmail in account.emails.map { it.trim().lowercase(java.util.Locale.ROOT) }.distinct()) {
                 onboarding += onboardOnePair(
@@ -253,7 +257,13 @@ open class AccountOnboardingService(
                     plan = plan,
                     requestor = requestor,
                     dryRun = dryRun,
-                    directResult = assessmentByPair[account.awsAccountId to ownerEmail.lowercase()]
+                    directResult = assessmentByPair[account.awsAccountId to ownerEmail.lowercase()],
+                    welcomeDelivery = {
+                        welcomeByOwner.getOrPut(ownerEmail) {
+                            ownerMailDeliveryService.welcome(accountsByOwner.getValue(ownerEmail), ownerEmail,
+                                plan.sendWelcomeEmail, dryRun, requestor?.id)
+                        }
+                    }
                 )
             }
         }
@@ -262,7 +272,7 @@ open class AccountOnboardingService(
             "Account onboarding complete: mode={}, pairs={}, dryRun={}, invites={}, welcomeMails={}, failures={}",
             plan.mode, onboarding.size, dryRun,
             onboarding.count { it.questionnaireInviteId != null },
-            onboarding.count { it.welcomeEmailSent },
+            welcomeByOwner.values.count { it.status == "SENT" },
             onboarding.count { it.error != null }
         )
         return OnboardingOutcome(onboarding, riskAssessments)
@@ -274,7 +284,8 @@ open class AccountOnboardingService(
         plan: OnboardingPlan,
         requestor: User?,
         dryRun: Boolean,
-        directResult: AccountRiskAssessmentInfo?
+        directResult: AccountRiskAssessmentInfo?,
+        welcomeDelivery: () -> com.secman.dto.OwnerMailDelivery
     ): AccountOnboardingInfo {
         val base = AccountOnboardingInfo(
             awsAccountId = awsAccountId,
@@ -323,7 +334,7 @@ open class AccountOnboardingService(
                     requested = plan.sendWelcomeEmail, status = status,
                     errorCode = if (status == "FAILED") "DELIVERY_FAILED" else null))
             } else {
-                val delivery = ownerMailDeliveryService.welcome(awsAccountId, ownerEmail, plan.sendWelcomeEmail, dryRun, requestor?.id)
+                val delivery = welcomeDelivery()
                 result.copy(welcomeEmailSent = delivery.status == "SENT", welcomeEmail = delivery)
             }
         } catch (e: Exception) {

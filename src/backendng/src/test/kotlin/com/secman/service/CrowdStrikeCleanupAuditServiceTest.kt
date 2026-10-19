@@ -117,7 +117,7 @@ class CrowdStrikeCleanupAuditServiceTest {
     fun `safety brake aborts when candidate ratio exceeds limit and never calls cleanup service`() {
         val cutoff = nowLdt.minusDays(30)
         // 6 candidates / 50 tracked = 12% > 10% limit
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff) } returns
+        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff, cutoff) } returns
             (1..6).map { i ->
                 Asset(
                     id = i.toLong(),
@@ -145,7 +145,7 @@ class CrowdStrikeCleanupAuditServiceTest {
     @Test
     fun `safety brake passes through when ratio is within limit`() {
         val cutoff = nowLdt.minusDays(30)
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff) } returns
+        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff, cutoff) } returns
             listOf(
                 Asset(
                     id = 1L,
@@ -179,7 +179,7 @@ class CrowdStrikeCleanupAuditServiceTest {
     @Test
     fun `safety brake fails closed when tracked count is unavailable but candidates exist`() {
         val cutoff = nowLdt.minusDays(30)
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff) } returns listOf(
+        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff, cutoff) } returns listOf(
             Asset(id = 1L, name = "a1", type = "SERVER", owner = "x", crowdStrikeLastImportedAt = cutoff.minusDays(1))
         )
         // safeTotalCombined swallows this into 0 — the brake must then ABORT, not
@@ -198,7 +198,7 @@ class CrowdStrikeCleanupAuditServiceTest {
     @Test
     fun `brake and cleanup share one cutoff instant`() {
         val cutoff = nowLdt.minusDays(30)
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff) } returns emptyList()
+        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff, cutoff) } returns emptyList()
         every { assetRepository.countCrowdStrikeTracked() } returns 100L
         var cutoffSeenByCleanup: LocalDateTime? = null
         every { cleanupService.cleanup(30, false, "scheduler", false, any()) } answers {
@@ -220,7 +220,7 @@ class CrowdStrikeCleanupAuditServiceTest {
 
     @Test
     fun `safety brake skipped when total tracked is zero`() {
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any()) } returns emptyList()
+        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any(), any()) } returns emptyList()
         every { assetRepository.countCrowdStrikeTracked() } returns 0L
         every { cleanupService.cleanup(any(), any(), any(), any(), any()) } returns CrowdStrikeAssetCleanupResponse(
             days = 30,
@@ -245,7 +245,7 @@ class CrowdStrikeCleanupAuditServiceTest {
 
     @Test
     fun `cleanup service exception is captured as FAILED audit row and notified`() {
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any()) } returns emptyList()
+        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any(), any()) } returns emptyList()
         every { assetRepository.countCrowdStrikeTracked() } returns 100L
         every { cleanupService.cleanup(any(), any(), any(), any(), any()) } throws RuntimeException("DB down")
         every { runRepository.save(any()) } answers { firstArg<CrowdStrikeCleanupRun>().apply { id = 11L } }

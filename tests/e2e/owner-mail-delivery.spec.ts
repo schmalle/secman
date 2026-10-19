@@ -4,6 +4,7 @@ import { test, expect } from '@playwright/test';
 test('welcome delivery survives import replay, respects opt-out, and previews CSV without writes', async ({ page }) => {
   test.skip(!process.env.SECMAN_TEST_ISOLATED_DB, 'Requires disposable test runner');
   await page.goto('/login');
+  await expect(page.locator('astro-island').filter({ has: page.locator('#username') })).not.toHaveAttribute('ssr', '');
   await page.locator('input[name="username"], input#username').first().fill(process.env.SECMAN_ADMIN_NAME!);
   await page.locator('input[name="password"], input#password').first().fill(process.env.SECMAN_ADMIN_PASS!);
   await page.getByRole('button', { name: 'Login', exact: true }).click();

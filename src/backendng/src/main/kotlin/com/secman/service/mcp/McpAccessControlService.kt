@@ -68,7 +68,7 @@ open class McpAccessControlService(
         val accessibleAssetIds = when {
             isAdmin -> null
             hasUniversalAssetAccess -> assetRepository.findAllIds().toSet()
-            else -> assetFilterService.getAccessibleAssetIds(Authentication.build(
+            else -> assetFilterService.getAuthorizedAssetIds(Authentication.build(
                 user.username, userRoles, mapOf("userId" to user.id!!, "email" to user.email)
             ))
         }

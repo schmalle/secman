@@ -7,7 +7,7 @@ import org.w3c.dom.Element
 import java.io.ByteArrayInputStream
 import java.time.Instant
 import java.time.LocalDateTime
-import java.time.ZoneId
+import java.time.ZoneOffset
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
@@ -96,15 +96,15 @@ class MasscanParserService {
         val startAttr = root.getAttribute("start")
         if (startAttr.isNullOrBlank()) {
             logger.warn("Masscan XML missing 'start' attribute, using current time")
-            return LocalDateTime.now()
+            return LocalDateTime.now(ZoneOffset.UTC)
         }
 
         return try {
             val epochSeconds = startAttr.toLong()
-            LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneId.systemDefault())
+            LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneOffset.UTC)
         } catch (e: NumberFormatException) {
             logger.warn("Invalid 'start' attribute value: $startAttr, using current time", e)
-            LocalDateTime.now()
+            LocalDateTime.now(ZoneOffset.UTC)
         }
     }
 
@@ -141,7 +141,8 @@ class MasscanParserService {
         return MasscanHost(
             ipAddress = ipAddress,
             timestamp = timestamp,
-            ports = ports
+            ports = ports,
+            timestampVerified = hostElement.getAttribute("endtime").toLongOrNull() != null
         )
     }
 
@@ -173,15 +174,15 @@ class MasscanParserService {
         val endtimeAttr = hostElement.getAttribute("endtime")
         if (endtimeAttr.isNullOrBlank()) {
             logger.warn("Host missing 'endtime' attribute, using current time")
-            return LocalDateTime.now()
+            return LocalDateTime.now(ZoneOffset.UTC)
         }
 
         return try {
             val epochSeconds = endtimeAttr.toLong()
-            LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneId.systemDefault())
+            LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneOffset.UTC)
         } catch (e: NumberFormatException) {
             logger.warn("Invalid 'endtime' attribute value: $endtimeAttr, using current time", e)
-            LocalDateTime.now()
+            LocalDateTime.now(ZoneOffset.UTC)
         }
     }
 
@@ -261,7 +262,8 @@ data class MasscanScanData(
 data class MasscanHost(
     val ipAddress: String,
     val timestamp: LocalDateTime,
-    val ports: List<MasscanPort>
+    val ports: List<MasscanPort>,
+    val timestampVerified: Boolean = true
 )
 
 /**

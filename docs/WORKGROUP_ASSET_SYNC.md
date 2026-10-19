@@ -248,3 +248,5 @@ The AWS wrapper tests require `jq` and use simulated `aws`/`uv` executables with
 the real shared helper. They cover secret selection, URL compatibility,
 credential/argument forwarding, failure handling and exit status without
 contacting AWS or SecMan.
+
+Current inventory is limited to verified observations within 72 hours. The sync wrappers reconcile account grants through owner-sync previews and do not derive replacement memberships from the filtered inventory. Stored explicit asset assignments therefore survive an asset becoming hidden. See [Current asset visibility](CURRENT_ASSETS.md).

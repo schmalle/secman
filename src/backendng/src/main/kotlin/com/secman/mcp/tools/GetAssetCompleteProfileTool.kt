@@ -78,7 +78,7 @@ class GetAssetCompleteProfileTool(
             }
 
             // Get asset
-            val asset = assetRepository.findById(assetId).orElse(null)
+            val asset = assetRepository.findById(assetId).filter { com.secman.service.AssetCurrentnessPolicy.isCurrent(it) }.orElse(null)
                 ?: return McpToolResult.error(
                     "ASSET_NOT_FOUND",
                     "Asset with ID $assetId not found"
@@ -99,7 +99,7 @@ class GetAssetCompleteProfileTool(
                     "cloudInstanceId" to asset.cloudInstanceId,
                     "adDomain" to asset.adDomain,
                     "osVersion" to asset.osVersion,
-                    "lastSeen" to asset.lastSeen?.toString(),
+                    "lastSeen" to com.secman.service.AssetCurrentnessPolicy.observedAt(asset)?.toString(),
                     "createdAt" to asset.createdAt?.toString(),
                     "updatedAt" to asset.updatedAt?.toString(),
                     "workgroups" to asset.workgroups.map { mapOf("id" to it.id, "name" to it.name) }

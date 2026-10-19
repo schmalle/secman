@@ -4,8 +4,9 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TEST_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEST_DIR"' EXIT
-mkdir -p "$TEST_DIR/scripts/test" "$TEST_DIR/bin"
+mkdir -p "$TEST_DIR/scripts/test/lib" "$TEST_DIR/bin"
 cp "$REPO_ROOT/scripts/test/run-isolated-e2e.sh" "$TEST_DIR/scripts/test/"
+cp "$REPO_ROOT/scripts/test/lib/full-stack-lock.sh" "$TEST_DIR/scripts/test/lib/"
 cat > "$TEST_DIR/bin/mariadb" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail

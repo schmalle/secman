@@ -1,29 +1,119 @@
 # CrowdStrike Vulnerability Import
 
+## Current Falcon enrollment per machine
+
+Interactive lookup, single-host synchronization and bulk imports use the same
+selection: maximum Falcon `first_seen`, then maximum `last_seen` for an enrollment
+time tie, within one machine identity. A reused hostname across separate instances,
+accounts or FQDN/domain identities is ambiguous for interactive lookup. Supply the
+asset ID/instance instead. All case variants and full-name aliases are discovered
+before selection. Missing enrollment timestamps, incomplete discovery and tied
+ranking fail closed; a failed winner never falls back to an older enrollment.
+
+Full hostnames are compared without case sensitivity, within the same AD-domain
+and cloud-account scope. Short names in different FQDNs stay separate. Aliases for
+the same cloud instance and account are ranked together even across AD-domain
+changes during enrollment. Bulk vulnerability
+imports enumerate the requested device types without an activity filter, select the
+winner, then apply `--last-seen-days` to that winner. This retains older AIDs as
+cleanup evidence without querying their vulnerabilities.
+Records without a cloud account join the sole known account for their full hostname
+and AD domain. They never bridge two conflicting known accounts.
+
+If Falcon omits a cloud device's hostname, its instance ID supplies the asset name
+and it still participates in selection with named aliases of that instance.
+Devices lacking both names and instance IDs are excluded only after Falcon confirms
+they have no open findings; otherwise the import stops before replacement.
+
+The CLI sends one active AID and a separate bounded `deviceSelection` containing
+Falcon enrollment/check-in timestamps and superseded records. Zero-finding winners
+are sent too. These payloads require an ADMIN account. After a successful fetch,
+the backend validates the selection and performs import and cleanup in one per-host
+transaction. It removes old bindings on the canonical asset and deletes proven
+superseded duplicate assets using audited cascade deletion. It preserves the
+canonical asset's display-name override, owner and workgroups; it does not copy
+access grants from duplicates. Cross-account/domain conflicts, unknown bindings,
+ambiguous legacy assets, unknown legacy duplicates stop that host's replacement for review. Proven retired
+duplicates with manual or integration relationships retain their inventory, grants
+and manual findings; only their retired CrowdStrike contribution is removed. Legacy duplicate assets without
+AID bindings require a matching retired cloud instance and CrowdStrike import ownership.
+
+On a device transition, the canonical asset's old CrowdStrike snapshot is cleared
+across all severities before importing the winner's queried slice. Other vulnerability
+sources on the canonical asset are preserved. Its old installed-product snapshot
+is invalidated on the transition and repopulated by the product importer, which
+rejects retired AIDs even when their hostname matches the surviving asset. A CRITICAL/HIGH-only import still has
+only CRITICAL/HIGH coverage; invalidating old LOW/MEDIUM rows is not evidence of
+remediation. Subsequent imports of the same selected device retain severity-scoped
+replacement. Old clients cannot reattach a retired AID to an already selected asset.
+Non-admin domain synchronization queries selected devices but does not retire assets.
+
+Migration `V283__falcon_device_enrollment_timestamps.sql` adds nullable Falcon
+`first_seen`/`last_seen` columns to the identity table. Existing `first_seen_at` and
+`last_seen_at` remain SecMan observation times. The next successful ADMIN import
+populates the Falcon timestamps and performs evidence-backed cleanup; the migration
+itself deletes nothing. Deploy the backend migration before the rebuilt CLI.
+
+## Verified snapshot synchronization
+
+Migration `V286__crowdstrike_snapshot_provenance.sql` adds per-severity snapshots
+and finding provenance, plus a database identity lock to serialize imports across
+backend processes. It does not invent provenance for historical rows or delete
+them. Legacy findings remain visible and explicitly unverified until a successful
+authoritative synchronization establishes their disposition.
+
+Use `POST /api/crowdstrike/vulnerabilities/sync` as ADMIN with
+`{"hostname":"server.example.com","assetId":42}`. The backend resolves the stored
+instance/account, refetches all severities from Falcon, and commits binding,
+coverage and findings together. The compatibility save endpoint also refetches;
+browser-submitted findings are not trusted as replacement evidence. The UI action
+is **Synchronize from Falcon**, including when the live result has zero findings.
+
+A successful empty result with reported total zero clears the fetched scope.
+Missing pagination totals, 404, provider errors, inconsistent totals and incomplete
+pagination preserve stored findings. A successful same-enrollment scoped import
+retains other severity scopes; enrollment replacement invalidates all retired
+CrowdStrike scopes and installed products. Saved server queries fetch every age in
+the requested severity scope, regardless of `--min-days-open`, so presentation
+filters cannot incorrectly erase younger findings.
+
+Responses expose asset ID, selected AID, successful snapshot time and coverage.
+A verified empty database snapshot remains a database result. Current ORM/native
+readers exclude retired proven snapshots; unknown coverage does not count as a
+clean AWS server. Sensor contact today and findings snapshot age remain distinct.
+
+ADMIN can page through local reconciliation evidence using
+`GET /api/crowdstrike/snapshots/reconciliation?afterId=0&limit=100`, then synchronize
+individual asset IDs. This preview does not contact Falcon or claim that missing
+provider records are retired. It reports legacy findings, binding counts and
+verified scopes. Resolve ambiguous/unverified identity groups individually before
+attempting retirement; no migration performs an absence-based fleet purge.
+
 ## Asset IP addresses
 
-CrowdStrike's official Hosts API exposes the current `local_ip`, `external_ip`,
-and `connection_ip` fields on a device entity. It also defines
-`POST /devices/combined/devices/network-address-history/v1`, whose per-device
-`history` entries carry `ip_address`. The import queries both structures in
-bounded 100-device chunks and unions and deduplicates up to 100 addresses per
-device response. See CrowdStrike's official SDK definitions for
-the [Hosts operations](https://github.com/CrowdStrike/falconpy/blob/main/src/falconpy/_endpoint/_hosts.py)
-and [network-address history response](https://github.com/CrowdStrike/gofalcon/blob/main/falcon/models/deviceapi_network_address_history_v1.go).
+The import reads the current `local_ip`, `external_ip`, `connection_ip`, and
+`ip` fields from CrowdStrike device entities in bounded 100-device chunks,
+deduplicating up to 100 addresses per device. It does not query network-address
+history. Current device addresses take precedence over older Spotlight host
+snapshots; Spotlight addresses are a fallback when device addresses are missing.
 
-`Asset.ip` remains the compatibility primary address, preferring the reported
-local IP over the sorted address history. The complete set is held in
-`asset_ip_address` and returned as `ipAddresses` by both the detail and paginated
-inventory APIs. Inventory filtering searches both primary and secondary addresses
-and counts each matching asset once.
+When a matched asset has a non-empty set of reported addresses, the import
+**replaces** its stored `asset_ip_address` set and updates `Asset.ip` to the
+reported local IP (or the first sorted current address). For example, an asset
+previously reporting IP1 that now reports only IP2 will contain only IP2 after
+import. Repeating the same import leaves the same addresses.
 
-These are **reported addresses**, including external and historical addresses,
-rather than a verified list of currently configured network interfaces. Imports
-merge newly reported addresses into the stored set. Missing addresses in a partial
-response or an unavailable history lookup do not delete previously reported
-addresses; an import without a primary IP preserves the existing primary.
-Editing or clearing the primary IP also preserves reported addresses. Existing
-stored addresses appear immediately without a reimport or database migration.
+Missing or blank IP data preserves the existing primary and address set. The
+asset register has no per-address source ownership: a non-empty CrowdStrike
+result replaces the entire set, including addresses entered manually or by other
+importers. Other importers retain their existing behavior.
+
+The set is returned as `ipAddresses` by the detail and paginated inventory APIs.
+Inventory filtering searches primary and secondary addresses and counts each
+matching asset once. These are addresses reported in the latest imported data,
+including external addresses; they are not a verified interface inventory.
+Existing historical addresses are removed on the next import that supplies IP
+data; no database migration or bulk cleanup is required.
 
 Service: `CrowdStrikeVulnerabilityImportService` (`src/backendng/src/main/kotlin/com/secman/service/`).
 Spec: `specs/048-prevent-duplicate-vulnerabilities/`.
@@ -70,8 +160,8 @@ reconciliation matching. This prevents a user rename from making the next import
 a second asset under the source hostname.
 
 The import resolves an existing asset by Falcon agent ID (AID), then cloud instance ID,
-then by the source hostname (short name or FQDN). Several AIDs can point to one SecMan
-asset, which covers reimaged Falcon hosts. Conflicting AID or cloud-instance mappings fail
+then by the source hostname (short name or FQDN) for legacy payloads. Latest-device
+payloads retain one active AID per asset and retire proven superseded enrollments. Conflicting AID or cloud-instance mappings fail
 the host transaction instead of silently merging assets. The importer falls back to `Asset.name` only for legacy rows whose
 source hostname has not yet been adopted. When that legacy row is found by cloud instance
 ID and its display name differs, SecMan conservatively records it as a legacy user override.
@@ -461,6 +551,41 @@ excluded from both stale deletion and agent-seen stamping, with a warning. Exist
 source/severity restrictions, timestamp fences and deletion safety brakes still apply.
 No existing AID mapping is automatically moved between assets.
 
+An ADMIN import may correct an existing asset's EC2 instance ID when the current
+Falcon AID and verified enrollment first-seen timestamp are unchanged, the AWS
+account is present and matches, and the AD domain matches. The incoming instance
+must be valid and unowned by another asset in that account. Missing identity
+evidence, additional unexplained bindings, an older observation, and an older
+provider contact timestamp reject the correction. The original asset ID and its
+manual relationships remain intact. AID and instance locks serialize concurrent
+claims; metadata, findings, snapshots, and the append-only
+`crowdstrike_instance_transition` audit commit or roll back together. A repeat
+save does not create another transition. V287 adds this history and a nullable
+last-accepted identity observation; legacy observation times are not invented.
+
+When a superseded AID now reports a different EC2 instance than its stored asset,
+an ADMIN import retires that old binding only with the same verified enrollment,
+matching AWS account, non-decreasing Falcon contact and a newer identity observation.
+The former physical asset and its manual data remain intact; its CrowdStrike findings,
+installed-product snapshot and active vulnerability snapshots are retired. The selected
+device is imported into its own compatible asset, or a new asset. An append-only
+transition with reason `SUPERSEDED_ENROLLMENT_MOVED` records the former binding.
+Missing evidence or unexplained additional AIDs still reject the transaction.
+
+V288 adds the cloud-instance/account lookup index. Identity-key locks serialize claims;
+owner discovery uses bound equality predicates without locking the asset-table scan.
+Only resolved asset rows receive write locks, avoiding contention between unrelated imports.
+
+Verified snapshots cover supported CVE findings in their declared severity
+scope. Findings without CVE IDs are counted as exclusions. Invalid supported
+findings or incomplete provider fetches cannot replace stored data. Each new
+snapshot records request-wide fetched, accepted, missing-CVE, and duplicate
+counts with `coverage_kind=SUPPORTED_CVE`; those totals repeat across its severity
+rows and must not be summed across severities. Legacy snapshots retain unknown
+counts. Import responses add `hostOutcomes` while retaining existing aggregate
+fields. The CLI reports committed instance changes and leaves rejected assets
+marked unchanged.
+
 Bulk `query servers` defaults to 4,000 rows per Spotlight page (maximum 5,000).
 When a multi-device shard reaches the 50-page bound, its partial rows are discarded
 and the device set is split into smaller shards and retried. Splitting stops at a
@@ -472,6 +597,12 @@ Streaming CLI imports register an authenticated run before fetching, heartbeat e
 user can heartbeat or finish the run, and a competing run receives HTTP 409. The
 backend holds deferred refreshes and completion notifications while that run is active.
 A crashed CLI loses its lease after ten minutes; it does not produce a success event.
+An active-run HTTP 409 includes the current lease expiry, which the CLI displays
+with retry guidance. Ctrl+C and normal JVM termination attempt to finish the run
+as failed, with a five-second cleanup bound; force termination or an unreachable
+backend still relies on lease expiry. Normal close and shutdown share one cleanup
+request. The backend retains the last 100 finalized results in memory so an owner
+can retry finish without changing the original outcome or clearing a newer run.
 Failed and reconciliation-aborted runs also suppress success notifications. Older
 callers retain the existing quiet-period fallback. CLI backend authentication is renewed
 every twenty minutes during long runs. These leases are local to the backend process;
@@ -479,7 +610,7 @@ a backend restart invalidates an active run and the CLI must rerun.
 
 ## Performance
 
-The streaming importer resolves device metadata and address history once per run,
+The streaming importer resolves current device metadata once per run,
 in 100-device chunks with four concurrent workers, and reuses the result during
 Spotlight fetching. Logs include metadata duration, fetch duration per outer batch,
 and storage duration. Backend DEBUG logs include per-asset resolution, prior-date
@@ -627,3 +758,56 @@ already trusts the same resolution for the strictly more destructive DELETE.
 ./gradlew test --tests "CrowdStrikeVulnerabilityImportServiceTest"
 ./gradlew test --tests "CrowdStrikeStaleVulnerabilityIntegrationTest"
 ```
+
+CrowdStrike findings shown in SecMan are restricted to HIGH and CRITICAL,
+including live lookups, stored finding lists, exports and operational counts.
+Complete synchronization still records evidence for every fetched severity so
+that empty results and enrollment replacement can be verified safely. Findings
+below HIGH remain internal reconciliation data; they are excluded by the shared
+ORM/native read boundary. Other vulnerability sources retain their existing
+severity visibility.
+
+
+## Asset cleanup and sensor retention
+
+The inventory shows **Falcon last contact** separately from **Last imported into SecMan**.
+A fresh import of a historical Falcon record does not indicate a fresh sensor contact.
+
+`delete-asset-not-seen` defaults to `--basis import-inactivity`: both the import and
+Falcon contact must be old (unknown contact is allowed). Use `--basis sensor-contact`
+to select verified Falcon contact older than the threshold even when its import is recent:
+
+```bash
+./scripts/secman delete-asset-not-seen 3 --basis sensor-contact --dry-run --verbose
+# After reviewing the preview:
+./scripts/secman delete-asset-not-seen 3 --basis sensor-contact --verbose
+```
+
+Unknown contact times are excluded in sensor mode. Manual and scan-owned inventory
+is protected in both modes. `--include-legacy` applies only to import-inactivity and
+still protects recent sensor contact. Eligibility is rechecked under the deletion lock.
+CLI/API/MCP responses include policy, UTC cutoff, both timestamps, retention configuration,
+exclusion counts and audit run ID. Candidate detail responses show at most 200 rows;
+candidate counts and deletion cover the entire selected population. Existing API callers retain import-inactivity behavior.
+
+To prevent deleted historical records from being imported again, explicitly set
+`CROWDSTRIKE_SENSOR_RETENTION_DAYS=3` in the backend environment and the shell running
+`import.sh`, then restart the backend. The default `0` keeps historical inventory.
+The backend independently excludes old, unknown or future contact from persistence
+when this policy is enabled, including per-host saves. These skips are reported as
+`SKIPPED_RETENTION`, preserve existing rows and are excluded from findings reconciliation.
+The import wrapper bounds discovery by this setting and uses the same window for
+normal and isolated runs (`CROWDSTRIKE_IMPORT_LAST_SEEN_DAYS`, default 3; wrapper caps wider values to 3).
+
+Scheduled cleanup remains disabled by default. `CROWDSTRIKE_CLEANUP_BASIS` selects
+its policy; the percentage brake remains active. Import-inactivity schedules also
+require a successful complete CLI run within 24 hours, observed since backend startup.
+Failed runs invalidate that evidence; a backend restart requires a new successful run.
+An active CLI import or in-flight import save blocks destructive cleanup in both modes.
+A cleanup permit prevents a new CLI run or save from overlapping the deletion run. History distinguishes
+`ABORTED_IMPORT_HEALTH` from `ABORTED_SAFETY_BRAKE`. A three-day sensor cutoff is an
+inventory retention decision and is not proof that a stopped machine has been retired.
+
+## Current asset visibility
+
+Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.

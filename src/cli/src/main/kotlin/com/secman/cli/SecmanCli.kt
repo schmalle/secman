@@ -404,7 +404,7 @@ class SecmanCli {
               Vulnerabilities:
                 add-vulnerability      Add or update a vulnerability for an asset
                 deduplicate-vulnerabilities  Remove duplicate vulnerability records (ADMIN)
-                delete-asset-not-seen  Delete CrowdStrike assets not imported for N days (ADMIN)
+                delete-asset-not-seen  Delete stale CrowdStrike assets by explicit timestamp policy (ADMIN)
                 asset-match-clear      Delete AWS assets missing from an S3 resource snapshot (ADMIN)
 
               Requirements:
@@ -535,7 +535,7 @@ class SecmanCli {
                                            WORKSTATION, or ALL (default: SERVER)
                   --severity <levels>      Severity filter (default: HIGH,CRITICAL)
                   --min-days-open <num>    Minimum days open filter (default: 30)
-                  --last-seen-days <num>   Only include devices seen within N days (default: 0 = all)
+                  --last-seen-days <num>   Only include devices seen within N days (default: 3; 0 = all)
                   --limit <num>            Page size for pagination (default: 4000)
                   --client-id <id>         CrowdStrike API client ID (overrides config file)
                   --client-secret <secret> CrowdStrike API client secret (overrides config file)
@@ -1168,7 +1168,7 @@ class SecmanCli {
 
                 IAM permissions required on the S3 object:
                   s3:GetObject  (mandatory)
-                  s3:HeadObject (recommended — enables pre-download size check)
+                  HeadObject uses the same s3:GetObject permission for the size check
 
                 Examples:
                   # Local config via env vars, dry run first:
@@ -1187,13 +1187,15 @@ class SecmanCli {
             """.trimIndent(),
 
             "delete-asset-not-seen" to """
-                secman delete-asset-not-seen - Delete CrowdStrike assets not imported for N days
+                secman delete-asset-not-seen - Delete stale CrowdStrike assets by explicit timestamp policy
 
                 Usage: secman delete-asset-not-seen <days> [options]
 
                 Requires: ADMIN role
 
                 Options:
+                  --basis <policy>         import-inactivity (default) or sensor-contact
+                  --include-legacy         Include protected legacy cleanup rules in import-inactivity mode
                   --dry-run                Preview matching assets without deleting them
                   --backend-url <url>      Backend API URL (default: SECMAN_HOST, SECMAN_BACKEND_URL, or http://localhost:8080)
                   --username <user>        Backend username with ADMIN role (or SECMAN_ADMIN_NAME env var)
@@ -1202,11 +1204,14 @@ class SecmanCli {
                   --verbose, -v            Show matching asset details
 
                 Notes:
-                  Only assets with a CrowdStrike import timestamp are eligible.
-                  Assets with no CrowdStrike import timestamp are ignored until they are
-                  seen by a future CrowdStrike import or an explicit admin backfill.
+                  Default: old import AND old/unknown Falcon contact. A recent import retains an asset.
+                  Sensor-contact: verified Falcon contact older than the cutoff, even with a recent import.
+                  Manual and scan-owned inventory is protected. Unknown sensor contact is excluded in sensor mode.
+                  To prevent re-importing old devices, configure CROWDSTRIKE_SENSOR_RETENTION_DAYS on backend/import.
+                  Legacy rows are opt-in for import-inactivity and still protected by recent sensor contact.
 
                 Examples:
+                  secman delete-asset-not-seen 3 --basis sensor-contact --dry-run --verbose
                   secman delete-asset-not-seen 30 --dry-run
                   secman delete-asset-not-seen 90 --verbose
                   secman delete-asset-not-seen 60 --backend-url https://secman.example.com

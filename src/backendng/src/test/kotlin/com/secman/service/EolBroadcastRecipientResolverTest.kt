@@ -165,6 +165,7 @@ class EolBroadcastRecipientResolverTest {
         manualCreator: User? = null
     ): Asset =
         Asset(
+            verifiedObservedAt = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusMinutes(1),
             name = "host-$owner",
             type = "SERVER",
             owner = owner,

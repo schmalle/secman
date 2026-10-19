@@ -11,7 +11,7 @@ import org.reactivestreams.Publisher
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
 
-/** Reject stale signed identities before endpoint role rules can allow the request. */
+/** Reject stale signed identities; AI buddy's guarded namespace reloads roles locally. */
 @Singleton
 class CurrentIdentityRule(private val users: UserRepository) : SecurityRule<HttpRequest<*>> {
     override fun getOrder(): Int = SecuredAnnotationRule.ORDER - 100
@@ -19,10 +19,13 @@ class CurrentIdentityRule(private val users: UserRepository) : SecurityRule<Http
     override fun check(request: HttpRequest<*>?, authentication: Authentication?): Publisher<SecurityRuleResult> {
         if (authentication == null) return Mono.just(SecurityRuleResult.UNKNOWN)
         return Mono.fromCallable {
+            // AI buddy authorizes every operation with freshly loaded roles and asset scope.
+            // Keep stale-claim rejection everywhere else, including similarly named prefixes.
+            val liveRoleRoute = request?.path?.startsWith("/api/ai-buddy/") == true
             val id = authentication.attributes["userId"]?.toString()?.toLongOrNull()
             val current = id?.let { users.findById(it).orElse(null) }
             if (current == null || !current.enabled || current.username != authentication.name ||
-                current.roles.map { it.name }.toSet() != authentication.roles.toSet() ||
+                (!liveRoleRoute && current.roles.map { it.name }.toSet() != authentication.roles.toSet()) ||
                 authentication.attributes["email"]?.toString()?.let { it != current.email } == true) {
                 SecurityRuleResult.REJECTED
             } else SecurityRuleResult.UNKNOWN

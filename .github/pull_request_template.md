@@ -18,8 +18,9 @@
 - [ ] `./scripts/startbackenddev.sh` starts cleanly (backend changes)
 - [ ] `cd src/frontend && npm ci && npm run build` exits 0 (frontend changes)
 - [ ] New/updated unit or integration tests cover the change
-- [ ] `/e2ejs` reports 0 JS errors (admin + normal user)
-- [ ] `/e2evulnexception` passes with 0 failures
+- [ ] Finalizer ran once on the integrated change: `/e2ejs` reports 0 JS errors (admin + normal user)
+- [ ] Finalizer `/e2evulnexception` passes with 0 failures, including cleanup repeat
+- [ ] Finalizer report records base/snapshot, build/startup, applicable feature suites, and log paths
 - [ ] Doc-only change outside `src/`, `tests/`, `scripts/` — E2E gates skipped
 
 ## Backend contract changes

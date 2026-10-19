@@ -43,7 +43,7 @@ class McpAccessControlServiceTest {
         assertThat(context.accessibleWorkgroupIds).isEmpty()
         assertThat(context.canAccessAsset(700L)).isFalse()
         verify(exactly = 1) {
-            assetFilterService.getAccessibleAssetIds(any())
+            assetFilterService.getAuthorizedAssetIds(any())
         }
     }
 
@@ -76,13 +76,13 @@ class McpAccessControlServiceTest {
     }
 
     private fun stubNoAccessibleAssets() {
-        every { assetFilterService.getAccessibleAssetIds(any()) } returns emptySet()
+        every { assetFilterService.getAuthorizedAssetIds(any()) } returns emptySet()
     }
 
     @Test
     fun `each MCP request recomputes visibility after revocation`() {
         every { userRepository.findByIdWithWorkgroups(42L) } returns Optional.of(user(mutableSetOf(User.Role.USER)))
-        every { assetFilterService.getAccessibleAssetIds(any()) } returnsMany listOf(setOf(700L), emptySet())
+        every { assetFilterService.getAuthorizedAssetIds(any()) } returnsMany listOf(setOf(700L), emptySet())
         assertThat(service.buildExecutionContext(apiKey(), delegation()).canAccessAsset(700L)).isTrue()
         assertThat(service.buildExecutionContext(apiKey(), delegation()).canAccessAsset(700L)).isFalse()
     }

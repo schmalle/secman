@@ -7,6 +7,7 @@ import com.secman.service.AdminSummaryService
 import com.secman.service.AwsAccountRecipientResolver
 import com.secman.service.GithubRepoAlertService
 import com.secman.service.NewAccountNotificationService
+import com.secman.service.NotificationAssetSeenWindow
 import com.secman.service.NotificationService
 import com.secman.service.UserMappingStatisticsService
 import com.secman.service.UserVulnerabilityNotificationService
@@ -105,6 +106,7 @@ class CliController(
      * Ported from NotificationCliService.queryOutdatedAssets().
      */
     private fun queryOutdatedAssets(verbose: Boolean): List<NotificationService.OutdatedAssetData> {
+        val seenWindow = NotificationAssetSeenWindow.current()
         val pageable = Pageable.unpaged()
         val outdatedView = outdatedAssetRepository.findOutdatedAssets(
             workgroupId = null,
@@ -120,6 +122,10 @@ class CliController(
             val asset = assetRepository.findByIdWithWorkgroups(view.assetId).orElse(null)
             if (asset == null) {
                 if (verbose) logger.warn("Asset {} not found, skipping", view.assetId)
+                return@forEach
+            }
+
+            if (!seenWindow.includes(asset.crowdStrikeAgentSeenAt)) {
                 return@forEach
             }
 

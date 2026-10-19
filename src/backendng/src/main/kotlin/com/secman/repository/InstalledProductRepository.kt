@@ -146,14 +146,14 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
      */
     @Query("""
         SELECT p FROM InstalledProduct p
-        ORDER BY p.name ASC, p.vendor ASC, p.version ASC, p.id ASC
+        WHERE p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL}) ORDER BY p.name ASC, p.vendor ASC, p.version ASC, p.id ASC
     """)
     fun findOrderedPage(pageable: Pageable): List<InstalledProduct>
 
     /** Non-admin counterpart of [findOrderedPage], scoped to accessible assets. */
     @Query("""
         SELECT p FROM InstalledProduct p
-        WHERE p.asset.id IN (:assetIds)
+        WHERE p.asset.id IN (:assetIds) AND p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
         ORDER BY p.name ASC, p.vendor ASC, p.version ASC, p.id ASC
     """)
     fun findOrderedPageForAssets(assetIds: Set<Long>, pageable: Pageable): List<InstalledProduct>
@@ -164,7 +164,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
      */
     @Query("""
         SELECT COUNT(p) FROM InstalledProduct p
-        WHERE (:search IS NULL OR :search = ''
+        WHERE p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL}) AND (:search IS NULL OR :search = ''
             OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
             OR LOWER(COALESCE(p.vendor, '')) LIKE LOWER(CONCAT('%', :search, '%'))
             OR LOWER(COALESCE(p.version, '')) LIKE LOWER(CONCAT('%', :search, '%'))
@@ -175,7 +175,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
     /** Non-admin counterpart of [countProducts]. */
     @Query("""
         SELECT COUNT(p) FROM InstalledProduct p
-        WHERE p.asset.id IN (:assetIds)
+        WHERE p.asset.id IN (:assetIds) AND p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND (:search IS NULL OR :search = ''
             OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
             OR LOWER(COALESCE(p.vendor, '')) LIKE LOWER(CONCAT('%', :search, '%'))
@@ -187,7 +187,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
     /** [countProducts] for the "search by server" box. */
     @Query("""
         SELECT COUNT(p) FROM InstalledProduct p
-        WHERE (:server IS NULL OR :server = ''
+        WHERE p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL}) AND (:server IS NULL OR :server = ''
             OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :server, '%'))
             OR LOWER(COALESCE(p.asset.ip, '')) LIKE LOWER(CONCAT('%', :server, '%')))
     """)
@@ -196,7 +196,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
     /** Non-admin counterpart of [countProductsByServer]. */
     @Query("""
         SELECT COUNT(p) FROM InstalledProduct p
-        WHERE p.asset.id IN (:assetIds)
+        WHERE p.asset.id IN (:assetIds) AND p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND (:server IS NULL OR :server = ''
             OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :server, '%'))
             OR LOWER(COALESCE(p.asset.ip, '')) LIKE LOWER(CONCAT('%', :server, '%')))
@@ -206,7 +206,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
     @Query("""
         SELECT p FROM InstalledProduct p
         JOIN FETCH p.asset
-        WHERE (:server IS NULL OR :server = ''
+        WHERE p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL}) AND (:server IS NULL OR :server = ''
             OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :server, '%'))
             OR LOWER(COALESCE(p.asset.ip, '')) LIKE LOWER(CONCAT('%', :server, '%')))
         ORDER BY p.asset.name ASC, p.name ASC, p.vendor ASC, p.version ASC
@@ -216,7 +216,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
     @Query("""
         SELECT p FROM InstalledProduct p
         JOIN FETCH p.asset
-        WHERE p.asset.id IN (:assetIds)
+        WHERE p.asset.id IN (:assetIds) AND p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND (:server IS NULL OR :server = ''
             OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :server, '%'))
             OR LOWER(COALESCE(p.asset.ip, '')) LIKE LOWER(CONCAT('%', :server, '%')))
@@ -226,7 +226,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
 
     @Query("""
         SELECT COUNT(DISTINCT p.asset.id) FROM InstalledProduct p
-        WHERE (:server IS NULL OR :server = ''
+        WHERE p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL}) AND (:server IS NULL OR :server = ''
             OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :server, '%'))
             OR LOWER(COALESCE(p.asset.ip, '')) LIKE LOWER(CONCAT('%', :server, '%')))
     """)
@@ -234,7 +234,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
 
     @Query("""
         SELECT COUNT(DISTINCT p.asset.id) FROM InstalledProduct p
-        WHERE p.asset.id IN (:assetIds)
+        WHERE p.asset.id IN (:assetIds) AND p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND (:server IS NULL OR :server = ''
             OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :server, '%'))
             OR LOWER(COALESCE(p.asset.ip, '')) LIKE LOWER(CONCAT('%', :server, '%')))
@@ -244,7 +244,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
     @Query("""
         SELECT DISTINCT asset FROM InstalledProduct p
         JOIN p.asset asset
-        WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :productName, '%'))
+        WHERE p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL}) AND LOWER(p.name) LIKE LOWER(CONCAT('%', :productName, '%'))
         ORDER BY asset.name ASC
     """)
     fun findAssetsByProductName(productName: String): List<Asset>
@@ -252,7 +252,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
     @Query("""
         SELECT DISTINCT asset FROM InstalledProduct p
         JOIN p.asset asset
-        WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :productName, '%'))
+        WHERE p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL}) AND LOWER(p.name) LIKE LOWER(CONCAT('%', :productName, '%'))
           AND asset.id IN (:assetIds)
         ORDER BY asset.name ASC
     """)
@@ -261,7 +261,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
     @Query("""
         SELECT p FROM InstalledProduct p
         JOIN FETCH p.asset
-        WHERE p.asset.id IN (:assetIds)
+        WHERE p.asset.id IN (:assetIds) AND p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND (:search IS NULL OR :search = ''
             OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
             OR LOWER(COALESCE(p.vendor, '')) LIKE LOWER(CONCAT('%', :search, '%'))
@@ -273,7 +273,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
 
     @Query("""
         SELECT COUNT(DISTINCT p.asset.id) FROM InstalledProduct p
-        WHERE (:search IS NULL OR :search = ''
+        WHERE p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL}) AND (:search IS NULL OR :search = ''
             OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
             OR LOWER(COALESCE(p.vendor, '')) LIKE LOWER(CONCAT('%', :search, '%'))
             OR LOWER(COALESCE(p.version, '')) LIKE LOWER(CONCAT('%', :search, '%'))
@@ -283,7 +283,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
 
     @Query("""
         SELECT COUNT(DISTINCT p.asset.id) FROM InstalledProduct p
-        WHERE p.asset.id IN (:assetIds)
+        WHERE p.asset.id IN (:assetIds) AND p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
           AND (:search IS NULL OR :search = ''
             OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
             OR LOWER(COALESCE(p.vendor, '')) LIKE LOWER(CONCAT('%', :search, '%'))
@@ -294,13 +294,13 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
 
     @Query("""
         SELECT DISTINCT p.name FROM InstalledProduct p
-        ORDER BY p.name ASC
+        WHERE p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL}) ORDER BY p.name ASC
     """)
     fun findDistinctNames(pageable: Pageable): List<String>
 
     @Query("""
         SELECT DISTINCT p.name FROM InstalledProduct p
-        WHERE p.asset.id IN (:assetIds)
+        WHERE p.asset.id IN (:assetIds) AND p.asset.id IN (SELECT a.id FROM Asset a WHERE ${AssetCurrentnessSql.JPQL})
         ORDER BY p.name ASC
     """)
     fun findDistinctNamesForAssets(assetIds: Set<Long>, pageable: Pageable): List<String>

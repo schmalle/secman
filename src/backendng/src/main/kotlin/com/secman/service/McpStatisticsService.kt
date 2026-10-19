@@ -33,8 +33,8 @@ open class McpStatisticsService(
         val activeSince = Instant.now().minus(7, ChronoUnit.DAYS)
         val result = mapOf(
             "generatedAt" to Instant.now().toString(),
-            "assets" to assetRepository.count(),
-            "vulnerabilities" to vulnerabilityRepository.count(),
+            "assets" to assetRepository.countCurrent(),
+            "vulnerabilities" to vulnerabilityRepository.countCurrent(),
             "users" to mapOf(
                 "total" to userRepository.count(),
                 "loggedInLast7Days" to userRepository.countByLastLoginGreaterThanEqual(activeSince),
@@ -64,7 +64,7 @@ open class McpStatisticsService(
         val result = mapOf(
             "generatedAt" to Instant.now().toString(),
             "scope" to if (universal) "ALL_ASSETS" else "DELEGATED_USER_ASSETS",
-            "assetCount" to if (universal) assetRepository.count() else assetIds.size.toLong(),
+            "assetCount" to if (universal) assetRepository.countCurrent() else assetIds.size.toLong(),
             "vulnerabilities" to severitySummary(rows)
         )
         log.info(

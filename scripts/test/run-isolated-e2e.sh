@@ -32,6 +32,16 @@ for command_name in mariadb mariadb-dump openssl lsof pass-cli rsync jq; do
     }
 done
 
+# Reserve the fixed ports across worktrees before inspecting or changing a database.
+source "$REPO_ROOT/scripts/test/lib/full-stack-lock.sh"
+unset SECMAN_E2E_LOCK_DIR
+if [[ "$DB_ONLY" == false ]]; then
+    secman_e2e_acquire_lock "/tmp/secman-e2e-$(id -u).lock"
+    trap 'secman_e2e_release_lock' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+fi
+
 # Fixed test ports must be free; never displace another stack.
 if [[ "$DB_ONLY" == false ]]; then
     for port in "$BACKEND_PORT" "$FRONTEND_PORT" "$SMTP_PORT"; do
@@ -122,6 +132,7 @@ finish() {
     else
         rm -f "$MANIFEST_FILE"
     fi
+    secman_e2e_release_lock || result=1
     exit "$result"
 }
 trap 'finish $?' EXIT

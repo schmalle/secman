@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import { formatServerDate } from '../utils/dateUtils';
+import { buddyLabel } from '../services/aiBuddyService';
+import { buddySetupLabel, buddySetupMissing, orderBuddyProviders, parseBuddySetupResult, type BuddySetupResult, type BuddyProviderOption } from '../services/aiBuddySetup';
 
 interface TranslationConfig {
   id?: number;
@@ -10,11 +12,26 @@ interface TranslationConfig {
   maxTokens: number;
   temperature: number;
   isActive: boolean;
+  aiBuddyEnabled: boolean;
+  aiBuddySingleInstance: boolean;
+  aiBuddyProviders: string;
+  aiBuddyMaxCostPerJobUsd: number;
+  aiBuddyDailyBudgetUsd: number;
+  aiBuddyMaxInputPricePerMillion: number;
+  aiBuddyMaxOutputPricePerMillion: number;
+  aiBuddyMicrosoftEvidenceEnabled: boolean;
+  aiBuddyCrowdStrikeEvidenceEnabled: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
 
+// Concrete IDs checked against OpenRouter's catalogue on 2026-10-10.
 const openRouterModelOptions = [
+  { value: 'openai/gpt-6.1-sol', label: 'GPT-6.1 Sol (latest Sol)' },
+  { value: 'openai/gpt-6.1-sol-pro', label: 'GPT-6.1 Sol Pro' },
+  { value: 'anthropic/claude-sonnet-5.5', label: 'Claude Sonnet 5.5 (latest Sonnet)' },
+  { value: 'openai/gpt-6-sol', label: 'GPT-6 Sol' },
+  { value: 'anthropic/claude-sonnet-5', label: 'Claude Sonnet 5' },
   { value: '~anthropic/claude-opus-latest', label: 'Claude Opus Latest' },
   { value: 'anthropic/claude-opus-4.7', label: 'Claude Opus 4.7' },
   { value: 'anthropic/claude-opus-4.7-fast', label: 'Claude Opus 4.7 (Fast)' },
@@ -27,8 +44,6 @@ const openRouterModelOptions = [
   { value: 'deepseek/deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
   { value: 'deepseek/deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
   { value: 'deepseek/deepseek-v4-flash:free', label: 'DeepSeek V4 Flash (free)' },
-  { value: 'openai/gpt-5.5', label: 'GPT-5.5' },
-  { value: 'openai/gpt-5.5-pro', label: 'GPT-5.5 Pro' },
   { value: 'mistralai/mistral-medium-3-5', label: 'Mistral Medium 3.5' },
   { value: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B' },
 ];
@@ -42,16 +57,56 @@ const TranslationConfigManagement: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingConfig, setEditingConfig] = useState<TranslationConfig | null>(null);
   const [testing, setTesting] = useState<number | null>(null);
-  const [selectedModelOption, setSelectedModelOption] = useState('~anthropic/claude-haiku-latest');
+  const [checkingSetup, setCheckingSetup] = useState(false);
+  const [setupError, setSetupError] = useState('');
+  const [setupResult, setSetupResult] = useState<BuddySetupResult | null>(null);
+  const [providerOptions, setProviderOptions] = useState<BuddyProviderOption[]>([]);
+  const [savedSetupChecks, setSavedSetupChecks] = useState<Record<number, BuddySetupResult>>({});
+  const [setupFeedback, setSetupFeedback] = useState<{ configId?: number; kind: 'info' | 'success' | 'warning' | 'danger'; message: string } | null>(null);
+  const setupRequest = useRef(0);
+  const setupLinkHandled = useRef(false);
+  const [selectedModelOption, setSelectedModelOption] = useState('openai/gpt-6.1-sol');
   const [customModelName, setCustomModelName] = useState('');
   const [formData, setFormData] = useState<TranslationConfig>({
     apiKey: '',
     baseUrl: 'https://openrouter.ai/api/v1',
-    modelName: '~anthropic/claude-haiku-latest',
+    modelName: 'openai/gpt-6.1-sol',
     maxTokens: 4000,
     temperature: 0.3,
-    isActive: true
+    isActive: true,
+    aiBuddyEnabled: false,
+    aiBuddySingleInstance: false,
+    aiBuddyProviders: '',
+    aiBuddyMaxCostPerJobUsd: 0.50,
+    aiBuddyDailyBudgetUsd: 10.0,
+    aiBuddyMaxInputPricePerMillion: 5.0,
+    aiBuddyMaxOutputPricePerMillion: 20.0,
+    aiBuddyMicrosoftEvidenceEnabled: true,
+    aiBuddyCrowdStrikeEvidenceEnabled: false
   });
+
+  useEffect(() => {
+    setupRequest.current += 1;
+    setCheckingSetup(false);
+    setSetupResult(null);
+    setSetupError('');
+  }, [formData]);
+
+  useEffect(() => {
+    setProviderOptions([]);
+  }, [showForm, editingConfig?.id, formData.modelName, formData.baseUrl, formData.maxTokens, formData.apiKey,
+    formData.aiBuddyMaxInputPricePerMillion, formData.aiBuddyMaxOutputPricePerMillion]);
+
+  useEffect(() => {
+    if (setupLinkHandled.current || !configs.length || new URLSearchParams(window.location.search).get('setup') !== 'ai-buddy') return;
+    setupLinkHandled.current = true;
+    handleEdit(configs.find(config => config.isActive) || configs[0]);
+    window.setTimeout(() => {
+      const field = document.getElementById('aiBuddyProviders');
+      field?.scrollIntoView({ block: 'center' });
+      field?.focus();
+    }, 0);
+  }, [configs]);
 
   // Check if user is authenticated
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -91,6 +146,8 @@ const TranslationConfigManagement: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         setConfigs(data);
+        setSavedSetupChecks({});
+        setSetupFeedback(null);
       } else {
         setError(`Failed to fetch translation configs: ${response.status}`);
       }
@@ -105,12 +162,13 @@ const TranslationConfigManagement: React.FC = () => {
     e.preventDefault();
     
     try {
-      if (editingConfig) {
-        await authenticatedPut(`/api/translation-config/${editingConfig.id}`, formData);
-      } else {
-        await authenticatedPost('/api/translation-config', formData);
+      const response = editingConfig
+        ? await authenticatedPut(`/api/translation-config/${editingConfig.id}`, formData)
+        : await authenticatedPost('/api/translation-config', formData);
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
+        throw new Error(result?.error || 'Unable to save OpenRouter configuration');
       }
-
       await fetchConfigs();
       resetForm();
       setError(null);
@@ -173,17 +231,88 @@ const TranslationConfigManagement: React.FC = () => {
     }
   };
 
+  const handleSetupCheck = async (config: TranslationConfig, fromForm: boolean) => {
+    const version = ++setupRequest.current;
+    setCheckingSetup(true);
+    setSetupError('');
+    if (!fromForm) {
+      setSetupFeedback({ configId: config.id, kind: 'info', message: `Checking AI buddy setup for ${config.modelName}…` });
+      if (config.id) setSavedSetupChecks(previous => {
+        const updated = { ...previous };
+        delete updated[config.id!];
+        return updated;
+      });
+    }
+    try {
+      const response = await authenticatedPost('/api/translation-config/ai-buddy/setup', {
+        configId: config.id ?? null, settings: config
+      });
+      const result = await response.json().catch(() => null);
+      if (version !== setupRequest.current) return;
+      if (!response.ok) {
+        throw new Error(response.status === 404
+          ? 'The AI buddy setup endpoint is not available on the running backend yet. It will be available after the backend is rebuilt and restarted.'
+          : result?.error || 'AI buddy setup could not be verified');
+      }
+      const checked = parseBuddySetupResult(result);
+      if (fromForm) {
+        setSetupResult(checked);
+        setProviderOptions(orderBuddyProviders(checked.providers));
+      } else if (config.id) {
+        setSavedSetupChecks(previous => ({ ...previous, [config.id!]: checked }));
+        setSetupFeedback({ configId: config.id, kind: checked.ready ? 'success' : 'warning',
+          message: checked.ready
+            ? `AI buddy setup check passed for ${config.modelName}. The configured provider routes meet the current requirements.`
+            : `AI buddy setup check did not pass for ${config.modelName}. ${checked.reasons.map(buddyLabel).join('; ') || 'Review the configuration settings.'}` });
+      }
+    } catch (err) {
+      if (version === setupRequest.current) {
+        const message = err instanceof Error ? err.message : 'AI buddy setup could not be verified';
+        if (fromForm) setSetupError(message);
+        else setSetupFeedback({ configId: config.id, kind: 'danger', message: `AI buddy setup check failed for ${config.modelName}. ${message}` });
+      }
+    } finally {
+      if (version === setupRequest.current) setCheckingSetup(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!showForm || !(formData.apiKey.trim() || editingConfig?.apiKey) ||
+      formData.baseUrl.replace(/\/+$/, '') !== 'https://openrouter.ai/api/v1' ||
+      !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(formData.modelName.trim())) return;
+    const timer = window.setTimeout(() => void handleSetupCheck(formData, true), 600);
+    return () => {
+      window.clearTimeout(timer);
+      setupRequest.current += 1;
+    };
+  }, [showForm, formData, editingConfig?.apiKey]);
+
+  const selectProvider = (tag: string, approved: boolean) => {
+    const tags = formData.aiBuddyProviders.split(',').map(value => value.trim()).filter(Boolean);
+    setFormData(previous => ({ ...previous, aiBuddyProviders: (approved
+      ? [...new Set([...tags, tag])] : tags.filter(value => value !== tag)).join(', ') }));
+  };
+
   const resetForm = () => {
     setFormData({
       apiKey: '',
       baseUrl: 'https://openrouter.ai/api/v1',
-      modelName: '~anthropic/claude-haiku-latest',
+      modelName: 'openai/gpt-6.1-sol',
       maxTokens: 4000,
       temperature: 0.3,
-      isActive: true
+      isActive: true,
+    aiBuddyEnabled: false,
+    aiBuddySingleInstance: false,
+    aiBuddyProviders: '',
+    aiBuddyMaxCostPerJobUsd: 0.50,
+    aiBuddyDailyBudgetUsd: 10.0,
+    aiBuddyMaxInputPricePerMillion: 5.0,
+    aiBuddyMaxOutputPricePerMillion: 20.0,
+    aiBuddyMicrosoftEvidenceEnabled: true,
+    aiBuddyCrowdStrikeEvidenceEnabled: false
     });
     setEditingConfig(null);
-    setSelectedModelOption('~anthropic/claude-haiku-latest');
+    setSelectedModelOption('openai/gpt-6.1-sol');
     setCustomModelName('');
     setShowForm(false);
   };
@@ -244,7 +373,7 @@ const TranslationConfigManagement: React.FC = () => {
       <div className="row">
         <div className="col-12">
           <div className="d-flex justify-content-between align-items-center mb-4">
-            <h2>LLM Configuration Management</h2>
+            <h2>OpenRouter / LLM Configuration Management</h2>
             <button
               className="btn btn-primary"
               onClick={() => {
@@ -279,8 +408,8 @@ const TranslationConfigManagement: React.FC = () => {
                           name="apiKey"
                           value={formData.apiKey}
                           onChange={handleInputChange}
-                          required
-                          placeholder={editingConfig ? "Enter new API key" : "sk-or-..."}
+                          required={!editingConfig}
+                          placeholder={editingConfig ? "Leave blank to keep the stored API key" : "sk-or-..."}
                         />
                         <div className="form-text">Get your API key from <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">OpenRouter</a></div>
                       </div>
@@ -319,7 +448,7 @@ const TranslationConfigManagement: React.FC = () => {
                           ))}
                           <option value={CUSTOM_MODEL_OPTION}>Custom model ID</option>
                         </select>
-                        <div className="form-text">Choose a known OpenRouter model.</div>
+                        <div className="form-text">Latest Sol and Sonnet models appear first. Use a concrete model ID for AI buddy; existing custom models remain editable.</div>
                       </div>
                       <div className="mb-3">
                         <label htmlFor="modelName" className="form-label">Custom Model ID</label>
@@ -389,6 +518,61 @@ const TranslationConfigManagement: React.FC = () => {
                     </div>
                   </div>
 
+                  <fieldset className="border rounded p-3 mb-3">
+                    <legend className="float-none w-auto px-2 fs-6">AI buddy(beta)</legend>
+                    <p className="text-muted">Active selects the configuration; Enabled turns on AI buddy. Neither means setup is complete. AI buddy uses this configuration’s API key, base URL and model, with output capped at 4,096 tokens.</p>
+                    <div className="alert alert-info" role="status">
+                      <strong>{setupResult?.ready ? 'Provider setup verified for this draft' : buddySetupLabel(formData, Boolean(editingConfig?.apiKey))}</strong>
+                      {formData.aiBuddyEnabled && buddySetupMissing(formData, Boolean(editingConfig?.apiKey)).length > 0 && <ul className="mb-0 mt-2">
+                        {buddySetupMissing(formData, Boolean(editingConfig?.apiKey)).map(reason => <li key={reason}>{reason}</li>)}
+                      </ul>}
+                      {setupResult && setupResult.reasons.length > 0 && <ul className="mb-0 mt-2">{setupResult.reasons.map(reason => <li key={reason}>{buddyLabel(reason)}</li>)}</ul>}
+                    </div>
+                    <div className="form-check mb-2"><input type="checkbox" className="form-check-input" id="aiBuddyEnabled" name="aiBuddyEnabled" checked={formData.aiBuddyEnabled} onChange={handleInputChange} /><label className="form-check-label" htmlFor="aiBuddyEnabled">Enable AI buddy(beta)</label></div>
+                    <div className="form-check mb-2"><input type="checkbox" className="form-check-input" id="aiBuddySingleInstance" name="aiBuddySingleInstance" checked={formData.aiBuddySingleInstance} onChange={handleInputChange} /><label className="form-check-label" htmlFor="aiBuddySingleInstance">I confirm this deployment uses one backend instance</label></div>
+                    <div className="form-check mb-2"><input type="checkbox" className="form-check-input" id="aiBuddyMicrosoftEvidenceEnabled" name="aiBuddyMicrosoftEvidenceEnabled" checked={formData.aiBuddyMicrosoftEvidenceEnabled} onChange={handleInputChange} /><label className="form-check-label" htmlFor="aiBuddyMicrosoftEvidenceEnabled">Retrieve public Microsoft remediation evidence</label></div>
+                    <div className="form-check mb-2"><input type="checkbox" className="form-check-input" id="aiBuddyCrowdStrikeEvidenceEnabled" name="aiBuddyCrowdStrikeEvidenceEnabled" checked={formData.aiBuddyCrowdStrikeEvidenceEnabled} onChange={handleInputChange} /><label className="form-check-label" htmlFor="aiBuddyCrowdStrikeEvidenceEnabled">Retrieve CrowdStrike remediation evidence using existing Falcon credentials</label></div>
+                    <div id="aiBuddyProviders" tabIndex={-1} className="mb-2">
+                      <h3 className="h6">Choose provider routes</h3>
+                      <p className="form-text">Routes for your selected model load automatically. Select a compatible route below to approve it. ZDR means zero data retention, as reported by OpenRouter. Save or Update applies your choices.</p>
+                    </div>
+                    <button type="button" className="btn btn-outline-primary mb-2" disabled={checkingSetup} onClick={() => void handleSetupCheck(formData, true)}>
+                      {checkingSetup ? 'Loading routes and checking setup…' : 'Refresh provider routes'}
+                    </button>
+                    <p className="form-text">Loading routes reads provider metadata only. It does not generate a report or save settings.</p>
+                    {setupError && <div className="alert alert-warning" role="alert">{setupError}</div>}
+                    {!formData.apiKey.trim() && !editingConfig?.apiKey && <p className="text-muted">Enter an OpenRouter API key above to load provider suggestions.</p>}
+                    {providerOptions.length > 0 && <div className="border rounded p-2 mb-2">
+                      {providerOptions.map(provider => <div className="form-check mb-2" key={provider.tag}>
+                        <input className="form-check-input" type="checkbox" id={`provider-${provider.tag}`} checked={formData.aiBuddyProviders.split(',').map(tag => tag.trim()).includes(provider.tag)}
+                          disabled={!provider.compatible && !formData.aiBuddyProviders.split(',').map(tag => tag.trim()).includes(provider.tag)} onChange={event => selectProvider(provider.tag, event.target.checked)} />
+                        <label className="form-check-label" htmlFor={`provider-${provider.tag}`}>
+                          {provider.name} <small className="text-muted">({provider.tag})</small>
+                          <span className={`badge ms-2 ${provider.reasons.includes('ZERO_RETENTION_REQUIRED') ? 'bg-secondary' : 'bg-success'}`}>
+                            {provider.reasons.includes('ZERO_RETENTION_REQUIRED') ? 'ZDR not verified' : 'ZDR'}
+                          </span>
+                          {provider.compatible && <span className="badge bg-primary ms-2">Compatible with your settings</span>}
+                        </label>
+                        {!provider.compatible && <small className="d-block text-muted">{provider.reasons.map(buddyLabel).join('; ')}</small>}
+                      </div>)}
+                    </div>}
+                    {setupResult && !setupError && providerOptions.length === 0 && <p className="text-warning">No provider routes were returned. Check the model, API key and setup messages above.</p>}
+                    {providerOptions.length > 0 && !providerOptions.some(provider => provider.compatible) && <p className="text-warning">No route currently meets all requirements. Review the reasons above, choose another model or adjust your token and price limits, then refresh.</p>}
+                    <details className="mb-2">
+                      <summary>Advanced: edit approved route tags manually</summary>
+                      <label htmlFor="aiBuddyProviderTags" className="form-label mt-2">Approved provider tags</label>
+                      <input className="form-control" id="aiBuddyProviderTags" name="aiBuddyProviders" maxLength={512} value={formData.aiBuddyProviders} onChange={handleInputChange} placeholder="Comma-separated provider tags" />
+                    </details>
+                    <p className="form-text">AI buddy requires a concrete author/model ID, the standard HTTPS OpenRouter URL, an approved provider route with structured outputs and zero data retention, and Max Tokens of at least 128. Automatic aliases, online/search suffixes and fallback routes are not accepted. Approve provider data handling before enabling.</p>
+                    <div className="row">
+                      <div className="col-md-6 mb-2"><label className="form-label" htmlFor="aiBuddyMaxCostPerJobUsd">Maximum reservation per report (USD)</label><input type="number" className="form-control" id="aiBuddyMaxCostPerJobUsd" name="aiBuddyMaxCostPerJobUsd" value={formData.aiBuddyMaxCostPerJobUsd} onChange={handleInputChange} min="0.01" max="1000000" step="0.01" required /></div>
+                      <div className="col-md-6 mb-2"><label className="form-label" htmlFor="aiBuddyDailyBudgetUsd">Daily AI buddy reservation budget (USD)</label><input type="number" className="form-control" id="aiBuddyDailyBudgetUsd" name="aiBuddyDailyBudgetUsd" value={formData.aiBuddyDailyBudgetUsd} onChange={handleInputChange} min="0.01" max="1000000" step="0.01" required /></div>
+                      <div className="col-md-6 mb-2"><label className="form-label" htmlFor="aiBuddyMaxInputPricePerMillion">Maximum input price per million tokens (USD)</label><input type="number" className="form-control" id="aiBuddyMaxInputPricePerMillion" name="aiBuddyMaxInputPricePerMillion" value={formData.aiBuddyMaxInputPricePerMillion} onChange={handleInputChange} min="0.01" max="1000000" step="0.01" required /></div>
+                      <div className="col-md-6 mb-2"><label className="form-label" htmlFor="aiBuddyMaxOutputPricePerMillion">Maximum output price per million tokens (USD)</label><input type="number" className="form-control" id="aiBuddyMaxOutputPricePerMillion" name="aiBuddyMaxOutputPricePerMillion" value={formData.aiBuddyMaxOutputPricePerMillion} onChange={handleInputChange} min="0.01" max="1000000" step="0.01" required /></div>
+                    </div>
+                    <p className="form-text">Budget counters are process-local and reset on restart. Set a provider-side spending ceiling as well. Saving or switching the active configuration affects subsequent requests; running analyses stop when their configuration changes.</p>
+                  </fieldset>
+
                   <div className="d-flex justify-content-end">
                     <button type="submit" className="btn btn-success me-2">
                       {editingConfig ? 'Update' : 'Save'}
@@ -409,6 +593,9 @@ const TranslationConfigManagement: React.FC = () => {
           <div className="card">
             <div className="card-body">
               <h5 className="card-title">LLM Configurations ({configs.length})</h5>
+              {!showForm && setupFeedback && <div className={`alert alert-${setupFeedback.kind}`} role="status" aria-live="polite">
+                {setupFeedback.message}
+              </div>}
               {configs.length === 0 ? (
                 <p className="text-muted">No LLM configurations found. Click "Add New Configuration" to create one.</p>
               ) : (
@@ -417,6 +604,7 @@ const TranslationConfigManagement: React.FC = () => {
                     <thead>
                       <tr>
                         <th>Status</th>
+                        <th>AI buddy setup</th>
                         <th>Model</th>
                         <th>Base URL</th>
                         <th>Max Tokens</th>
@@ -432,6 +620,11 @@ const TranslationConfigManagement: React.FC = () => {
                             <span className={`badge ${config.isActive ? 'bg-success' : 'bg-secondary'}`}>
                               {config.isActive ? 'Active' : 'Inactive'}
                             </span>
+                          </td>
+                          <td>
+                            <strong>{config.id && savedSetupChecks[config.id]?.ready ? 'Provider setup verified' : buddySetupLabel(config)}</strong>
+                            {config.aiBuddyEnabled && <ul className="small mb-0">{buddySetupMissing(config).map(reason => <li key={reason}>{reason}</li>)}</ul>}
+                            {config.id && savedSetupChecks[config.id]?.reasons.map(reason => <div className="small" key={reason}>{buddyLabel(reason)}</div>)}
                           </td>
                           <td>{config.modelName}</td>
                           <td>{config.baseUrl}</td>
@@ -453,7 +646,10 @@ const TranslationConfigManagement: React.FC = () => {
                                 className="btn btn-outline-info mb-1"
                                 disabled={testing === config.id}
                               >
-                                {testing === config.id ? 'Testing...' : 'Test'}
+                                {testing === config.id ? 'Testing...' : 'Test LLM connection'}
+                              </button>
+                              <button onClick={() => void handleSetupCheck(config, false)} className="btn btn-outline-info mb-1" disabled={checkingSetup}>
+                                {checkingSetup && setupFeedback?.configId === config.id ? 'Checking AI buddy setup…' : 'Check AI buddy setup'}
                               </button>
                               <button 
                                 onClick={() => config.id && handleDelete(config.id)} 
@@ -473,6 +669,8 @@ const TranslationConfigManagement: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {!showForm && setupError && <div className="alert alert-warning" role="alert">{setupError}</div>}
 
       {error && (
         <div className="row mt-4">

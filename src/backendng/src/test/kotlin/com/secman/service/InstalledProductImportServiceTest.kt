@@ -314,4 +314,20 @@ class InstalledProductImportServiceTest {
         type = "SERVER",
         owner = "owner"
     )
+    @Test
+    fun `retired AID cannot fall back to the current asset hostname`() {
+        val current = asset(1L, "server01")
+        every { assetRepository.findAll() } returns mutableListOf(current)
+        every { crowdStrikeAssetIdentityRepository.findByAssetIdIn(listOf(1L)) } returns listOf(
+            CrowdStrikeAssetIdentity(asset = current, crowdStrikeAid = "aid-current", sourceHostname = "server01",
+                falconFirstSeenAt = java.time.LocalDateTime.now())
+        )
+        val result = service.importProducts(listOf(InstalledProductDto(
+            externalId = "retired-app", hostname = "server01", name = "Old application", aid = "aid-retired"
+        )), dryRun = false)
+        assertThat(result.productsSkipped).isEqualTo(1)
+        verify(exactly = 0) { installedProductRepository.deleteByAssetId(any()) }
+        verify(exactly = 0) { installedProductRepository.save(any()) }
+    }
+
 }

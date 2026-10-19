@@ -263,6 +263,11 @@ AWS S3 operations (`asset-match-clear`, `manage-user-mappings import-s3`, `list-
 | `AWS_ACCOUNT_BUCKET_NAME` | S3 bucket name for the `manage-user-mappings import-s3` mapping file (fallback when `--bucket` is omitted) |
 | `AWS_ACCOUNT_BUCKET_KEY_NAME` | S3 object key for the `manage-user-mappings import-s3` mapping file (fallback when `--key` is omitted) |
 
+`scripts/secman` and `scripts/secmancli` resolve the AWS credentials, region,
+and asset snapshot bucket/key from `secmanpp.env` using Proton Pass. See
+[Asset match-clear](CLI_ASSET_MATCH_CLEAR.md#environment-variables) for the
+vault field mappings and preview command.
+
 ## adread (workgroup import and AWS asset synchronization)
 
 `src/adread/read.py` — see [AD read/import](ADREAD.md) and
@@ -482,3 +487,11 @@ failure would look like an app bug.
 | Relay push `400 section has no policy entry` | a section was added to `RelaySnapshotBuilder` without a row in `SECTION_POLICIES` |
 | App: "this account is not authorized" | no `RelayIdentity` links that provider subject to a secman user |
 | App: "requires a stronger login method" | the account holds ADMIN and tried GitHub or an enrollment code — working as intended |
+
+### AI buddy(beta)
+
+Default off. Configure AI buddy in the existing **Admin → LLM Configuration** form, using the active OpenRouter record’s key, URL, model and token limit. Additional enablement, approved-provider, budget and evidence settings are stored in that same record; no AI buddy environment variables are needed or read. See [AI_BUDDY.md](AI_BUDDY.md) for migration, privacy, single-instance and rollout/rollback requirements. BETA adds eligibility without adding object access; ADMIN and SECCHAMPION are implicitly eligible. Reports are temporary advice only.
+
+## Current asset visibility
+
+Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.

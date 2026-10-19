@@ -2,6 +2,7 @@ package com.secman.cli.service
 
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
@@ -64,18 +65,27 @@ class S3DownloadService {
         validateObjectKey(key)
 
         val s3Client = buildS3Client(region, profile, accessKeyId, secretAccessKey, sessionToken)
+        return downloadToTempFile(s3Client, bucket, key)
+    }
 
+    internal fun downloadToTempFile(s3Client: S3Client, bucket: String, key: String): Path {
+        var operation = "HeadObject"
         try {
-            // Check file size before downloading (best-effort — requires s3:HeadObject)
+            // Check file size before downloading (best-effort — requires s3:GetObject)
             val objectSize = try {
                 getObjectSize(s3Client, bucket, key)
             } catch (e: S3Exception) {
                 if (e.statusCode() == 403) {
-                    log.warn("HeadObject permission denied — skipping pre-download size check. " +
-                        "Grant s3:HeadObject for file size validation before download.")
+                    log.warn("S3 HeadObject returned 403 — metadata size check unavailable; attempting GetObject. " +
+                        "Both operations use s3:GetObject. Verify the exact key and bucket access; " +
+                        "a missing object can also return 403 without s3:ListBucket.")
+                    null
+                } else if (e.statusCode() == 400 && e.awsErrorDetails()?.errorCode().isNullOrBlank()) {
+                    // HEAD has no error body; GET can expose an expired session or other AWS reason.
+                    log.warn("S3 HeadObject returned generic 400 — attempting size-limited GetObject for detailed diagnostics.")
                     null
                 } else {
-                    throw e  // re-throw non-permission errors (e.g. 404 will be caught by outer handler)
+                    throw e
                 }
             }
 
@@ -102,6 +112,7 @@ class S3DownloadService {
             log.info("Downloading s3://$bucket/$key to temp file: $tempFile")
 
             try {
+                operation = "GetObject"
                 // Use streaming getObject instead of path-based overload to avoid
                 // SDK FileResponseTransformer issues with pre-existing temp files
                 s3Client.getObject(
@@ -110,17 +121,12 @@ class S3DownloadService {
                         .key(key)
                         .build()
                 ).use { responseStream ->
-                    Files.copy(responseStream, tempFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                    Files.newOutputStream(tempFile).use { output ->
+                        copyWithSizeLimit(responseStream, output)
+                    }
                 }
 
-                // Post-download size check (catches oversized files when HeadObject was unavailable)
                 val downloadedSize = Files.size(tempFile)
-                if (downloadedSize > MAX_FILE_SIZE_BYTES) {
-                    Files.deleteIfExists(tempFile)
-                    throw S3DownloadException(
-                        "Downloaded file exceeds ${MAX_FILE_SIZE_MB}MB limit (actual: ${downloadedSize / 1024 / 1024}MB). File deleted."
-                    )
-                }
 
                 log.info("Downloaded ${downloadedSize / 1024}KB from S3")
                 return tempFile
@@ -132,20 +138,25 @@ class S3DownloadService {
 
         } catch (e: NoSuchBucketException) {
             throw S3DownloadException(
-                "Bucket '$bucket' does not exist or is not accessible\n${formatS3Diagnostics(e)}"
+                "Bucket '$bucket' does not exist or is not accessible\n${formatS3Diagnostics(e, operation)}"
             )
         } catch (e: NoSuchKeyException) {
             throw S3DownloadException(
-                "File 's3://$bucket/$key' not found\n${formatS3Diagnostics(e)}"
+                "File 's3://$bucket/$key' not found\n${formatS3Diagnostics(e, operation)}"
             )
         } catch (e: S3Exception) {
-            if (e.statusCode() == 403) {
+            if (e.awsErrorDetails()?.errorCode() in setOf("ExpiredToken", "ExpiredTokenException")) {
                 throw S3DownloadException(
-                    "Access denied. Check IAM permissions for bucket '$bucket'. " +
-                    "Required permission: s3:GetObject\n${formatS3Diagnostics(e)}"
+                    "AWS session credentials have expired. Refresh the access key, secret key, and session token together, " +
+                        "or use a valid --aws-profile, then rerun the command.\n" + formatS3Diagnostics(e, operation)
                 )
             }
-            throw S3DownloadException(formatS3Diagnostics(e))
+            if (e.statusCode() == 403) {
+                throw S3DownloadException(
+                    formatDownloadAccessDenied(e, operation, bucket, key)
+                )
+            }
+            throw S3DownloadException(formatS3Diagnostics(e, operation))
         } catch (e: SdkClientException) {
             val message = e.message ?: "Unknown error"
             when {
@@ -198,8 +209,28 @@ class S3DownloadService {
     ): S3Client {
         val builder = S3Client.builder()
 
-        // Configure credentials provider (explicit > profile > default chain)
-        when {
+        builder.credentialsProvider(credentialsProvider(profile, accessKeyId, secretAccessKey, sessionToken))
+
+        // Configure region
+        if (region != null) {
+            log.debug("Using explicit AWS region: $region")
+            builder.region(Region.of(region))
+        }
+        // If region is null, SDK will resolve from:
+        // 1. AWS_REGION environment variable
+        // 2. AWS config file (~/.aws/config)
+        // 3. EC2 instance metadata
+
+        return builder.build()
+    }
+
+    internal fun credentialsProvider(
+        profile: String?, accessKeyId: String?, secretAccessKey: String?, sessionToken: String?
+    ): AwsCredentialsProvider {
+        if (listOf(profile, accessKeyId, secretAccessKey, sessionToken).any { it != null && it.isBlank() }) {
+            throw S3DownloadException("AWS credential options must not be blank")
+        }
+        return when {
             accessKeyId != null && secretAccessKey != null -> {
                 log.debug("Using explicit AWS credentials")
                 // ASIA prefix = temporary STS credentials; session token is mandatory
@@ -218,37 +249,30 @@ class S3DownloadService {
                 } else {
                     AwsBasicCredentials.create(accessKeyId, secretAccessKey)
                 }
-                builder.credentialsProvider(StaticCredentialsProvider.create(credentials))
+                StaticCredentialsProvider.create(credentials)
             }
-            accessKeyId != null && secretAccessKey == null -> {
+            accessKeyId != null || secretAccessKey != null || sessionToken != null -> {
                 throw S3DownloadException(
-                    "AWS access key ID provided but secret access key is missing.\n" +
-                    "  Both --aws-access-key-id and --aws-secret-access-key are required together.\n" +
-                    "  Alternatively, set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables."
+                    "Explicit AWS credentials must include both access key ID and secret access key. " +
+                        "Provide a complete credential set; flags are not combined with environment credentials."
                 )
             }
             profile != null -> {
                 log.debug("Using AWS profile: $profile")
-                builder.credentialsProvider(ProfileCredentialsProvider.create(profile))
+                ProfileCredentialsProvider.create(profile)
             }
             else -> {
                 log.debug("Using default AWS credential chain")
-                builder.credentialsProvider(DefaultCredentialsProvider.builder().build())
+                DefaultCredentialsProvider.builder().build()
             }
         }
-
-        // Configure region
-        if (region != null) {
-            log.debug("Using explicit AWS region: $region")
-            builder.region(Region.of(region))
-        }
-        // If region is null, SDK will resolve from:
-        // 1. AWS_REGION environment variable
-        // 2. AWS config file (~/.aws/config)
-        // 3. EC2 instance metadata
-
-        return builder.build()
     }
+
+    internal fun formatDownloadAccessDenied(exception: S3Exception, operation: String, bucket: String, key: String): String =
+        "S3 $operation access denied for s3://$bucket/$key.\n" +
+            "Check the selected AWS identity, exact object key, IAM permissions and bucket policy.\n" +
+            "HeadObject and GetObject require s3:GetObject; a missing key can return 403 without s3:ListBucket.\n" +
+            formatS3Diagnostics(exception, operation)
 
     /**
      * Get object size via HeadObject request
@@ -263,12 +287,28 @@ class S3DownloadService {
         return headResponse.contentLength()
     }
 
-    internal fun formatS3Diagnostics(exception: S3Exception): String {
+    internal fun copyWithSizeLimit(input: java.io.InputStream, output: java.io.OutputStream): Long {
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var total = 0L
+        while (true) {
+            val read = input.read(buffer, 0, minOf(buffer.size.toLong(), MAX_FILE_SIZE_BYTES - total + 1).toInt())
+            if (read < 0) return total
+            total += read
+            if (total > MAX_FILE_SIZE_BYTES) {
+                throw S3DownloadException("Downloaded file exceeds ${MAX_FILE_SIZE_MB}MB limit. Download stopped.")
+            }
+            output.write(buffer, 0, read)
+        }
+    }
+
+    internal fun formatS3Diagnostics(exception: S3Exception, operation: String? = null): String {
         val details = exception.awsErrorDetails()
         val response = details?.sdkHttpResponse()
 
         return buildString {
-            append("S3 request failed")
+            append("S3 ")
+            if (operation != null) append(operation).append(' ')
+            append("request failed")
             append("\n  HTTP status: ").append(exception.statusCode())
             append("\n  AWS error code: ").append(safeDiagnosticValue(details?.errorCode()))
             append("\n  AWS message: ").append(safeDiagnosticValue(details?.errorMessage()))

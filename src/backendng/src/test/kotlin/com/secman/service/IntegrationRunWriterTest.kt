@@ -42,6 +42,7 @@ class IntegrationRunWriterTest {
 
     @BeforeEach
     fun setUp() {
+        every { repository.invalidateCurrentInventoryCaches() } returns Unit
         every { repository.scannerForSubmission(1) } returns scanner
         every { repository.lock(IntegrationSubject::class.java, 2) } returns subject
         every { repository.lock(Asset::class.java, 3) } returns asset

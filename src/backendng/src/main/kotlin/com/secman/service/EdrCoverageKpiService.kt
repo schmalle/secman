@@ -28,12 +28,9 @@ import java.time.LocalDateTime
  *    excludes the synthetic "AWS Account <id>" placeholder assets, which get a cloudAccountId
  *    but never a cloudInstanceId.
  *
- *  - **"has CrowdStrike"** = `crowdStrikeAgentSeenAt` within [AGENT_SEEN_FRESHNESS_DAYS], NOT
- *    `crowdStrikeLastImportedAt`. The latter is only written for hosts that returned findings —
- *    the daily import filters `--severity CRITICAL,HIGH` and drops empty batches — so building
- *    the numerator on it would systematically undercount, reporting low coverage precisely for
- *    well-patched fleets. `crowdStrikeAgentSeenAt` is stamped from the import's full Stage-1
- *    queried-host population instead (see CrowdStrikeVulnerabilityImportService.stampAgentSeen).
+ *  - **"has CrowdStrike"** = the provider's UTC sensor contact within
+ *    [AGENT_SEEN_FRESHNESS_DAYS]. Importing an offline host's retained findings does
+ *    not refresh this timestamp; zero-finding hosts still retain their contact evidence.
  */
 @Singleton
 open class EdrCoverageKpiService(
@@ -71,8 +68,9 @@ open class EdrCoverageKpiService(
      */
     fun recalculate() {
         val start = System.currentTimeMillis()
+        val calculatedAt = LocalDateTime.now(java.time.ZoneOffset.UTC)
         try {
-            val totalEc2 = assetRepository.countAllAwsAssetsWithInstanceId()
+            val totalEc2 = assetRepository.countCurrentAwsAssetsWithInstanceId()
 
             // Skip the remaining queries entirely when there is no EC2 population at all.
             val excluded = if (totalEc2 == 0L) 0L else assetRepository.countEc2AssetsExcludedByNoEdrException()
@@ -81,7 +79,7 @@ open class EdrCoverageKpiService(
                 0L
             } else {
                 assetRepository.countEc2AssetsWithFreshCrowdStrikeAgent(
-                    LocalDateTime.now().minusDays(AGENT_SEEN_FRESHNESS_DAYS)
+                    LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(AGENT_SEEN_FRESHNESS_DAYS)
                 )
             }
 
@@ -97,7 +95,7 @@ open class EdrCoverageKpiService(
                     agentSeenWithinDays = AGENT_SEEN_FRESHNESS_DAYS
                 )
             )
-            upsertCache(json, System.currentTimeMillis() - start)
+            upsertCache(json, System.currentTimeMillis() - start, calculatedAt)
 
             log.info(
                 "EDR coverage KPI recalculated: totalEc2={}, excludedByNoEdr={}, eligible={}, covered={}, percentage={}",
@@ -119,6 +117,11 @@ open class EdrCoverageKpiService(
     @Scheduled(fixedDelay = "1h", initialDelay = "20m")
     open fun recalculateScheduled() {
         recalculate()
+    }
+
+    @Scheduled(fixedDelay = "1m", initialDelay = "30s")
+    open fun refreshExpiredInventory() {
+        if (cacheRepository.findByCacheKey(CACHE_KEY).isEmpty) recalculate()
     }
 
     /**
@@ -159,9 +162,9 @@ open class EdrCoverageKpiService(
     }
 
     @Transactional
-    open fun upsertCache(json: String, durationMs: Long) {
+    open fun upsertCache(json: String, durationMs: Long, calculatedAt: LocalDateTime = LocalDateTime.now(java.time.ZoneOffset.UTC)) {
         // Atomic native upsert on the cache_key unique index — see
         // VulnerabilityStatisticsCacheRepository.upsertByCacheKey for the race this closes.
-        cacheRepository.upsertByCacheKey(CACHE_KEY, json, LocalDateTime.now(), durationMs)
+        cacheRepository.upsertByCacheKey(CACHE_KEY, json, LocalDateTime.now(), durationMs, calculatedAt)
     }
 }

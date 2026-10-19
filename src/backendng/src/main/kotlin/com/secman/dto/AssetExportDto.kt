@@ -56,7 +56,7 @@ data class AssetExportDto(
                 workgroups = asset.workgroups.joinToString(", ") { it.name },
                 createdAt = asset.createdAt,
                 updatedAt = asset.updatedAt,
-                lastSeen = asset.lastSeen
+                lastSeen = com.secman.service.AssetCurrentnessPolicy.observedAt(asset)
             )
         }
     }

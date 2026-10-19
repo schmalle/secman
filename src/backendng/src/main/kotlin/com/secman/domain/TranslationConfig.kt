@@ -1,5 +1,7 @@
 package com.secman.domain
 
+import com.secman.util.EncryptedStringConverter
+import com.fasterxml.jackson.annotation.JsonInclude
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.persistence.*
 import jakarta.validation.constraints.Max
@@ -12,6 +14,7 @@ import java.time.LocalDateTime
 @Entity
 @Table(name = "translation_config")
 @Serdeable
+@JsonInclude(JsonInclude.Include.ALWAYS)
 data class TranslationConfig(
     @Id
     // IDENTITY, not the AUTO default: this table's id column is AUTO_INCREMENT, but on
@@ -21,7 +24,8 @@ data class TranslationConfig(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null,
 
-    @Column(name = "api_key", length = 512, nullable = false)
+    @Convert(converter = EncryptedStringConverter::class)
+    @Column(name = "api_key", length = 1536, nullable = false)
     @NotBlank
     @Size(max = 512)
     var apiKey: String,
@@ -46,6 +50,25 @@ data class TranslationConfig(
     @Column(name = "is_active", nullable = false)
     var isActive: Boolean = false,
 
+    @Column(name = "ai_buddy_enabled", nullable = false)
+    var aiBuddyEnabled: Boolean = false,
+    @Column(name = "ai_buddy_single_instance", nullable = false)
+    var aiBuddySingleInstance: Boolean = false,
+    @Column(name = "ai_buddy_providers", length = 512, nullable = false)
+    var aiBuddyProviders: String = "",
+    @Column(name = "ai_buddy_max_cost_usd", nullable = false)
+    var aiBuddyMaxCostPerJobUsd: Double = 0.50,
+    @Column(name = "ai_buddy_daily_budget_usd", nullable = false)
+    var aiBuddyDailyBudgetUsd: Double = 10.0,
+    @Column(name = "ai_buddy_input_price", nullable = false)
+    var aiBuddyMaxInputPricePerMillion: Double = 5.0,
+    @Column(name = "ai_buddy_output_price", nullable = false)
+    var aiBuddyMaxOutputPricePerMillion: Double = 20.0,
+    @Column(name = "ai_buddy_microsoft_evidence", nullable = false)
+    var aiBuddyMicrosoftEvidenceEnabled: Boolean = true,
+    @Column(name = "ai_buddy_crowdstrike_evidence", nullable = false)
+    var aiBuddyCrowdStrikeEvidenceEnabled: Boolean = false,
+
     @Column(name = "created_at", nullable = false, updatable = false)
     var createdAt: LocalDateTime? = null,
 
@@ -58,10 +81,16 @@ data class TranslationConfig(
         
         // Popular AI models for dropdown
         val AVAILABLE_MODELS = mapOf(
+            "openai/gpt-6.1-sol" to "GPT-6.1 Sol (latest Sol)",
+            "openai/gpt-6.1-sol-pro" to "GPT-6.1 Sol Pro",
+            "anthropic/claude-sonnet-5.5" to "Claude Sonnet 5.5 (latest Sonnet)",
+            "openai/gpt-6-sol" to "GPT-6 Sol",
+            "anthropic/claude-sonnet-5" to "Claude Sonnet 5",
+            "anthropic/claude-sonnet-4.6" to "Claude Sonnet 4.6",
             "anthropic/claude-3-haiku" to "Claude 3 Haiku (Fast & Affordable)",
             "anthropic/claude-3-sonnet" to "Claude 3 Sonnet (Balanced)",
             "anthropic/claude-3-opus" to "Claude 3 Opus (Most Capable)",
-            "openai/gpt-4o" to "GPT-4o (Latest OpenAI)",
+            "openai/gpt-4o" to "GPT-4o",
             "openai/gpt-4o-mini" to "GPT-4o Mini (Fast & Affordable)",
             "meta-llama/llama-3.1-8b-instruct" to "Llama 3.1 8B (Open Source)",
             "meta-llama/llama-3.1-70b-instruct" to "Llama 3.1 70B (Open Source)"

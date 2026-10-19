@@ -104,7 +104,15 @@ class QueryCommand(
 
             val finalResponse = filteredByProduct
 
-            System.out.println("Total vulnerabilities found: ${finalResponse.vulnerabilities.size}")
+            val failedDevices = finalResponse.failedAids.size
+            val allDevicesFailed = failedDevices > 0 && finalResponse.devices.all {
+                it.crowdStrikeAid in finalResponse.failedAids
+            }
+            when {
+                allDevicesFailed -> System.out.println("Vulnerability count unavailable: all $failedDevices device queries failed")
+                failedDevices > 0 -> System.out.println("Partial vulnerabilities found: ${finalResponse.vulnerabilities.size} ($failedDevices device queries failed)")
+                else -> System.out.println("Total vulnerabilities found: ${finalResponse.vulnerabilities.size}")
+            }
 
             if (verbose && finalResponse.vulnerabilities.isNotEmpty()) {
                 val severityCount = finalResponse.vulnerabilities
@@ -125,7 +133,7 @@ class QueryCommand(
                 if (save) return 2
             }
 
-            if (save && finalResponse.vulnerabilities.isNotEmpty()) {
+            if (save && (finalResponse.vulnerabilities.isNotEmpty() || finalResponse.devices.isNotEmpty())) {
                 // Authenticate with backend before import
                 val backendUrl = getenv("SECMAN_BACKEND_URL")
                     ?: getenv("SECMAN_HOST")
@@ -155,7 +163,23 @@ class QueryCommand(
                 )
 
                 System.out.println(if (result.errors.isEmpty()) "Save completed!" else "Save failed")
-                System.out.println("  - Asset: ${if (result.serversCreated > 0) "CREATED" else "UPDATED"}")
+                val status = when {
+                    result.serversCreated > 0 -> "CREATED"
+                    result.serversUpdated > 0 -> "UPDATED"
+                    result.hostOutcomes.any { it.status == "SKIPPED_RETENTION" } -> "UNCHANGED (sensor retention)"
+                    else -> "UNCHANGED (save rejected)"
+                }
+                System.out.println("  - Asset: $status")
+                result.hostOutcomes.forEach { outcome ->
+                    if (outcome.status == "SKIPPED_RETENTION") System.out.println("  - ${outcome.message}")
+                    if (outcome.status != "REJECTED" && outcome.formerInstanceId != null)
+                        System.out.println("  - EC2 instance ID (asset ${outcome.assetId}): ${outcome.formerInstanceId} -> ${outcome.instanceId}")
+                    outcome.coverage?.let {
+                        System.out.println("  - Provider findings fetched: ${it.fetched}")
+                        System.out.println("  - Findings excluded: ${it.missingCve} (missing CVE ID); duplicates collapsed: ${it.duplicates}")
+                    }
+                    if (outcome.errorCode != null) System.err.println("  - ${outcome.errorCode}: ${outcome.message}")
+                }
                 System.out.println("  - Vulnerabilities imported: ${result.vulnerabilitiesImported}")
                 System.out.println("  - Vulnerabilities skipped: ${result.vulnerabilitiesSkipped}")
 

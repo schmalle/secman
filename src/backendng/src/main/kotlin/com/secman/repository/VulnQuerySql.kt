@@ -41,7 +41,7 @@ object VulnQuerySql {
      * The substitution is safe by CONSTRUCTION, not by inspection:
      * `VulnerabilityRepository.recomputeExceptedAll()` sets
      * `excepted = CASE WHEN EXISTS(... ExceptionMatchSql.EXCEPTION_MATCH) THEN 1 ELSE 0 END`
-     * over the same `vulnerability v JOIN asset a` shape — i.e. `excepted = 0` IS the
+     * over the same `vulnerability v JOIN ${AssetCurrentnessSql.ASSETS} a` shape — i.e. `excepted = 0` IS the
      * materialization of `NOT EXISTS(EXCEPTION_MATCH)`, one hop removed.
      * `ExceptionMaterializationService` keeps it fresh: per-asset during import, on every
      * exception create/update/delete, an hourly expiry sweep, and a nightly full recompute.
@@ -84,8 +84,8 @@ object VulnQuerySql {
                COALESCE(v.cvss_severity, 'UNKNOWN') as cvssSeverity,
                COUNT(*) as occurrenceCount,
                COUNT(DISTINCT v.asset_id) as affectedAssetCount
-        FROM vulnerability v
-        JOIN asset a ON v.asset_id = a.id
+        FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
+        JOIN ${AssetCurrentnessSql.ASSETS} a ON v.asset_id = a.id
         WHERE """
     // GROUP BY the same COALESCE the SELECT projects, not the raw column: grouping on
     // `v.cvss_severity` while selecting `COALESCE(v.cvss_severity, 'UNKNOWN')` emits TWO rows
@@ -104,8 +104,8 @@ object VulnQuerySql {
                COUNT(DISTINCT v.asset_id) as affectedAssetCount,
                COUNT(DISTINCT CASE WHEN v.cvss_severity = 'CRITICAL' THEN v.vulnerability_id END) as criticalCount,
                COUNT(DISTINCT CASE WHEN v.cvss_severity = 'HIGH' THEN v.vulnerability_id END) as highCount
-        FROM vulnerability v
-        JOIN asset a ON v.asset_id = a.id
+        FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
+        JOIN ${AssetCurrentnessSql.ASSETS} a ON v.asset_id = a.id
         WHERE """
     const val MOST_VULNERABLE_PRODUCTS_TAIL = """v.vulnerable_product_versions IS NOT NULL
           AND v.vulnerable_product_versions != ''
@@ -118,8 +118,8 @@ object VulnQuerySql {
     // --- Severity distribution ---
     const val SEVERITY_DISTRIBUTION_SELECT = """
         SELECT COALESCE(v.cvss_severity, 'UNKNOWN') as severity, COUNT(*) as count
-        FROM vulnerability v
-        JOIN asset a ON v.asset_id = a.id
+        FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
+        JOIN ${AssetCurrentnessSql.ASSETS} a ON v.asset_id = a.id
         WHERE """
     const val SEVERITY_DISTRIBUTION_TAIL = """$VISIBLE
         GROUP BY COALESCE(v.cvss_severity, 'UNKNOWN')
@@ -133,8 +133,8 @@ object VulnQuerySql {
                SUM(CASE WHEN v.cvss_severity = 'HIGH' THEN 1 ELSE 0 END) as highCount,
                SUM(CASE WHEN v.cvss_severity = 'MEDIUM' THEN 1 ELSE 0 END) as mediumCount,
                SUM(CASE WHEN v.cvss_severity = 'LOW' THEN 1 ELSE 0 END) as lowCount
-        FROM vulnerability v
-        JOIN asset a ON v.asset_id = a.id
+        FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
+        JOIN ${AssetCurrentnessSql.ASSETS} a ON v.asset_id = a.id
         WHERE """
     // Tiebreaker on a.id so the LIMIT 50 boundary is stable across refreshes.
     const val TOP_ASSETS_TAIL = """$VISIBLE
@@ -153,8 +153,8 @@ object VulnQuerySql {
                SUM(CASE WHEN v.cvss_severity = 'MEDIUM' THEN 1 ELSE 0 END) as mediumCount,
                SUM(CASE WHEN v.cvss_severity = 'LOW' THEN 1 ELSE 0 END) as lowCount,
                CAST(COUNT(*) AS DOUBLE) / COUNT(DISTINCT a.id) as avgVulnsPerAsset
-        FROM vulnerability v
-        JOIN asset a ON v.asset_id = a.id
+        FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
+        JOIN ${AssetCurrentnessSql.ASSETS} a ON v.asset_id = a.id
         WHERE """
     const val BY_ASSET_TYPE_TAIL = """$VISIBLE
         GROUP BY COALESCE(a.type, 'Unknown')
@@ -169,8 +169,8 @@ object VulnQuerySql {
                SUM(CASE WHEN v.cvss_severity = 'HIGH' THEN 1 ELSE 0 END) as highCount,
                SUM(CASE WHEN v.cvss_severity = 'MEDIUM' THEN 1 ELSE 0 END) as mediumCount,
                SUM(CASE WHEN v.cvss_severity = 'LOW' THEN 1 ELSE 0 END) as lowCount
-        FROM vulnerability v
-        JOIN asset a ON v.asset_id = a.id
+        FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
+        JOIN ${AssetCurrentnessSql.ASSETS} a ON v.asset_id = a.id
         WHERE """
     const val TEMPORAL_TRENDS_TAIL = """v.scan_timestamp >= :startDate
         AND $VISIBLE

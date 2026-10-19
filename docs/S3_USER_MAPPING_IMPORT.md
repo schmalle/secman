@@ -19,11 +19,12 @@ Build CLI: `./gradlew :cli:shadowJar`.
 
 IAM (per-bucket):
 ```json
-{ "Effect":"Allow",
-  "Action": ["s3:GetObject","s3:HeadObject","s3:ListBucket"],
-  "Resource":["arn:aws:s3:::your-bucket","arn:aws:s3:::your-bucket/*"] }
+{ "Version": "2012-10-17", "Statement": [
+  { "Effect": "Allow", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::your-bucket/*" },
+  { "Effect": "Allow", "Action": "s3:ListBucket", "Resource": "arn:aws:s3:::your-bucket" }
+] }
 ```
-- `import-s3` / `download-s3` / `print-s3` — `s3:GetObject` (required) + `s3:HeadObject` (recommended; falls back to post-download size check).
+- `import-s3` / `download-s3` / `print-s3` — `s3:GetObject` authorizes both GetObject and HeadObject; there is no `s3:HeadObject` IAM action. A denied metadata check falls back to the download and a post-download size check.
 - `list-bucket` — `s3:ListBucket`.
 
 Env: `SECMAN_ADMIN_EMAIL` (or `--admin-user`) for audit logging.
@@ -196,7 +197,7 @@ export AWS_ENDPOINT_URL=http://localhost:9090
 | Symptom | Fix |
 |---|---|
 | `AWS credentials not found` | export `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, or `aws configure`, or `--aws-profile` |
-| `Access denied` (403) | IAM lacks `s3:GetObject`/`s3:HeadObject`; bucket policy; bucket+key correct |
+| `Access denied` (403) | Check the AWS-stated denial, selected identity, IAM and bucket policy, and exact key. A missing key can also return 403 without `s3:ListBucket`; do not assume GetObject permission alone is missing |
 | `Bucket does not exist` | spelling (lowercase, case-sensitive); region (`--aws-region`) |
 | `NoSuchKey` | key path; `aws s3 ls s3://bucket/path/`; case-sensitive |
 | `File exceeds 10MB` | split into batches |
@@ -211,3 +212,104 @@ export AWS_ENDPOINT_URL=http://localhost:9090
 - Stack traces only at debug level.
 - Audit log entries for every operation (admin email, op type, mapping details).
 - All inputs (bucket, key, email, domain, AWS account ID) validated before use.
+
+
+## Welcome every owner of a newly discovered AWS account
+
+```bash
+./scripts/secman manage-user-mappings import --file mappings.csv \
+  --onboarding-mode WELCOME_ONLY --dry-run
+./scripts/secman manage-user-mappings import --file mappings.csv \
+  --onboarding-mode WELCOME_ONLY
+# Same options for an S3 mapping upload (bucket/key from AWS_ACCOUNT_* env vars):
+./scripts/secman manage-user-mappings import-s3 \
+  --onboarding-mode WELCOME_ONLY --dry-run
+```
+
+ADMIN access and an active email provider are required for live delivery. The
+existing welcome template is configured in Account Onboarding. Each distinct
+mapped owner of a newly discovered AWS account is eligible; adding an owner to a
+known account does not trigger this event. Dry run saves nothing and contacts no
+mail provider. FAILED or uncertain PENDING welcome delivery exits with code 1,
+even if mappings were saved. Inspect the notification before retrying.
+
+See [recipient rules, template setup, delivery statuses, and retries](ACCOUNT_ONBOARDING.md#welcome-every-owner-of-a-newly-discovered-aws-account).
+Both `import --help` and `import-s3 --help` include welcome-only preview examples.
+
+### AWS credential precedence for `import-s3`
+
+Explicit `--aws-access-key-id` and `--aws-secret-access-key` flags (with
+`--aws-session-token` for temporary credentials) take priority over `--aws-profile`.
+An explicit profile takes priority over environment credentials, including those
+resolved by `./scripts/secman`. Without either override, the SDK default credential
+chain resolves the environment and configured AWS providers. Supply explicit
+credentials as a complete set; flags are never combined with environment values.
+Blank or incomplete explicit credentials are rejected.
+
+A 403 report identifies HeadObject or GetObject and retains AWS's diagnostic reason
+and request ID. Verify the exact key before changing permissions. For cross-account
+access, the bucket policy must also permit the selected identity. ListBucket is
+required for listing and lets S3 distinguish a missing key (404) from denied access;
+it is not a blanket prerequisite for downloading a known, permitted object.
+
+### Expired AWS sessions and metadata errors
+
+A generic HeadObject HTTP 400 without an AWS error code triggers a GetObject
+attempt to obtain the detailed AWS error. Known metadata errors, such as a wrong
+signing region, remain errors. Downloads enforce the 10 MB limit while streaming;
+failed or oversized downloads remove their temporary file.
+
+`ExpiredToken` reports that the session credentials have expired. Refresh the
+access key, secret key, and session token together in the credential source, or
+use a valid `--aws-profile`, then rerun. The CLI does not renew vault credentials
+or change AWS policies. `import-s3` exits 2 on this error before importing rows or
+sending owner mail. S3 download errors identify HeadObject or GetObject and retain
+AWS's error code and request ID.
+
+### One welcome email per owner per import
+
+Welcome mail is grouped by trimmed, case-insensitive owner email within each
+import. One message lists all that owner's newly discovered accounts; a later
+import with additional new accounts may send another welcome. Dry runs print
+one `MAIL` line per recipient and the complete account list. Retries use the same
+grouped notification. Assessment and questionnaire messages stay account-specific.
+See [the complete welcome-mail contract](ACCOUNT_ONBOARDING.md#one-welcome-email-per-owner-per-import)
+for template placeholders, delivery status, and retry rules.
+
+### Send one test welcome email
+
+Use `--test-email ADDRESS` with `--onboarding-mode WELCOME_ONLY` to send one
+sample of the configured welcome email without importing any mappings:
+
+```bash
+./scripts/secman manage-user-mappings import-s3 \
+  --bucket example-accounts --key accounts.json \
+  --onboarding-mode WELCOME_ONLY --test-email person@example.com
+# Local CSV and JSON files support the same option:
+./scripts/secman manage-user-mappings import --file mappings.csv \
+  --onboarding-mode WELCOME_ONLY --test-email person@example.com
+```
+
+The first normalized owner alphabetically in the validated file supplies the
+sample; its distinct account IDs are sorted and grouped in one message. Only
+the supplied test recipient receives it, with `[TEST]` in the subject and an
+administrator notice in both bodies. Known accounts can be sampled too.
+No mappings, assessments, questionnaire tokens, or production welcome-delivery
+records are created or changed. No valid AWS group means no email is sent.
+Files must be nonempty and at most 10MB; the sampled group is limited to 200
+accounts. Validation errors refuse the send instead of sampling a partial file.
+
+Remove `--dry-run` when using `--test-email`: the combination is rejected so a
+dry run continues to guarantee no email. Assessment modes, `--start-risk-assessment`,
+`--no-welcome-email`, `--createnotify`, `--notify-address`, and `--risk-usecase`
+cannot be combined with the test option. The S3 statistics flag `--send-email`
+is also incompatible. ADMIN access is required; test sends
+share the existing simulation rate limit. `SENT` confirms SMTP acceptance, not
+inbox delivery. Failed or uncertain delivery returns a nonzero exit code and
+is never automatically retried.
+
+The CLI calls `POST /api/account-onboarding/welcome-test` with `recipient` and
+`accountIds`. This dedicated route returns 404 on an older backend rather than
+silently sending a single-account simulation. Deploy/restart the updated backend
+before using the option. Existing simulation commands and import behavior are
+unchanged when the option is absent.

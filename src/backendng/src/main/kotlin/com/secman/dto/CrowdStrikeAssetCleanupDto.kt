@@ -9,18 +9,21 @@ data class CrowdStrikeAssetCleanupRequest(
     val dryRun: Boolean = false,
     // Feature 087: per-run override for the legacy rule (rule B). Null means
     // "use the configured default" (`secman.crowdstrike.cleanup.include-legacy`).
-    val includeLegacy: Boolean? = null
+    val includeLegacy: Boolean? = null,
+    val basis: String = "import-inactivity"
 )
 
 /**
  * Why a candidate was selected for deletion. Feature 087.
- * - TIMESTAMP_STALE: rule A — `crowdStrikeLastImportedAt < cutoff`.
+ * - SENSOR_CONTACT_STALE: verified Falcon contact older than the UTC cutoff.
+ * - TIMESTAMP_STALE: old import and old/unknown sensor contact.
  * - LEGACY_NULL_TIMESTAMP: rule B — `owner='CrowdStrike Import'` AND no
  *   import timestamp AND no manualCreator AND no scanUploader AND
  *   `COALESCE(lastSeen, updatedAt, createdAt) < cutoff`.
  */
 @Serdeable
 enum class CleanupCandidateReason {
+    SENSOR_CONTACT_STALE,
     TIMESTAMP_STALE,
     LEGACY_NULL_TIMESTAMP
 }
@@ -31,7 +34,9 @@ data class CrowdStrikeAssetCleanupCandidateDto(
     val name: String,
     // Nullable since Feature 087: legacy candidates have no import timestamp.
     val crowdStrikeLastImportedAt: LocalDateTime?,
-    val reason: CleanupCandidateReason
+    val reason: CleanupCandidateReason,
+    val falconLastContact: java.time.Instant? = null,
+    val lastImportedAt: java.time.Instant? = null
 )
 
 @Serdeable
@@ -58,5 +63,9 @@ data class CrowdStrikeAssetCleanupResponse(
     val runId: Long? = null,
     // Feature 087: rule-B contribution split. Always ≤ candidateCount / deletedCount.
     val legacyCandidateCount: Int = 0,
-    val legacyDeletedCount: Int = 0
+    val legacyDeletedCount: Int = 0,
+    val basis: String = "import-inactivity",
+    val cutoffUtc: java.time.Instant? = null,
+    val exclusions: Map<String, Long> = emptyMap(),
+    val retentionDays: Int = 0
 )

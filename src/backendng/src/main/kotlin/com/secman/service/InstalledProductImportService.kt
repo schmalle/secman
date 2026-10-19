@@ -46,6 +46,7 @@ open class InstalledProductImportService(
         val now = LocalDateTime.now()
         // Assets whose stale products have already been cleared during this request.
         val clearedAssetIds = mutableSetOf<Long>()
+        val currentAidsByAsset = mutableMapOf<Long, Set<String>>()
 
         // Distinct hosts (normalized) we could not resolve. Tracked as sets so the
         // reported "unknown systems" count reflects hosts, not product rows: a single
@@ -99,6 +100,14 @@ open class InstalledProductImportService(
                         skipped++
                         return@forEach
                     }
+                }
+                val activeAids = currentAidsByAsset.getOrPut(requireNotNull(asset.id)) {
+                    crowdStrikeAssetIdentityRepository.findByAssetIdIn(listOf(requireNotNull(asset.id)))
+                        .filter { it.falconFirstSeenAt != null }.map { it.crowdStrikeAid }.toSet()
+                }
+                if (activeAids.isNotEmpty() && normalizeAid(dto.aid) !in activeAids) {
+                    skipped++
+                    return@forEach
                 }
                 if (dryRun) {
                     imported++

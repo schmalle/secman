@@ -27,7 +27,7 @@ const AssetIdRedirect: React.FC<AssetIdRedirectProps> = ({ assetId }) => {
           throw new Error('Asset response did not include a name');
         }
 
-        window.location.replace(`/vulnerabilities/system?hostname=${encodeURIComponent(asset.name)}`);
+        window.location.replace(`/vulnerabilities/system?assetId=${assetId}`);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to open asset');

@@ -182,14 +182,13 @@ OWASP: A01/A10 touched — A10 outbound host allowlist deferred, see note below
 ## What this skill is not
 
 - **Not a replacement for `/security-review`** — step 3c invokes it.
-- **Not a replacement for the mandatory E2E gates.** `/e2ejs` and
-  `/e2evulnexception` are separate, still required, and still need a running
-  stack (`CLAUDE.md` Hard Principle 7).
-- **Not a completion gate on its own.** A change is complete when
-  `./gradlew build` is clean **and** `./scripts/startbackenddev.sh` starts
-  cleanly (Principle 5), frontend edits pass `npm ci && npm run build`
-  (Principle 5a), and `extensions/` clients are checked for contract drift
-  (Principle 5b). Secure and broken is still broken.
+- **Not a replacement for finalization.** `/finalizer` owns `/e2ejs` and
+  `/e2evulnexception` once for the combined change before merge (Principle 7).
+  Workers run focused regression tests and affected-module checks.
+- **Not a merge gate on its own.** Workers report ready for integration after
+  focused checks. `/finalizer` establishes merge readiness through full build,
+  isolated startup, frontend validation and client contract checks (Principles
+  5–5b), plus the E2E gates.
 - **Not offline-only.** Phases 1–3b need no stack, no `pass-cli`, no network.
   Phase 3c and the build/startup gates do.
 

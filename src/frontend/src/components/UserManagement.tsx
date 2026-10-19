@@ -35,7 +35,7 @@ interface Workgroup {
 // All roles implemented: USER (baseline), ADMIN (full access),
 // VULN (vulnerabilities), RISK (risk management), REQ (requirements),
 // SECCHAMPION (broad access: risk+req+vuln), RELEASE_MANAGER (release management)
-const AVAILABLE_ROLES = ['USER', 'ADMIN', 'VULN', 'RISK', 'REQ', 'SECCHAMPION', 'RELEASE_MANAGER', 'REPORT'];
+const AVAILABLE_ROLES = ['USER', 'ADMIN', 'VULN', 'RISK', 'REQ', 'REQADMIN', 'SECCHAMPION', 'RELEASE_MANAGER', 'REPORT', 'BETA'];
 
 const UserManagement = () => {
     const [isAdmin, setIsAdmin] = useState(false);
@@ -790,7 +790,7 @@ const UserManagement = () => {
                                                         onChange={handleNewUserRolesChange}
                                                         disabled={isSubmittingUser}
                                                     />
-                                                    <label className="form-check-label" htmlFor={`role-${role}`}>{role}</label>
+                                                    <label className="form-check-label" htmlFor={`role-${role}`}>{role === 'BETA' ? 'BETA — optional beta features; existing access limits apply' : role}</label>
                                                 </div>
                                             ))}
                                         </div>
@@ -872,7 +872,7 @@ const UserManagement = () => {
                                                         onChange={handleEditUserRolesChange}
                                                         disabled={isSubmittingEdit}
                                                     />
-                                                    <label className="form-check-label" htmlFor={`edit-role-${role}`}>{role}</label>
+                                                    <label className="form-check-label" htmlFor={`edit-role-${role}`}>{role === 'BETA' ? 'BETA — optional beta features; existing access limits apply' : role}</label>
                                                 </div>
                                             ))}
                                         </div>

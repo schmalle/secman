@@ -111,6 +111,7 @@ open class CliControllerOutdatedNotificationsIntegrationTest : BaseIntegrationTe
             owner = awsAccountId
         )
         newAsset.cloudAccountId = awsAccountId
+        newAsset.crowdStrikeAgentSeenAt = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC)
         newAsset.workgroups = mutableSetOf(workgroup!!)
         asset = assetRepository.save(newAsset)
 
@@ -145,5 +146,18 @@ open class CliControllerOutdatedNotificationsIntegrationTest : BaseIntegrationTe
 
         assertThat(response.status).isEqualTo(HttpStatus.OK)
         assertThat(response.body()!!.assetsProcessed).isEqualTo(1)
+
+        for (seenAt in listOf(null, java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(4),
+            java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).plusDays(1))) {
+            asset!!.crowdStrikeAgentSeenAt = seenAt
+            assetRepository.update(asset!!)
+            val filtered = client.toBlocking().retrieve(
+                HttpRequest.POST("/api/cli/notifications/send-outdated",
+                    CliController.SendNotificationsRequest(dryRun = true)).bearerAuth(token),
+                CliController.NotificationResultDto::class.java
+            )
+            assertThat(filtered.assetsProcessed).isZero()
+            assertThat(filtered.emailsSent).isZero()
+        }
     }
 }

@@ -11,6 +11,11 @@ export interface User {
   roles?: string[];
 }
 
+/** Beta access is additive; object access is checked independently. */
+export function canAccessBetaFeatures(roles: string[] | undefined): boolean {
+  return roles?.some(role => ['BETA', 'ADMIN', 'SECCHAMPION'].includes(role)) ?? false;
+}
+
 export interface Release {
   id: number;
   version: string;

@@ -42,6 +42,7 @@ class AssetFilterServiceWorkgroupAdDomainTest {
     @Test
     fun `regular user can access assets matching AD domains assigned to their direct workgroups`() {
         val domainAsset = Asset(id = 501L, name = "host1", type = "SERVER", owner = "CrowdStrike Import", adDomain = "corp.example.com")
+        every { assetRepository.findCurrentIdsIn(listOf(501L)) } returns listOf(501L)
         every { memoryConfig.lazyLoadingEnabled } returns false
         every {
             assetRepository.findAccessibleByWorkgroupMembership(10L)
@@ -60,6 +61,7 @@ class AssetFilterServiceWorkgroupAdDomainTest {
 
     @Test
     fun `REST fallback excludes assets granted only by disabled workgroup membership`() {
+        every { assetRepository.findCurrentIdsIn(listOf(501L)) } returns listOf(501L)
         every { memoryConfig.lazyLoadingEnabled } returns false
         every {
             assetRepository.findAccessibleByWorkgroupMembership(10L)

@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import io.micronaut.context.annotation.Value
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
-import java.net.InetAddress
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -272,36 +271,12 @@ open class EolCatalogClient(
         } catch (e: Exception) {
             throw EolSourceException("EOL source base URL is not a valid URL")
         }
-        if (!uri.isAbsolute) throw EolSourceException("EOL source base URL must be absolute")
-        if (!"https".equals(uri.scheme, ignoreCase = true)) {
-            throw EolSourceException("EOL source base URL must use https")
-        }
-        if (uri.userInfo != null) throw EolSourceException("EOL source base URL must not contain credentials")
-        if (uri.port != -1 && uri.port != 443) {
-            throw EolSourceException("EOL source base URL must use the default https port")
-        }
-        val host = uri.host ?: throw EolSourceException("EOL source base URL has no host")
-        val allowed = allowedHosts.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
-        if (!allowed.contains(host.lowercase())) {
-            throw EolSourceException("EOL source host is not in secman.eol.allowed-hosts")
-        }
-        assertPublicHost(host)
-        return uri
-    }
-
-    private fun assertPublicHost(host: String) {
-        val addresses = try {
-            InetAddress.getAllByName(host)
+        return try {
+            OutboundUrlPolicy.validate(uri, allowedHosts.split(',').map { it.trim() }.toSet())
+        } catch (e: IllegalArgumentException) {
+            throw EolSourceException(e.message ?: "EOL source URL rejected")
         } catch (e: Exception) {
             throw EolSourceException("EOL source host could not be resolved")
-        }
-        for (address in addresses) {
-            if (address.isLoopbackAddress || address.isLinkLocalAddress || address.isSiteLocalAddress ||
-                address.isAnyLocalAddress || address.isMulticastAddress ||
-                address.hostAddress == CLOUD_METADATA_IPV4
-            ) {
-                throw EolSourceException("EOL source host resolves to a non-public address")
-            }
         }
     }
 
@@ -327,7 +302,6 @@ open class EolCatalogClient(
     }
 
     companion object {
-        private const val CLOUD_METADATA_IPV4 = "169.254.169.254"
         private val PRODUCT_KEY_PATTERN = Regex("^[a-z0-9][a-z0-9._-]{0,189}$")
     }
 }

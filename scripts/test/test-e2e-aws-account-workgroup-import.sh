@@ -476,8 +476,8 @@ setup_testbed() {
     # The asset the rule-9 phase looks for. Owner is a stub string, never the
     # viewer's username: rule #8 grants access on owner == username, and that
     # would make the rule-9 assertion pass without rule 9 doing anything.
-    api PUT "/api/assets/import" "$(jq -nc --arg n "$RULE9_ASSET_NAME" --arg o "$RULE9_ASSET_OWNER" --arg c "$ACC_RULE9" \
-        '{name:$n, type:"SERVER", owner:$o, cloudAccountId:$c, description:"E2E rule #9 visibility probe"}')" >/dev/null
+    api PUT "/api/assets/import" "$(jq -nc --arg n "$RULE9_ASSET_NAME" --arg o "$RULE9_ASSET_OWNER" --arg c "$ACC_RULE9" --arg seen "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        '{name:$n, type:"SERVER", owner:$o, cloudAccountId:$c, description:"E2E rule #9 visibility probe", observedAt:$seen}')" >/dev/null
     [[ "$(api_status)" =~ ^20 ]] || { log_fail "Could not create the rule-9 asset (HTTP $(api_status))"; exit 1; }
     log_pass "Asset $RULE9_ASSET_NAME created with cloudAccountId=$ACC_RULE9"
 }

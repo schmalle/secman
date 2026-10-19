@@ -115,7 +115,8 @@ object TestDataFactory {
             type = type,
             owner = owner,
             ip = ip,
-            lastSeen = LocalDateTime.now()
+            lastSeen = LocalDateTime.now(),
+            verifiedObservedAt = LocalDateTime.now(java.time.ZoneOffset.UTC)
         )
     }
 

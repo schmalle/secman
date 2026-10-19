@@ -401,3 +401,7 @@ and end-to-end handler tests for the RBAC mirror, revocation and staleness.
 
 The relay is deliberately dependency-free, so `go build` works with no module
 proxy and its supply chain is the Go release plus this repository.
+
+## Current asset visibility
+
+Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.

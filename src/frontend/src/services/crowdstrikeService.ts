@@ -48,6 +48,10 @@ export interface CrowdStrikeQueryResponse {
      * and are NOT yet imported (they will not appear in the persisted-table views).
      */
     dataSource?: 'DATABASE' | 'LIVE_API';
+    assetId?: number | null;
+    selectedAid?: string | null;
+    snapshotStatus?: 'VERIFIED' | 'PARTIAL' | 'UNVERIFIED' | 'LIVE_COMPLETE' | 'INCOMPLETE';
+    snapshotCoverage?: string[];
     /**
      * Optional note about how this response was produced, rendered as a warning banner.
      * Set when a force refresh reached CrowdStrike but Falcon held no device record for the
@@ -64,6 +68,7 @@ export interface CrowdStrikeSaveRequest {
     hostname: string;
     vulnerabilities: CrowdStrikeVulnerabilityDto[];
     instanceId?: string; // T050: Optional instance ID for asset enrichment
+    assetId?: number | null;
 }
 
 /**
@@ -95,7 +100,8 @@ export async function queryVulnerabilities(
     force: boolean = false,
     page: number = 0,
     limit: number = 20000,
-    severity: string = 'HIGH,CRITICAL'
+    severity: string = 'HIGH,CRITICAL',
+    assetId?: number | null
 ): Promise<CrowdStrikeQueryResponse> {
     console.log('[CrowdStrikeService] queryVulnerabilities called');
     console.log('[CrowdStrikeService] Hostname:', hostname);
@@ -106,7 +112,8 @@ export async function queryVulnerabilities(
     const forceParam = force ? '&force=true' : '';
     const pageParam = `&page=${page}&limit=${limit}`;
     const severityParam = severity ? `&severity=${encodeURIComponent(severity)}` : '';
-    const url = `/api/vulnerabilities?hostname=${encodeURIComponent(hostname)}${forceParam}${pageParam}${severityParam}`;
+    const assetParam = assetId ? `&assetId=${assetId}` : '';
+    const url = `/api/vulnerabilities?hostname=${encodeURIComponent(hostname)}${forceParam}${pageParam}${severityParam}${assetParam}`;
     console.log('[CrowdStrikeService] Calling API:', url);
 
     try {
@@ -200,7 +207,7 @@ export async function saveVulnerabilities(
     console.log('[CrowdStrikeService] Hostname:', request.hostname);
     console.log('[CrowdStrikeService] Vulnerabilities count:', request.vulnerabilities.length);
 
-    const url = '/api/crowdstrike/vulnerabilities/save';
+    const url = '/api/crowdstrike/vulnerabilities/sync';
     console.log('[CrowdStrikeService] Calling API:', url);
 
     try {
@@ -210,7 +217,7 @@ export async function saveVulnerabilities(
                 'Content-Type': 'application/json'
             },
             credentials: 'include',  // Send HttpOnly cookie for authentication
-            body: JSON.stringify(request)
+            body: JSON.stringify({ hostname: request.hostname, instanceId: request.instanceId, assetId: request.assetId })
         });
 
         console.log('[CrowdStrikeService] Response status:', response.status);

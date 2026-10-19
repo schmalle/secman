@@ -103,7 +103,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
                     ORDER BY COALESCE(v.first_seen_at, v.scan_timestamp) ASC,
                              v.vulnerability_id ASC
                 ) AS rn
-            FROM vulnerability v
+            FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
             WHERE v.excepted = 0
               AND v.product_class <> 'INSTALLER_ARTIFACT'
               AND COALESCE(v.first_seen_at, v.scan_timestamp) < :thresholdDate
@@ -126,7 +126,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
     @Query(
         value = """
         SELECT COUNT(DISTINCT v.asset_id)
-        FROM vulnerability v
+        FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
         WHERE v.excepted = 0
           AND v.product_class <> 'INSTALLER_ARTIFACT'
           AND COALESCE(v.first_seen_at, v.scan_timestamp) < :thresholdDate

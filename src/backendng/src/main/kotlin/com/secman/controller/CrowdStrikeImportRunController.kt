@@ -34,8 +34,11 @@ open class CrowdStrikeImportRunController(
         log.info("CrowdStrike import run started: runId={}, actor={}", id, actor(authentication))
         HttpResponse.ok(mapOf("runId" to id))
     } catch (e: IllegalStateException) {
+        val body = mutableMapOf("error" to "An import or cleanup is already active")
+        lease.activeExpiresAt()?.let { body["expiresAt"] = it.toString() }
+        log.warn("CrowdStrike import start actor={} outcome=rejected reason=active-operation", actor(authentication))
         HttpResponse.status<Map<String, String>>(HttpStatus.CONFLICT)
-            .body(mapOf("error" to "An import run is already active"))
+            .body(body)
     }
 
     @Post("/{runId}/heartbeat")
@@ -51,9 +54,12 @@ open class CrowdStrikeImportRunController(
     @Synchronized
     open fun finish(@PathVariable runId: String, @QueryValue(defaultValue = "false") successful: Boolean,
                     authentication: Authentication): HttpResponse<*> = try {
+        lease.finishedStatus(runId, authentication.name)?.let { status ->
+            return HttpResponse.ok(mapOf("status" to status))
+        }
         lease.requireOwner(runId, authentication.name)
         notifier.finishExplicitRun(runId, successful)
-        lease.finish(runId, authentication.name)
+        lease.finish(runId, authentication.name, successful)
         log.info("CrowdStrike import run finished: runId={}, actor={}, successful={}", runId, actor(authentication), successful)
         refreshService.requestDeferredRefresh("CrowdStrike import run ended")
         HttpResponse.ok(mapOf("status" to if (successful) "COMPLETED" else "FAILED"))

@@ -57,6 +57,7 @@ open class CrowdStrikeCleanupNotificationService(
             CrowdStrikeCleanupStatus.SUCCESS -> "completed"
             CrowdStrikeCleanupStatus.PARTIAL -> "completed with errors"
             CrowdStrikeCleanupStatus.ABORTED_SAFETY_BRAKE -> "aborted (safety brake)"
+            CrowdStrikeCleanupStatus.ABORTED_IMPORT_HEALTH -> "aborted (import health)"
             CrowdStrikeCleanupStatus.FAILED -> "FAILED"
         }
         return "[secman] CrowdStrike stale-asset cleanup $tag — ${run.deletedCount} deleted"
@@ -74,6 +75,9 @@ open class CrowdStrikeCleanupNotificationService(
               <h2>CrowdStrike stale-asset cleanup ${escape(run.status.name)}</h2>
               <table cellpadding="4" style="border-collapse: collapse">
                 <tr><td><b>Triggered by</b></td><td>${escape(run.triggeredBy)}</td></tr>
+                <tr><td><b>Policy</b></td><td>${escape(run.basis)}</td></tr>
+                <tr><td><b>Cutoff (UTC)</b></td><td>${run.cutoffUtc ?: "Unknown for historical run"}</td></tr>
+                <tr><td><b>Retained/skipped</b></td><td>${run.skippedCount}</td></tr>
                 <tr><td><b>Stale threshold</b></td><td>${run.staleDays} days</td></tr>
                 <tr><td><b>Cutoff</b></td><td>$cutoff</td></tr>
                 <tr><td><b>CrowdStrike-tracked assets (total)</b></td><td>${run.totalCrowdStrikeTracked}</td></tr>

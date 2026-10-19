@@ -17,7 +17,7 @@ import java.time.Instant
 open class IntegrationReadService(private val repository: IntegrationRepository, private val access: IntegrationAccessService,
                                   private val mapper: com.fasterxml.jackson.databind.ObjectMapper) {
     open fun scanners(auth: Authentication): List<IntegrationScannerDto> {
-        val ids = access.assetIds(auth)
+        val ids = access.currentAssetIds(auth)
         val admin = "ADMIN" in auth.roles
         if (!admin && ids.isEmpty()) return emptyList()
         return repository.page(IntegrationScanner::class.java, IntegrationPageQuery.SCANNERS,
@@ -35,13 +35,13 @@ open class IntegrationReadService(private val repository: IntegrationRepository,
 
     open fun subject(id: Long, auth: Authentication): IntegrationSubjectDto {
         val subject = repository.find(IntegrationSubject::class.java, id) ?: access.notFound()
-        access.requireAsset(subject.assetId, auth)
+        access.requireCurrentAsset(subject.assetId, auth)
         return subjectDtos(listOf(subject)).single()
     }
 
     open fun runs(page: Int, size: Int, scannerId: Long?, subjectId: Long?, auth: Authentication): IntegrationPage<IntegrationRunDto> {
         pagination(page, size)
-        val ids = access.assetIds(auth)
+        val ids = access.currentAssetIds(auth)
         if (ids.isEmpty()) return emptyPage(page, size)
         val result = repository.page(IntegrationRun::class.java, IntegrationPageQuery.RUNS,
             mapOf("assets" to ids, "scanner" to scannerId, "subject" to subjectId), page, size)
@@ -61,7 +61,7 @@ open class IntegrationReadService(private val repository: IntegrationRepository,
             filter.severity != null && filter.severity !in IntegrationRunValidator.SEVERITIES ||
             filter.state != null && filter.state !in setOf("OPEN", "RESOLVED") ||
             (filter.search?.length ?: 0) > 200 || (filter.owner?.length ?: 0) > 255) invalid("Invalid finding filter")
-        val ids = access.assetIds(auth)
+        val ids = access.currentAssetIds(auth)
         if (ids.isEmpty()) return emptyPage(page, size)
         val params = mapOf("assets" to ids, "scanner" to filter.scannerId, "subject" to filter.subjectId,
             "repo" to filter.githubRepositoryId, "source" to filter.source, "owner" to filter.owner,
@@ -82,10 +82,10 @@ open class IntegrationReadService(private val repository: IntegrationRepository,
         return attachment
     }
 
-    open fun summary(auth: Authentication): IntegrationSummaryDto = summaryFor(access.assetIds(auth))
+    open fun summary(auth: Authentication): IntegrationSummaryDto = summaryFor(access.currentAssetIds(auth))
 
     open fun webExposureSummary(auth: Authentication): WebExposureSummaryDto {
-        val ids = access.assetIds(auth)
+        val ids = access.currentAssetIds(auth)
         if (ids.isEmpty()) return WebExposureSummaryDto(0, 0, 0, 0, 0, 0, 0, 0, 0, null)
         fun count(query: IntegrationCountQuery) = repository.count(query, ids)
         return WebExposureSummaryDto(
@@ -103,7 +103,7 @@ open class IntegrationReadService(private val repository: IntegrationRepository,
         pagination(page, size)
         if (filter.reachability != null && filter.reachability !in IntegrationRunValidator.REACHABILITY)
             invalid("Invalid exposure filter")
-        val ids = access.assetIds(auth)
+        val ids = access.currentAssetIds(auth)
         if (ids.isEmpty()) return emptyPage(page, size)
         val result = repository.page(
             WebExposure::class.java, IntegrationPageQuery.WEB_EXPOSURES,
@@ -131,7 +131,7 @@ open class IntegrationReadService(private val repository: IntegrationRepository,
         if (filter.category != null && filter.category !in IntegrationRunValidator.COMPONENT_CATEGORIES ||
             filter.state != null && filter.state !in setOf("OPEN", "RESOLVED") ||
             (filter.search?.length ?: 0) > 200) invalid("Invalid component filter")
-        val ids = access.assetIds(auth)
+        val ids = access.currentAssetIds(auth)
         if (ids.isEmpty()) return emptyPage(page, size)
         val result = repository.page(
             WebComponent::class.java, IntegrationPageQuery.WEB_COMPONENTS,
@@ -159,7 +159,7 @@ open class IntegrationReadService(private val repository: IntegrationRepository,
     open fun run(id: Long, auth: Authentication): IntegrationRunDetailDto {
         val r = repository.find(IntegrationRun::class.java, id) ?: access.notFound()
         val s = repository.find(IntegrationSubject::class.java, r.subjectId) ?: access.notFound()
-        access.requireAsset(s.assetId, auth)
+        access.requireCurrentAsset(s.assetId, auth)
         val a = repository.find(Asset::class.java, s.assetId) ?: access.notFound()
         val c = repository.find(IntegrationScanner::class.java, r.scannerId) ?: access.notFound()
         val dto = IntegrationRunDto(r.id!!, r.scannerId, r.subjectId, c.name, a.name, r.status, r.completeCoverage,
@@ -189,7 +189,7 @@ open class IntegrationReadService(private val repository: IntegrationRepository,
     private fun authorizedFinding(id: Long, auth: Authentication): IntegrationFinding {
         val finding = repository.find(IntegrationFinding::class.java, id) ?: access.notFound()
         val subject = repository.find(IntegrationSubject::class.java, finding.subjectId) ?: access.notFound()
-        access.requireAsset(subject.assetId, auth)
+        access.requireCurrentAsset(subject.assetId, auth)
         return finding
     }
 

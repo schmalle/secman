@@ -47,16 +47,16 @@ import org.slf4j.LoggerFactory
 /**
  * Configure what the account owner is asked, and what their answers mean.
  *
- * **ADMIN or SECCHAMPION, for reads and writes alike.** That is a deliberate departure from
+ * **Configuration authoring permits ADMIN or SECCHAMPION, for reads and writes alike.** That is a deliberate departure from
  * [DemandClassificationController], which lets both roles read but only ADMIN write: deciding
  * which security requirements apply to a cloud account is exactly a security champion's job,
  * and routing every rule edit through an ADMIN would make the feature unusable by the people
  * who own it. Both roles are enforced here *and* mirrored in the UI (Principle 2) — this
  * annotation is the boundary, the UI check is UX.
  *
- * Everything on this controller writes or reveals configuration only. The one endpoint with a
- * real-world side effect is [simulate], which sends mail and creates rows on purpose; it is
- * rate-limited and audited accordingly.
+ * [simulate] sends mail and may create simulation rows. The ADMIN-only [testWelcome]
+ * sends a sample without production delivery records. Both share simulation rate limits
+ * and audit their mail outcomes.
  */
 @Controller("/api/account-onboarding")
 @Secured("ADMIN", "SECCHAMPION")
@@ -69,7 +69,8 @@ open class AccountOnboardingController(
     private val userRepository: UserRepository,
     private val ruleMatcher: AccountOnboardingRuleMatcher,
     private val onboardingService: AccountOnboardingService,
-    private val rateLimiter: AccountOnboardingRateLimiter
+    private val rateLimiter: AccountOnboardingRateLimiter,
+    private val ownerMailDeliveryService: com.secman.service.OwnerMailDeliveryService
 ) {
     private val log = LoggerFactory.getLogger(AccountOnboardingController::class.java)
 
@@ -534,6 +535,27 @@ open class AccountOnboardingController(
                 } else null
             )
         )
+    }
+
+    /** Send a single sample without changing mappings, invites, or production delivery records. */
+    @Post("/welcome-test")
+    @Secured("ADMIN")
+    open fun testWelcome(
+        @Body request: com.secman.dto.AccountWelcomeTestRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        if (!EmailAddressValidator.isValidRecipient(request.recipient)) {
+            return badRequest("recipient must be a valid single email address")
+        }
+        if (request.accountIds.isEmpty() || request.accountIds.size > 200 ||
+            request.accountIds.any { !ACCOUNT_ID_PATTERN.matches(it) }) {
+            return badRequest("accountIds must contain between 1 and 200 valid 12-digit AWS account IDs")
+        }
+        if (!rateLimiter.tryAcquire(AccountOnboardingRateLimiter.Bucket.SIMULATE, authentication.name)) {
+            return error(HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMITED", "Too many test emails. Try again later.")
+        }
+        return HttpResponse.ok(ownerMailDeliveryService.testWelcome(
+            request.accountIds, request.recipient, authentication.name))
     }
 
     // --- Mapping -----------------------------------------------------------
