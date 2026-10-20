@@ -84,7 +84,7 @@ class CrowdStrikeDeleteOnFailIntegrationTest {
     private fun post(batch: CrowdStrikeVulnerabilityBatchDto, enabled: Boolean = true): ImportStatisticsDto {
         val response = http.toBlocking().exchange(HttpRequest.POST(
             "/api/crowdstrike/servers/import?deleteOnFail=$enabled", listOf(batch)).bearerAuth(token()), ImportStatisticsDto::class.java)
-        assertThat(response.headers.get("X-Secman-Deleteonfail")).isEqualTo(if (enabled) "atomic-v1" else "disabled")
+        assertThat(response.headers.get("X-Secman-Deleteonfail")).isEqualTo(if (enabled) "hostname-v2" else "disabled")
         return response.body()!!
     }
 
@@ -117,6 +117,7 @@ class CrowdStrikeDeleteOnFailIntegrationTest {
         assertThat(outcome.recoveryAttempts).isEqualTo(1)
         assertThat(outcome.recoveryStatus).isEqualTo("COMMITTED")
         assertThat(outcome.recoveryAssetId).isEqualTo(id)
+        assertThat(outcome.recoveryDeletedAssetIds).containsExactly(id)
         assertThat(assets.findById(id)).isEmpty()
         val replacement = identities.findByCrowdStrikeAidIn(listOf(device.aid)).single().asset
         assertThat(replacement.id).isNotEqualTo(id)
@@ -138,16 +139,16 @@ class CrowdStrikeDeleteOnFailIntegrationTest {
     }
 
     @Test
-    fun `missing authoritative account blocks deletion with a reason`() {
+    fun `explicit hostname cleanup can reset an asset when incoming account metadata is missing`() {
         val (device, id) = fixture()
         val result = post(payload(device.copy(cloudAccountId = null)))
         val outcome = result.hostOutcomes.single()
-        assertThat(outcome.errorCode).isEqualTo("INCOMPLETE_IDENTITY")
-        assertThat(outcome.recoveryStatus).isEqualTo("BLOCKED")
-        assertThat(outcome.recoveryReason).isEqualTo("INCOMPLETE_IDENTITY")
-        assertThat(outcome.recoveryAttempts).isZero()
-        assertThat(assets.findById(id)).isPresent()
-        assertThat(audits.countByAssetId(id)).isZero()
+        assertThat(result.errors).isEmpty()
+        assertThat(outcome.recoveryStatus).isEqualTo("COMMITTED")
+        assertThat(outcome.recoveryDeletedAssetIds).containsExactly(id)
+        assertThat(assets.findById(id)).isEmpty()
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(device.aid)).single().asset.cloudAccountId).isNull()
+        assertThat(audits.countByAssetId(id)).isEqualTo(1)
     }
 
     @Test
@@ -169,19 +170,79 @@ class CrowdStrikeDeleteOnFailIntegrationTest {
     }
 
     @Test
-    fun `proven AID owner recovers without deleting an independent same hostname device`() {
+    fun `hostname cleanup deletes every exact match and leaves similar hostnames untouched`() {
         val (device, id) = fixture()
         val sibling = device.copy(aid = UUID.randomUUID().toString().replace("-", ""),
             instanceId = "i-" + UUID.randomUUID().toString().replace("-", "").take(17))
         ownedAids.add(sibling.aid)
         importer.importVulnerabilitiesForServer(payload(sibling), "test-admin", true)
         val siblingId = identities.findByCrowdStrikeAidIn(listOf(sibling.aid)).single().asset.id!!
+        val outside = device().copy(hostname = device.hostname + ".example.test")
+        importer.importVulnerabilitiesForServer(payload(outside), "test-admin", true)
+        val outsideId = identities.findByCrowdStrikeAidIn(listOf(outside.aid)).single().asset.id!!
         val result = post(payload(device))
         assertThat(result.errors).isEmpty()
+        assertThat(result.hostOutcomes.single().recoveryDeletedAssetIds).containsExactlyInAnyOrder(id, siblingId)
         assertThat(assets.findById(id)).isEmpty()
-        assertThat(assets.findById(siblingId)).isPresent()
-        assertThat(count("vulnerability", siblingId)).isEqualTo(1)
-        assertThat(audits.countByAssetId(siblingId)).isZero()
+        assertThat(assets.findById(siblingId)).isEmpty()
+        assertThat(audits.countByAssetId(id)).isEqualTo(1)
+        assertThat(audits.countByAssetId(siblingId)).isEqualTo(1)
+        assertThat(assets.findById(outsideId)).isPresent()
+        assertThat(count("vulnerability", outsideId)).isEqualTo(1)
+        assertThat(audits.countByAssetId(outsideId)).isZero()
+    }
+
+    @Test
+    fun `production multiple AID binding no longer vetoes hostname deletion`() {
+        val (device, id) = fixture()
+        val otherAid = UUID.randomUUID().toString().replace("-", "")
+        ownedAids.add(otherAid)
+        identities.save(com.secman.domain.CrowdStrikeAssetIdentity(asset = assets.findById(id).orElseThrow(),
+            crowdStrikeAid = otherAid, sourceHostname = device.hostname))
+        val result = post(payload(device))
+        assertThat(result.errors).isEmpty()
+        assertThat(result.hostOutcomes.single().recoveryDeletedAssetIds).containsExactly(id)
+        assertThat(assets.findById(id)).isEmpty()
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(otherAid))).isEmpty()
+        assertThat(audits.countByAssetId(id)).isEqualTo(1)
+    }
+
+    @Test
+    fun `unexplained binding rejection without a conflict asset ID recovers by explicit hostname only`() {
+        val device = device()
+        importer.importVulnerabilitiesForServer(payload(device, Instant.now().minusSeconds(5)), "test-admin", true)
+        val id = identities.findByCrowdStrikeAidIn(listOf(device.aid)).single().asset.id!!
+        val otherAid = UUID.randomUUID().toString().replace("-", "")
+        ownedAids.add(otherAid)
+        identities.save(com.secman.domain.CrowdStrikeAssetIdentity(asset = assets.findById(id).orElseThrow(),
+            crowdStrikeAid = otherAid, sourceHostname = device.hostname))
+        val ordinary = post(payload(device), false)
+        assertThat(ordinary.hostOutcomes.single().errorCode).isEqualTo("UNEXPLAINED_AID")
+        assertThat(assets.findById(id)).isPresent()
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(otherAid))).hasSize(1)
+        val recovered = post(payload(device))
+        assertThat(recovered.errors).isEmpty()
+        assertThat(recovered.hostOutcomes.single().recoveryDeletedAssetIds).containsExactly(id)
+        assertThat(assets.findById(id)).isEmpty()
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(otherAid))).isEmpty()
+    }
+
+    @Test
+    fun `failure after multiple hostname deletions restores every asset binding finding and audit`() {
+        val (device, id) = fixture()
+        val sibling = device().copy(hostname = device.hostname, lastSeen = device.lastSeen!!.minusSeconds(1))
+        importer.importVulnerabilitiesForServer(payload(sibling), "test-admin", true)
+        val siblingId = identities.findByCrowdStrikeAidIn(listOf(sibling.aid)).single().asset.id!!
+        val result = post(payload(device).copy(runSeverities = listOf("LOW")))
+        assertThat(result.errors).hasSize(1)
+        assertThat(result.hostOutcomes.single().recoveryAttempts).isEqualTo(2)
+        assertThat(result.hostOutcomes.single().recoveryDeletedAssetIds).isEmpty()
+        for (assetId in listOf(id, siblingId)) {
+            assertThat(assets.findById(assetId)).isPresent()
+            assertThat(count("vulnerability", assetId)).isEqualTo(1)
+            assertThat(audits.countByAssetId(assetId)).isZero()
+        }
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(device.aid, sibling.aid))).hasSize(2)
     }
 
     @Test

@@ -29,11 +29,13 @@ data class CrowdStrikeHostImportOutcome(
     val recoveryAttempts: Int = 0,
     val recoveryStatus: String? = null,
     val recoveryReason: String? = null,
-    val recoveryAssetId: Long? = null
+    val recoveryAssetId: Long? = null,
+    val recoveryDeletedAssetIds: List<Long> = emptyList()
 )
 
 /** Plain operator diagnostic, also usable by clients that do not render structured outcomes. */
 fun CrowdStrikeHostImportOutcome.recoverySummary(): String? = if (!recoveryRequested) null else
     "Delete-on-fail: ${recoveryStatus ?: "UNKNOWN"}; attempts=$recoveryAttempts/2" +
         (recoveryAssetId?.let { "; target asset=$it" } ?: "") +
+        (if (recoveryDeletedAssetIds.isNotEmpty()) "; deleted assets=${recoveryDeletedAssetIds.joinToString(",")}" else "") +
         (recoveryReason?.let { "; reason=$it" } ?: "")
