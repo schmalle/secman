@@ -19,7 +19,7 @@ class CrowdStrikeRepairRequestService(
 
     fun execute(input: CrowdStrikeIdentityReconcileRequest, auth: Authentication): CrowdStrikeRepairRequestStatus {
         authorize(auth)
-        require(input.assetId > 0 && input.expectedAids.size in 2..20 &&
+        require(input.assetId > 0 && input.expectedAids.size in 2..100 &&
             input.expectedAids.all { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) } &&
             input.reason.trim().length in 10..255 && input.reason.none(Char::isISOControl)) { "Invalid repair request" }
         if (!access.canAccessAsset(input.assetId, auth)) throw HttpStatusException(HttpStatus.NOT_FOUND, "System not found")

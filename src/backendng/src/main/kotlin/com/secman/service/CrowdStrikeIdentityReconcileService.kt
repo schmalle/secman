@@ -32,7 +32,7 @@ class CrowdStrikeIdentityReconcileService(
 
     fun reconcile(request: CrowdStrikeIdentityReconcileRequest, auth: Authentication): CrowdStrikeIdentityReconcileResponse {
         if ("ADMIN" !in auth.roles) throw HttpStatusException(HttpStatus.FORBIDDEN, "Identity repair requires ADMIN")
-        require(request.assetId > 0 && request.expectedAids.size in 2..20 &&
+        require(request.assetId > 0 && request.expectedAids.size in 2..100 &&
             request.expectedAids.all { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) } &&
             request.reason.trim().length in 10..255 && request.reason.none(Char::isISOControl)) { "Invalid repair request" }
         if (!access.canAccessAsset(request.assetId, auth)) throw HttpStatusException(HttpStatus.NOT_FOUND, "System not found")

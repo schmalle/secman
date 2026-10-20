@@ -9,7 +9,7 @@ import com.fasterxml.jackson.annotation.JsonInclude
 @Serdeable
 data class CrowdStrikeIdentityReconcileRequest(
     @field:Positive val assetId: Long,
-    @field:Size(min = 2, max = 20) val expectedAids: Set<String>,
+    @field:Size(min = 2, max = 100) val expectedAids: Set<String>,
     @field:Size(min = 10, max = 255) val reason: String,
     val dryRun: Boolean = true,
     @field:Pattern(regexp = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
