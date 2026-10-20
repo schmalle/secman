@@ -1050,10 +1050,10 @@ inventory retention decision and is not proof that a stopped machine has been re
 Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.
 
 
-### Delete hostname matches after a rejected query import
+### Delete conflicting assets after a rejected query import
 
 `query servers --hostnames ARCGIS --save --deleteonfail` explicitly authorizes
-hostname cleanup after a rejected import. Single-host
+hostname and verified selected-AID owner cleanup after a rejected import. Single-host
 `query --hostname ARCGIS --save --deleteonfail` and explicit
 `query servers --aid <aid> --save --deleteonfail` use the same behavior. ADMIN
 permission and `--save` are required. Fleet streaming queries reject this flag;
@@ -1084,8 +1084,8 @@ imported in the same request.
 
 Each recovery cycle acquires database identity locks, discovers the exact target
 set, locks targets in ID order and rechecks hostname, metadata, bindings and
-protected references. A conflict target outside the hostname scope is never
-deleted. Newer stored observations, concurrent target changes, protected risk,
+protected references. An outside asset is eligible only as the verified selected-AID
+owner described below. Newer stored observations, concurrent target changes, protected risk,
 assessment or demand references, and cascade timeouts stop cleanup. The existing
 import candidate limit of 101 matches also bounds hostname cleanup; exceeding it
 refuses the operation without partial deletion.
@@ -1096,8 +1096,16 @@ failed save rolls back **every** deleted asset, finding, binding and deletion au
 The replacement retry discovers candidates only within the exact hostname scope.
 It does not reuse another hostname's asset solely because its cloud instance and
 account match. Normal imports retain their existing instance-continuity rules.
-A selected AID still bound outside the cleanup scope stops recovery with
-`CONFLICT_OUTSIDE_HOSTNAME` before any deletion. Superseded AIDs bound to other
+With the `identity-v3` contract, the selected AID's owner under a different stored
+hostname is included in the same atomic cleanup when it has exactly one binding
+(the selected AID), the stored enrollment first-seen timestamp matches Falcon,
+and Falcon supplies last contact. This also works when no exact-hostname asset
+exists. Missing enrollment evidence returns `UNVERIFIED_SELECTED_OWNER`; other
+bindings return `UNEXPLAINED_AID`, including the blocking asset ID. The same
+freshness, protected-reference, target-change and total 101-asset limits apply.
+Matching only an instance ID or a similar hostname never adds an outside target.
+The legacy `hostname-v2` contract still returns `CONFLICT_OUTSIDE_HOSTNAME`.
+Superseded AIDs bound to other
 hostnames are excluded from the recovery retry, including binding retirement;
 their assets, findings, bindings and enrollment history remain unchanged. An original rejection on
 one of those historical bindings does not veto cleanup of the requested hostname.
@@ -1111,11 +1119,16 @@ exceptions. Recreated assets receive new IDs; unrelated metadata and relationshi
 are not restored. History, completion notifications, CLI statistics and
 reconciliation count the final device outcome once.
 
-The API acknowledges this hostname-cleanup contract with
-`X-Secman-Deleteonfail: hostname-v2`. The CLI reports a deployment mismatch if this
-acknowledgment is absent. Destructive requests are never automatically resent
+The CLI first checks the ADMIN-only `GET /api/crowdstrike/import-recovery-capabilities`
+endpoint for `X-Secman-Deleteonfail: identity-v3`. If authentication or compatibility
+fails, it sends no import. It then sends that same contract header on each destructive
+POST and verifies the acknowledgment. Requests with an unsupported contract are
+rejected before import. An absent header retains `hostname-v2` semantics for older
+clients; deploy the backend before the CLI. No database migration is required.
+Destructive requests are never automatically resent
 after gateway errors or timeouts because the backend outcome may be unknown.
-Both query commands print attempts, outcome, blocking reason and the complete
+Both query commands print attempts, outcome, original conflict reason after recovery,
+replacement asset ID, blocking reason and the complete
 `recoveryDeletedAssetIds` list for committed cleanup. The original conflict's
 `recoveryAssetId` is diagnostic; it does not limit deletion to that one asset.
 Failed or rolled-back recovery reports no committed deleted IDs.
@@ -1127,3 +1140,9 @@ Regression checks: `./scripts/runbackendtests.sh --tests '*CrowdStrikeDeleteOnFa
 exercises real HTTP, MariaDB, multiple AID bindings, multi-asset hostname cleanup,
 scope exclusions and transaction rollback in a disposable schema;
 `./gradlew :cli:test :cli:shadowJar` checks the CLI contract and packaged build.
+
+For read-only diagnosis of an outside owner, call the ADMIN-only
+`GET /api/crowdstrike/identity-preview?hostname=<hostname>&aid=<selected-aid>`.
+The optional 32-hex-character AID adds its current owner to the hostname matches;
+the response includes enrollment/contact observations and `selectedAidOwner`.
+This preview does not authorize deletion or replace transactional revalidation.

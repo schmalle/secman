@@ -12,7 +12,7 @@ import jakarta.inject.Singleton
 import jakarta.persistence.EntityManager
 import jakarta.persistence.LockModeType
 
-/** ADMIN opt-in cleanup of the exact failed hostname, inside the replacement transaction. */
+/** ADMIN opt-in cleanup of a failed hostname and its verified selected-AID owner. */
 @Singleton
 class CrowdStrikeImportRecoveryService(
     private val assets: AssetRepository,
@@ -23,16 +23,33 @@ class CrowdStrikeImportRecoveryService(
     private val deletion: AssetCascadeDeleteService,
     private val entityManager: EntityManager
 ) {
-    fun recover(batch: CrowdStrikeVulnerabilityBatchDto, conflict: CrowdStrikeIdentityConflict, username: String): List<Long> {
+    fun recover(batch: CrowdStrikeVulnerabilityBatchDto, conflict: CrowdStrikeIdentityConflict, username: String, includeSelectedOwner: Boolean = false): List<Long> {
         require(canRecover(batch, conflict)) { "Import rejection cannot be recovered by hostname cleanup" }
         val selection = requireNotNull(batch.deviceSelection)
         val selectionAids = (listOf(selection.selected) + selection.superseded).map { it.aid }
         val outsideBindings = identities.findByCrowdStrikeAidIn(selectionAids).filter {
             !matchesHostname(it.asset, batch.hostname)
         }
-        guard(outsideBindings.none { it.crowdStrikeAid == selection.selected.aid },
+        val outsideOwner = outsideBindings.singleOrNull { it.crowdStrikeAid == selection.selected.aid }
+        guard(outsideOwner == null || includeSelectedOwner,
             "CONFLICT_OUTSIDE_HOSTNAME", "Selected Falcon identity belongs outside the hostname cleanup scope")
-        val candidates = hostnameTargets(batch.hostname)
+        val hostnameCandidates = hostnameTargets(batch.hostname)
+        val candidates = (hostnameCandidates + listOfNotNull(outsideOwner?.asset)).distinctBy { it.id }
+        guard(candidates.size <= 101, "TOO_MANY_HOSTNAME_MATCHES", "Recovery exceeds the import candidate limit")
+        val outsideId = outsideOwner?.asset?.id
+        fun validateOutsideOwner() {
+            if (outsideId == null) return
+            val owned = identities.findByAssetIdIn(listOf(outsideId))
+            guard(owned.size == 1 && owned.single().crowdStrikeAid == selection.selected.aid,
+                "UNEXPLAINED_AID", "Selected AID owner asset $outsideId has additional or changed Falcon bindings")
+            val binding = owned.single()
+            val firstSeen = selection.selected.firstSeen?.let {
+                java.time.LocalDateTime.ofInstant(it, java.time.ZoneOffset.UTC)
+            }
+            guard(firstSeen != null && binding.falconFirstSeenAt == firstSeen && selection.selected.lastSeen != null,
+                "UNVERIFIED_SELECTED_OWNER", "Selected AID owner asset $outsideId requires matching enrollment and provider contact")
+        }
+        validateOutsideOwner()
         guard(candidates.isNotEmpty(), "TARGET_CHANGED", "No assets match the failed hostname")
         val expected = candidates.associateBy { requireNotNull(it.id) }
         // A superseded binding may have caused the original rejection. It is not a
@@ -44,17 +61,23 @@ class CrowdStrikeImportRecoveryService(
             guard(expected.getValue(id).updatedAt == conflict.assetUpdatedAt, "TARGET_CHANGED",
                 "Recovery target changed after import rejection")
         }
-        val versions = expected.mapValues { (_, asset) -> asset.updatedAt to asset.cloudInstanceId }
+        val versions = expected.mapValues { (_, asset) ->
+            listOf(asset.updatedAt, asset.cloudInstanceId, asset.cloudAccountId, asset.adDomain, asset.crowdStrikeHostname, asset.name)
+        }
+        fun unchanged(asset: Asset) = versions[asset.id] ==
+            listOf(asset.updatedAt, asset.cloudInstanceId, asset.cloudAccountId, asset.adDomain, asset.crowdStrikeHostname, asset.name)
+        fun inScope(asset: Asset) = matchesHostname(asset, batch.hostname) || asset.id == outsideId
         val locked = expected.keys.sorted().map { id ->
             val asset = entityManager.find(Asset::class.java, id, LockModeType.PESSIMISTIC_WRITE)
                 ?: throw CrowdStrikeRecoveryBlocked("TARGET_CHANGED", "Recovery target no longer exists")
             entityManager.refresh(asset, LockModeType.PESSIMISTIC_WRITE)
-            guard(matchesHostname(asset, batch.hostname) && versions.getValue(id) == (asset.updatedAt to asset.cloudInstanceId),
+            guard(inScope(asset) && unchanged(asset),
                 "TARGET_CHANGED", "Recovery target changed while acquiring deletion locks")
             asset
         }
-        guard(hostnameTargets(batch.hostname).map { it.id }.toSet() == expected.keys, "TARGET_CHANGED",
+        guard(hostnameTargets(batch.hostname).map { it.id }.toSet() == hostnameCandidates.map { it.id }.toSet(), "TARGET_CHANGED",
             "Assets matching the hostname changed during recovery")
+        validateOutsideOwner()
         val bindings = identities.findByAssetIdIn(expected.keys.toList())
         // Other AIDs are part of the explicitly authorized hostname cleanup, not a veto.
         CrowdStrikeDeviceReplacementService.requireFreshObservation(bindings, selection, true)
@@ -72,8 +95,9 @@ class CrowdStrikeImportRecoveryService(
         locked.forEach { target ->
             val id = requireNotNull(target.id)
             deletion.deleteAsset(id, username, forceTimeout = false, cleanupEligibility = { asset ->
-                guard(matchesHostname(asset, batch.hostname) && versions.getValue(id) == (asset.updatedAt to asset.cloudInstanceId),
+                guard(inScope(asset) && unchanged(asset),
                     "TARGET_CHANGED", "Hostname cleanup target metadata changed")
+                if (id == outsideId) validateOutsideOwner()
                 guard(identities.findByAssetIdIn(listOf(id)).map { it.crowdStrikeAid }.toSet() == bindingIds[id].orEmpty(),
                     "TARGET_CHANGED", "Hostname cleanup target bindings changed")
                 guard(demands.findByExistingAssetId(id).isEmpty() && assessments.findAllByInvolvedAssetId(id).isEmpty() &&

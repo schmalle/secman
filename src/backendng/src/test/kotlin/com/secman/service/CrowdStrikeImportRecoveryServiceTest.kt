@@ -131,6 +131,40 @@ class CrowdStrikeImportRecoveryServiceTest {
     }
 
     @Test
+    fun `verified outside selected owner is included without a hostname candidate or conflict ID`() {
+        val outside = asset.copy(id = 9, name = "OTHER")
+        val first = java.time.Instant.parse("2025-01-01T00:00:00Z")
+        val selected = batch.deviceSelection!!.selected.copy(firstSeen = first, lastSeen = java.time.Instant.now())
+        val binding = CrowdStrikeAssetIdentity(asset = outside, crowdStrikeAid = selected.aid, sourceHostname = "OTHER",
+            falconFirstSeenAt = java.time.LocalDateTime.ofInstant(first, java.time.ZoneOffset.UTC))
+        stub(listOf(outside), listOf(binding))
+        every { assets.findCrowdStrikeReplacementCandidates("ARCGIS", any()) } returns
+            Page.of(emptyList(), Pageable.from(0, 102), 0)
+        assertThat(service.recover(batch.copy(deviceSelection = batch.deviceSelection.copy(selected = selected)),
+            CrowdStrikeIdentityConflict("UNEXPLAINED_AID", "conflict"), "admin", true)).containsExactly(9L)
+    }
+
+    @Test
+    fun `outside selected owner with extra bindings is never deleted`() {
+        val outside = asset.copy(id = 9, name = "OTHER")
+        stub(bindings = listOf(
+            CrowdStrikeAssetIdentity(asset = outside, crowdStrikeAid = "aid-one", sourceHostname = "OTHER"),
+            CrowdStrikeAssetIdentity(asset = outside, crowdStrikeAid = "unrelated", sourceHostname = "OTHER")))
+        val error = assertThrows<CrowdStrikeRecoveryBlocked> { service.recover(batch, conflict, "admin", true) }
+        assertThat(error.reason).isEqualTo("UNEXPLAINED_AID")
+        verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `outside owner without enrollment evidence is preserved`() {
+        val outside = asset.copy(id = 9, name = "OTHER")
+        stub(bindings = listOf(CrowdStrikeAssetIdentity(asset = outside, crowdStrikeAid = "aid-one", sourceHostname = "OTHER")))
+        val error = assertThrows<CrowdStrikeRecoveryBlocked> { service.recover(batch, conflict, "admin", true) }
+        assertThat(error.reason).isEqualTo("UNVERIFIED_SELECTED_OWNER")
+        verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `outside superseded identity cannot veto cleanup or be deleted`() {
         val outside = asset.copy(id = 9, name = "OLD-ARCGIS")
         val historical = batch.deviceSelection!!.selected.copy(aid = "aid-old", hostname = outside.name)
