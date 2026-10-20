@@ -30,7 +30,7 @@ class CrowdStrikeIdentityRepairIntegrationTest {
     private data class Fixture(val request: CrowdStrikeIdentityReconcileRequest,
         val batches: List<CrowdStrikeVulnerabilityBatchDto>, val state: LegacyCrowdStrikeAssetState)
 
-    private fun fixture(): Fixture = tx.executeWrite {
+    private fun fixture(deviceCount: Int = 2): Fixture = tx.executeWrite {
         val suffix = UUID.randomUUID().toString().replace("-", "")
         val source = assets.save(Asset(name = "Human name $suffix", crowdStrikeHostname = "same-$suffix",
             nameOverriddenAt = LocalDateTime.now(), nameOverriddenBy = "test-admin", owner = "Human owner", type = "SERVER",
@@ -40,11 +40,12 @@ class CrowdStrikeIdentityRepairIntegrationTest {
         em.persist(Vulnerability(asset = source, vulnerabilityId = "MANUAL-KEEP", source = "MANUAL", cvssSeverity = "HIGH", scanTimestamp = LocalDateTime.now()))
         em.persist(Vulnerability(asset = source, vulnerabilityId = "CVE-2026-9999", source = "CROWDSTRIKE", cvssSeverity = "HIGH", scanTimestamp = LocalDateTime.now()))
         em.persist(InstalledProduct(asset = source, name = "Legacy mixed software", crowdStrikeAid = "aid-a-$suffix"))
-        val records = listOf("a", "b").mapIndexed { index, label ->
+        val records = (listOf("a", "b") + (2 until deviceCount).map { it.toString() }).mapIndexed { index, label ->
             val aid = "aid-$label-$suffix"
             identities.save(CrowdStrikeAssetIdentity(asset = source, crowdStrikeAid = aid, sourceHostname = source.crowdStrikeHostname!!))
             CrowdStrikeDeviceRecord(aid, source.crowdStrikeHostname!!,
-                if (index == 0) source.cloudInstanceId else "i-${suffix.takeLast(17)}", source.cloudAccountId,
+                if (index == 0) source.cloudInstanceId else if (index == 1) "i-${suffix.takeLast(17)}"
+                else "i-${suffix.take(11)}${index.toString(16).padStart(6, '0')}", source.cloudAccountId,
                 firstSeen = Instant.parse("2026-01-01T00:00:00Z"), lastSeen = Instant.now().minusSeconds(30), productType = "Server")
         }
         em.flush()
@@ -182,6 +183,21 @@ class CrowdStrikeIdentityRepairIntegrationTest {
     }
 
     @Test
+    fun `26 legacy bindings are discovered and repaired atomically without losing source relationships`() {
+        val fixture = fixture(26)
+        val admin = io.micronaut.security.authentication.Authentication.build("test-admin", listOf("ADMIN"))
+        val page = discovery.candidates(fixture.request.assetId - 1, 1, fixture.request.assetId, admin)
+        assertThat(page.candidates.single().expectedAids).isEqualTo(fixture.request.expectedAids).hasSize(26)
+        assertThat(writer.preview(fixture.request, fixture.batches, fixture.state).devices).hasSize(26)
+        val repaired = writer.repair(fixture.request, fixture.batches, fixture.state, "test-admin")
+        assertThat(repaired.devices.map { it.assetId }.distinct()).hasSize(26)
+        assertThat(identities.findByAssetIdIn(listOf(fixture.request.assetId))).hasSize(1)
+        assertThat(count("SELECT COUNT(*) FROM crowdstrike_identity_repair WHERE source_asset_id = :id", fixture.request.assetId)).isEqualTo(26)
+        assertThat(count("SELECT COUNT(*) FROM asset_workgroups WHERE asset_id = :id", fixture.request.assetId)).isEqualTo(1)
+        assertThat(count("SELECT COUNT(*) FROM vulnerability WHERE asset_id = :id AND source = 'MANUAL'", fixture.request.assetId)).isEqualTo(1)
+    }
+
+    @Test
     fun `candidate discovery is bounded and keyset paging survives an earlier repair`() {
         val first = fixture()
         val second = fixture()
@@ -192,7 +208,7 @@ class CrowdStrikeIdentityRepairIntegrationTest {
             binding.falconFirstSeenAt = LocalDateTime.now()
             identities.update(binding)
             val source = assets.findById(tooMany.request.assetId).orElseThrow()
-            repeat(19) { identities.save(CrowdStrikeAssetIdentity(asset = source,
+            repeat(99) { identities.save(CrowdStrikeAssetIdentity(asset = source,
                 crowdStrikeAid = "extra-${UUID.randomUUID()}", sourceHostname = source.name)) }
         }
         val admin = io.micronaut.security.authentication.Authentication.build("test-admin", listOf("ADMIN"))
@@ -219,16 +235,16 @@ class CrowdStrikeIdentityRepairIntegrationTest {
 
     @Test
     fun `HTTP rejections expose safe specific reasons and durable status without fetching findings`() {
-        val f = fixture()
+        val fixture = fixture(26)
         tx.executeWrite {
-            val asset = assets.findById(f.request.assetId).orElseThrow()
+            val asset = assets.findById(fixture.request.assetId).orElseThrow()
             asset.cloudAccountId = null
             assets.update(asset)
         }
         val name = "repair-diagnostics-${UUID.randomUUID()}"
         users.save(com.secman.testutil.TestDataFactory.createAdminUser(username = name, email = "$name@example.test"))
         val token = com.secman.testutil.TestAuthHelper.getAuthToken(http, name)
-        val request = f.request.copy(requestId = UUID.randomUUID().toString(), dryRun = true)
+        val request = fixture.request.copy(requestId = UUID.randomUUID().toString(), dryRun = true)
         repeat(2) {
             assertThatThrownBy {
                 http.toBlocking().exchange(io.micronaut.http.HttpRequest.POST("/api/crowdstrike/identity-reconcile", request).bearerAuth(token), Map::class.java)
@@ -244,7 +260,7 @@ class CrowdStrikeIdentityRepairIntegrationTest {
             "/api/crowdstrike/identity-reconcile/requests/${request.requestId}").bearerAuth(token), Map::class.java)
         assertThat(status["state"]).isEqualTo("REJECTED")
         assertThat(status["errorCode"]).isEqualTo("SOURCE_ACCOUNT_MISSING")
-        assertThat(identities.findByAssetIdIn(listOf(request.assetId))).hasSize(2)
+        assertThat(identities.findByAssetIdIn(listOf(request.assetId))).hasSize(26)
     }
 
     @Test

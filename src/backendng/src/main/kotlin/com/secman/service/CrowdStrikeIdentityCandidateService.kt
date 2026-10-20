@@ -35,7 +35,7 @@ open class CrowdStrikeIdentityCandidateService(
             FROM asset a JOIN crowdstrike_asset_identity i ON i.asset_id = a.id
             WHERE a.id > :afterId AND a.id <= :throughId
             GROUP BY a.id, a.crowdstrike_hostname, a.name
-            HAVING COUNT(*) BETWEEN 2 AND 20
+            HAVING COUNT(*) BETWEEN 2 AND 100
                AND SUM(CASE WHEN i.falcon_first_seen_at IS NOT NULL OR i.falcon_last_seen_at IS NOT NULL
                     OR i.identity_observed_at IS NOT NULL THEN 1 ELSE 0 END) = 0
             ORDER BY a.id
@@ -49,7 +49,7 @@ open class CrowdStrikeIdentityCandidateService(
             val bound = bindings[id].orEmpty()
             // An import may finish between the SQL aggregate and binding read. Advance
             // by the scanned IDs even if every row in this page has just resolved.
-            if (!access.canAccessAsset(id, auth) || bound.size !in 2..20 || bound.any {
+            if (!access.canAccessAsset(id, auth) || bound.size !in 2..100 || bound.any {
                 it.falconFirstSeenAt != null || it.falconLastSeenAt != null || it.identityObservedAt != null
             }) null else CrowdStrikeIdentityCandidate(id, row[1].toString(), bound.map { it.crowdStrikeAid }.toSortedSet())
         }

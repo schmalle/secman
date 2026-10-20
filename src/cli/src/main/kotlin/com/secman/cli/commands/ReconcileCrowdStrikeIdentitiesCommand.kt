@@ -21,7 +21,7 @@ import java.util.concurrent.Callable
     description = ["Discover, preview or repair unverified legacy multi-AID assets using fresh Falcon evidence (ADMIN)"])
 class ReconcileCrowdStrikeIdentitiesCommand(private val mapper: ObjectMapper) : Callable<Int> {
     @Option(names = ["--asset-id"]) var assetId: Long = 0
-    @Option(names = ["--expected-aids"], split = ",", description = ["All current AIDs bound to the source asset (2..20)"])
+    @Option(names = ["--expected-aids"], split = ",", description = ["All current AIDs bound to the source asset (2..100)"])
     var aids: Set<String> = emptySet()
     @Option(names = ["--all-candidates"], description = ["Discover and process every eligible legacy asset; omit --asset-id/--expected-aids"])
     var allCandidates: Boolean = false
@@ -47,8 +47,8 @@ class ReconcileCrowdStrikeIdentitiesCommand(private val mapper: ObjectMapper) : 
             require(requestStatus!!.matches(Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"))) { "Request status requires a UUID" }
         } else {
             require(if (allCandidates) assetId == 0L && aids.isEmpty() else
-                assetId > 0 && aids.size in 2..20 && aids.all { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) }) {
-                "Choose --all-candidates OR a positive --asset-id with 2..20 valid --expected-aids"
+                assetId > 0 && aids.size in 2..100 && aids.all { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) }) {
+                "Choose --all-candidates OR a positive --asset-id with 2..100 valid --expected-aids"
             }
             require(afterId >= 0 && batchSize in 1..100 && (allCandidates || (afterId == 0L && batchSize == 50))) { "Invalid discovery pagination" }
             require(reason.trim().length in 10..255 && reason.none(Char::isISOControl)) { "Supply an audit reason of 10..255 characters" }

@@ -84,6 +84,31 @@ class CrowdStrikeIdentityBatchCliTest {
     }
 
     @Test
+    fun `discovery forwards complete 26 and 100 AID sets and rejects 101`() {
+        for (size in listOf(26, 100, 101)) {
+            var writes = 0
+            val aids = (0 until size).map { "aid-$it" }
+            val (summary, events) = run(pages = {
+                mapOf("candidates" to listOf(mapOf("assetId" to 42, "hostname" to "legacy-host",
+                    "expectedAids" to aids)), "nextAfterId" to 42, "throughId" to 100, "hasMore" to false)
+            }, repair = { body ->
+                writes++
+                assertThat(body.path("expectedAids").map { it.asText() }).containsExactlyElementsOf(aids)
+                200 to success(body)
+            })
+            if (size <= 100) {
+                assertThat(writes).isEqualTo(1)
+                assertThat(summary.path("complete").asBoolean()).isTrue()
+                assertThat(events.single().path("status").asText()).isEqualTo("PREVIEWED")
+            } else {
+                assertThat(writes).isZero()
+                assertThat(summary.path("complete").asBoolean()).isFalse()
+                assertThat(events).isEmpty()
+            }
+        }
+    }
+
+    @Test
     fun `all candidates are paged with one login and failures do not stop independent repairs`() {
         val calls = mutableListOf<Long>()
         val (summary, events, queries) = run(pages = { query ->

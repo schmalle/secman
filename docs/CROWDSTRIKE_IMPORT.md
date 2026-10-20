@@ -53,7 +53,7 @@ production errors. No migration or bulk rewrite of existing assets is required.
 
 ### Repair independent EC2 devices bound to one legacy asset
 
-Use `reconcile-crowdstrike-identities` for an asset with 2..20 unverified legacy
+Use `reconcile-crowdstrike-identities` for an asset with 2..100 unverified legacy
 AID bindings when Falcon confirms distinct EC2 instances. The command defaults to
 a read-only preview. It calls the ADMIN-only
 `POST /api/crowdstrike/identity-reconcile` endpoint. Preview fetches device metadata
@@ -77,10 +77,10 @@ For automatic discovery across the inventory, omit asset IDs and AIDs:
 ```
 
 `--all-candidates` is mutually exclusive with `--asset-id` and `--expected-aids`.
-It discovers assets with 2..20 bindings whose Falcon enrollment/contact and
+It discovers assets with 2..100 bindings whose Falcon enrollment/contact and
 identity-observation timestamps are all null. Discovery is local evidence only;
 each candidate must still pass the complete server-side provider and repair
-validation described below. Assets with verified bindings or more than 20 AIDs
+validation described below. Assets with verified bindings or more than 100 AIDs
 remain outside this automatic recovery and require separate review.
 
 The ADMIN-only `GET /api/crowdstrike/identity-reconcile/candidates` accepts

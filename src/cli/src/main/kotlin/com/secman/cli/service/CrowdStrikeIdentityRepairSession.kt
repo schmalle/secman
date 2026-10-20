@@ -184,7 +184,7 @@ internal class CrowdStrikeIdentityRepairSession(
             val id = candidate.path("assetId")
             check(id.isIntegralNumber && id.canConvertToLong() && id.asLong() > prior &&
                 id.asLong() <= page.path("nextAfterId").asLong() && id.asLong() <= page.path("throughId").asLong() &&
-                candidate.path("hostname").isTextual && aids.isArray && aids.size() in 2..20 &&
+                candidate.path("hostname").isTextual && aids.isArray && aids.size() in 2..100 &&
                 aids.all { it.isTextual && it.asText().matches(Regex("[A-Za-z0-9_-]{1,64}")) } &&
                 aids.map { it.asText() }.distinct().size == aids.size()) { "Invalid candidate identity" }
             prior = id.asLong()

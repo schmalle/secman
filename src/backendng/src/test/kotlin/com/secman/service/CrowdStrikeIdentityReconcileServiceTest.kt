@@ -54,6 +54,36 @@ class CrowdStrikeIdentityReconcileServiceTest {
     }
 
     @Test
+    fun `legacy sources with 26 and 100 bindings can be previewed without downloading findings`() {
+        stub()
+        for (size in listOf(26, 100)) {
+            val records = (0 until size).map { index -> a.copy(aid = "aid-$index",
+                instanceId = if (index == 0) a.instanceId else "i-${index.toString(16).padStart(17, '0')}") }
+            val large = request.copy(expectedAids = records.map { it.aid }.toSet())
+            every { identities.findByAssetIdIn(listOf(1L)) } returns records.map {
+                CrowdStrikeAssetIdentity(asset = asset, crowdStrikeAid = it.aid, sourceHostname = it.hostname)
+            }
+            every { client.resolveDeviceRecords(large.expectedAids, any()) } returns records
+            every { writer.preview(large, any(), any()) } answers {
+                assertThat(secondArg<List<com.secman.dto.CrowdStrikeVulnerabilityBatchDto>>()).hasSize(size)
+                CrowdStrikeIdentityReconcileResponse(1, true, emptyList())
+            }
+            assertThat(service.reconcile(large, admin).dryRun).isTrue()
+        }
+        verify(exactly = 0) { writer.repair(any(), any(), any(), any()) }
+        verify(exactly = 0) { client.queryDeviceVulnerabilities(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `more than 100 bindings fail before provider or persistence access`() {
+        assertThatThrownBy { service.reconcile(request.copy(expectedAids = (0..100).map { "aid-$it" }.toSet()), admin) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+        verify { client wasNot Called }
+        verify { writer wasNot Called }
+        verify { assets wasNot Called }
+    }
+
+    @Test
     fun `ADMIN and asset authorization are enforced before provider access`() {
         assertThatThrownBy { service.reconcile(request, Authentication.build("viewer", listOf("VULN"))) }
             .isInstanceOf(HttpStatusException::class.java)
