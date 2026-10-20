@@ -95,6 +95,27 @@ class QueryCommandTest {
         verify(exactly = 0) { api.queryAllVulnerabilities(any(), any()) }
         verify(exactly = 0) { storage.storeServerVulnerabilities(any(), any(), any(), any(), any()) }
     }
+    @Test
+    fun `deleteonfail requires save before querying Falcon`() {
+        val cmd = command().apply { save = false; deleteOnFail = true }
+        assertThat(cmd.execute()).isNotZero()
+        verify(exactly = 0) { api.queryAllVulnerabilities(any(), any()) }
+    }
+
+    @Test
+    fun `deleteonfail command delegates bounded recovery to the backend`() {
+        val cmd = command().apply { deleteOnFail = true }
+        every { api.queryAllVulnerabilities(any(), any()) } returns response()
+        every { auth.authenticate(any(), any(), any()) } returns UUID.randomUUID().toString()
+        every { storage.storeServerVulnerabilities(any(), any(), any(), any(), any(), true) } returns
+            BatchStorageResult(1, 1, 0, 1, 0, 0, emptyList())
+        val (exit, output) = outputOf(cmd)
+        assertThat(exit).isZero()
+        assertThat(output).contains("Save completed!", "Asset: CREATED")
+        verify(exactly = 1) { api.queryAllVulnerabilities(any(), any()) }
+        verify(exactly = 1) { storage.storeServerVulnerabilities(any(), null, any(), any(), any(), true) }
+    }
+
     private fun outputOf(cmd: QueryCommand): Pair<Int, String> {
         val original = System.out
         val output = ByteArrayOutputStream()

@@ -50,9 +50,11 @@ class QueryCommand(
     var clientSecret: String? = null
     var verbose: Boolean = false
     var save: Boolean = false
+    var deleteOnFail: Boolean = false
 
     fun execute(): Int {
         return try {
+            require(!deleteOnFail || save) { "--deleteonfail requires --save" }
             log.info("Querying vulnerabilities for hostname: {}", hostname)
 
             if (hostname.isBlank()) {
@@ -158,6 +160,7 @@ class QueryCommand(
 
                 val result = storageService.storeServerVulnerabilities(
                     serverBatches = serverBatches,
+                    deleteOnFail = deleteOnFail,
                     authToken = authToken,
                     runSeverities = severity?.split(",")?.map(String::trim)?.filter(String::isNotBlank)
                 )

@@ -218,6 +218,27 @@ class CrowdStrikeDeviceReplacementServiceTest {
     }
 
     @Test
+    fun `stale account domain and enrollment conflicts cannot become destructive recovery candidates`() {
+        val (_, binding, incoming) = instanceChange()
+        val accepted = Instant.now().minusSeconds(5)
+        binding.identityObservedAt = LocalDateTime.ofInstant(accepted, ZoneOffset.UTC)
+        val conflicting = listOf(incoming.copy(cloudAccountId = "other-account"),
+            incoming.copy(adDomain = "other.test"), incoming.copy(firstSeen = incoming.firstSeen!!.plusSeconds(1)))
+        for (device in conflicting) {
+            for (observed in listOf(accepted.minusSeconds(1), accepted)) {
+                val payload = incomingBatch(device, observed)
+                assertThatThrownBy { service.prepare(payload, payload.deviceSelection!!) }
+                    .isInstanceOf(CrowdStrikeIdentityConflict::class.java).extracting("code").isEqualTo("STALE_IDENTITY_OBSERVATION")
+            }
+            binding.falconLastSeenAt = LocalDateTime.ofInstant(incoming.lastSeen!!.plusSeconds(1), ZoneOffset.UTC)
+            val payload = incomingBatch(device)
+            assertThatThrownBy { service.prepare(payload, payload.deviceSelection!!) }
+                .isInstanceOf(CrowdStrikeIdentityConflict::class.java).extracting("code").isEqualTo("STALE_IDENTITY_OBSERVATION")
+        }
+        verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `older and tied identity observations cannot restore former instance`() {
         val (_, binding, incoming) = instanceChange()
         val accepted = Instant.now().minusSeconds(5)
