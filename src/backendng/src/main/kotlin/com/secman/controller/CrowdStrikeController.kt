@@ -56,6 +56,9 @@ open class CrowdStrikeController(
 ) {
     private val log = LoggerFactory.getLogger(CrowdStrikeController::class.java)
 
+    @jakarta.inject.Inject
+    internal lateinit var importRecoveryService: com.secman.service.CrowdStrikeImportRecoveryService
+
     /**
      * Query CrowdStrike for vulnerabilities with filtering and pagination
      *
@@ -430,12 +433,16 @@ open class CrowdStrikeController(
         // 100 leaves room for a future bump while keeping the bound meaningful.
         // Per-server vulnerability count is already capped on the DTO itself.
         @Body @Valid @Size(max = 100) batches: List<CrowdStrikeVulnerabilityBatchDto>,
-        authentication: Authentication
+        authentication: Authentication,
+        @QueryValue(defaultValue = "false") deleteOnFail: Boolean = false
     ): HttpResponse<*> {
         val username = authentication.name
         log.info("Received batch import request: servers={}, user={}", batches.size, username)
 
         return try {
+            if (deleteOnFail && !authentication.roles.contains("ADMIN")) {
+                return HttpResponse.status<Any>(HttpStatus.FORBIDDEN)
+            }
             // T023: Call import service
             if (batches.any { it.deviceSelection != null } && !authentication.roles.contains("ADMIN")) {
                 log.warn("Falcon device replacement denied: user={} outcome=forbidden", username)
@@ -449,7 +456,10 @@ open class CrowdStrikeController(
                 asset?.id == null || !assetFilterService.canAccessAsset(requireNotNull(asset.id), authentication)
             }) return HttpResponse.notFound<Any>()
             val statistics = importService.importServerVulnerabilities(batches, username,
-                allowDeviceReplacement = authentication.roles.contains("ADMIN"))
+                allowDeviceReplacement = authentication.roles.contains("ADMIN"),
+                recoverRejected = if (deleteOnFail) { batch, conflict ->
+                    importRecoveryService.recover(batch, conflict, username)
+                } else null)
 
             log.info("Batch import completed: servers processed={}, created={}, updated={}, vulnerabilities imported={}, skipped={}, errors={}, user={}",
                 statistics.serversProcessed, statistics.serversCreated, statistics.serversUpdated,

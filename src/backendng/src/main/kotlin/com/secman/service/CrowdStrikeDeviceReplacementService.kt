@@ -35,14 +35,23 @@ class CrowdStrikeDeviceReplacementService(
         val relocatedBindings: List<CrowdStrikeAssetIdentity> = emptyList())
 
     /** Includes transaction completion, so concurrent first imports cannot create two assets. */
-    fun <T> withSelectionLocks(selection: CrowdStrikeDeviceSelection?, action: () -> T): T {
-        if (selection == null) return action()
-        val stripes = (listOf(selection.selected) + selection.superseded).flatMap { device ->
+    fun <T> withSelectionLocks(selection: CrowdStrikeDeviceSelection?, action: () -> T): T =
+        withSelectionLocks(selection, null, action)
+
+    fun <T> withSelectionLocks(selection: CrowdStrikeDeviceSelection?, hostname: String?, action: () -> T): T {
+        val records = selection?.let { listOf(it.selected) + it.superseded }.orEmpty()
+        val identityKeys = records.flatMap { device ->
             val scope = device.hostnameScope()
             listOf(listOf("hostname") + scope, listOf("aid", device.aid)) + listOfNotNull(device.instanceId?.takeIf(String::isNotBlank)?.let {
                 listOf("instance", it.trim().lowercase(), scope.last())
             })
-        }.map { Math.floorMod(it.hashCode(), importLocks.size) }.distinct().sorted()
+        }
+        // Recovery resolves by hostname across all accounts/domains. Every import,
+        // including legacy payloads, must share this lock for the entire recovery loop.
+        val hostnameKeys = (records.map { it.hostname } + listOfNotNull(hostname)).map {
+            listOf("hostname-global", it.trim().lowercase(java.util.Locale.ROOT))
+        }
+        val stripes = (identityKeys + hostnameKeys).map { Math.floorMod(it.hashCode(), importLocks.size) }.distinct().sorted()
         fun locked(index: Int): T = if (index == stripes.size) action() else
             synchronized(importLocks[stripes[index]]) { locked(index + 1) }
         return locked(0)
@@ -119,6 +128,7 @@ class CrowdStrikeDeviceReplacementService(
         val changingInstance = knownWinner?.asset?.let {
             !it.cloudInstanceId.isNullOrBlank() && !it.cloudInstanceId.equals(selected.instanceId, ignoreCase = true)
         } == true
+        requireFreshObservation(identities, selection, changingInstance)
         if (changingInstance) {
             val asset = requireNotNull(knownWinner).asset
             fun conflict(code: String, message: String): Nothing = throw CrowdStrikeIdentityConflict(code, message,
@@ -179,15 +189,7 @@ class CrowdStrikeDeviceReplacementService(
         }
         val incomingFirst = LocalDateTime.ofInstant(requireNotNull(selected.firstSeen), ZoneOffset.UTC)
         val storedWinner = current.firstOrNull { it.crowdStrikeAid == selected.aid }
-        val observed = LocalDateTime.ofInstant(selection.observedAt, ZoneOffset.UTC)
-        require(!selection.observedAt.isAfter(java.time.Instant.now().plusSeconds(60))) { "Future identity observation" }
-        if (current.any { it.identityObservedAt?.let { prior -> prior > observed || (changingInstance && prior == observed) } == true } ||
-            (changingInstance && storedWinner?.falconLastSeenAt?.let { prior ->
-                selected.lastSeen == null || LocalDateTime.ofInstant(selected.lastSeen, ZoneOffset.UTC) < prior
-            } == true)) {
-            throw CrowdStrikeIdentityConflict("STALE_IDENTITY_OBSERVATION", "An older Falcon identity observation cannot replace newer data",
-                storedWinner?.asset?.id, storedWinner?.asset?.cloudInstanceId, selected.instanceId)
-        }
+        requireFreshObservation(current, selection, changingInstance)
         if (changingInstance && (current.size != 1 || current.single().crowdStrikeAid != selected.aid))
             throw CrowdStrikeIdentityConflict("UNEXPLAINED_AID", "An instance change requires one current Falcon binding")
         require(current.none { binding ->
@@ -228,6 +230,26 @@ class CrowdStrikeDeviceReplacementService(
                 bindings.size != 1 || bindings.singleOrNull()?.crowdStrikeAid != selected.aid ||
                     bindings.singleOrNull()?.falconFirstSeenAt == null
             }), canonical?.cloudInstanceId?.takeIf { changingInstance }, relocatedBindings)
+    }
+
+    companion object {
+        internal fun requireFreshObservation(
+            bindings: List<CrowdStrikeAssetIdentity>,
+            selection: CrowdStrikeDeviceSelection,
+            changingInstance: Boolean
+        ) {
+            val selected = selection.selected
+            val storedWinner = bindings.firstOrNull { it.crowdStrikeAid == selected.aid }
+            val observed = LocalDateTime.ofInstant(selection.observedAt, ZoneOffset.UTC)
+            require(!selection.observedAt.isAfter(java.time.Instant.now().plusSeconds(60))) { "Future identity observation" }
+            if (bindings.any { it.identityObservedAt?.let { prior -> prior > observed || (changingInstance && prior == observed) } == true } ||
+                (changingInstance && storedWinner?.falconLastSeenAt?.let { prior ->
+                    selected.lastSeen == null || LocalDateTime.ofInstant(selected.lastSeen, ZoneOffset.UTC) < prior
+                } == true)) {
+                throw CrowdStrikeIdentityConflict("STALE_IDENTITY_OBSERVATION", "An older Falcon identity observation cannot replace newer data",
+                    storedWinner?.asset?.id, storedWinner?.asset?.cloudInstanceId, selected.instanceId)
+            }
+        }
     }
 
     internal fun lockIdentity(selection: CrowdStrikeDeviceSelection) {

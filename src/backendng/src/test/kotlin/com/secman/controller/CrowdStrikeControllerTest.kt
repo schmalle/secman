@@ -48,6 +48,14 @@ class CrowdStrikeControllerTest {
         )
     }
 
+    @Test
+    fun `deleteonfail is forbidden to vulnerability users before any import`() {
+        val result = controller.importServerVulnerabilities(emptyList(),
+            Authentication.build("viewer", listOf("VULN")), deleteOnFail = true)
+        assertThat(result.code()).isEqualTo(403)
+        verify(exactly = 0) { importService.importServerVulnerabilities(any(), any(), any(), any(), any()) }
+    }
+
     // --- force routing ---
 
     @Test

@@ -73,6 +73,7 @@ class ServersCommand {
     var minDaysOpen: Int = 30
     var dryRun: Boolean = false
     var save: Boolean = false
+    var deleteOnFail: Boolean = false
     var verbose: Boolean = false
     var clientId: String? = null
     var clientSecret: String? = null
@@ -85,10 +86,14 @@ class ServersCommand {
 
     fun execute(): Int {
         return try {
+            require(!deleteOnFail || save) { "--deleteonfail requires --save" }
             require(!(aid != null && allMatches)) { "Use --aid or --all-matches, not both" }
             require(!allMatches || !hostnames.isNullOrEmpty()) { "--all-matches requires --hostnames" }
             require(aid == null || hostnames.isNullOrEmpty()) { "Use --aid or --hostnames, not both" }
             val explicitDevices = aid != null || allMatches
+            require(!deleteOnFail || !hostnames.isNullOrEmpty() || explicitDevices) {
+                "--deleteonfail requires --hostnames or --aid; streaming recovery cannot safely identify future hostname siblings"
+            }
             val parsedDeviceType = try {
                 DeviceType.fromString(deviceType)
             } catch (e: IllegalArgumentException) {
@@ -128,7 +133,7 @@ class ServersCommand {
 
             // Authenticate with backend when --save is specified
             var authToken: String? = null
-            if (save) {
+            if (save && !dryRun) {
                 val username = System.getenv("SECMAN_ADMIN_NAME")
                 val password = System.getenv("SECMAN_ADMIN_PASS")
 
@@ -157,7 +162,7 @@ class ServersCommand {
             }
 
             // When --save is specified and no specific hostnames, use streaming mode
-            if (save && hostnames.isNullOrEmpty() && !explicitDevices) {
+            if (save && !dryRun && hostnames.isNullOrEmpty() && !explicitDevices) {
                 return com.secman.cli.service.CrowdStrikeImportSession(cliHttpClient, resolvedBackendUrl,
                     requireNotNull(authToken), refreshToken = {
                         cliHttpClient.authenticate(System.getenv("SECMAN_ADMIN_NAME"),
@@ -548,7 +553,7 @@ class ServersCommand {
             }
 
             val result = storageService.storeServerVulnerabilities(serverBatches, backendUrl = resolvedBackendUrl, authToken = authToken,
-                runSeverities = severity.split(",").map(String::trim).filter(String::isNotBlank))
+                runSeverities = severity.split(",").map(String::trim).filter(String::isNotBlank), deleteOnFail = deleteOnFail)
 
             val deviceLabel = parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }
             System.out.println("\n--- Import Statistics ---")

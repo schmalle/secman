@@ -1048,3 +1048,32 @@ inventory retention decision and is not proof that a stopped machine has been re
 ## Current asset visibility
 
 Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.
+
+
+### Delete an asset after a rejected query import
+
+`query servers --hostnames ARCGIS --save --deleteonfail` opts into destructive
+recovery. Single-host `query --hostname ARCGIS --save --deleteonfail` and explicit
+`query servers --aid <aid> --save --deleteonfail` support the same flag. ADMIN
+permission and `--save` are required. Fleet streaming queries reject this flag:
+future hostname siblings cannot safely be ruled out. Dry runs never save or delete.
+Without the flag, existing import behavior is unchanged.
+
+The CLI sends `POST /api/crowdstrike/servers/import?deleteOnFail=true`. The backend
+handles at most two delete-and-retry cycles after the initial save (three save
+attempts total per device), reusing the fetched payload. Only account, AD-domain
+or enrollment conflicts with an exact rejected asset ID are eligible. Generic
+validation failures, transport errors, incomplete snapshots, lock contention and
+stale identity observations never trigger deletion. Recovery requires one exact
+hostname match and no unrelated Falcon bindings. Multiple payloads sharing a
+hostname are saved without destructive recovery. Same-host imports are serialized across conflict detection, deletion and retry.
+Protected asset references, identity changes during deletion, and cascade timeouts
+stop recovery.
+
+Deletion removes the asset and cascading data, including its old vulnerabilities
+and exceptions. Recreation may assign a new ID; unrelated metadata and
+relationships are not restored. Backend history, completion notifications, CLI
+statistics and reconciliation use the final outcome, counting each device once.
+Destructive import requests are never automatically resent after gateway errors
+or timeouts, since the backend may already have used its recovery budget. This
+feature requires the updated backend as well as the updated CLI.
