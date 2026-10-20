@@ -115,13 +115,16 @@ On each target, the script creates / refreshes this layout under
             └── (entire contents of src/frontend/dist/)
 ```
 
-Transfer is done with `rsync -az --delete`:
+Transfer uses `rsync -az`, publishing hashed frontend assets before server files:
 
 - `-a` preserves permissions / timestamps.
 - `-z` compresses over the wire.
-- `--delete` removes files from the target frontend `dist/` tree that no
-  longer exist locally. Backend and CLI jars are copied into their Gradle
-  `build/libs` locations so existing runtime scripts keep working.
+- `dist/client/_astro/` is copied first without deletion. Previous hashed bundles
+  stay available to open pages and the previous SSR process during restart.
+- The remaining `dist/` tree uses `--delete --delay-updates`, excluding
+  `/client/_astro/` from transfer and deletion. This removes obsolete server files
+  without deleting bundles still in use. This is not an atomic application restart.
+- Backend and CLI jars retain their Gradle `build/libs` locations.
 
 ## Behaviour and order of operations
 
@@ -192,8 +195,9 @@ Re-running the script with the same arguments is safe and reproducible:
 - The Gradle `clean` tasks force a fresh shadowJar build.
 - `npm ci` reproduces `node_modules` from the lockfile (it deletes
   `node_modules/` first), so a stale dependency cannot leak in.
-- `rsync --delete` ensures the remote subdirectories reflect the local
-  build exactly — no orphaned files left over from previous releases.
+- Server output is synchronized; previous hashed frontend bundles are deliberately
+  retained. Plan storage maintenance separately, after old pages and processes can
+  no longer reference those files. Do not delete them during a live deployment.
 
 There is no built-in roll-back. If you need one, deploy to a versioned
 `--dest` and flip a symlink out-of-band.
@@ -258,3 +262,23 @@ up manually if needed.
 - `scripts/startbackenddev.sh` — local dev start (not for production targets).
 - `docs/DEPLOYMENT.md` — runtime configuration on a deployed host.
 - `docs/PASS_CLI.md` — secret resolution for the runtime environment.
+
+## Missing frontend bundles after deployment
+
+A blank page with `/_astro/AssetManagement.<hash>.js` returning 404 means
+page HTML and available build files disagree. Retrying the same missing hash
+with `?astro-retry=...` cannot repair that mismatch.
+
+Deploy the complete frontend build and restart the frontend SSR process after
+transfer, using the target's service manager. This script transfers artifacts;
+it does not restart services. Verify that every frontend instance serves HTML
+and assets from a compatible build. For rolling container deployments, retain
+previous immutable assets in shared storage or keep old replicas available for
+their asset requests; replacing an image alone does not preserve old bundles.
+
+HTML responses now use `Cache-Control: private, no-store`. The inline hydration
+error handler checks for missing component/renderer bundles and automatically
+refreshes once per page per tab. A repeated failure displays an alert with a
+manual refresh button. It cannot repair an incomplete deployment: restore a
+complete build if a fresh page still refers to a missing file. Previously cached
+pages without the handler require a manual refresh after the deployment is fixed.

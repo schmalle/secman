@@ -38,6 +38,9 @@ class CrowdStrikeImportRecoveryServiceTest {
         every { assets.findCrowdStrikeReplacementCandidates("ARCGIS", any()) } answers {
             Page.of(remaining.toList(), Pageable.from(0, 102), remaining.size.toLong())
         }
+        every { identities.findByCrowdStrikeAidIn(any()) } answers {
+            bindings.filter { it.crowdStrikeAid in firstArg<List<String>>() }
+        }
         every { identities.findByAssetIdIn(any()) } answers {
             bindings.filter { it.asset.id in firstArg<List<Long>>() }
         }
@@ -58,7 +61,7 @@ class CrowdStrikeImportRecoveryServiceTest {
     @Test
     fun `hostname cleanup does not require matching stored AIDs account domain or enrollment`() {
         val selected = requireNotNull(batch.deviceSelection).selected
-        for (code in listOf("CLOUD_ACCOUNT_CONFLICT", "AD_DOMAIN_CONFLICT", "ENROLLMENT_MISMATCH", "UNEXPLAINED_AID", "INCOMPLETE_IDENTITY")) {
+        for (code in listOf("CLOUD_ACCOUNT_CONFLICT", "AD_DOMAIN_CONFLICT", "ENROLLMENT_MISMATCH", "UNEXPLAINED_AID", "INCOMPLETE_IDENTITY", "DUPLICATE_ASSET_CONFLICT", "SUPERSEDED_IDENTITY_CONFLICT")) {
             assertThat(CrowdStrikeImportRecoveryService.canRecover(batch.copy(deviceSelection = CrowdStrikeDeviceSelection(
                 selected.copy(cloudAccountId = null, adDomain = null, firstSeen = null))), CrowdStrikeIdentityConflict(code, "conflict"))).isTrue()
         }
@@ -119,7 +122,17 @@ class CrowdStrikeImportRecoveryServiceTest {
     }
 
     @Test
+    fun `selected AID outside hostname scope prevents every deletion`() {
+        val outside = asset.copy(id = 9, name = "OTHER")
+        stub(bindings = listOf(CrowdStrikeAssetIdentity(asset = outside, crowdStrikeAid = "aid-one", sourceHostname = "OTHER")))
+        val error = assertThrows<CrowdStrikeRecoveryBlocked> { service.recover(batch, conflict, "admin") }
+        assertThat(error.reason).isEqualTo("CONFLICT_OUTSIDE_HOSTNAME")
+        verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `oversized hostname cleanup refuses without partial deletion`() {
+        stub()
         every { assets.findCrowdStrikeReplacementCandidates("ARCGIS", any()) } returns Page.of(listOf(asset), Pageable.from(0, 102), 102)
         val error = assertThrows<CrowdStrikeRecoveryBlocked> { service.recover(batch, conflict, "admin") }
         assertThat(error.reason).isEqualTo("TOO_MANY_HOSTNAME_MATCHES")

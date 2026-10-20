@@ -1068,8 +1068,12 @@ Display-name overrides, hostname prefixes, FQDN suffixes and wildcard matches do
 not broaden the target set. Other AIDs bound to these assets are deleted with
 the assets; they do not veto the explicitly authorized hostname cleanup.
 
-Account, domain, enrollment, incomplete-identity and conflicting-binding
-rejections can trigger cleanup. Complete finding coverage and a matching selected
+Account, domain, enrollment, duplicate-asset, superseded-identity,
+incomplete-identity and conflicting-binding rejections can trigger cleanup.
+Stored identity failures carry explicit error codes, including
+`DUPLICATE_ASSET_CONFLICT`, so duplicate validation does not bypass recovery through
+a generic exception. Invalid payloads and concurrent identity changes remain
+non-recoverable. Complete finding coverage and a matching selected
 device hostname are required. Generic validation failures, transport errors,
 incomplete snapshots and stale observations do not trigger cleanup. If account
 metadata is missing, the replacement uses the fetched metadata as supplied; it
@@ -1089,6 +1093,11 @@ refuses the operation without partial deletion.
 Deletion uses the normal asset cascade service and records one deletion audit per
 asset. All deletions and the replacement save share one fresh transaction. Any
 failed save rolls back **every** deleted asset, finding, binding and deletion audit.
+The replacement retry discovers candidates only within the exact hostname scope.
+It does not reuse another hostname's asset solely because its cloud instance and
+account match. Normal imports retain their existing instance-continuity rules.
+A selected or superseded AID still bound outside the cleanup scope stops recovery
+with `CONFLICT_OUTSIDE_HOSTNAME` before any deletion.
 There are at most two recovery cycles after the initial save (three save attempts
 total per device), reusing the fetched findings. Only a committed recovery removes
 the matching assets and their cascading data, including old vulnerabilities and

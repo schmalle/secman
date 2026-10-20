@@ -57,7 +57,7 @@ class CrowdStrikeDeviceReplacementService(
         return locked(0)
     }
 
-    fun prepare(batch: CrowdStrikeVulnerabilityBatchDto, selection: CrowdStrikeDeviceSelection): Replacement {
+    fun prepare(batch: CrowdStrikeVulnerabilityBatchDto, selection: CrowdStrikeDeviceSelection, hostnameRecovery: Boolean = false): Replacement {
         lockIdentity(selection)
         val records = listOf(selection.selected) + selection.superseded
         val verified = selectLatestCrowdStrikeDevices(records).singleOrNull()
@@ -73,9 +73,12 @@ class CrowdStrikeDeviceReplacementService(
         }
         val ids = records.map { it.aid }.toSet()
         val identities = identityRepository.findByCrowdStrikeAidIn(ids)
-        val hostnameCandidates = records.map { it.hostname.trim().lowercase() }.distinct().flatMap { hostname ->
+        if (hostnameRecovery && identities.any { !(it.asset.crowdStrikeHostname ?: it.asset.name).equals(batch.hostname, ignoreCase = true) })
+            throw CrowdStrikeIdentityConflict("CONFLICT_OUTSIDE_HOSTNAME", "Falcon identity is bound outside the hostname cleanup scope")
+        val candidateHostnames = if (hostnameRecovery) listOf(batch.hostname) else records.map { it.hostname }
+        val hostnameCandidates = candidateHostnames.map { it.trim().lowercase() }.distinct().flatMap { hostname ->
             val page = assetRepository.findCrowdStrikeReplacementCandidates(hostname, Pageable.from(0, 102))
-            require(page.totalSize <= 101) { "Ambiguous stored Falcon hostname" }
+            if (page.totalSize > 101) throw CrowdStrikeIdentityConflict("TOO_MANY_HOSTNAME_MATCHES", "Ambiguous stored Falcon hostname")
             page.content
         }
         // Identity-key locks serialize competing claims. Discover owners without locking
@@ -83,11 +86,22 @@ class CrowdStrikeDeviceReplacementService(
         // unrelated assets and deadlocks parallel imports that already hold those rows.
         val instanceCandidates = records.filter { !it.instanceId.isNullOrBlank() && !it.cloudAccountId.isNullOrBlank() }
             .flatMap { device ->
-                val ownerIds = entityManager.createNativeQuery("""
-                    SELECT id FROM asset WHERE cloud_instance_id = :instance
-                        AND cloud_account_id = :account ORDER BY id LIMIT 102
-                """).setParameter("instance", device.instanceId).setParameter("account", device.cloudAccountId).resultList
-                require(ownerIds.size <= 101) { "Ambiguous stored cloud instance" }
+                val ownerQuery = if (hostnameRecovery) {
+                    entityManager.createNativeQuery("""
+                        SELECT id FROM asset WHERE cloud_instance_id = :instance
+                            AND cloud_account_id = :account
+                            AND LOWER(COALESCE(crowdstrike_hostname, name)) = LOWER(:hostname)
+                            ORDER BY id LIMIT 102
+                    """).setParameter("hostname", batch.hostname)
+                } else {
+                    entityManager.createNativeQuery("""
+                        SELECT id FROM asset WHERE cloud_instance_id = :instance
+                            AND cloud_account_id = :account ORDER BY id LIMIT 102
+                    """)
+                }
+                val ownerIds = ownerQuery.setParameter("instance", device.instanceId)
+                    .setParameter("account", device.cloudAccountId).resultList
+                if (ownerIds.size > 101) throw CrowdStrikeIdentityConflict("TOO_MANY_INSTANCE_MATCHES", "Ambiguous stored cloud instance")
                 ownerIds.map { id ->
                     val owner = entityManager.find(Asset::class.java, (id as Number).toLong(), LockModeType.PESSIMISTIC_WRITE)
                         ?: error("Cloud instance owner disappeared")
@@ -117,7 +131,7 @@ class CrowdStrikeDeviceReplacementService(
                 binding.identityObservedAt?.let { it >= observed } == true) {
                 throw CrowdStrikeIdentityConflict("SUPERSEDED_IDENTITY_CONFLICT",
                     "Superseded Falcon enrollment needs verified account, enrollment and newer observation",
-                    asset.id, asset.cloudInstanceId, device.instanceId)
+                    asset.id, asset.cloudInstanceId, device.instanceId, device.aid, asset.updatedAt)
             }
         }
         val relocatedAssetIds = relocatedBindings.map { it.asset.id }.toSet()
@@ -175,7 +189,7 @@ class CrowdStrikeDeviceReplacementService(
         }
         val candidates = (identities.filterNot { it in relocatedBindings }.map { it.asset } + matchingHostnameCandidates +
             instanceCandidates.filter(::compatible)).distinctBy { it.id }
-        require(candidates.size <= 101) { "Too many stored Falcon replacement candidates" }
+        if (candidates.size > 101) throw CrowdStrikeIdentityConflict("TOO_MANY_REPLACEMENT_CANDIDATES", "Too many stored Falcon replacement candidates")
         val locked = candidates.sortedBy { it.id }.map { asset ->
             entityManager.find(Asset::class.java, asset.id, LockModeType.PESSIMISTIC_WRITE)
                 ?: error("Falcon replacement candidate disappeared")
@@ -203,22 +217,21 @@ class CrowdStrikeDeviceReplacementService(
             identityRepository.findByAssetIdIn(locked.map { requireNotNull(it.id) })
         if (current.any { it.crowdStrikeAid !in ids }) throw CrowdStrikeIdentityConflict("UNEXPLAINED_AID",
             "Stored asset has an unverified Falcon device identity")
-        require(identities.filterNot { it in relocatedBindings }.all { binding -> current.any { it.crowdStrikeAid == binding.crowdStrikeAid && it.asset.id == binding.asset.id } }) {
-            "Falcon identity changed while acquiring replacement locks"
-        }
+        if (!identities.filterNot { it in relocatedBindings }.all { binding -> current.any { it.crowdStrikeAid == binding.crowdStrikeAid && it.asset.id == binding.asset.id } })
+            throw CrowdStrikeIdentityConflict("IDENTITY_CHANGED", "Falcon identity changed while acquiring replacement locks")
         val incomingFirst = LocalDateTime.ofInstant(requireNotNull(selected.firstSeen), ZoneOffset.UTC)
         val storedWinner = current.firstOrNull { it.crowdStrikeAid == selected.aid }
         requireFreshObservation(current, selection, changingInstance)
         if (changingInstance && (current.size != 1 || current.single().crowdStrikeAid != selected.aid))
             throw CrowdStrikeIdentityConflict("UNEXPLAINED_AID", "An instance change requires one current Falcon binding")
-        require(current.none { binding ->
+        if (current.any { binding ->
             binding.crowdStrikeAid != selected.aid &&
                 (binding.falconLastSeenAt ?: LocalDateTime.MIN) >=
                 (selected.lastSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) } ?: LocalDateTime.MIN)
-        }) { "An older or tied Falcon device cannot replace the current device" }
-        require(current.none { binding -> binding.falconLastSeenAt?.let { prior ->
+        }) throw CrowdStrikeIdentityConflict("STALE_IDENTITY_OBSERVATION", "An older or tied Falcon device cannot replace the current device")
+        if (current.any { binding -> binding.falconLastSeenAt?.let { prior ->
             selected.lastSeen == null || LocalDateTime.ofInstant(selected.lastSeen, ZoneOffset.UTC) < prior
-        } == true }) { "An older Falcon device contact cannot overwrite newer data" }
+        } == true }) throw CrowdStrikeIdentityConflict("STALE_IDENTITY_OBSERVATION", "An older Falcon device contact cannot overwrite newer data")
         if (storedWinner?.falconFirstSeenAt != null) {
             if (storedWinner.falconFirstSeenAt != incomingFirst)
                 throw CrowdStrikeIdentityConflict("ENROLLMENT_MISMATCH", "Falcon enrollment timestamp changed for an existing device",
@@ -229,22 +242,24 @@ class CrowdStrikeDeviceReplacementService(
             ?: locked.firstOrNull { it.cloudInstanceId.equals(selected.instanceId, ignoreCase = true) }
             ?: locked.firstOrNull()
         val duplicates = locked.filter { it.id != canonical?.id }
-        require(duplicates.all { duplicate ->
+        if (!duplicates.all { duplicate ->
             val bindings = current.filter { it.asset.id == duplicate.id }
             if (bindings.isNotEmpty()) bindings.all { binding -> selection.superseded.any { it.aid == binding.crowdStrikeAid } }
             else duplicate.owner == com.secman.constants.AssetOwners.CROWDSTRIKE_IMPORT &&
                 !duplicate.cloudInstanceId.isNullOrBlank() && selection.superseded.any {
                     it.instanceId.equals(duplicate.cloudInstanceId, ignoreCase = true)
                 }
-        }) { "Duplicate assets do not have proven superseded Falcon identities" }
+        }) throw CrowdStrikeIdentityConflict("DUPLICATE_ASSET_CONFLICT",
+            "Duplicate assets do not have proven superseded Falcon identities", instanceId = selected.instanceId, aid = selected.aid)
         if (canonical != null && !canonical.cloudInstanceId.isNullOrBlank() &&
             !canonical.cloudInstanceId.equals(selected.instanceId, ignoreCase = true)) {
-            require(!selected.instanceId.isNullOrBlank()) { "Missing replacement cloud instance metadata" }
-            require(storedWinner?.asset?.id == canonical.id ||
+            if (selected.instanceId.isNullOrBlank()) throw CrowdStrikeIdentityConflict("INCOMPLETE_IDENTITY",
+                "Missing replacement cloud instance metadata", canonical.id, canonical.cloudInstanceId, selected.instanceId, selected.aid, canonical.updatedAt)
+            if (!(storedWinner?.asset?.id == canonical.id ||
                 current.any { it.asset.id == canonical.id && it.crowdStrikeAid in selection.superseded.map { old -> old.aid } } ||
-                selection.superseded.any { !it.instanceId.isNullOrBlank() && it.instanceId.equals(canonical.cloudInstanceId, ignoreCase = true) }) {
-                "Unverified cloud instance replacement"
-            }
+                selection.superseded.any { !it.instanceId.isNullOrBlank() && it.instanceId.equals(canonical.cloudInstanceId, ignoreCase = true) }))
+                throw CrowdStrikeIdentityConflict("INSTANCE_IDENTITY_CONFLICT", "Unverified cloud instance replacement",
+                    canonical.id, canonical.cloudInstanceId, selected.instanceId, selected.aid, canonical.updatedAt)
         }
         return Replacement(canonical, duplicates, canonical != null &&
             (current.filter { it.asset.id == canonical.id }.let { bindings ->

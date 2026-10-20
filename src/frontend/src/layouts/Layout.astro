@@ -1,4 +1,5 @@
 ---
+import chunkRecoveryScript from '../scripts/chunkRecovery.js?raw';
 import TopNav from '../components/TopNav.astro';
 import Footer from '../components/Footer.astro';
 import Sidebar from '../components/Sidebar.tsx';
@@ -55,6 +56,8 @@ const requiresRedirect = !user && !isPublicPage;
 		    the Astro middleware (frontend) and SecurityHeadersFilter (backend API responses). */}
 		<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net; font-src 'self' cdn.jsdelivr.net; img-src 'self' data: blob:; connect-src 'self' cdn.jsdelivr.net; form-action 'self'; base-uri 'self'; object-src 'none';" />
 		<title>{title}</title>
+        {/* Inline so recovery still works when a deployment removes a JavaScript bundle. */}
+        <script is:inline set:html={chunkRecoveryScript} />
         {/*
           Decide the app chrome BEFORE first paint.
 

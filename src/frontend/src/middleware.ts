@@ -67,6 +67,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // frame-ancestors cannot be delivered via <meta> per CSP spec — it must come from
     // a response header. X-Frame-Options is the legacy fallback for older browsers.
     try {
+        // HTML references build-specific hashes; a cached page can outlive its bundles.
+        if (response.headers.get('Content-Type')?.includes('text/html')) {
+            response.headers.set('Cache-Control', 'private, no-store');
+        }
         response.headers.set('X-Frame-Options', 'DENY');
         const existingCsp = response.headers.get('Content-Security-Policy');
         if (existingCsp) {
