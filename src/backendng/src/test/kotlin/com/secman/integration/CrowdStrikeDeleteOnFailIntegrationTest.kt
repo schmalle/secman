@@ -86,8 +86,8 @@ class CrowdStrikeDeleteOnFailIntegrationTest {
 
     private fun post(batch: CrowdStrikeVulnerabilityBatchDto, enabled: Boolean = true): ImportStatisticsDto {
         val response = http.toBlocking().exchange(HttpRequest.POST(
-            "/api/crowdstrike/servers/import?deleteOnFail=$enabled", listOf(batch)).bearerAuth(token()), ImportStatisticsDto::class.java)
-        assertThat(response.headers.get("X-Secman-Deleteonfail")).isEqualTo(if (enabled) "hostname-v2" else "disabled")
+            "/api/crowdstrike/servers/import?deleteOnFail=$enabled", listOf(batch)).bearerAuth(token()).header("X-Secman-Deleteonfail", "identity-v3"), ImportStatisticsDto::class.java)
+        assertThat(response.headers.get("X-Secman-Deleteonfail")).isEqualTo(if (enabled) "identity-v3" else "disabled")
         return response.body()!!
     }
 
@@ -366,6 +366,70 @@ class CrowdStrikeDeleteOnFailIntegrationTest {
     }
 
     @Test
+    fun `legacy request retains hostname scope and preview locates outside selected owner`() {
+        val (original, id) = fixture()
+        val renamed = original.copy(hostname = "renamed-" + original.hostname)
+        val response = http.toBlocking().exchange(HttpRequest.POST(
+            "/api/crowdstrike/servers/import?deleteOnFail=true", listOf(payload(renamed))).bearerAuth(token()),
+            ImportStatisticsDto::class.java)
+        assertThat(response.headers.get("X-Secman-Deleteonfail")).isEqualTo("hostname-v2")
+        assertThat(response.body()!!.hostOutcomes.single().recoveryReason).isEqualTo("CONFLICT_OUTSIDE_HOSTNAME")
+        val preview = http.toBlocking().retrieve(HttpRequest.GET<Any>(
+            "/api/crowdstrike/identity-preview?hostname=${renamed.hostname}&aid=${original.aid}").bearerAuth(token()),
+            String::class.java)
+        assertThat(preview).contains(original.hostname, original.aid, "selectedAidOwner")
+        assertThat(assets.findById(id)).isPresent()
+        assertThat(audits.countByAssetId(id)).isZero()
+    }
+
+    @Test
+    fun `verified outside owner can be replaced by a complete empty finding snapshot`() {
+        val (original, id) = fixture()
+        val renamed = original.copy(hostname = "renamed-" + original.hostname)
+        val result = post(payload(renamed).copy(vulnerabilities = emptyList(), findingCoverage = CrowdStrikeFindingCoverage(0, 0)))
+        assertThat(result.errors).isEmpty()
+        assertThat(result.hostOutcomes.single().recoveryDeletedAssetIds).containsExactly(id)
+        val replacement = identities.findByCrowdStrikeAidIn(listOf(original.aid)).single().asset
+        assertThat(count("vulnerability", replacement.id!!)).isZero()
+    }
+
+    @Test
+    fun `verified selected owner under old hostname is replaced atomically without hostname matches`() {
+        val (original, id) = fixture()
+        val renamed = original.copy(hostname = "renamed-" + original.hostname)
+        val result = post(payload(renamed))
+        assertThat(result.errors).isEmpty()
+        assertThat(result.hostOutcomes.single().recoveryDeletedAssetIds).containsExactly(id)
+        assertThat(assets.findById(id)).isEmpty()
+        val replacement = identities.findByCrowdStrikeAidIn(listOf(original.aid)).single().asset
+        assertThat(replacement.crowdStrikeHostname).isEqualTo(renamed.hostname)
+        assertThat(count("vulnerability", replacement.id!!)).isEqualTo(1)
+        assertThat(audits.countByAssetId(id)).isEqualTo(1)
+        val again = post(payload(renamed))
+        assertThat(again.errors).isEmpty()
+        assertThat(again.hostOutcomes.single().recoveryStatus).isEqualTo("NOT_NEEDED")
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(original.aid)).single().asset.id).isEqualTo(replacement.id)
+    }
+
+    @Test
+    fun `failed cross hostname replacement restores outside owner and hostname target`() {
+        val (original, id) = fixture()
+        val renamed = original.copy(hostname = "renamed-" + original.hostname)
+        val hostnameId = legacyAsset(renamed)
+        val before = count("vulnerability", id)
+        val result = post(payload(renamed).copy(runSeverities = listOf("LOW")))
+        assertThat(result.errors).hasSize(1)
+        assertThat(result.hostOutcomes.single().recoveryStatus).isEqualTo("ROLLED_BACK")
+        assertThat(result.hostOutcomes.single().recoveryAttempts).isEqualTo(2)
+        assertThat(assets.findById(id)).isPresent()
+        assertThat(assets.findById(hostnameId)).isPresent()
+        assertThat(count("vulnerability", id)).isEqualTo(before)
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(original.aid)).single().asset.id).isEqualTo(id)
+        assertThat(audits.countByAssetId(id)).isZero()
+        assertThat(audits.countByAssetId(hostnameId)).isZero()
+    }
+
+    @Test
     fun `cleanup cannot steal selected AID from a different hostname`() {
         val device = device()
         val id = legacyAsset(device)
@@ -378,8 +442,8 @@ class CrowdStrikeDeleteOnFailIntegrationTest {
             crowdStrikeAid = other, sourceHostname = device.hostname + ".retained.test"))
         val result = post(payload(device))
         assertThat(result.errors).hasSize(1)
-        assertThat(result.hostOutcomes.single().recoveryReason).isEqualTo("CONFLICT_OUTSIDE_HOSTNAME")
-        assertThat(result.errors.single()).contains("Selected Falcon identity belongs outside the hostname cleanup scope")
+        assertThat(result.hostOutcomes.single().recoveryReason).isEqualTo("UNEXPLAINED_AID")
+        assertThat(result.errors.single()).contains("has additional or changed Falcon bindings")
         assertThat(assets.findById(id)).isPresent()
         assertThat(assets.findById(outsideId)).isPresent()
         assertThat(identities.findByCrowdStrikeAidIn(listOf(device.aid)).single().asset.id).isEqualTo(outsideId)

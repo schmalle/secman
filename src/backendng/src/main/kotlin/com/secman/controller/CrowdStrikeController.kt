@@ -161,22 +161,36 @@ open class CrowdStrikeController(
         HttpResponse.status<Any>(HttpStatus.BAD_GATEWAY)
     }
 
+    @Get("/crowdstrike/import-recovery-capabilities")
+    @Secured("ADMIN")
+    open fun recoveryCapabilities(): HttpResponse<Map<String, String>> =
+        HttpResponse.ok(mapOf("contract" to "identity-v3")).header("X-Secman-Deleteonfail", "identity-v3")
+
     /** Read-only preview: never moves bindings or deletes legacy records. */
     @Get("/crowdstrike/identity-preview")
     @Secured("ADMIN")
-    open fun previewIdentities(@QueryValue hostname: String): HttpResponse<*> {
+    open fun previewIdentities(@QueryValue hostname: String, @QueryValue aid: String? = null): HttpResponse<*> {
         val name = try { sanitizeHostname(hostname) } catch (e: IllegalArgumentException) {
             return HttpResponse.badRequest(mapOf("error" to "Invalid hostname"))
         }
         val candidates = assetRepository.findCrowdStrikeReplacementCandidates(name, io.micronaut.data.model.Pageable.from(0, 102))
         if (candidates.totalSize > 101) return HttpResponse.badRequest(mapOf("error" to "Too many matches; use asset IDs"))
-        val bindings = if (candidates.content.isEmpty()) emptyList() else
-            identityRepository.findByAssetIdIn(candidates.content.map { requireNotNull(it.id) })
-        return HttpResponse.ok(candidates.content.map { asset ->
+        if (aid != null && !aid.matches(Regex("[0-9a-fA-F]{32}")))
+            return HttpResponse.badRequest(mapOf("error" to "Invalid Falcon AID"))
+        val selectedOwners = aid?.let { identityRepository.findByCrowdStrikeAidIn(listOf(it.lowercase())) }
+            .orEmpty().map { it.asset }
+        val targets = (candidates.content + selectedOwners).distinctBy { it.id }
+        val bindings = if (targets.isEmpty()) emptyList() else
+            identityRepository.findByAssetIdIn(targets.map { requireNotNull(it.id) })
+        return HttpResponse.ok(targets.map { asset ->
             val owned = bindings.filter { it.asset.id == asset.id }
             mapOf("assetId" to asset.id, "hostname" to (asset.crowdStrikeHostname ?: asset.name),
                 "instanceId" to asset.cloudInstanceId, "accountId" to asset.cloudAccountId,
                 "aids" to owned.map { it.crowdStrikeAid }, "lastSeen" to asset.crowdStrikeAgentSeenAt,
+                "selectedAidOwner" to (aid != null && owned.any { it.crowdStrikeAid.equals(aid, ignoreCase = true) }),
+                "enrollments" to owned.map { mapOf("aid" to it.crowdStrikeAid,
+                    "firstSeen" to it.falconFirstSeenAt, "lastSeen" to it.falconLastSeenAt,
+                    "observedAt" to it.identityObservedAt) },
                 "classification" to when {
                     owned.isEmpty() -> "LEGACY_UNBOUND_REVIEW"
                     owned.size > 1 -> "MULTIPLE_BINDINGS_REVIEW"
@@ -434,7 +448,8 @@ open class CrowdStrikeController(
         // Per-server vulnerability count is already capped on the DTO itself.
         @Body @Valid @Size(max = 100) batches: List<CrowdStrikeVulnerabilityBatchDto>,
         authentication: Authentication,
-        @QueryValue(defaultValue = "false") deleteOnFail: Boolean = false
+        @QueryValue(defaultValue = "false") deleteOnFail: Boolean = false,
+        @Header("X-Secman-Deleteonfail") recoveryContract: String? = null
     ): HttpResponse<*> {
         val username = authentication.name
         log.info("Received batch import request: servers={}, user={}", batches.size, username)
@@ -442,6 +457,10 @@ open class CrowdStrikeController(
         return try {
             if (deleteOnFail && !authentication.roles.contains("ADMIN")) {
                 return HttpResponse.status<Any>(HttpStatus.FORBIDDEN)
+            }
+            if (deleteOnFail && recoveryContract != null && recoveryContract !in setOf("hostname-v2", "identity-v3")) {
+                return HttpResponse.status<Any>(HttpStatus.CONFLICT)
+                    .body(mapOf("error" to "Unsupported delete-on-fail contract"))
             }
             // T023: Call import service
             if (batches.any { it.deviceSelection != null } && !authentication.roles.contains("ADMIN")) {
@@ -458,7 +477,7 @@ open class CrowdStrikeController(
             val statistics = importService.importServerVulnerabilities(batches, username,
                 allowDeviceReplacement = authentication.roles.contains("ADMIN"),
                 recoverRejected = if (deleteOnFail) { batch, conflict ->
-                    importRecoveryService.recover(batch, conflict, username)
+                    importRecoveryService.recover(batch, conflict, username, includeSelectedOwner = recoveryContract == "identity-v3")
                 } else null)
 
             log.info("Batch import completed: servers processed={}, created={}, updated={}, vulnerabilities imported={}, skipped={}, errors={}, user={}",
@@ -466,7 +485,7 @@ open class CrowdStrikeController(
                 statistics.vulnerabilitiesImported, statistics.vulnerabilitiesSkipped, statistics.errors.size, username)
 
             // T023: Return statistics
-            HttpResponse.ok(statistics).header("X-Secman-Deleteonfail", if (deleteOnFail) "hostname-v2" else "disabled")
+            HttpResponse.ok(statistics).header("X-Secman-Deleteonfail", if (deleteOnFail) recoveryContract ?: "hostname-v2" else "disabled")
         } catch (e: IllegalArgumentException) {
             log.warn("Invalid batch import request: user={}", username, e)
             HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid request")))

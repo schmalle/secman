@@ -38,4 +38,5 @@ fun CrowdStrikeHostImportOutcome.recoverySummary(): String? = if (!recoveryReque
     "Delete-on-fail: ${recoveryStatus ?: "UNKNOWN"}; attempts=$recoveryAttempts/2" +
         (recoveryAssetId?.let { "; target asset=$it" } ?: "") +
         (if (recoveryDeletedAssetIds.isNotEmpty()) "; deleted assets=${recoveryDeletedAssetIds.joinToString(",")}" else "") +
+        (if (recoveryStatus == "COMMITTED") assetId?.let { "; replacement asset=$it" }.orEmpty() else "") +
         (recoveryReason?.let { "; reason=$it" } ?: "")

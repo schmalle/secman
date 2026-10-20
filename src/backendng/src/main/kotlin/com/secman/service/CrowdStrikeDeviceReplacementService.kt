@@ -304,7 +304,7 @@ class CrowdStrikeDeviceReplacementService(
                 listOfNotNull(device.instanceId?.takeIf(String::isNotBlank)?.let {
                     "instance:${it.trim().lowercase()}"
                 })
-        } + stored.mapNotNull { it.asset.cloudInstanceId?.takeIf(String::isNotBlank)?.let { id -> "instance:${id.trim().lowercase()}" } })
+        } + stored.map { "hostname:" + (it.asset.crowdStrikeHostname ?: it.asset.name).trim().lowercase() } + stored.mapNotNull { it.asset.cloudInstanceId?.takeIf(String::isNotBlank)?.let { id -> "instance:${id.trim().lowercase()}" } })
             .map { key -> java.security.MessageDigest.getInstance("SHA-256").digest(key.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) } }.distinct().sorted()
         keys.forEach { key ->

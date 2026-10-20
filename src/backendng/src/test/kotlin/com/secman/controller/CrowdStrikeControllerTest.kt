@@ -56,6 +56,14 @@ class CrowdStrikeControllerTest {
         verify(exactly = 0) { importService.importServerVulnerabilities(any(), any(), any(), any(), any()) }
     }
 
+    @Test
+    fun `unknown destructive contract is rejected before import`() {
+        val result = controller.importServerVulnerabilities(emptyList(),
+            Authentication.build("admin", listOf("ADMIN")), true, "future-v99")
+        assertThat(result.code()).isEqualTo(409)
+        verify(exactly = 0) { importService.importServerVulnerabilities(any(), any(), any(), any(), any()) }
+    }
+
     // --- force routing ---
 
     @Test
