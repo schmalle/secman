@@ -466,7 +466,7 @@ open class CrowdStrikeController(
                 statistics.vulnerabilitiesImported, statistics.vulnerabilitiesSkipped, statistics.errors.size, username)
 
             // T023: Return statistics
-            HttpResponse.ok(statistics)
+            HttpResponse.ok(statistics).header("X-Secman-Deleteonfail", if (deleteOnFail) "atomic-v1" else "disabled")
         } catch (e: IllegalArgumentException) {
             log.warn("Invalid batch import request: user={}", username, e)
             HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid request")))

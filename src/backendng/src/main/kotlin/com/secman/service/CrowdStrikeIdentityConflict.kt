@@ -7,5 +7,9 @@ class CrowdStrikeIdentityConflict(
     val assetId: Long? = null,
     val formerInstanceId: String? = null,
     val instanceId: String? = null,
-    val aid: String? = null
+    val aid: String? = null,
+    val assetUpdatedAt: java.time.LocalDateTime? = null
 ) : IllegalArgumentException(message)
+
+/** A safe operator reason for refusing deletion after the target was rechecked. */
+class CrowdStrikeRecoveryBlocked(val reason: String, message: String) : IllegalStateException(message)

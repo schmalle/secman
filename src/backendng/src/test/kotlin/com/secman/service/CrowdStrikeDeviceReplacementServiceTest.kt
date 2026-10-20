@@ -89,7 +89,36 @@ class CrowdStrikeDeviceReplacementServiceTest {
             .isInstanceOf(IllegalArgumentException::class.java)
         assertThatThrownBy { service.prepare(incomingBatch.copy(cloudAccountId = "account-b"),
             CrowdStrikeDeviceSelection(incoming.copy(cloudAccountId = "account-b"))) }
-            .isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("account or domain")
+            .isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("cloud account")
+    }
+
+    @Test
+    fun `same instance account contradiction exposes exact recoverable target`() {
+        val incoming = newest.copy(instanceId = "i-0195e4497a3f7ddcc", cloudAccountId = "012345678901")
+        val asset = Asset(id = 42305L, name = incoming.hostname, type = "SERVER", owner = "CrowdStrike Import",
+            cloudInstanceId = incoming.instanceId, cloudAccountId = "034362056090", adDomain = null,
+            updatedAt = LocalDateTime.of(2026, 10, 19, 6, 0, 8))
+        stub(CrowdStrikeAssetIdentity(asset = asset, crowdStrikeAid = incoming.aid, sourceHostname = incoming.hostname))
+        val payload = incomingBatch(incoming)
+        val conflict = org.junit.jupiter.api.assertThrows<CrowdStrikeIdentityConflict> {
+            service.prepare(payload, payload.deviceSelection!!)
+        }
+        assertThat(conflict.code).isEqualTo("CLOUD_ACCOUNT_CONFLICT")
+        assertThat(conflict.assetId).isEqualTo(42305L)
+        assertThat(conflict.formerInstanceId).isEqualTo(incoming.instanceId)
+        assertThat(conflict.aid).isEqualTo(incoming.aid)
+        assertThat(conflict.assetUpdatedAt).isEqualTo(asset.updatedAt)
+    }
+
+    @Test
+    fun `same instance missing account is incomplete evidence and cannot authorize deletion`() {
+        val incoming = newest.copy(instanceId = "i-0195e4497a3f7ddcc", cloudAccountId = null)
+        val asset = Asset(id = 42305L, name = incoming.hostname, type = "SERVER", owner = "CrowdStrike Import",
+            cloudInstanceId = incoming.instanceId, cloudAccountId = "034362056090")
+        stub(CrowdStrikeAssetIdentity(asset = asset, crowdStrikeAid = incoming.aid, sourceHostname = incoming.hostname))
+        val payload = incomingBatch(incoming)
+        assertThatThrownBy { service.prepare(payload, payload.deviceSelection!!) }
+            .isInstanceOf(CrowdStrikeIdentityConflict::class.java).extracting("code").isEqualTo("INCOMPLETE_IDENTITY")
     }
 
     private fun instanceChange(): Triple<Asset, CrowdStrikeAssetIdentity, CrowdStrikeDeviceRecord> {
@@ -131,7 +160,7 @@ class CrowdStrikeDeviceReplacementServiceTest {
         val (_, _, incoming) = instanceChange()
         val cases = listOf(
             incoming.copy(cloudAccountId = "other-account") to "CLOUD_ACCOUNT_CONFLICT",
-            incoming.copy(cloudAccountId = null) to "CLOUD_ACCOUNT_CONFLICT",
+            incoming.copy(cloudAccountId = null) to "INCOMPLETE_IDENTITY",
             incoming.copy(adDomain = null) to "AD_DOMAIN_CONFLICT",
             incoming.copy(adDomain = "other.test") to "AD_DOMAIN_CONFLICT",
             incoming.copy(instanceId = null) to "INCOMPLETE_IDENTITY",

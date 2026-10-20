@@ -31,6 +31,8 @@ class CrowdStrikeImportRecoveryServiceTest {
 
     private fun stub() {
         every { assets.findCrowdStrikeReplacementCandidates("ARCGIS", any()) } returns Page.of(listOf(asset), Pageable.from(0, 2), 1)
+        every { identities.findByCrowdStrikeAidIn(any()) } returns emptyList()
+        every { assets.findById(7) } returns java.util.Optional.of(asset)
         every { identities.findByAssetIdIn(listOf(7L)) } returns emptyList()
         every { demands.findByExistingAssetId(7) } returns emptyList()
         every { assessments.findAllByInvolvedAssetId(7) } returns emptyList()
@@ -71,11 +73,21 @@ class CrowdStrikeImportRecoveryServiceTest {
         }
         service.recover(batch, conflict, "admin")
         assertThat(guard!!(asset)).isTrue()
-        assertThat(guard!!(asset.copy(name = "OTHER"))).isFalse()
-        assertThat(guard!!(asset.copy(cloudInstanceId = "i-changed"))).isFalse()
-        assertThat(guard!!(asset.copy(cloudAccountId = "123456789012"))).isFalse()
+        assertThrows<CrowdStrikeRecoveryBlocked> { guard!!(asset.copy(name = "OTHER")) }
+        assertThrows<CrowdStrikeRecoveryBlocked> { guard!!(asset.copy(cloudInstanceId = "i-changed")) }
+        assertThrows<CrowdStrikeRecoveryBlocked> { guard!!(asset.copy(cloudAccountId = "123456789012")) }
         every { demands.findByExistingAssetId(7) } returns listOf(mockk())
-        assertThat(guard!!(asset)).isFalse()
+        assertThrows<CrowdStrikeRecoveryBlocked> { guard!!(asset) }
+    }
+
+    @Test
+    fun `target changed between initial rejection and recovery cannot be deleted`() {
+        stub()
+        val newer = asset.copy(updatedAt = java.time.LocalDateTime.now())
+        every { assets.findById(7) } returns java.util.Optional.of(newer)
+        val error = assertThrows<CrowdStrikeRecoveryBlocked> { service.recover(batch, conflict, "admin") }
+        assertThat(error.reason).isEqualTo("TARGET_CHANGED")
+        verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any(), any()) }
     }
 
     @Test

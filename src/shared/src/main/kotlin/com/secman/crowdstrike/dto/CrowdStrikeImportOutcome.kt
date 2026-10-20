@@ -24,5 +24,16 @@ data class CrowdStrikeHostImportOutcome(
     val message: String? = null,
     val coverage: CrowdStrikeFindingCoverage? = null,
     val aid: String? = null,
-    val accountId: String? = null
+    val accountId: String? = null,
+    val recoveryRequested: Boolean = false,
+    val recoveryAttempts: Int = 0,
+    val recoveryStatus: String? = null,
+    val recoveryReason: String? = null,
+    val recoveryAssetId: Long? = null
 )
+
+/** Plain operator diagnostic, also usable by clients that do not render structured outcomes. */
+fun CrowdStrikeHostImportOutcome.recoverySummary(): String? = if (!recoveryRequested) null else
+    "Delete-on-fail: ${recoveryStatus ?: "UNKNOWN"}; attempts=$recoveryAttempts/2" +
+        (recoveryAssetId?.let { "; target asset=$it" } ?: "") +
+        (recoveryReason?.let { "; reason=$it" } ?: "")

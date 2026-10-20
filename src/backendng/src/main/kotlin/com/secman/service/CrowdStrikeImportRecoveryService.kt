@@ -22,31 +22,45 @@ class CrowdStrikeImportRecoveryService(
     fun recover(batch: CrowdStrikeVulnerabilityBatchDto, conflict: CrowdStrikeIdentityConflict, username: String) {
         require(canRecover(batch, conflict)) { "Import rejection cannot be recovered by deleting an asset" }
         val id = requireNotNull(conflict.assetId)
-        val candidates = assets.findCrowdStrikeReplacementCandidates(batch.hostname, Pageable.from(0, 2))
-        check(candidates.totalSize == 1L && candidates.content.singleOrNull()?.id == id) {
-            "Recovery requires exactly one hostname match with the rejected asset ID"
-        }
-        val expectedUpdatedAt = candidates.content.single().updatedAt
-        val aids = batch.crowdStrikeAids + listOfNotNull(batch.deviceSelection?.selected?.aid)
+        val selected = requireNotNull(batch.deviceSelection).selected
+        val owners = identities.findByCrowdStrikeAidIn(listOf(selected.aid))
+        val provenOwner = owners.singleOrNull()?.asset?.id == id
+        guard(owners.isEmpty() || provenOwner, "TARGET_CHANGED", "Selected Falcon device changed its stored asset binding")
+        val target = assets.findById(id).orElseThrow { IllegalStateException("Recovery target no longer exists") }
+        guard(provenOwner || uniqueHostnameTarget(batch.hostname, id), "AMBIGUOUS_TARGET",
+            "Recovery requires a proven AID owner or one exact hostname target")
+        guard(target.updatedAt == conflict.assetUpdatedAt, "TARGET_CHANGED", "Recovery target changed after import rejection")
+        val expectedUpdatedAt = conflict.assetUpdatedAt
+        val aids = batch.crowdStrikeAids + selected.aid
         val bindings = identities.findByAssetIdIn(listOf(id))
-        check(bindings.all { it.crowdStrikeAid in aids }) {
-            "Recovery cannot delete an asset with another Falcon device binding"
-        }
+        guard(bindings.all { it.crowdStrikeAid in aids }, "UNEXPLAINED_AID",
+            "Recovery cannot delete an asset with another Falcon device binding")
         CrowdStrikeDeviceReplacementService.requireFreshObservation(bindings, requireNotNull(batch.deviceSelection), true)
         // Use the normal cascade service, with its timeout and audit behavior. Recheck
         // hostname, instance and protected references under its pessimistic asset lock.
         deletion.deleteAsset(id, username, forceTimeout = false, cleanupEligibility = { asset ->
-            (asset.crowdStrikeHostname ?: asset.name).equals(batch.hostname, ignoreCase = true) &&
-                asset.cloudInstanceId == conflict.formerInstanceId && asset.updatedAt == expectedUpdatedAt &&
-                assets.findCrowdStrikeReplacementCandidates(batch.hostname, Pageable.from(0, 2)).let {
-                    it.totalSize == 1L && it.content.singleOrNull()?.id == id
-                } && stillConflicts(asset, batch, conflict.code) &&
-                demands.findByExistingAssetId(id).isEmpty() &&
-                assessments.findAllByInvolvedAssetId(id).isEmpty() &&
-                risks.findByAssetId(id).isEmpty() &&
-                identities.findByAssetIdIn(listOf(id)).all { it.crowdStrikeAid in aids }
+            guard((asset.crowdStrikeHostname ?: asset.name).equals(batch.hostname, ignoreCase = true) &&
+                asset.cloudInstanceId == conflict.formerInstanceId && asset.updatedAt == expectedUpdatedAt,
+                "TARGET_CHANGED", "Recovery target metadata changed")
+            guard(if (provenOwner) identities.findByCrowdStrikeAidIn(listOf(selected.aid)).singleOrNull()?.asset?.id == id
+                else uniqueHostnameTarget(batch.hostname, id), "TARGET_CHANGED", "Recovery target ownership changed")
+            guard(stillConflicts(asset, batch, conflict.code), "CONFLICT_CHANGED", "Original identity conflict no longer applies")
+            guard(demands.findByExistingAssetId(id).isEmpty() && assessments.findAllByInvolvedAssetId(id).isEmpty() &&
+                risks.findByAssetId(id).isEmpty(), "PROTECTED_REFERENCES", "Recovery target has protected asset references")
+            guard(identities.findByAssetIdIn(listOf(id)).all { it.crowdStrikeAid in aids },
+                "UNEXPLAINED_AID", "Recovery target has another Falcon device binding")
+            true
         })
     }
+
+    private fun guard(allowed: Boolean, reason: String, message: String) {
+        if (!allowed) throw CrowdStrikeRecoveryBlocked(reason, message)
+    }
+
+    private fun uniqueHostnameTarget(hostname: String, id: Long): Boolean =
+        assets.findCrowdStrikeReplacementCandidates(hostname, Pageable.from(0, 2)).let {
+            it.totalSize == 1L && it.content.singleOrNull()?.id == id
+        }
 
     private fun stillConflicts(asset: com.secman.domain.Asset, batch: CrowdStrikeVulnerabilityBatchDto, code: String): Boolean {
         val selection = requireNotNull(batch.deviceSelection)
@@ -66,12 +80,18 @@ class CrowdStrikeImportRecoveryService(
     }
 
     companion object {
+        fun blockedReason(batch: CrowdStrikeVulnerabilityBatchDto, conflict: CrowdStrikeIdentityConflict): String? = when {
+            conflict.assetId == null -> "MISSING_CONFLICT_ASSET"
+            batch.deviceSelection == null -> "MISSING_DEVICE_SELECTION"
+            conflict.code !in setOf("CLOUD_ACCOUNT_CONFLICT", "AD_DOMAIN_CONFLICT", "ENROLLMENT_MISMATCH") -> conflict.code
+            conflict.code == "CLOUD_ACCOUNT_CONFLICT" && batch.deviceSelection.selected.cloudAccountId.isNullOrBlank() -> "MISSING_CLOUD_ACCOUNT"
+            conflict.code == "AD_DOMAIN_CONFLICT" && batch.deviceSelection.selected.adDomain.isNullOrBlank() -> "MISSING_AD_DOMAIN"
+            conflict.code == "ENROLLMENT_MISMATCH" && batch.deviceSelection.selected.firstSeen == null -> "MISSING_ENROLLMENT"
+            batch.findingCoverage?.complete != true || batch.findingCoverage.invalid != 0 -> "INCOMPLETE_SNAPSHOT"
+            else -> null
+        }
+
         fun canRecover(batch: CrowdStrikeVulnerabilityBatchDto, conflict: CrowdStrikeIdentityConflict): Boolean =
-            conflict.assetId != null && batch.deviceSelection != null &&
-                (conflict.code != "CLOUD_ACCOUNT_CONFLICT" || !batch.deviceSelection.selected.cloudAccountId.isNullOrBlank()) &&
-                (conflict.code != "AD_DOMAIN_CONFLICT" || !batch.deviceSelection.selected.adDomain.isNullOrBlank()) &&
-                (conflict.code != "ENROLLMENT_MISMATCH" || batch.deviceSelection.selected.firstSeen != null) &&
-                batch.findingCoverage?.complete == true && batch.findingCoverage.invalid == 0 &&
-                conflict.code in setOf("CLOUD_ACCOUNT_CONFLICT", "AD_DOMAIN_CONFLICT", "ENROLLMENT_MISMATCH")
+            blockedReason(batch, conflict) == null
     }
 }

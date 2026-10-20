@@ -1,5 +1,7 @@
 package com.secman.cli.commands
 
+import com.secman.crowdstrike.dto.recoverySummary
+
 import com.secman.cli.config.ConfigLoader
 import com.secman.cli.service.CliHttpClient
 import com.secman.cli.service.VulnerabilityStorageService
@@ -560,6 +562,10 @@ class ServersCommand {
             System.out.println("$deviceLabel processed: ${result.serversProcessed}")
             System.out.println("  - New $deviceLabel created: ${result.serversCreated}")
             System.out.println("  - Existing $deviceLabel updated: ${result.serversUpdated}")
+            result.hostOutcomes.forEach { outcome ->
+                outcome.recoverySummary()?.let { System.out.println("${outcome.hostname}: $it") }
+                outcome.errorCode?.let { System.err.println("${outcome.hostname}: $it: ${outcome.message}") }
+            }
             val retentionSkipped = result.hostOutcomes.count { it.status == "SKIPPED_RETENTION" }
             System.out.println("  - Skipped by sensor retention: $retentionSkipped")
             System.out.println("Vulnerabilities imported: ${result.vulnerabilitiesImported}")

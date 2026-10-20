@@ -1,5 +1,7 @@
 package com.secman.cli.commands
 
+import com.secman.crowdstrike.dto.recoverySummary
+
 import com.secman.cli.config.ConfigLoader
 import com.secman.cli.export.ExportService
 import com.secman.cli.service.CliHttpClient
@@ -174,6 +176,7 @@ class QueryCommand(
                 }
                 System.out.println("  - Asset: $status")
                 result.hostOutcomes.forEach { outcome ->
+                    outcome.recoverySummary()?.let { System.out.println("  - $it") }
                     if (outcome.status == "SKIPPED_RETENTION") System.out.println("  - ${outcome.message}")
                     if (outcome.status != "REJECTED" && outcome.formerInstanceId != null)
                         System.out.println("  - EC2 instance ID (asset ${outcome.assetId}): ${outcome.formerInstanceId} -> ${outcome.instanceId}")
