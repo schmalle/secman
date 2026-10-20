@@ -27,15 +27,20 @@ class CrowdStrikeImportRecoveryService(
         require(canRecover(batch, conflict)) { "Import rejection cannot be recovered by hostname cleanup" }
         val selection = requireNotNull(batch.deviceSelection)
         val selectionAids = (listOf(selection.selected) + selection.superseded).map { it.aid }
-        guard(identities.findByCrowdStrikeAidIn(selectionAids).none {
+        val outsideBindings = identities.findByCrowdStrikeAidIn(selectionAids).filter {
             !matchesHostname(it.asset, batch.hostname)
-        }, "CONFLICT_OUTSIDE_HOSTNAME", "Selected or superseded Falcon identity belongs outside the hostname cleanup scope")
+        }
+        guard(outsideBindings.none { it.crowdStrikeAid == selection.selected.aid },
+            "CONFLICT_OUTSIDE_HOSTNAME", "Selected Falcon identity belongs outside the hostname cleanup scope")
         val candidates = hostnameTargets(batch.hostname)
         guard(candidates.isNotEmpty(), "TARGET_CHANGED", "No assets match the failed hostname")
         val expected = candidates.associateBy { requireNotNull(it.id) }
-        guard(conflict.assetId == null || conflict.assetId in expected, "CONFLICT_OUTSIDE_HOSTNAME",
-            "Rejected identity belongs to an asset outside the requested hostname")
-        conflict.assetId?.let { id ->
+        // A superseded binding may have caused the original rejection. It is not a
+        // cleanup target and will be excluded from the hostname-scoped retry.
+        guard(conflict.assetId == null || conflict.assetId in expected ||
+            outsideBindings.any { it.asset.id == conflict.assetId && it.crowdStrikeAid == conflict.aid },
+            "CONFLICT_OUTSIDE_HOSTNAME", "Rejected identity belongs to an asset outside the requested hostname")
+        conflict.assetId?.takeIf { it in expected }?.let { id ->
             guard(expected.getValue(id).updatedAt == conflict.assetUpdatedAt, "TARGET_CHANGED",
                 "Recovery target changed after import rejection")
         }

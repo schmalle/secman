@@ -32,7 +32,8 @@ class CrowdStrikeDeviceReplacementService(
 
     data class Replacement(val asset: Asset?, val duplicates: List<Asset>, val snapshotChanged: Boolean,
         val formerInstanceId: String? = null,
-        val relocatedBindings: List<CrowdStrikeAssetIdentity> = emptyList())
+        val relocatedBindings: List<CrowdStrikeAssetIdentity> = emptyList(),
+        val preservedHistoricalAids: Set<String> = emptySet())
 
     /** Includes transaction completion, so concurrent first imports cannot create two assets. */
     fun <T> withSelectionLocks(selection: CrowdStrikeDeviceSelection?, action: () -> T): T =
@@ -72,9 +73,16 @@ class CrowdStrikeDeviceReplacementService(
             "Import metadata does not match selected Falcon device"
         }
         val ids = records.map { it.aid }.toSet()
-        val identities = identityRepository.findByCrowdStrikeAidIn(ids)
-        if (hostnameRecovery && identities.any { !(it.asset.crowdStrikeHostname ?: it.asset.name).equals(batch.hostname, ignoreCase = true) })
-            throw CrowdStrikeIdentityConflict("CONFLICT_OUTSIDE_HOSTNAME", "Falcon identity is bound outside the hostname cleanup scope")
+        val discoveredIdentities = identityRepository.findByCrowdStrikeAidIn(ids)
+        if (hostnameRecovery && discoveredIdentities.any { it.crowdStrikeAid == selected.aid &&
+                !(it.asset.crowdStrikeHostname ?: it.asset.name).equals(batch.hostname, ignoreCase = true) })
+            throw CrowdStrikeIdentityConflict("CONFLICT_OUTSIDE_HOSTNAME", "Selected Falcon identity is bound outside the hostname cleanup scope")
+        // Historical AIDs outside the explicitly requested hostname are neither
+        // replacement candidates nor bindings to retire during destructive recovery.
+        val preservedHistoricalAids = if (hostnameRecovery) discoveredIdentities.filter {
+            !(it.asset.crowdStrikeHostname ?: it.asset.name).equals(batch.hostname, ignoreCase = true)
+        }.map { it.crowdStrikeAid }.toSet() else emptySet()
+        val identities = discoveredIdentities.filterNot { it.crowdStrikeAid in preservedHistoricalAids }
         val candidateHostnames = if (hostnameRecovery) listOf(batch.hostname) else records.map { it.hostname }
         val hostnameCandidates = candidateHostnames.map { it.trim().lowercase() }.distinct().flatMap { hostname ->
             val page = assetRepository.findCrowdStrikeReplacementCandidates(hostname, Pageable.from(0, 102))
@@ -265,7 +273,7 @@ class CrowdStrikeDeviceReplacementService(
             (current.filter { it.asset.id == canonical.id }.let { bindings ->
                 bindings.size != 1 || bindings.singleOrNull()?.crowdStrikeAid != selected.aid ||
                     bindings.singleOrNull()?.falconFirstSeenAt == null
-            }), canonical?.cloudInstanceId?.takeIf { changingInstance }, relocatedBindings)
+            }), canonical?.cloudInstanceId?.takeIf { changingInstance }, relocatedBindings, preservedHistoricalAids)
     }
 
     companion object {
@@ -368,7 +376,9 @@ class CrowdStrikeDeviceReplacementService(
                 former.replace('\r', '_').replace('\n', '_'), selected.instanceId)
         }
         // Historical evidence is separate from the single current binding used for matching.
-        (listOf(selection.selected) + selection.superseded).forEach { device ->
+        (listOf(selection.selected) + selection.superseded).filterNot {
+            it.aid in replacement.preservedHistoricalAids
+        }.forEach { device ->
             entityManager.createNativeQuery("""
                 INSERT INTO crowdstrike_enrollment_history
                     (crowdstrike_aid, asset_id, hostname, instance_id, cloud_account_id, product_type,

@@ -95,6 +95,7 @@ class CrowdStrikeDeleteOnFailIntegrationTest {
         val sql = when (table) {
             "vulnerability" -> "SELECT COUNT(*) FROM vulnerability WHERE asset_id = ?"
             "crowdstrike_snapshot" -> "SELECT COUNT(*) FROM crowdstrike_snapshot WHERE asset_id = ?"
+            "crowdstrike_enrollment_history" -> "SELECT COUNT(*) FROM crowdstrike_enrollment_history WHERE asset_id = ?"
             else -> error("Unsupported fixture count")
         }
         return transactions.executeRead { state ->
@@ -309,6 +310,62 @@ class CrowdStrikeDeleteOnFailIntegrationTest {
     }
 
     @Test
+    fun `outside superseded hostname alias and all its data survive successful recovery`() {
+        val (device, id) = fixture()
+        val historical = device.copy(aid = UUID.randomUUID().toString().replace("-", ""),
+            hostname = device.hostname + ".retained.test", lastSeen = device.lastSeen!!.minusSeconds(60))
+        ownedAids.add(historical.aid)
+        importer.importVulnerabilitiesForServer(payload(historical, Instant.now().minusSeconds(5)), "test-admin", true)
+        val outsideId = identities.findByCrowdStrikeAidIn(listOf(historical.aid)).single().asset.id!!
+        val extraAid = UUID.randomUUID().toString().replace("-", "")
+        ownedAids.add(extraAid)
+        identities.save(com.secman.domain.CrowdStrikeAssetIdentity(asset = assets.findById(outsideId).orElseThrow(),
+            crowdStrikeAid = extraAid, sourceHostname = historical.hostname))
+        val incoming = payload(device).copy(deviceSelection = CrowdStrikeDeviceSelection(device, listOf(historical)))
+        val ordinary = post(incoming, false)
+        assertThat(ordinary.errors).hasSize(1)
+        val result = post(incoming)
+        assertThat(result.errors).isEmpty()
+        assertThat(result.hostOutcomes.single().recoveryDeletedAssetIds).containsExactly(id)
+        assertThat(result.hostOutcomes.single().recoveryAttempts).isEqualTo(1)
+        assertThat(assets.findById(id)).isEmpty()
+        val replacementId = identities.findByCrowdStrikeAidIn(listOf(device.aid)).single().asset.id!!
+        assertThat(count("vulnerability", replacementId)).isEqualTo(1)
+        assertThat(assets.findById(outsideId).orElseThrow().crowdStrikeHostname).isEqualTo(historical.hostname)
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(historical.aid, extraAid))).hasSize(2)
+            .allSatisfy { binding -> assertThat(binding.asset.id).isEqualTo(outsideId) }
+        assertThat(count("vulnerability", outsideId)).isEqualTo(1)
+        assertThat(count("crowdstrike_enrollment_history", outsideId)).isEqualTo(1)
+        assertThat(audits.countByAssetId(outsideId)).isZero()
+    }
+
+    @Test
+    fun `outside superseded rejection target is ignored and failed retry rolls back hostname cleanup`() {
+        val (device, id) = fixture()
+        val historical = device.copy(aid = UUID.randomUUID().toString().replace("-", ""),
+            hostname = device.hostname + ".retained.test", lastSeen = device.lastSeen!!.minusSeconds(60))
+        ownedAids.add(historical.aid)
+        val outsideId = legacyAsset(historical.copy(instanceId = "i-0123456789abcdef0"))
+        identities.save(com.secman.domain.CrowdStrikeAssetIdentity(asset = assets.findById(outsideId).orElseThrow(),
+            crowdStrikeAid = historical.aid, sourceHostname = historical.hostname))
+        val incoming = payload(device).copy(deviceSelection = CrowdStrikeDeviceSelection(device, listOf(historical)))
+        assertThat(post(incoming, false).hostOutcomes.single().errorCode).isEqualTo("SUPERSEDED_IDENTITY_CONFLICT")
+        val failed = post(incoming.copy(runSeverities = listOf("LOW")))
+        assertThat(failed.hostOutcomes.single().recoveryAttempts).isEqualTo(2)
+        assertThat(failed.hostOutcomes.single().recoveryStatus).isEqualTo("ROLLED_BACK")
+        assertThat(assets.findById(id)).isPresent()
+        assertThat(assets.findById(outsideId)).isPresent()
+        assertThat(audits.countByAssetId(id)).isZero()
+        assertThat(audits.countByAssetId(outsideId)).isZero()
+        val recovered = post(incoming)
+        assertThat(recovered.errors).isEmpty()
+        assertThat(recovered.hostOutcomes.single().recoveryDeletedAssetIds).containsExactly(id)
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(historical.aid)).single().asset.id).isEqualTo(outsideId)
+        assertThat(assets.findById(outsideId)).isPresent()
+        assertThat(audits.countByAssetId(outsideId)).isZero()
+    }
+
+    @Test
     fun `cleanup cannot steal selected AID from a different hostname`() {
         val device = device()
         val id = legacyAsset(device)
@@ -322,6 +379,7 @@ class CrowdStrikeDeleteOnFailIntegrationTest {
         val result = post(payload(device))
         assertThat(result.errors).hasSize(1)
         assertThat(result.hostOutcomes.single().recoveryReason).isEqualTo("CONFLICT_OUTSIDE_HOSTNAME")
+        assertThat(result.errors.single()).contains("Selected Falcon identity belongs outside the hostname cleanup scope")
         assertThat(assets.findById(id)).isPresent()
         assertThat(assets.findById(outsideId)).isPresent()
         assertThat(identities.findByCrowdStrikeAidIn(listOf(device.aid)).single().asset.id).isEqualTo(outsideId)

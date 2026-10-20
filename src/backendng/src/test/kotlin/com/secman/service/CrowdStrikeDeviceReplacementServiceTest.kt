@@ -55,6 +55,24 @@ class CrowdStrikeDeviceReplacementServiceTest {
     }
 
     @Test
+    fun `hostname retry excludes external superseded bindings without retiring them`() {
+        val outside = Asset(id = 99L, name = "old-hostname.example.test", type = "SERVER", owner = "CrowdStrike Import",
+            cloudInstanceId = "i-former", cloudAccountId = older.cloudAccountId)
+        val historical = CrowdStrikeAssetIdentity(asset = outside, crowdStrikeAid = older.aid, sourceHostname = outside.name)
+        stub(historical)
+        every { assets.findCrowdStrikeReplacementCandidates(any(), any()) } returns Page.of(emptyList<Asset>(), Pageable.from(0, 102), 0)
+        // The old binding has no verified enrollment; the normal replacement path refuses it.
+        assertThatThrownBy { service.prepare(batch, selection) }.isInstanceOf(CrowdStrikeIdentityConflict::class.java)
+        val result = service.prepare(batch, selection, hostnameRecovery = true)
+        assertThat(result.asset).isNull()
+        assertThat(result.duplicates).isEmpty()
+        assertThat(result.relocatedBindings).isEmpty()
+        assertThat(result.preservedHistoricalAids).containsExactly(older.aid)
+        verify(exactly = 0) { identities.delete(any<CrowdStrikeAssetIdentity>()) }
+        verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `shared asset keeps user metadata and replaces the old snapshot`() {
         val asset = Asset(id = 1L, name = "User display name", crowdStrikeHostname = newest.hostname,
             type = "SERVER", owner = "User owner")

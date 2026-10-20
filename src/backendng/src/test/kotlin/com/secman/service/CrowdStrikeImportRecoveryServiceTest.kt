@@ -131,6 +131,20 @@ class CrowdStrikeImportRecoveryServiceTest {
     }
 
     @Test
+    fun `outside superseded identity cannot veto cleanup or be deleted`() {
+        val outside = asset.copy(id = 9, name = "OLD-ARCGIS")
+        val historical = batch.deviceSelection!!.selected.copy(aid = "aid-old", hostname = outside.name)
+        val incoming = batch.copy(deviceSelection = batch.deviceSelection.copy(superseded = listOf(historical)))
+        stub(bindings = listOf(CrowdStrikeAssetIdentity(asset = outside, crowdStrikeAid = historical.aid, sourceHostname = outside.name)))
+        // The historical binding itself caused the ordinary import rejection.
+        val rejection = CrowdStrikeIdentityConflict("SUPERSEDED_IDENTITY_CONFLICT", "conflict",
+            outside.id, aid = historical.aid)
+        assertThat(service.recover(incoming, rejection, "admin")).containsExactly(7L)
+        verify(exactly = 1) { deletion.deleteAsset(7, "admin", false, null, any()) }
+        verify(exactly = 0) { deletion.deleteAsset(9, any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `oversized hostname cleanup refuses without partial deletion`() {
         stub()
         every { assets.findCrowdStrikeReplacementCandidates("ARCGIS", any()) } returns Page.of(listOf(asset), Pageable.from(0, 102), 102)

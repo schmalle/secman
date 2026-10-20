@@ -1096,8 +1096,14 @@ failed save rolls back **every** deleted asset, finding, binding and deletion au
 The replacement retry discovers candidates only within the exact hostname scope.
 It does not reuse another hostname's asset solely because its cloud instance and
 account match. Normal imports retain their existing instance-continuity rules.
-A selected or superseded AID still bound outside the cleanup scope stops recovery
-with `CONFLICT_OUTSIDE_HOSTNAME` before any deletion.
+A selected AID still bound outside the cleanup scope stops recovery with
+`CONFLICT_OUTSIDE_HOSTNAME` before any deletion. Superseded AIDs bound to other
+hostnames are excluded from the recovery retry, including binding retirement;
+their assets, findings, bindings and enrollment history remain unchanged. An original rejection on
+one of those historical bindings does not veto cleanup of the requested hostname.
+Normal imports retain their existing superseded-identity validation. Safe recovery
+guard messages are returned to the CLI, so a selected-AID ownership conflict no
+longer appears only as a generic instruction to inspect backend logs.
 There are at most two recovery cycles after the initial save (three save attempts
 total per device), reusing the fetched findings. Only a committed recovery removes
 the matching assets and their cascading data, including old vulnerabilities and
