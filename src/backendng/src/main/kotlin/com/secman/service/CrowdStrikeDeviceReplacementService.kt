@@ -132,14 +132,15 @@ class CrowdStrikeDeviceReplacementService(
         if (changingInstance) {
             val asset = requireNotNull(knownWinner).asset
             fun conflict(code: String, message: String): Nothing = throw CrowdStrikeIdentityConflict(code, message,
-                asset.id, asset.cloudInstanceId, selected.instanceId)
+                asset.id, asset.cloudInstanceId, selected.instanceId, selected.aid, asset.updatedAt)
             if (selected.instanceId?.matches(Regex("i-(?:[0-9a-f]{8}|[0-9a-f]{17})")) != true)
                 conflict("INCOMPLETE_IDENTITY", "A valid incoming EC2 instance ID is required")
             if (selected.lastSeen == null)
                 conflict("INCOMPLETE_IDENTITY", "Provider contact time is required for an instance change")
-            if (asset.cloudAccountId.isNullOrBlank() || selected.cloudAccountId.isNullOrBlank() ||
-                !asset.cloudAccountId.orEmpty().trim().equals(selected.cloudAccountId.orEmpty().trim(), ignoreCase = true))
-                conflict("CLOUD_ACCOUNT_CONFLICT", "Falcon device conflicts with stored account or domain")
+            if (asset.cloudAccountId.isNullOrBlank() || selected.cloudAccountId.isNullOrBlank())
+                conflict("INCOMPLETE_IDENTITY", "Verified stored and incoming cloud accounts are required for an instance change")
+            if (!asset.cloudAccountId.orEmpty().trim().equals(selected.cloudAccountId.orEmpty().trim(), ignoreCase = true))
+                conflict("CLOUD_ACCOUNT_CONFLICT", "Falcon device conflicts with stored cloud account")
             if (!asset.adDomain.orEmpty().trim().equals(selected.adDomain.orEmpty().trim(), ignoreCase = true))
                 conflict("AD_DOMAIN_CONFLICT", "Falcon device conflicts with stored AD domain")
             if (knownWinner.falconFirstSeenAt == null || knownWinner.falconFirstSeenAt !=
@@ -179,7 +180,25 @@ class CrowdStrikeDeviceReplacementService(
             entityManager.find(Asset::class.java, asset.id, LockModeType.PESSIMISTIC_WRITE)
                 ?: error("Falcon replacement candidate disappeared")
         }
-        require(locked.all(::compatible)) { "Falcon device conflicts with stored account or domain" }
+        locked.firstOrNull { !compatible(it) }?.let { asset ->
+            val code = when {
+                (!asset.cloudInstanceId.isNullOrBlank() && selected.instanceId.isNullOrBlank()) ||
+                    (!asset.cloudAccountId.isNullOrBlank() && selected.cloudAccountId.isNullOrBlank()) -> "INCOMPLETE_IDENTITY"
+                !asset.cloudInstanceId.isNullOrBlank() &&
+                    !asset.cloudInstanceId.equals(selected.instanceId, ignoreCase = true) -> "INSTANCE_IDENTITY_CONFLICT"
+                !asset.cloudAccountId.isNullOrBlank() &&
+                    !asset.cloudAccountId.orEmpty().trim().equals(selected.cloudAccountId?.trim(), ignoreCase = true) -> "CLOUD_ACCOUNT_CONFLICT"
+                selected.adDomain.isNullOrBlank() -> "INCOMPLETE_IDENTITY"
+                else -> "AD_DOMAIN_CONFLICT"
+            }
+            val message = when (code) {
+                "INCOMPLETE_IDENTITY" -> "Selected Falcon device is missing identity metadata required by the stored asset"
+                "CLOUD_ACCOUNT_CONFLICT" -> "Falcon device conflicts with stored cloud account"
+                "INSTANCE_IDENTITY_CONFLICT" -> "Falcon device conflicts with stored cloud instance"
+                else -> "Falcon device conflicts with stored AD domain"
+            }
+            throw CrowdStrikeIdentityConflict(code, message, asset.id, asset.cloudInstanceId, selected.instanceId, selected.aid, asset.updatedAt)
+        }
         val current = if (locked.isEmpty()) emptyList() else
             identityRepository.findByAssetIdIn(locked.map { requireNotNull(it.id) })
         if (current.any { it.crowdStrikeAid !in ids }) throw CrowdStrikeIdentityConflict("UNEXPLAINED_AID",
@@ -201,7 +220,9 @@ class CrowdStrikeDeviceReplacementService(
             selected.lastSeen == null || LocalDateTime.ofInstant(selected.lastSeen, ZoneOffset.UTC) < prior
         } == true }) { "An older Falcon device contact cannot overwrite newer data" }
         if (storedWinner?.falconFirstSeenAt != null) {
-            require(storedWinner.falconFirstSeenAt == incomingFirst) { "Falcon enrollment timestamp changed for an existing device" }
+            if (storedWinner.falconFirstSeenAt != incomingFirst)
+                throw CrowdStrikeIdentityConflict("ENROLLMENT_MISMATCH", "Falcon enrollment timestamp changed for an existing device",
+                    storedWinner.asset.id, storedWinner.asset.cloudInstanceId, selected.instanceId, selected.aid, storedWinner.asset.updatedAt)
         }
         val canonical = storedWinner?.asset?.let { winner -> locked.first { it.id == winner.id } }
             ?: locked.singleOrNull()

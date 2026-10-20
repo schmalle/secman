@@ -1064,16 +1064,41 @@ handles at most two delete-and-retry cycles after the initial save (three save
 attempts total per device), reusing the fetched payload. Only account, AD-domain
 or enrollment conflicts with an exact rejected asset ID are eligible. Generic
 validation failures, transport errors, incomplete snapshots, lock contention and
-stale identity observations never trigger deletion. Recovery requires one exact
-hostname match and no unrelated Falcon bindings. Multiple payloads sharing a
+stale identity observations never trigger deletion. Missing account or instance
+metadata is reported as `INCOMPLETE_IDENTITY`; it is not treated as a contradictory
+identity. The CLI resolves device-entity metadata by exact AID before constructing
+the selection and keeps cloud account IDs as strings, including leading zeros.
+Recovery requires the exact rejected asset ID, a proven selected-AID owner (or one
+unique hostname target when there is no AID owner), and no unrelated Falcon bindings. Multiple payloads sharing a
 hostname are saved without destructive recovery. Same-host imports are serialized across conflict detection, deletion and retry.
 Protected asset references, identity changes during deletion, and cascade timeouts
 stop recovery.
 
-Deletion removes the asset and cascading data, including its old vulnerabilities
-and exceptions. Recreation may assign a new ID; unrelated metadata and
+Each recovery cycle acquires database identity locks and performs deletion and
+reimport in one fresh transaction. Failed saves roll back the asset deletion,
+findings, identity bindings and deletion audit; a guard rejection stops immediately.
+Only a committed recovery removes the asset and cascading data, including its old
+vulnerabilities and exceptions. Recreation may assign a new ID; unrelated metadata and
 relationships are not restored. Backend history, completion notifications, CLI
 statistics and reconciliation use the final outcome, counting each device once.
 Destructive import requests are never automatically resent after gateway errors
 or timeouts, since the backend may already have used its recovery budget. This
 feature requires the updated backend as well as the updated CLI.
+
+The API acknowledges this contract with `X-Secman-Deleteonfail: atomic-v1`.
+Updated CLIs report a deployment mismatch if that acknowledgment is absent and
+never resend the request. Per-host outcomes expose `recoveryRequested`,
+`recoveryAttempts`, `recoveryStatus`, `recoveryReason`, and `recoveryAssetId`.
+Both query commands print these diagnostics. Status is `NOT_NEEDED`, `BLOCKED`,
+`COMMITTED`, or `ROLLED_BACK`. Reasons include `INCOMPLETE_IDENTITY`,
+`PROTECTED_REFERENCES`, `UNEXPLAINED_AID`, `TARGET_CHANGED`, and `RETRY_EXHAUSTED`.
+
+Deploy the backend and CLI together, backend first. Verify the running artifacts
+come from the patched build. Before a controlled recovery, inspect the selected
+AID's current Falcon account/instance metadata and its `crowdstrike_asset_identity`
+binding, in addition to the asset row. A shared hostname is not identity evidence.
+No manual production SQL update or blanket hostname deletion is needed.
+
+Regression checks: `./scripts/runbackendtests.sh --tests '*CrowdStrikeDeleteOnFailIntegrationTest'`
+exercises real HTTP, MariaDB and transaction rollback in a disposable schema;
+`./gradlew :cli:test :cli:shadowJar` checks the CLI contract and packaged build.
