@@ -1050,55 +1050,65 @@ inventory retention decision and is not proof that a stopped machine has been re
 Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.
 
 
-### Delete an asset after a rejected query import
+### Delete hostname matches after a rejected query import
 
-`query servers --hostnames ARCGIS --save --deleteonfail` opts into destructive
-recovery. Single-host `query --hostname ARCGIS --save --deleteonfail` and explicit
-`query servers --aid <aid> --save --deleteonfail` support the same flag. ADMIN
-permission and `--save` are required. Fleet streaming queries reject this flag:
-future hostname siblings cannot safely be ruled out. Dry runs never save or delete.
-Without the flag, existing import behavior is unchanged.
+`query servers --hostnames ARCGIS --save --deleteonfail` explicitly authorizes
+hostname cleanup after a rejected import. Single-host
+`query --hostname ARCGIS --save --deleteonfail` and explicit
+`query servers --aid <aid> --save --deleteonfail` use the same behavior. ADMIN
+permission and `--save` are required. Fleet streaming queries reject this flag;
+dry runs never save or delete. Without the flag, normal device identity rules
+and import behavior remain unchanged.
 
-The CLI sends `POST /api/crowdstrike/servers/import?deleteOnFail=true`. The backend
-handles at most two delete-and-retry cycles after the initial save (three save
-attempts total per device), reusing the fetched payload. Only account, AD-domain
-or enrollment conflicts with an exact rejected asset ID are eligible. Generic
-validation failures, transport errors, incomplete snapshots, lock contention and
-stale identity observations never trigger deletion. Missing account or instance
-metadata is reported as `INCOMPLETE_IDENTITY`; it is not treated as a contradictory
-identity. The CLI resolves device-entity metadata by exact AID before constructing
-the selection and keeps cloud account IDs as strings, including leading zeros.
-Recovery requires the exact rejected asset ID, a proven selected-AID owner (or one
-unique hostname target when there is no AID owner), and no unrelated Falcon bindings. Multiple payloads sharing a
-hostname are saved without destructive recovery. Same-host imports are serialized across conflict detection, deletion and retry.
-Protected asset references, identity changes during deletion, and cascade timeouts
-stop recovery.
+The CLI sends `POST /api/crowdstrike/servers/import?deleteOnFail=true`. After an
+eligible identity-related rejection, the backend deletes **all assets whose
+stored CrowdStrike hostname matches the failed hostname exactly**, ignoring case.
+For legacy rows without a CrowdStrike hostname it matches the asset name.
+Display-name overrides, hostname prefixes, FQDN suffixes and wildcard matches do
+not broaden the target set. Other AIDs bound to these assets are deleted with
+the assets; they do not veto the explicitly authorized hostname cleanup.
 
-Each recovery cycle acquires database identity locks and performs deletion and
-reimport in one fresh transaction. Failed saves roll back the asset deletion,
-findings, identity bindings and deletion audit; a guard rejection stops immediately.
-Only a committed recovery removes the asset and cascading data, including its old
-vulnerabilities and exceptions. Recreation may assign a new ID; unrelated metadata and
-relationships are not restored. Backend history, completion notifications, CLI
-statistics and reconciliation use the final outcome, counting each device once.
-Destructive import requests are never automatically resent after gateway errors
-or timeouts, since the backend may already have used its recovery budget. This
-feature requires the updated backend as well as the updated CLI.
+Account, domain, enrollment, incomplete-identity and conflicting-binding
+rejections can trigger cleanup. Complete finding coverage and a matching selected
+device hostname are required. Generic validation failures, transport errors,
+incomplete snapshots and stale observations do not trigger cleanup. If account
+metadata is missing, the replacement uses the fetched metadata as supplied; it
+does not inherit the deleted asset's account. Cloud account IDs remain strings,
+including leading zeros. Multiple payloads sharing a hostname are imported without
+destructive recovery so that importing one device cannot delete a sibling just
+imported in the same request.
 
-The API acknowledges this contract with `X-Secman-Deleteonfail: atomic-v1`.
-Updated CLIs report a deployment mismatch if that acknowledgment is absent and
-never resend the request. Per-host outcomes expose `recoveryRequested`,
-`recoveryAttempts`, `recoveryStatus`, `recoveryReason`, and `recoveryAssetId`.
-Both query commands print these diagnostics. Status is `NOT_NEEDED`, `BLOCKED`,
-`COMMITTED`, or `ROLLED_BACK`. Reasons include `INCOMPLETE_IDENTITY`,
-`PROTECTED_REFERENCES`, `UNEXPLAINED_AID`, `TARGET_CHANGED`, and `RETRY_EXHAUSTED`.
+Each recovery cycle acquires database identity locks, discovers the exact target
+set, locks targets in ID order and rechecks hostname, metadata, bindings and
+protected references. A conflict target outside the hostname scope is never
+deleted. Newer stored observations, concurrent target changes, protected risk,
+assessment or demand references, and cascade timeouts stop cleanup. The existing
+import candidate limit of 101 matches also bounds hostname cleanup; exceeding it
+refuses the operation without partial deletion.
 
-Deploy the backend and CLI together, backend first. Verify the running artifacts
-come from the patched build. Before a controlled recovery, inspect the selected
-AID's current Falcon account/instance metadata and its `crowdstrike_asset_identity`
-binding, in addition to the asset row. A shared hostname is not identity evidence.
-No manual production SQL update or blanket hostname deletion is needed.
+Deletion uses the normal asset cascade service and records one deletion audit per
+asset. All deletions and the replacement save share one fresh transaction. Any
+failed save rolls back **every** deleted asset, finding, binding and deletion audit.
+There are at most two recovery cycles after the initial save (three save attempts
+total per device), reusing the fetched findings. Only a committed recovery removes
+the matching assets and their cascading data, including old vulnerabilities and
+exceptions. Recreated assets receive new IDs; unrelated metadata and relationships
+are not restored. History, completion notifications, CLI statistics and
+reconciliation count the final device outcome once.
+
+The API acknowledges this hostname-cleanup contract with
+`X-Secman-Deleteonfail: hostname-v2`. The CLI reports a deployment mismatch if this
+acknowledgment is absent. Destructive requests are never automatically resent
+after gateway errors or timeouts because the backend outcome may be unknown.
+Both query commands print attempts, outcome, blocking reason and the complete
+`recoveryDeletedAssetIds` list for committed cleanup. The original conflict's
+`recoveryAssetId` is diagnostic; it does not limit deletion to that one asset.
+Failed or rolled-back recovery reports no committed deleted IDs.
+
+Deploy the patched backend first, then the matching CLI. No manual production SQL
+cleanup is required. A successful initial save performs no deletion.
 
 Regression checks: `./scripts/runbackendtests.sh --tests '*CrowdStrikeDeleteOnFailIntegrationTest'`
-exercises real HTTP, MariaDB and transaction rollback in a disposable schema;
+exercises real HTTP, MariaDB, multiple AID bindings, multi-asset hostname cleanup,
+scope exclusions and transaction rollback in a disposable schema;
 `./gradlew :cli:test :cli:shadowJar` checks the CLI contract and packaged build.
