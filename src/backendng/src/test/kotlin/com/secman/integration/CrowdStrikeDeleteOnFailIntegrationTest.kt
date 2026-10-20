@@ -44,16 +44,19 @@ class CrowdStrikeDeleteOnFailIntegrationTest {
     @Inject lateinit var deletion: com.secman.service.AssetCascadeDeleteService
     private val ownedAids = mutableListOf<String>()
     private val ownedRiskIds = mutableListOf<Long>()
+    private val ownedAssetIds = mutableListOf<Long>()
 
     @AfterEach
     fun removeOwnedFixtures() {
         jpaTransactions.executeWrite {
             ownedRiskIds.forEach(risks::deleteById)
             val bindings = identities.findByCrowdStrikeAidIn(ownedAids)
-            bindings.mapNotNull { it.asset.id }.distinct().forEach { deletion.deleteAsset(it, "test-admin", true) }
+            (bindings.mapNotNull { it.asset.id } + ownedAssetIds).distinct().filter { assets.findById(it).isPresent }
+                .forEach { deletion.deleteAsset(it, "test-admin", true) }
         }
         ownedAids.clear()
         ownedRiskIds.clear()
+        ownedAssetIds.clear()
     }
 
     private fun device() = CrowdStrikeDeviceRecord(UUID.randomUUID().toString().replace("-", ""),
@@ -243,6 +246,87 @@ class CrowdStrikeDeleteOnFailIntegrationTest {
             assertThat(audits.countByAssetId(assetId)).isZero()
         }
         assertThat(identities.findByCrowdStrikeAidIn(listOf(device.aid, sibling.aid))).hasSize(2)
+    }
+
+    private fun legacyAsset(device: CrowdStrikeDeviceRecord, hostname: String = device.hostname): Long {
+        val asset = assets.save(com.secman.domain.Asset(name = hostname, crowdStrikeHostname = hostname,
+            type = "SERVER", owner = "Legacy import", cloudInstanceId = device.instanceId, cloudAccountId = device.cloudAccountId))
+        return requireNotNull(asset.id).also { ownedAssetIds.add(it) }
+    }
+
+    @Test
+    fun `unproven duplicate assets enter hostname recovery and preserve normal rejection without flag`() {
+        val device = device()
+        val ids = listOf(legacyAsset(device), legacyAsset(device))
+        val ordinary = post(payload(device), false)
+        assertThat(ordinary.hostOutcomes.single().errorCode).isEqualTo("DUPLICATE_ASSET_CONFLICT")
+        ids.forEach { assertThat(assets.findById(it)).isPresent() }
+        val recovered = post(payload(device))
+        assertThat(recovered.errors).isEmpty()
+        assertThat(recovered.hostOutcomes.single().recoveryAttempts).isEqualTo(1)
+        assertThat(recovered.hostOutcomes.single().recoveryDeletedAssetIds).containsExactlyElementsOf(ids)
+        ids.forEach { id ->
+            assertThat(assets.findById(id)).isEmpty()
+            assertThat(audits.countByAssetId(id)).isEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `retry does not rediscover a different hostname by shared cloud instance and unknown AID`() {
+        val device = device()
+        val id = legacyAsset(device)
+        val outsideId = legacyAsset(device, device.hostname + ".retained.test")
+        val outsideAid = UUID.randomUUID().toString().replace("-", "")
+        ownedAids.add(outsideAid)
+        identities.save(com.secman.domain.CrowdStrikeAssetIdentity(asset = assets.findById(outsideId).orElseThrow(),
+            crowdStrikeAid = outsideAid, sourceHostname = device.hostname + ".retained.test"))
+        val ordinary = post(payload(device), false)
+        assertThat(ordinary.hostOutcomes.single().errorCode).isEqualTo("UNEXPLAINED_AID")
+        val recovered = post(payload(device))
+        assertThat(recovered.errors).isEmpty()
+        assertThat(recovered.hostOutcomes.single().recoveryAttempts).isEqualTo(1)
+        assertThat(recovered.hostOutcomes.single().recoveryDeletedAssetIds).containsExactly(id)
+        val replacementId = identities.findByCrowdStrikeAidIn(listOf(device.aid)).single().asset.id!!
+        assertThat(replacementId).isNotIn(id, outsideId)
+        assertThat(assets.findById(id)).isEmpty()
+        assertThat(assets.findById(outsideId).orElseThrow().crowdStrikeHostname).endsWith(".retained.test")
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(outsideAid)).single().asset.id).isEqualTo(outsideId)
+        assertThat(audits.countByAssetId(outsideId)).isZero()
+    }
+
+    @Test
+    fun `failed retry of unproven duplicates restores both legacy rows without deletion audits`() {
+        val device = device()
+        val ids = listOf(legacyAsset(device), legacyAsset(device))
+        val result = post(payload(device).copy(runSeverities = listOf("LOW")))
+        assertThat(result.hostOutcomes.single().recoveryAttempts).isEqualTo(2)
+        assertThat(result.hostOutcomes.single().recoveryStatus).isEqualTo("ROLLED_BACK")
+        assertThat(result.hostOutcomes.single().recoveryDeletedAssetIds).isEmpty()
+        ids.forEach { id ->
+            assertThat(assets.findById(id)).isPresent()
+            assertThat(audits.countByAssetId(id)).isZero()
+        }
+    }
+
+    @Test
+    fun `cleanup cannot steal selected AID from a different hostname`() {
+        val device = device()
+        val id = legacyAsset(device)
+        val outsideId = legacyAsset(device, device.hostname + ".retained.test")
+        identities.save(com.secman.domain.CrowdStrikeAssetIdentity(asset = assets.findById(outsideId).orElseThrow(),
+            crowdStrikeAid = device.aid, sourceHostname = device.hostname + ".retained.test"))
+        val other = UUID.randomUUID().toString().replace("-", "")
+        ownedAids.add(other)
+        identities.save(com.secman.domain.CrowdStrikeAssetIdentity(asset = assets.findById(outsideId).orElseThrow(),
+            crowdStrikeAid = other, sourceHostname = device.hostname + ".retained.test"))
+        val result = post(payload(device))
+        assertThat(result.errors).hasSize(1)
+        assertThat(result.hostOutcomes.single().recoveryReason).isEqualTo("CONFLICT_OUTSIDE_HOSTNAME")
+        assertThat(assets.findById(id)).isPresent()
+        assertThat(assets.findById(outsideId)).isPresent()
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(device.aid)).single().asset.id).isEqualTo(outsideId)
+        assertThat(audits.countByAssetId(id)).isZero()
+        assertThat(audits.countByAssetId(outsideId)).isZero()
     }
 
     @Test

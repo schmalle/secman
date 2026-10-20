@@ -37,7 +37,7 @@
 #     src/cli/build/libs/cli-<ver>-all.jar
 #     src/frontend/dist/        (contents of src/frontend/dist/)
 #
-#   Transfer uses rsync -az --delete for the frontend dist directory.
+#   Frontend assets are published first and previous hashed bundles are retained.
 #   Backend and CLI jars are copied into their Gradle build/libs locations
 #   so runtime scripts that reference the repository-like tree keep working.
 #
@@ -161,7 +161,7 @@ FRONTEND_DIST="$REPO_ROOT/src/frontend/dist"
 
 [[ -f "$BACKEND_JAR" ]] || { echo "Error: backend shadowJar not found under src/backendng/build/libs/" >&2; exit 1; }
 [[ -f "$CLI_JAR" ]]     || { echo "Error: cli shadowJar not found under src/cli/build/libs/" >&2; exit 1; }
-[[ -d "$FRONTEND_DIST" ]] || { echo "Error: frontend dist not found at $FRONTEND_DIST" >&2; exit 1; }
+[[ -d "$FRONTEND_DIST/client/_astro" && -f "$FRONTEND_DIST/server/entry.mjs" ]] || { echo "Error: frontend dist not found at $FRONTEND_DIST" >&2; exit 1; }
 
 echo "==> Build complete:"
 echo "    backend : $BACKEND_JAR"
@@ -182,7 +182,7 @@ deploy_to() {
     local remote_frontend_dist="$REMOTE_DEST/src/frontend/dist"
 
     # Pre-flight: confirm SSH works and create remote layout
-    ssh "${SSH_OPTS[@]}" "$target" "mkdir -p '$remote_backend_libs' '$remote_cli_libs' '$remote_frontend_dist'"
+    ssh "${SSH_OPTS[@]}" "$target" "mkdir -p '$remote_backend_libs' '$remote_cli_libs' '$remote_frontend_dist/client/_astro'"
 
     rsync -az --delete -e "$RSYNC_SSH" \
         "$BACKEND_JAR" "$target:$remote_backend_libs/"
@@ -190,7 +190,12 @@ deploy_to() {
     rsync -az --delete -e "$RSYNC_SSH" \
         "$CLI_JAR" "$target:$remote_cli_libs/"
 
-    rsync -az --delete -e "$RSYNC_SSH" \
+    # Publish new immutable assets before any server manifest can reference them.
+    # Keep old hashes for open pages and the previous SSR process during restart.
+    rsync -az --delay-updates -e "$RSYNC_SSH" \
+        "$FRONTEND_DIST/client/_astro/" "$target:$remote_frontend_dist/client/_astro/"
+
+    rsync -az --delete --delay-updates --exclude='/client/_astro/' -e "$RSYNC_SSH" \
         "$FRONTEND_DIST/" "$target:$remote_frontend_dist/"
 
     echo "    done: $target"

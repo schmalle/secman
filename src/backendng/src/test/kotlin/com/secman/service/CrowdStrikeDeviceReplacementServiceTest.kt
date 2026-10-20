@@ -121,6 +121,20 @@ class CrowdStrikeDeviceReplacementServiceTest {
             .isInstanceOf(CrowdStrikeIdentityConflict::class.java).extracting("code").isEqualTo("INCOMPLETE_IDENTITY")
     }
 
+    @Test
+    fun `unproven legacy duplicates expose a typed recoverable identity conflict`() {
+        stub()
+        val legacyRows = listOf(1L, 2L).map { id -> Asset(id = id, name = newest.hostname, type = "SERVER",
+            owner = "Legacy import", cloudInstanceId = newest.instanceId, cloudAccountId = newest.cloudAccountId) }
+        every { assets.findCrowdStrikeReplacementCandidates(any(), any()) } returns Page.of(legacyRows, Pageable.from(0, 102), 2)
+        legacyRows.forEach { asset -> every { em.find(Asset::class.java, asset.id, LockModeType.PESSIMISTIC_WRITE) } returns asset }
+        val payload = incomingBatch(newest)
+        val conflict = org.junit.jupiter.api.assertThrows<CrowdStrikeIdentityConflict> { service.prepare(payload, payload.deviceSelection!!) }
+        assertThat(conflict.code).isEqualTo("DUPLICATE_ASSET_CONFLICT")
+        assertThat(conflict.aid).isEqualTo(newest.aid)
+        verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any(), any()) }
+    }
+
     private fun instanceChange(): Triple<Asset, CrowdStrikeAssetIdentity, CrowdStrikeDeviceRecord> {
         val asset = Asset(id = 1L, name = "Human display name", type = "SERVER", owner = "Human owner",
             cloudInstanceId = "i-0123456789abcdef0", cloudAccountId = "123456789012", adDomain = "example.test")

@@ -26,6 +26,10 @@ class CrowdStrikeImportRecoveryService(
     fun recover(batch: CrowdStrikeVulnerabilityBatchDto, conflict: CrowdStrikeIdentityConflict, username: String): List<Long> {
         require(canRecover(batch, conflict)) { "Import rejection cannot be recovered by hostname cleanup" }
         val selection = requireNotNull(batch.deviceSelection)
+        val selectionAids = (listOf(selection.selected) + selection.superseded).map { it.aid }
+        guard(identities.findByCrowdStrikeAidIn(selectionAids).none {
+            !matchesHostname(it.asset, batch.hostname)
+        }, "CONFLICT_OUTSIDE_HOSTNAME", "Selected or superseded Falcon identity belongs outside the hostname cleanup scope")
         val candidates = hostnameTargets(batch.hostname)
         guard(candidates.isNotEmpty(), "TARGET_CHANGED", "No assets match the failed hostname")
         val expected = candidates.associateBy { requireNotNull(it.id) }
@@ -94,7 +98,8 @@ class CrowdStrikeImportRecoveryService(
             batch.deviceSelection == null -> "MISSING_DEVICE_SELECTION"
             !batch.deviceSelection.selected.hostname.trim().equals(batch.hostname.trim(), ignoreCase = true) -> "HOSTNAME_MISMATCH"
             conflict.code !in setOf("CLOUD_ACCOUNT_CONFLICT", "AD_DOMAIN_CONFLICT", "ENROLLMENT_MISMATCH",
-                "INCOMPLETE_IDENTITY", "UNEXPLAINED_AID", "INSTANCE_IDENTITY_CONFLICT", "INSTANCE_ALREADY_BOUND") -> conflict.code
+                "INCOMPLETE_IDENTITY", "UNEXPLAINED_AID", "INSTANCE_IDENTITY_CONFLICT", "INSTANCE_ALREADY_BOUND",
+                "DUPLICATE_ASSET_CONFLICT", "SUPERSEDED_IDENTITY_CONFLICT") -> conflict.code
             batch.findingCoverage?.complete != true || batch.findingCoverage.invalid != 0 -> "INCOMPLETE_SNAPSHOT"
             else -> null
         }
