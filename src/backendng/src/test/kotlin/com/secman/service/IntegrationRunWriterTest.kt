@@ -85,6 +85,17 @@ class IntegrationRunWriterTest {
     private fun submit(request: IntegrationRunRequest) = writer.apply(validator.validate(request, time.plusSeconds(1000)), auth)
 
     @Test
+    fun `source snapshots cannot resolve by absence even when client claims complete coverage`() {
+        scanner.source = "SOURCE_CODE"
+        assertThatThrownBy { submit(run(1, present = listOf(finding()))) }
+            .isInstanceOf(HttpStatusException::class.java)
+        assertThat(runs).isEmpty()
+        submit(run(2, complete = false, present = listOf(finding())))
+        submit(run(3, complete = false))
+        assertThat(findings.getValue("stable").state).isEqualTo("OPEN")
+    }
+
+    @Test
     fun `same key is replayed without mutation but changed content conflicts`() {
         val request = run(1, present = listOf(finding()))
         val first = submit(request)

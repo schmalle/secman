@@ -159,3 +159,29 @@ tables as a rollback shortcut; their foreign keys intentionally retain history.
 ## Current asset visibility
 
 Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.
+
+
+## Optional source and web integration
+
+`SOURCE_CODE` registers the independent source checker. GitHub inventory bindings are
+supported for both `GITHUB_AI` and `SOURCE_CODE`; source projects can also bind an
+explicit existing asset. Source submissions must set `completeCoverage=false`:
+`IntegrationRunWriter` rejects an attempt to resolve findings by source-review absence.
+
+ADMIN-only `GET /binding-target?assetId=…` or `?githubRepositoryId=…` previews a single
+stored inventory record before registration. The UI requires its exact numeric ID and
+shows URI, account/instance and owner. Preview/binding never grant the service user access.
+
+Run history, finding details and attachments use stored-record authorization, so old
+evidence remains available after asset currentness expires. Findings lists retain their
+current-only default; REST and MCP accept `includeHistorical=true` for explicit historical
+triage. Current summary and web exposure reads continue to require current assets.
+
+Both extensions offer optional private local delivery queues and retry commands. REST v1
+idempotency remains unchanged. A stale queued run is blocked rather than timestamp-shifted;
+late history-only ingestion and central scan jobs are deferred. No credentials or raw web
+response bodies are stored in queues. There are no database migrations in this phase.
+
+Operator guides: `extensions/secman_source/docs/secman-integration.md` and
+`extensions/secman_web_check/docs/SECMAN.md`. Local scan state, central delivery state,
+GitHub issue state and SecMan exceptions remain independent.

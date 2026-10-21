@@ -177,7 +177,11 @@ export interface IntegrationRunDetail {
   findings: Pick<IntegrationFinding, 'externalId' | 'severity' | 'title' | 'description' | 'recommendation' | 'evidence' | 'filePath' | 'lineRange' | 'url' | 'confidence' | 'engine' | 'model' | 'commitSha' | 'issueUrl' | 'fixPrUrl'>[];
   attachments: { id: number; findingId: number; fileName: string; contentType: string }[];
 }
-export const getIntegrationRun = (id: number) => read<IntegrationRunDetail>(`/runs/${id}`);
+export function normalizeIntegrationRunDetail(value: IntegrationRunDetail): IntegrationRunDetail {
+  return { ...value, findings: value.findings ?? [], attachments: value.attachments ?? [] };
+}
+export const getIntegrationRun = async (id: number) =>
+  normalizeIntegrationRunDetail(await read<IntegrationRunDetail>(`/runs/${id}`));
 
 export async function saveScanner(scanner: Omit<Scanner, 'id'>, id?: number): Promise<Scanner> {
   const response = id

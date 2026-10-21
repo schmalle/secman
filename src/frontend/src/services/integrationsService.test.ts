@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { normalizeIntegrationPage } from './integrationsService';
+import { normalizeIntegrationPage, normalizeIntegrationRunDetail, type IntegrationRunDetail } from './integrationsService';
 
 test('normalizes an omitted empty content collection', () => {
   const page = normalizeIntegrationPage({
@@ -25,4 +25,12 @@ test('preserves returned page content', () => {
   });
 
   assert.equal(page.content, content);
+});
+
+
+test('normalizes omitted empty historical findings and attachments', () => {
+  const result = normalizeIntegrationRunDetail({ run: { id: 1 } } as IntegrationRunDetail);
+  assert.deepEqual(result.findings, []);
+  assert.deepEqual(result.attachments, []);
+  assert.equal(result.run.id, 1);
 });
