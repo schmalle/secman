@@ -41,7 +41,7 @@ open class IntegrationAdminService(
         val scanner = repository.lock(IntegrationScanner::class.java, scannerId) ?: access.notFound()
         if ((request.assetId == null) == (request.githubRepositoryId == null)) invalid("Exactly one inventory ID is required")
         val repo = request.githubRepositoryId?.let { repository.lock(GithubRepository::class.java, it) ?: access.notFound() }
-        if (repo != null && scanner.source != "GITHUB_AI") invalid("GitHub subjects require a GITHUB_AI scanner")
+        if (repo != null && scanner.source !in setOf("GITHUB_AI", "SOURCE_CODE")) invalid("GitHub subjects require a source scanner")
         val asset = if (repo != null) {
             repository.repositorySubject(repo.id!!)?.let { repository.find(Asset::class.java, it.assetId) }
                 ?: resolveRepositoryAsset(repo, auth)

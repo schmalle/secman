@@ -5,7 +5,8 @@ import { useClientRoles } from '../utils/useClientAuth';
 import PortHistory from './PortHistory';
 import VulnerabilityHistory from './VulnerabilityHistory';
 import { BulkDeleteConfirmModal } from './BulkDeleteConfirmModal';
-import { bulkDeleteAssets, type BulkDeleteResult } from '../services/assetService';
+import { SelectedAssetDeleteModal } from './SelectedAssetDeleteModal';
+import { bulkDeleteAssets, deleteSelectedAssets, type BulkDeleteResult, type SelectedAssetDeletionResult } from '../services/assetService';
 import { exportVulnerabilitiesServerSide, cancelExportJob, getDistinctAdDomains, type ExportJob } from '../services/vulnerabilityManagementService';
 import { scrollContainerStyle, stickyHeaderCellStyle } from './scrollableTableStyles';
 import './AssetManagement.css';
@@ -106,6 +107,11 @@ const AssetManagement: React.FC = () => {
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const [bulkDeleteSuccess, setBulkDeleteSuccess] = useState<string | null>(null);
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<number>>(new Set());
+  const [showSelectedDeleteModal, setShowSelectedDeleteModal] = useState(false);
+  const [isDeletingSelected, setIsDeletingSelected] = useState(false);
+  const [selectedDeleteResults, setSelectedDeleteResults] = useState<SelectedAssetDeletionResult[] | null>(null);
+  const [selectedDeleteError, setSelectedDeleteError] = useState<string | null>(null);
 
   // Export vulnerabilities state
   const [exportLoading, setExportLoading] = useState(false);
@@ -120,6 +126,7 @@ const AssetManagement: React.FC = () => {
   // utils/useClientAuth). The mount effect below keeps calling getUser() directly —
   // effects only ever run on the client, where it is already correct.
   const roles = useClientRoles();
+  const canDeleteSelected = isAdmin(roles);
   const canManageGrants = isAdmin(roles) || isSecChampion(roles);
   const canAssignOwner = canManageGrants;
 
@@ -149,6 +156,9 @@ const AssetManagement: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    setSelectedAssetIds(new Set());
+    setShowSelectedDeleteModal(false);
+    setLoading(true);
     const controller = new AbortController();
     const timer = window.setTimeout(() => fetchAssets(controller.signal), 300);
     return () => {
@@ -156,6 +166,13 @@ const AssetManagement: React.FC = () => {
       controller.abort();
     };
   }, [page, pageSize, nameFilter, ipFilter, ownerFilter, adDomainFilter, accountIdFilter, workgroupFilter, falconActivity]);
+
+  useEffect(() => {
+    if (!canDeleteSelected) {
+      setSelectedAssetIds(new Set());
+      setShowSelectedDeleteModal(false);
+    }
+  }, [canDeleteSelected]);
 
   useEffect(() => {
     if (!urlStateReady) return;
@@ -402,6 +419,26 @@ const AssetManagement: React.FC = () => {
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred while deleting the asset');
+    }
+  };
+
+  const selectedAssets = assets.filter(asset => asset.id !== undefined && selectedAssetIds.has(asset.id))
+    .map(asset => ({ id: asset.id!, name: asset.name }));
+
+  const handleDeleteSelected = async () => {
+    if (!canDeleteSelected || isDeletingSelected || selectedAssets.length === 0) return;
+    setIsDeletingSelected(true);
+    setSelectedDeleteResults(null);
+    setSelectedDeleteError(null);
+    try {
+      setSelectedDeleteResults(await deleteSelectedAssets(selectedAssets.map(asset => asset.id)));
+    } catch (err) {
+      setSelectedDeleteError(err instanceof Error ? err.message : 'Selected asset deletion failed.');
+    } finally {
+      setShowSelectedDeleteModal(false);
+      setSelectedAssetIds(new Set());
+      await Promise.all([fetchAssets(), fetchAssetCount()]);
+      setIsDeletingSelected(false);
     }
   };
 
@@ -927,9 +964,20 @@ const AssetManagement: React.FC = () => {
         </div>
       )}
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
+      {selectedDeleteError && <div className="alert alert-danger" role="alert">{selectedDeleteError}</div>}
+      {selectedDeleteResults && (
+        <div className={`alert ${selectedDeleteResults.some(result => !result.deleted) ? 'alert-warning' : 'alert-success'}`} role="alert">
+          Deleted {selectedDeleteResults.filter(result => result.deleted).length} of {selectedDeleteResults.length} selected assets.
+          {selectedDeleteResults.some(result => !result.deleted) && (
+            <ul className="mb-0">{selectedDeleteResults.filter(result => !result.deleted).map(result => (
+              <li key={result.assetId}>SecMan #{result.assetId}: {result.message}</li>
+            ))}</ul>
+          )}
+        </div>
+      )}
 
       {/* Filters */}
-      <section className="asset-management__filters flex-shrink-0" aria-label="Asset filters">
+      <fieldset className="asset-management__filters flex-shrink-0" aria-label="Asset filters" disabled={isDeletingSelected}>
         <div className="asset-management__filter-row">
           <div>
             <label htmlFor="nameFilter" className="form-label">Name</label>
@@ -1023,7 +1071,7 @@ const AssetManagement: React.FC = () => {
             {accountIdFilter && <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => { setAccountIdFilter(''); setPage(0); }} aria-label={`Remove Account ID filter: ${accountIdFilter}`}>Account ID: {accountIdFilter} ×</button>}
           </div>
         )}
-      </section>
+      </fieldset>
 
       <section className="asset-management__results d-flex flex-column flex-grow-1" aria-label="Asset results">
               <div className="asset-management__results-toolbar d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
@@ -1035,9 +1083,16 @@ const AssetManagement: React.FC = () => {
                       : `${matchingCount.toLocaleString()} matching of ${accessibleCount.toLocaleString()} accessible assets`}
                 </h5>
                 <div className="d-flex flex-wrap align-items-center gap-3">
+                {canDeleteSelected && (
+                  <button type="button" className="btn btn-danger btn-sm"
+                    disabled={selectedAssets.length === 0 || loading || isDeletingSelected || isDeletingBulk}
+                    onClick={() => setShowSelectedDeleteModal(true)}>
+                    Delete selected assets ({selectedAssets.length})
+                  </button>
+                )}
                 <label className="d-flex align-items-center gap-2">
                   Rows
-                  <select className="form-select form-select-sm" value={pageSize} onChange={(event) => {
+                  <select className="form-select form-select-sm" value={pageSize} disabled={isDeletingSelected} onChange={(event) => {
                     const nextSize = Number(event.target.value);
                     setPageSize(nextSize);
                     setPage(0);
@@ -1068,6 +1123,15 @@ const AssetManagement: React.FC = () => {
                   <table className={`table table-striped table-hover ${compactRows ? 'table-sm' : ''}`} style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
                     <thead className="table-light">
                       <tr>
+                        {canDeleteSelected && (
+                          <th style={stickyHeaderCellStyle}>
+                            <input type="checkbox" className="form-check-input" aria-label="Select all assets on this page"
+                              checked={assets.length > 0 && selectedAssets.length === assets.length}
+                              disabled={loading || isDeletingSelected || isDeletingBulk}
+                              onChange={event => setSelectedAssetIds(new Set(event.target.checked
+                                ? assets.flatMap(asset => asset.id === undefined ? [] : [asset.id]) : []))} />
+                          </th>
+                        )}
                         <th style={stickyHeaderCellStyle}>Name</th>
                         <th style={stickyHeaderCellStyle} title="Reported addresses include local, external and historical addresses.">Reported IP Addresses</th>
                         <th style={stickyHeaderCellStyle}>URI</th>
@@ -1081,6 +1145,21 @@ const AssetManagement: React.FC = () => {
                     <tbody>
                       {assets.map((asset) => (
                         <tr key={asset.id}>
+                          {canDeleteSelected && (
+                            <td>
+                              <input type="checkbox" className="form-check-input" aria-label={`Select ${asset.name} (SecMan #${asset.id})`}
+                                checked={asset.id !== undefined && selectedAssetIds.has(asset.id)}
+                                disabled={asset.id === undefined || loading || isDeletingSelected || isDeletingBulk}
+                                onChange={event => {
+                                  const checked = event.target.checked;
+                                  setSelectedAssetIds(previous => {
+                                    const next = new Set(previous);
+                                    if (checked) next.add(asset.id!); else next.delete(asset.id!);
+                                    return next;
+                                  });
+                                }} />
+                            </td>
+                          )}
                           <td>
                             {asset.name}
                             <small className="d-block text-muted">SecMan #{asset.id}</small>
@@ -1153,6 +1232,7 @@ const AssetManagement: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => handleDelete(asset.id!)}
+                                  disabled={isDeletingSelected}
                                   className="btn btn-sm btn-outline-danger"
                                   title="Delete asset with all related data (cascade deletion)"
                                 >
@@ -1172,8 +1252,8 @@ const AssetManagement: React.FC = () => {
                   {matchingCount === 0 ? 'Showing 0 assets' : `Showing ${page * pageSize + 1}–${Math.min((page + 1) * pageSize, matchingCount)} of ${matchingCount.toLocaleString()}`}
                 </span>
                 <nav className="btn-group" aria-label="Asset pages">
-                  <button className="btn btn-sm btn-outline-secondary" disabled={page === 0 || loading} onClick={() => setPage(value => value - 1)}>Previous</button>
-                  <button className="btn btn-sm btn-outline-secondary" disabled={page + 1 >= totalPages || loading} onClick={() => setPage(value => value + 1)}>Next</button>
+                  <button className="btn btn-sm btn-outline-secondary" disabled={page === 0 || loading || isDeletingSelected} onClick={() => setPage(value => value - 1)}>Previous</button>
+                  <button className="btn btn-sm btn-outline-secondary" disabled={page + 1 >= totalPages || loading || isDeletingSelected} onClick={() => setPage(value => value + 1)}>Next</button>
                 </nav>
               </div>
       </section>
@@ -1194,6 +1274,11 @@ const AssetManagement: React.FC = () => {
           assetName={selectedAssetForVulns.name}
           onClose={handleCloseVulnerabilities}
         />
+      )}
+
+      {canDeleteSelected && showSelectedDeleteModal && (
+        <SelectedAssetDeleteModal assets={selectedAssets} isDeleting={isDeletingSelected}
+          onClose={() => setShowSelectedDeleteModal(false)} onConfirm={handleDeleteSelected} />
       )}
 
       {/* Bulk Delete Success Message (Feature 029) */}

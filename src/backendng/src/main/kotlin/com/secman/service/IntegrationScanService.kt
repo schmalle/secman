@@ -57,6 +57,8 @@ open class IntegrationRunWriter(
         val asset = repository.lock(Asset::class.java, subject.assetId) ?: access.notFound()
         if (request.inventory != null && scanner.source != "WEB_SECURITY")
             invalid("Component inventory is only accepted from WEB_SECURITY scanners")
+        if (scanner.source == "SOURCE_CODE" && request.completeCoverage)
+            invalid("Source reviews cannot resolve findings by absence")
         val run = IntegrationRun(scannerId = request.scannerId, subjectId = request.subjectId, runKey = request.runKey,
             contentDigest = validated.digest, status = request.status, completeCoverage = request.completeCoverage,
             startedAt = request.startedAt, completedAt = request.completedAt, metadataJson = request.metadataJson,

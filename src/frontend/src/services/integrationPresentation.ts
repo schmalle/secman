@@ -1,5 +1,6 @@
 export interface FindingFilters {
   source?: string;
+  includeHistorical?: boolean;
   scannerId?: number;
   subjectId?: number;
   githubRepositoryId?: number;

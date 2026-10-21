@@ -16,8 +16,22 @@ import java.time.Instant
 @Transactional
 open class IntegrationReadService(private val repository: IntegrationRepository, private val access: IntegrationAccessService,
                                   private val mapper: com.fasterxml.jackson.databind.ObjectMapper) {
+    open fun bindingTarget(request: IntegrationSubjectRequest, auth: Authentication): Map<String, Any?> {
+        access.requireAdmin(auth)
+        if ((request.assetId == null) == (request.githubRepositoryId == null)) invalid("Exactly one inventory ID is required")
+        request.githubRepositoryId?.let {
+            val repo = repository.find(GithubRepository::class.java, it) ?: access.notFound()
+            return mapOf("id" to repo.id, "name" to repo.fullName, "uri" to repo.htmlUrl,
+                "instance" to repo.githubInstance, "repositoryId" to repo.githubRepoId, "owner" to repo.ownerEmail)
+        }
+        access.requireAsset(request.assetId!!, auth)
+        val asset = repository.find(Asset::class.java, request.assetId) ?: access.notFound()
+        return mapOf("id" to asset.id, "name" to asset.name, "uri" to asset.uri,
+            "cloudAccountId" to asset.cloudAccountId, "owner" to asset.owner)
+    }
+
     open fun scanners(auth: Authentication): List<IntegrationScannerDto> {
-        val ids = access.currentAssetIds(auth)
+        val ids = access.assetIds(auth)
         val admin = "ADMIN" in auth.roles
         if (!admin && ids.isEmpty()) return emptyList()
         return repository.page(IntegrationScanner::class.java, IntegrationPageQuery.SCANNERS,
@@ -35,13 +49,13 @@ open class IntegrationReadService(private val repository: IntegrationRepository,
 
     open fun subject(id: Long, auth: Authentication): IntegrationSubjectDto {
         val subject = repository.find(IntegrationSubject::class.java, id) ?: access.notFound()
-        access.requireCurrentAsset(subject.assetId, auth)
+        access.requireAsset(subject.assetId, auth)
         return subjectDtos(listOf(subject)).single()
     }
 
     open fun runs(page: Int, size: Int, scannerId: Long?, subjectId: Long?, auth: Authentication): IntegrationPage<IntegrationRunDto> {
         pagination(page, size)
-        val ids = access.currentAssetIds(auth)
+        val ids = access.assetIds(auth)
         if (ids.isEmpty()) return emptyPage(page, size)
         val result = repository.page(IntegrationRun::class.java, IntegrationPageQuery.RUNS,
             mapOf("assets" to ids, "scanner" to scannerId, "subject" to subjectId), page, size)
@@ -61,7 +75,7 @@ open class IntegrationReadService(private val repository: IntegrationRepository,
             filter.severity != null && filter.severity !in IntegrationRunValidator.SEVERITIES ||
             filter.state != null && filter.state !in setOf("OPEN", "RESOLVED") ||
             (filter.search?.length ?: 0) > 200 || (filter.owner?.length ?: 0) > 255) invalid("Invalid finding filter")
-        val ids = access.currentAssetIds(auth)
+        val ids = if (filter.includeHistorical) access.assetIds(auth) else access.currentAssetIds(auth)
         if (ids.isEmpty()) return emptyPage(page, size)
         val params = mapOf("assets" to ids, "scanner" to filter.scannerId, "subject" to filter.subjectId,
             "repo" to filter.githubRepositoryId, "source" to filter.source, "owner" to filter.owner,
@@ -159,7 +173,7 @@ open class IntegrationReadService(private val repository: IntegrationRepository,
     open fun run(id: Long, auth: Authentication): IntegrationRunDetailDto {
         val r = repository.find(IntegrationRun::class.java, id) ?: access.notFound()
         val s = repository.find(IntegrationSubject::class.java, r.subjectId) ?: access.notFound()
-        access.requireCurrentAsset(s.assetId, auth)
+        access.requireAsset(s.assetId, auth)
         val a = repository.find(Asset::class.java, s.assetId) ?: access.notFound()
         val c = repository.find(IntegrationScanner::class.java, r.scannerId) ?: access.notFound()
         val dto = IntegrationRunDto(r.id!!, r.scannerId, r.subjectId, c.name, a.name, r.status, r.completeCoverage,
@@ -189,7 +203,7 @@ open class IntegrationReadService(private val repository: IntegrationRepository,
     private fun authorizedFinding(id: Long, auth: Authentication): IntegrationFinding {
         val finding = repository.find(IntegrationFinding::class.java, id) ?: access.notFound()
         val subject = repository.find(IntegrationSubject::class.java, finding.subjectId) ?: access.notFound()
-        access.requireCurrentAsset(subject.assetId, auth)
+        access.requireAsset(subject.assetId, auth)
         return finding
     }
 

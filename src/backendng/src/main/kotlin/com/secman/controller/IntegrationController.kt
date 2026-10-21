@@ -33,6 +33,12 @@ open class IntegrationController(
     open fun updateScanner(@PathVariable id: Long, @Body request: IntegrationScannerRequest, authentication: Authentication) =
         admin.saveScanner(id, request, authentication)
 
+    @Get("/binding-target")
+    @Secured("ADMIN")
+    open fun bindingTarget(@Nullable @QueryValue assetId: Long?, @Nullable @QueryValue githubRepositoryId: Long?,
+                           authentication: Authentication) =
+        reads.bindingTarget(IntegrationSubjectRequest(assetId, githubRepositoryId), authentication)
+
     @Post("/scanners/{id}/subjects")
     @Secured("ADMIN")
     open fun bind(@PathVariable id: Long, @Body request: IntegrationSubjectRequest, authentication: Authentication) =
@@ -88,8 +94,9 @@ open class IntegrationController(
                       @Nullable @QueryValue scannerId: Long?, @Nullable @QueryValue subjectId: Long?,
                       @Nullable @QueryValue githubRepositoryId: Long?, @Nullable @QueryValue source: String?,
                       @Nullable @QueryValue owner: String?, @Nullable @QueryValue severity: String?,
-                      @Nullable @QueryValue state: String?, @Nullable @QueryValue search: String?, authentication: Authentication) =
-        reads.findings(page, size, IntegrationFindingFilter(scannerId, subjectId, githubRepositoryId, source, owner, severity, state, search), authentication)
+                      @Nullable @QueryValue state: String?, @Nullable @QueryValue search: String?,
+                      @QueryValue(defaultValue = "false") includeHistorical: Boolean, authentication: Authentication) =
+        reads.findings(page, size, IntegrationFindingFilter(scannerId, subjectId, githubRepositoryId, source, owner, severity, state, search, includeHistorical), authentication)
 
     @Get("/findings/{id}")
     open fun finding(@PathVariable id: Long, authentication: Authentication) = reads.finding(id, authentication)
