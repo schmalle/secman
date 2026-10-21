@@ -815,6 +815,48 @@ open class AssetController(
         id: Long,
         @QueryValue(defaultValue = "false") forceTimeout: Boolean,
         authentication: Authentication
+    ): HttpResponse<*> = deleteAsset(id, forceTimeout, authentication)
+
+    @Serdeable
+    data class DeleteSelectedAssetsRequest(val assetIds: List<Long>)
+
+    @Serdeable
+    data class SelectedAssetDeletionResult(val assetId: Long, val deleted: Boolean, val message: String)
+
+    @Serdeable
+    data class DeleteSelectedAssetsResponse(val results: List<SelectedAssetDeletionResult>)
+
+    /** Each asset uses the same reference checks, transaction and audit trail as single deletion. */
+    @Post("/delete-selected")
+    @Secured("ADMIN")
+    open fun deleteSelected(
+        @Body request: DeleteSelectedAssetsRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        if (!authentication.roles.contains("ADMIN")) return HttpResponse.status<Any>(HttpStatus.FORBIDDEN)
+        if (request.assetIds.isEmpty() || request.assetIds.size > 250 || request.assetIds.any { it <= 0 }) {
+            return HttpResponse.badRequest(ErrorResponse("Select between 1 and 250 positive asset IDs."))
+        }
+        // No outer transaction: a blocked asset must not roll back successful deletions.
+        val results = request.assetIds.distinct().map { id ->
+            val response = deleteAsset(id, false, authentication)
+            val deleted = response.status == HttpStatus.OK
+            val message = when (val body = response.body()) {
+                is ErrorResponse -> body.error
+                is DeletionErrorDto -> "${body.cause}. ${body.suggestedAction}"
+                else -> if (deleted) "Asset deleted." else "Asset could not be deleted."
+            }
+            log.info("Selected asset deletion: actor={} assetId={} outcome={}",
+                authentication.name.replace(Regex("[\\r\\n]"), ""), id, if (deleted) "deleted" else "retained")
+            SelectedAssetDeletionResult(id, deleted, message)
+        }
+        return HttpResponse.ok(DeleteSelectedAssetsResponse(results))
+    }
+
+    private fun deleteAsset(
+        id: Long,
+        forceTimeout: Boolean,
+        authentication: Authentication
     ): HttpResponse<*> {
         return try {
             log.info("Cascade delete request for asset {} by user {} (forceTimeout={})",

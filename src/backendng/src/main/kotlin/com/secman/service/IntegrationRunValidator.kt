@@ -30,7 +30,7 @@ class IntegrationRunValidator(private val mapper: ObjectMapper) {
     companion object {
         val STATUSES = setOf("SUCCESS", "PARTIAL", "FAILED", "SKIPPED")
         val SEVERITIES = setOf("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
-        val SOURCES = setOf("GITHUB_AI", "VISUAL", "WEB_SECURITY")
+        val SOURCES = setOf("GITHUB_AI", "SOURCE_CODE", "VISUAL", "WEB_SECURITY")
         val COMPONENT_CATEGORIES = setOf("JAVASCRIPT_LIBRARY", "CSS_LIBRARY", "WEB_SERVER")
         val REACHABILITY = setOf("REACHABLE", "UNREACHABLE", "UNKNOWN")
         val EVIDENCE_TYPES = setOf("RESOURCE_URL", "HTTP_HEADER")

@@ -19,6 +19,23 @@ export interface BulkDeleteResult {
   message: string;
 }
 
+export interface SelectedAssetDeletionResult {
+  assetId: number;
+  deleted: boolean;
+  message: string;
+}
+
+export async function deleteSelectedAssets(assetIds: number[]): Promise<SelectedAssetDeletionResult[]> {
+  const response = await authenticatedPost('/api/assets/delete-selected', { assetIds });
+  if (!response.ok) {
+    throw new Error(response.status === 403
+      ? 'Insufficient permissions. ADMIN role required.'
+      : 'Could not complete selected asset deletion. Refresh the list before retrying.');
+  }
+  const data: { results: SelectedAssetDeletionResult[] } = await response.json();
+  return data.results;
+}
+
 /**
  * Response from import operation
  */

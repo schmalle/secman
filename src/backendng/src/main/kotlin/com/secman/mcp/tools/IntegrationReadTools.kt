@@ -92,6 +92,7 @@ class ListIntegrationFindingsTool(
             "severity" to mapOf("type" to "string", "enum" to listOf("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")),
             "state" to mapOf("type" to "string", "enum" to listOf("OPEN", "RESOLVED")),
             "search" to mapOf("type" to "string", "maxLength" to 200),
+            "includeHistorical" to mapOf("type" to "boolean", "default" to false),
         ),
     )
 
@@ -109,6 +110,7 @@ class ListIntegrationFindingsTool(
             severity = arguments["severity"] as? String,
             state = arguments["state"] as? String,
             search = arguments["search"] as? String,
+            includeHistorical = arguments["includeHistorical"] as? Boolean ?: false,
         )
         return integrationRead(users, context) { reads.findings(page, size, filter, it) }
     }
@@ -253,6 +255,7 @@ class ListWebComponentsTool(
             ),
             "state" to mapOf("type" to "string", "enum" to listOf("OPEN", "RESOLVED")),
             "search" to mapOf("type" to "string", "maxLength" to 200),
+            "includeHistorical" to mapOf("type" to "boolean", "default" to false),
         ),
     )
 

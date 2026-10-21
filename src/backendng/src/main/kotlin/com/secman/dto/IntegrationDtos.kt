@@ -67,7 +67,8 @@ import java.time.Instant
 data class IntegrationFindingFilter(
     val scannerId: Long? = null, val subjectId: Long? = null, val githubRepositoryId: Long? = null,
     val source: String? = null, val owner: String? = null, val severity: String? = null,
-    val state: String? = null, val search: String? = null
+    val state: String? = null, val search: String? = null,
+    val includeHistorical: Boolean = false
 )
 @Serdeable data class WebExposureSummaryDto(
     val configuredAssets: Long, val scannedAssets: Long, val reachableAssets: Long,

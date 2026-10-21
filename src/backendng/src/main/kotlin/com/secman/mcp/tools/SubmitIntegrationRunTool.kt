@@ -50,7 +50,22 @@ internal object IntegrationToolSchema {
             "scannerId" to mapOf("type" to "integer"), "subjectId" to mapOf("type" to "integer"),
             "runKey" to mapOf("type" to "string"), "status" to mapOf("type" to "string", "enum" to listOf("SUCCESS", "PARTIAL", "FAILED", "SKIPPED")),
             "completeCoverage" to mapOf("type" to "boolean"), "startedAt" to mapOf("type" to "string", "format" to "date-time"),
-            "completedAt" to mapOf("type" to "string", "format" to "date-time"), "metadataJson" to mapOf("type" to "string"),
+            "completedAt" to mapOf("type" to "string", "format" to "date-time"), "metadataJson" to mapOf("type" to "string", "maxLength" to 16000),
+            "inventory" to mapOf("type" to "object", "properties" to mapOf(
+                "completeCoverage" to mapOf("type" to "boolean"),
+                "exposure" to mapOf("type" to listOf("object", "null"), "properties" to mapOf(
+                    "configuredUrl" to text(), "effectiveUrl" to text(),
+                    "reachability" to mapOf("type" to "string", "enum" to listOf("REACHABLE", "UNREACHABLE", "UNKNOWN")),
+                    "httpStatus" to mapOf("type" to listOf("integer", "null")),
+                    "redirectCount" to mapOf("type" to "integer"), "vantagePoint" to text()
+                )),
+                "components" to mapOf("type" to "array", "maxItems" to 500, "items" to mapOf(
+                    "type" to "object", "properties" to (
+                        listOf("componentKey", "category", "name", "version", "evidenceType", "evidence", "sourceUrl")
+                            .associateWith { text() } + mapOf("confidence" to mapOf("type" to "number"))
+                    )
+                ))
+            )),
             "findings" to mapOf("type" to "array", "maxItems" to 500, "items" to mapOf(
                 "type" to "object", "required" to listOf("externalId", "severity", "title"),
                 "properties" to (listOf("externalId", "title", "description", "recommendation", "evidence", "filePath", "lineRange", "url",
