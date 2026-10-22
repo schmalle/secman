@@ -828,7 +828,10 @@ open class AssetController(
 
     @Serdeable
     data class HostnameDeletionPreviewResponse(
-        val assets: List<HostnameDeletionCandidate>, val unmatchedHostnames: List<String>
+        @field:JsonInclude(JsonInclude.Include.ALWAYS)
+        val assets: List<HostnameDeletionCandidate>,
+        @field:JsonInclude(JsonInclude.Include.ALWAYS)
+        val unmatchedHostnames: List<String>
     )
 
     /** Include stored, non-current assets; deletion still uses the reviewed IDs through delete-selected. */
