@@ -25,6 +25,22 @@ export interface SelectedAssetDeletionResult {
   message: string;
 }
 
+export interface HostnameDeletionPreview {
+  assets: Array<{ id: number; name: string; hostname: string; cloudAccountId?: string; cloudInstanceId?: string }>;
+  unmatchedHostnames: string[];
+}
+
+export async function previewHostnameDeletion(hostnames: string): Promise<HostnameDeletionPreview> {
+  const response = await authenticatedPost('/api/assets/deletion-preview', { hostnames });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(response.status === 403 ? 'ADMIN role required.'
+      : response.status === 400 && typeof body?.error === 'string' ? body.error
+      : 'Could not preview hostname deletion. Please try again.');
+  }
+  return response.json();
+}
+
 export async function deleteSelectedAssets(assetIds: number[]): Promise<SelectedAssetDeletionResult[]> {
   const response = await authenticatedPost('/api/assets/delete-selected', { assetIds });
   if (!response.ok) {

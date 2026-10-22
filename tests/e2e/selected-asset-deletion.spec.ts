@@ -22,6 +22,13 @@ async function prepare(page: Page, role = 'ADMIN', failSecond = false) {
       const matching = items.filter(asset => asset.name.includes(name));
       body = { items: matching, matchingCount: matching.length, page: 0, pageSize: 50, totalPages: 2 };
     }
+    if (url.pathname === '/api/assets/deletion-preview') {
+      const { hostnames } = route.request().postDataJSON();
+      expect(hostnames).toBe('host-one, host-two, missing-host');
+      body = { assets: fixtures.slice(0, 2).map(asset => ({ id: asset.assetId, name: asset.name,
+        hostname: 'host-one', cloudAccountId: '012345678901', cloudInstanceId: `i-${asset.assetId}` })),
+        unmatchedHostnames: ['host-two', 'missing-host'] };
+    }
     if (url.pathname === '/api/assets/delete-selected') {
       const { assetIds } = route.request().postDataJSON();
       submissions.push(assetIds);
@@ -91,7 +98,45 @@ for (const role of ['USER', 'SECCHAMPION']) {
   test(`${role} cannot see selected asset deletion controls`, async ({ page }) => {
     await prepare(page, role);
     await expect(page.getByRole('button', { name: /Delete selected assets/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Delete by hostname', exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Select all assets on this page', { exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Select Selected asset 41 (SecMan #41)', { exact: true })).toHaveCount(0);
   });
 }
+
+
+test('hostname deletion previews duplicates, invalidates edits and reports partial results', async ({ page }, testInfo) => {
+  const submissions = await prepare(page, 'ADMIN', true);
+  await page.getByRole('button', { name: 'Delete by hostname', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Delete assets by hostname', exact: true });
+  await expect(dialog.getByRole('button', { name: /Permanently delete/ })).toBeDisabled();
+  await dialog.getByLabel('Comma-separated hostnames').fill('host-one, host-two, missing-host');
+  await dialog.getByRole('button', { name: 'Preview matching assets', exact: true }).click();
+  await expect(dialog.getByText('No matching assets:', { exact: false })).toContainText('missing-host');
+  await expect(dialog.getByRole('cell', { name: 'host-one', exact: true })).toHaveCount(2);
+  expect(submissions).toEqual([]);
+  await dialog.getByLabel('Comma-separated hostnames').fill('changed');
+  await expect(dialog.getByRole('button', { name: /Permanently delete/ })).toBeDisabled();
+  await dialog.getByLabel('Comma-separated hostnames').fill('host-one, host-two, missing-host');
+  await dialog.getByRole('button', { name: 'Preview matching assets', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Permanently delete 2 assets', exact: true })).toBeEnabled();
+  await page.screenshot({ path: testInfo.outputPath('hostname-delete-preview.png') });
+  await dialog.getByRole('button', { name: 'Permanently delete 2 assets', exact: true }).click();
+  await expect(dialog.getByRole('status')).toContainText('1 deleted; 1 retained.');
+  await expect(dialog.getByRole('status')).toContainText('SecMan #42: Retained');
+  await expect(dialog.getByRole('button', { name: /Permanently delete/ })).toBeDisabled();
+  expect(submissions).toEqual([[41, 42]]);
+  await dialog.getByRole('button', { name: 'Close', exact: true }).last().click();
+  await expect(page.getByRole('cell', { name: 'Selected asset 41 SecMan #41', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: 'Selected asset 42 SecMan #42', exact: true })).toBeVisible();
+});
+
+
+test('admin section opens the hostname deletion dialog', async ({ page }) => {
+  await prepare(page);
+  await page.goto('/admin');
+  await page.getByRole('button', { name: 'Delete by hostname', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Delete assets by hostname', exact: true });
+  await expect(dialog.getByLabel('Comma-separated hostnames')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: /Permanently delete/ })).toBeDisabled();
+});

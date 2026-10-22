@@ -1,5 +1,6 @@
 // filepath: /Users/flake/sources/misc/secman/src/frontend/src/components/AdminPage.tsx
 import React, { useState, useEffect } from 'react';
+import { HostnameAssetDeleteModal } from './HostnameAssetDeleteModal';
 
 // Define an interface for the user data expected from the backend
 interface User {
@@ -14,6 +15,7 @@ interface User {
 const AdminPage = () => {
     const [isAdmin, setIsAdmin] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [showHostnameDelete, setShowHostnameDelete] = useState(false);
 
     useEffect(() => {
         let timeoutId: NodeJS.Timeout | null = null;
@@ -67,7 +69,20 @@ const AdminPage = () => {
             <h2>Admin Section</h2>
             <p>Welcome, Administrator!</p>
             
+            {showHostnameDelete && <HostnameAssetDeleteModal onClose={() => setShowHostnameDelete(false)} />}
             <div className="row mt-4">
+                <div className="col-md-4 mb-3">
+                    <div className="card">
+                        <div className="card-body">
+                            <h5 className="card-title">Delete assets by hostname</h5>
+                            <p className="card-text">Preview a comma-separated hostname list and delete the matching assets together.</p>
+                            <button type="button" className="btn btn-outline-danger" onClick={() => setShowHostnameDelete(true)}>
+                                Delete by hostname
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div className="col-md-4 mb-3">
                     <div className="card">
                         <div className="card-body">

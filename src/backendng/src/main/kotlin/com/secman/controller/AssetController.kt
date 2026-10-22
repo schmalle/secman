@@ -818,6 +818,50 @@ open class AssetController(
     ): HttpResponse<*> = deleteAsset(id, forceTimeout, authentication)
 
     @Serdeable
+    data class HostnameDeletionPreviewRequest(val hostnames: String)
+
+    @Serdeable
+    data class HostnameDeletionCandidate(
+        val id: Long, val name: String, val hostname: String,
+        val cloudAccountId: String?, val cloudInstanceId: String?
+    )
+
+    @Serdeable
+    data class HostnameDeletionPreviewResponse(
+        val assets: List<HostnameDeletionCandidate>, val unmatchedHostnames: List<String>
+    )
+
+    /** Include stored, non-current assets; deletion still uses the reviewed IDs through delete-selected. */
+    @Post("/deletion-preview")
+    @Secured("ADMIN")
+    open fun previewHostnameDeletion(
+        @Body request: HostnameDeletionPreviewRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        if (!authentication.roles.contains("ADMIN")) return HttpResponse.status<Any>(HttpStatus.FORBIDDEN)
+        if (request.hostnames.length > 64000) {
+            return HttpResponse.badRequest(ErrorResponse("Enter at most 250 hostnames."))
+        }
+        val hostnames = request.hostnames.split(',').map { it.trim().lowercase(java.util.Locale.ROOT) }
+            .filter { it.isNotEmpty() }.distinct()
+        if (hostnames.isEmpty() || hostnames.size > 250 || hostnames.any { name ->
+                name.length > 255 || name.any { it.isWhitespace() || it.isISOControl() }
+            }) {
+            return HttpResponse.badRequest(ErrorResponse("Enter 1 to 250 comma-separated hostnames, each at most 255 characters without whitespace."))
+        }
+        val matches = assetRepository.findStoredByExactHostnames(hostnames, io.micronaut.data.model.Pageable.from(0, 250))
+        if (matches.totalSize > 250) {
+            return HttpResponse.badRequest(ErrorResponse("More than 250 assets match. Use a smaller hostname list; no assets were deleted."))
+        }
+        val candidates = matches.content.map { asset ->
+            HostnameDeletionCandidate(requireNotNull(asset.id), asset.name, asset.crowdStrikeHostname ?: asset.name,
+                asset.cloudAccountId, asset.cloudInstanceId)
+        }
+        val matched = candidates.map { it.hostname.lowercase(java.util.Locale.ROOT) }.toSet()
+        return HttpResponse.ok(HostnameDeletionPreviewResponse(candidates, hostnames.filterNot { it in matched }))
+    }
+
+    @Serdeable
     data class DeleteSelectedAssetsRequest(val assetIds: List<Long>)
 
     @Serdeable

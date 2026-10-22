@@ -6,6 +6,7 @@ import PortHistory from './PortHistory';
 import VulnerabilityHistory from './VulnerabilityHistory';
 import { BulkDeleteConfirmModal } from './BulkDeleteConfirmModal';
 import { SelectedAssetDeleteModal } from './SelectedAssetDeleteModal';
+import { HostnameAssetDeleteModal } from './HostnameAssetDeleteModal';
 import { bulkDeleteAssets, deleteSelectedAssets, type BulkDeleteResult, type SelectedAssetDeletionResult } from '../services/assetService';
 import { exportVulnerabilitiesServerSide, cancelExportJob, getDistinctAdDomains, type ExportJob } from '../services/vulnerabilityManagementService';
 import { scrollContainerStyle, stickyHeaderCellStyle } from './scrollableTableStyles';
@@ -108,6 +109,7 @@ const AssetManagement: React.FC = () => {
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const [bulkDeleteSuccess, setBulkDeleteSuccess] = useState<string | null>(null);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<number>>(new Set());
+  const [showHostnameDeleteModal, setShowHostnameDeleteModal] = useState(false);
   const [showSelectedDeleteModal, setShowSelectedDeleteModal] = useState(false);
   const [isDeletingSelected, setIsDeletingSelected] = useState(false);
   const [selectedDeleteResults, setSelectedDeleteResults] = useState<SelectedAssetDeletionResult[] | null>(null);
@@ -706,6 +708,11 @@ const AssetManagement: React.FC = () => {
                   )}
                 </>
               )}
+              {canDeleteSelected && (
+                <button type="button" className="btn btn-outline-danger" onClick={() => setShowHostnameDeleteModal(true)}>
+                  Delete by hostname
+                </button>
+              )}
               {/* Feature 029: Bulk Delete Button (ADMIN only, hidden when no assets) */}
               {canManageGrants && matchingCount > 0 && (
                 <details className="asset-management__actions">
@@ -1295,6 +1302,14 @@ const AssetManagement: React.FC = () => {
             ></button>
           </div>
         </div>
+      )}
+
+      {showHostnameDeleteModal && canDeleteSelected && (
+        <HostnameAssetDeleteModal onClose={() => {
+          setShowHostnameDeleteModal(false);
+          setSelectedAssetIds(new Set());
+          void Promise.all([fetchAssets(), fetchAssetCount()]);
+        }} />
       )}
 
       {/* Bulk Delete Confirmation Modal (Feature 029) */}
