@@ -72,6 +72,7 @@ class QueryCommandTest {
         val (exit, output) = outputOf(cmd)
         assertThat(exit).isEqualTo(1)
         assertThat(output).contains("Asset: UNCHANGED (save rejected)").doesNotContain("Asset: UPDATED")
+        assertThat(output).contains("--- Failed import hostnames (1, comma-separated) ---\nserver-1")
     }
 
     @Test
@@ -118,12 +119,15 @@ class QueryCommandTest {
 
     private fun outputOf(cmd: QueryCommand): Pair<Int, String> {
         val original = System.out
+        val originalErr = System.err
         val output = ByteArrayOutputStream()
         return try {
             System.setOut(PrintStream(output))
+            System.setErr(PrintStream(output))
             cmd.execute() to output.toString(Charsets.UTF_8)
         } finally {
             System.setOut(original)
+            System.setErr(originalErr)
         }
     }
 

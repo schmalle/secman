@@ -282,7 +282,7 @@ No persistent `secman_test` setup is needed. Existing application rows are never
 
 ## Extension Clients (`extensions/`)
 
-`secman_ai_github`, `secman_web_check`, and `secman_intra_mon` are independent Python repositories with their own remotes, **gitignored here** — root `git status` never shows them. Normal builds do not cover them. The first two share the version-1 result contract covered by `/integration-contract-test` and `scripts/check-integration-contract.sh --run`; `secman_intra_mon` uses the legacy REST surface and needs the same manual five-dimension contract check described below. `secman_source` is a separate gitignored local source-review CLI with its own remote; it calls neither SecMan nor the relay, so it has no backend or relay contract to check here.
+`secman_ai_github`, `secman_web_check`, and `secman_intra_mon` are independent Python repositories with their own remotes, **gitignored here** — root `git status` never shows them. Normal builds do not cover them. The first two share the version-1 result contract covered by `/integration-contract-test` and `scripts/check-integration-contract.sh --run`; `secman_intra_mon` uses the legacy REST surface and needs the same manual five-dimension contract check described below. `secman_source` is a separate gitignored source-review CLI with its own remote. Its optional `SOURCE_CODE` integration uses the same REST v1 discovery/submission contract and is covered by the contract gate; standalone scanning remains independent. Source snapshots cannot resolve findings by absence. Both source/web clients retain private local delivery queues; see `docs/INTEGRATION_RESULTS.md`.
 
 `secman_app_ios` (iOS/iPadOS status app, Swift) is a **relay client, not a backend client**: it never calls `/api/…` and holds no secman credential. A change to a secman endpoint cannot break it. What *can* is the relay contract — `com.secman.relay.RelayDtos`, the section names and `SECTION_POLICIES` in `RelaySnapshotBuilder`, or `src/relay/internal/api`. Both envelopes carry a `schemaVersion` for that reason; bump it on a breaking change and update `relaySupportedSnapshotSchemaVersion` in the app. Sweep its surface with `grep -rnE '/api/v1/|/ingest/v1/' extensions/secman_app_ios --include='*.swift'`.
 
@@ -327,7 +327,7 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-10-20*
+*Last updated: 2026-10-21*
 
 ## Recent Changes
 

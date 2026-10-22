@@ -1050,6 +1050,46 @@ inventory retention decision and is not proof that a stopped machine has been re
 Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.
 
 
+### Copying failed import hostnames
+
+CLI imports print a **Failed import hostnames (N, comma-separated)** section
+with a single copyable line of names. This list is not truncated when the detailed
+error display shows only the first 20 errors. Names are deduplicated ignoring
+case and sorted. The list covers backend import failures and known hostnames
+whose Falcon fetch failed; failed devices without resolvable hostname metadata
+remain represented by the existing fetch-error count. Successful imports and
+retention skips are not added to the list.
+
+The names can be pasted into the admin deletion preview below. Review the
+matches there: a failed device may share its hostname with another valid asset.
+
+### Admin deletion by hostname
+
+In **Admin** or **Assets**, administrators can choose **Delete by hostname**, enter a
+comma-separated list, and select **Preview matching assets**. Matching is exact
+and case-insensitive against the stored CrowdStrike hostname, or the asset name
+when no CrowdStrike hostname exists. Display-name overrides do not replace a
+stored CrowdStrike hostname for this lookup. Wildcards and short-name/FQDN
+expansion are not used.
+
+The preview includes older stored assets regardless of current-assets filters,
+shows every duplicate match with its SecMan ID, AWS account and instance ID, and
+lists unmatched hostnames. At most 250 distinct hostnames and 250 matching assets
+are allowed; an oversized result is rejected rather than truncated. Editing the
+input clears the preview and requires another lookup.
+
+**Permanently delete** submits only the displayed asset IDs in one operation.
+Assets added after the preview are not included. Deletion uses the existing
+per-asset cascade, protected-reference checks and audit trail; a retained asset
+does not roll back other successful deletions. Results identify each deleted or
+retained ID. Related data, including vulnerabilities and asset exceptions, is
+permanently removed for successfully deleted assets. A failed or lost response
+requires a new preview before retrying.
+
+`POST /api/assets/deletion-preview` accepts `{ "hostnames": "host-one, host-two" }`
+and is read-only and ADMIN-only. Confirmed deletion reuses ADMIN-only
+`POST /api/assets/delete-selected` with `{ "assetIds": [1, 2] }`.
+
 ### Delete conflicting assets after a rejected query import
 
 `query servers --hostnames ARCGIS --save --deleteonfail` explicitly authorizes
@@ -1131,7 +1171,12 @@ Both query commands print attempts, outcome, original conflict reason after reco
 replacement asset ID, blocking reason and the complete
 `recoveryDeletedAssetIds` list for committed cleanup. The original conflict's
 `recoveryAssetId` is diagnostic; it does not limit deletion to that one asset.
-Failed or rolled-back recovery reports no committed deleted IDs.
+Failed or rolled-back recovery reports no committed deleted IDs. The CLI also appends recovery
+status, attempt count and blocking reason to each final error line when
+`--deleteonfail` was requested. `SAME_HOST_SIBLINGS` explains when the CLI itself
+suppressed hostname cleanup to protect sibling devices. Missing backend recovery
+details are reported as `UNKNOWN`, rather than implying that cleanup ran or was
+safe to retry.
 
 Deploy the patched backend first, then the matching CLI. No manual production SQL
 cleanup is required. A successful initial save performs no deletion.

@@ -15,7 +15,7 @@ class IntegrationRunValidatorTest {
     @Test
     fun `accepts every supported integration scanner source`() {
         assertThat(IntegrationRunValidator.SOURCES)
-            .containsExactlyInAnyOrder("GITHUB_AI", "VISUAL", "WEB_SECURITY")
+            .containsExactlyInAnyOrder("GITHUB_AI", "SOURCE_CODE", "VISUAL", "WEB_SECURITY")
     }
 
     @Test

@@ -112,4 +112,65 @@ class SelectedAssetDeletionControllerTest : BaseIntegrationTest() {
         assertThat(assets.existsById(blockedId)).isTrue()
         assertThat(assets.existsById(selectedId)).isFalse()
     }
+    private fun preview(hostnames: String, auth: String? = token()): AssetController.HostnameDeletionPreviewResponse {
+        val request = HttpRequest.POST("/api/assets/deletion-preview", AssetController.HostnameDeletionPreviewRequest(hostnames))
+        auth?.let(request::bearerAuth)
+        return client.toBlocking().retrieve(request, AssetController.HostnameDeletionPreviewResponse::class.java)
+    }
+
+    @Test
+    fun `hostname preview includes old duplicates and exact Falcon or legacy names without deleting`() {
+        val hostname = "preview-${System.nanoTime()}"
+        val first = assets.save(TestDataFactory.createAsset(name = "display-$hostname").apply {
+            crowdStrikeHostname = hostname
+            cloudAccountId = "012345678901"
+            cloudInstanceId = "i-0123456789abcdef0"
+            lastSeen = LocalDateTime.now().minusDays(30)
+        })
+        val second = assets.save(TestDataFactory.createAsset(name = hostname))
+        val suffix = assets.save(TestDataFactory.createAsset(name = "$hostname.example.test"))
+        val response = preview("  ${hostname.uppercase()}, $hostname, missing-$hostname, , display-$hostname")
+        assertThat(response.assets.map { it.id }).containsExactly(first.id, second.id)
+        assertThat(response.assets.first().cloudAccountId).isEqualTo("012345678901")
+        assertThat(response.assets.first().cloudInstanceId).isEqualTo("i-0123456789abcdef0")
+        assertThat(response.unmatchedHostnames).containsExactly("missing-$hostname", "display-$hostname")
+        for (row in listOf(first, second, suffix)) {
+            assertThat(assets.existsById(requireNotNull(row.id))).isTrue()
+            assertThat(audits.countByAssetId(requireNotNull(row.id))).isZero()
+        }
+        val deleted = delete(response.assets.map { it.id })
+        assertThat(deleted.results.all { it.deleted }).isTrue()
+        assertThat(assets.existsById(requireNotNull(suffix.id))).isTrue()
+    }
+
+    @Test
+    fun `hostname preview rejects non administrators and invalid lists`() {
+        for (auth in listOf(null, token("USER"), token("SECCHAMPION"))) {
+            val failure = assertThrows<HttpClientResponseException> { preview("host", auth) }
+            assertThat(failure.status).isEqualTo(if (auth == null) HttpStatus.UNAUTHORIZED else HttpStatus.FORBIDDEN)
+        }
+        val auth = token()
+        for (input in listOf("", " , , ", "a".repeat(256), "two hosts", "host\nother",
+                (1..251).joinToString(",") { "host-$it" }, "a".repeat(64001))) {
+            assertThat(assertThrows<HttpClientResponseException> { preview(input, auth) }.status)
+                .isEqualTo(HttpStatus.BAD_REQUEST)
+        }
+    }
+
+    @Test
+    fun `hostname preview rejects oversized results instead of offering a partial deletion`() {
+        val hostname = "many-${System.nanoTime()}"
+        val rows = assets.saveAll((1..251).map { TestDataFactory.createAsset(name = hostname) }).toList()
+        assertThat(assertThrows<HttpClientResponseException> { preview(hostname) }.status)
+            .isEqualTo(HttpStatus.BAD_REQUEST)
+        assertThat(rows.all { assets.existsById(requireNotNull(it.id)) }).isTrue()
+    }
+
+    @Test
+    fun `wildcards in hostname preview are literals`() {
+        val row = asset()
+        assertThat(preview("%, _").assets).isEmpty()
+        assertThat(assets.existsById(requireNotNull(row.id))).isTrue()
+    }
+
 }

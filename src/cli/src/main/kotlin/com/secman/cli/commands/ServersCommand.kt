@@ -393,6 +393,8 @@ class ServersCommand {
                         }
                     }
 
+                    printFailedImportHostnames(allFailedHostnames + streamResult.failedHosts.mapNotNull { it.hostname })
+
                     val exitCode = when {
                         reconcileFailed -> 2
                         totalErrorCount > 0 -> 1
@@ -509,6 +511,7 @@ class ServersCommand {
             }
             if (requestedHostnames.isNotEmpty() && notFound.size >= requestedHostnames.size) {
                 System.err.println("Error: none of the requested hostnames were found in CrowdStrike")
+                if (save && !dryRun) printFailedImportHostnames(response.notFoundHostnames)
                 return 1
             }
 
@@ -595,6 +598,11 @@ class ServersCommand {
                     System.err.println("  ... and ${result.errors.size - 20} more errors")
                 }
             }
+
+            printFailedImportHostnames(result.failedHostnames +
+                result.hostOutcomes.filter { it.status == "REJECTED" }.map { it.hostname } +
+                response.devices.filter { it.crowdStrikeAid in response.failedAids }.mapNotNull { it.hostname } +
+                response.notFoundHostnames)
 
             if (result.errors.isNotEmpty()) 1 else if (response.failedAids.isNotEmpty()) 2 else 0
         } catch (e: NotFoundException) {

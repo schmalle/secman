@@ -660,6 +660,16 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     """)
     fun findCrowdStrikeReplacementCandidates(hostname: String, pageable: Pageable): Page<Asset>
 
+    @io.micronaut.data.annotation.Query(value = """
+        SELECT a FROM Asset a
+        WHERE LOWER(COALESCE(a.crowdStrikeHostname, a.name)) IN (:hostnames)
+        ORDER BY a.id
+    """, countQuery = """
+        SELECT COUNT(a) FROM Asset a
+        WHERE LOWER(COALESCE(a.crowdStrikeHostname, a.name)) IN (:hostnames)
+    """)
+    fun findStoredByExactHostnames(hostnames: List<String>, pageable: Pageable): Page<Asset>
+
     // Feature 054: Products Overview - Asset queries by product
 
     /**

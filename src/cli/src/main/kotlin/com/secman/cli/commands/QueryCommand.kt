@@ -134,7 +134,10 @@ class QueryCommand(
             // Save to database via backend HTTP API if --save flag is specified
             if (finalResponse.failedAids.isNotEmpty()) {
                 System.err.println("Incomplete lookup for ${finalResponse.failedAids.size} device(s)")
-                if (save) return 2
+                if (save) {
+                    printFailedImportHostnames(listOf(hostname))
+                    return 2
+                }
             }
 
             if (save && (finalResponse.vulnerabilities.isNotEmpty() || finalResponse.devices.isNotEmpty())) {
@@ -188,6 +191,9 @@ class QueryCommand(
                 }
                 System.out.println("  - Vulnerabilities imported: ${result.vulnerabilitiesImported}")
                 System.out.println("  - Vulnerabilities skipped: ${result.vulnerabilitiesSkipped}")
+
+                printFailedImportHostnames(result.failedHostnames +
+                    result.hostOutcomes.filter { it.status == "REJECTED" }.map { it.hostname })
 
                 if (result.errors.isNotEmpty()) {
                     System.err.println("  - Errors:")

@@ -64,6 +64,21 @@ class IntegrationPersistenceTest : BaseIntegrationTest() {
         attachments = listOf(IntegrationAttachmentInput("evidence.txt", "text/plain", "ZXZpZGVuY2U=")))
 
     @Test
+    fun `stale history remains authorized without entering current inventory`() {
+        val accepted = scans.submit(body(1, listOf(evidence())), auth)
+        asset.verifiedObservedAt = java.time.LocalDateTime.now().minusDays(10)
+        assets.update(asset)
+        val finding = reads.findings(0, 100, IntegrationFindingFilter(scannerId = scannerId, includeHistorical = true), auth).content.single()
+        assertThat(reads.findings(0, 100, IntegrationFindingFilter(scannerId = scannerId), auth).content).isEmpty()
+        assertThat(reads.run(accepted.id, auth).run.id).isEqualTo(accepted.id)
+        assertThat(reads.finding(finding.id, auth).id).isEqualTo(finding.id)
+        assertThat(reads.subject(subjectId, auth).id).isEqualTo(subjectId)
+        val outsider = Authentication.build("unassigned-user", listOf("USER"), mapOf("userId" to Long.MAX_VALUE))
+        assertThatThrownBy { reads.run(accepted.id, outsider) }.isInstanceOf(HttpStatusException::class.java)
+        assertThat(reads.findings(0, 100, IntegrationFindingFilter(includeHistorical = true), outsider).content).isEmpty()
+    }
+
+    @Test
     fun `subject discovery exposes the AWS account identity used by scanner CSV imports`() {
         assertThat(reads.subjects(scannerId, 0, 100, auth).content.single().cloudAccountId)
             .isEqualTo("111122223333")
