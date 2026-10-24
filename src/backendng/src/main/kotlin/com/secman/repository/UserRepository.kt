@@ -10,6 +10,35 @@ import java.util.*
 @Repository
 interface UserRepository : JpaRepository<User, Long> {
 
+    /**
+     * Identity fields checked on every authenticated request (CurrentIdentityRule), one row per
+     * role. A JPQL projection in a single indexed round trip, instead of hydrating the entity and
+     * then lazily selecting its role collection.
+     */
+    @Query("SELECT u.enabled, u.username, u.email, r FROM User u LEFT JOIN u.roles r WHERE u.id = :id")
+    fun findIdentityRows(id: Long): List<Array<Any?>>
+
+    /**
+     * Everything `GET /api/auth/status` reports besides roles, in one round trip. That endpoint
+     * runs on every page navigation; it used to issue five separate count/lookup queries.
+     * Columns: id, username, email, direct AWS accounts, received shares, enabled direct
+     * workgroups, domains, profile-picture timestamp (null when there is no picture).
+     */
+    @Query("""
+        SELECT u.id, u.username, u.email,
+            (SELECT COUNT(DISTINCT m.awsAccountId) FROM UserMapping m WHERE m.email = u.email AND m.awsAccountId IS NOT NULL),
+            (SELECT COUNT(s) FROM AwsAccountSharing s WHERE s.targetUser.id = u.id),
+            (SELECT COUNT(DISTINCT w.id) FROM Workgroup w JOIN w.users wu WHERE wu.email = u.email AND w.enabled = true),
+            (SELECT COUNT(DISTINCT m2.domain) FROM UserMapping m2 WHERE m2.email = u.email AND m2.domain IS NOT NULL),
+            (SELECT p.updatedAt FROM UserProfilePicture p WHERE p.userId = u.id)
+        FROM User u WHERE u.username = :username
+    """)
+    fun findAuthStatusRows(username: String): List<Array<Any?>>
+
+    /** Username/email pairs for pickers, without hydrating users or their role collections. */
+    @Query("SELECT u.username, u.email FROM User u ORDER BY LOWER(u.username)")
+    fun findUsernameEmailPairs(): List<Array<Any?>>
+
     // Memory Optimization - Feature 073
 
     /**

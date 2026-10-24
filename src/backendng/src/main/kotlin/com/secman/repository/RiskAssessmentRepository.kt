@@ -52,6 +52,17 @@ interface RiskAssessmentRepository : JpaRepository<RiskAssessment, Long> {
 
     fun countByStatus(status: String): Long
 
+    // Report aggregates: counted in the database instead of loading every assessment with its
+    // seven eager associations just to group them in memory.
+    @Query("SELECT ra.status, COUNT(ra) FROM RiskAssessment ra GROUP BY ra.status")
+    fun countGroupedByStatus(): List<Array<Any?>>
+
+    @Query("SELECT COUNT(DISTINCT ra.assessmentBasisId) FROM RiskAssessment ra")
+    fun countDistinctAssessmentBasisIds(): Long
+
+    @Query("SELECT ra FROM RiskAssessment ra ORDER BY ra.createdAt DESC")
+    fun findRecent(pageable: io.micronaut.data.model.Pageable): List<RiskAssessment>
+
     @Query(
         """
         UPDATE RiskAssessment ra SET ra.outstandingReminderSentAt = :claimedAt

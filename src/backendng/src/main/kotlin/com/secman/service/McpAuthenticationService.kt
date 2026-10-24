@@ -1,5 +1,7 @@
 package com.secman.service
 
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
 import com.secman.domain.*
 import com.secman.repository.McpApiKeyRepository
 import com.secman.repository.McpAuditLogRepository
@@ -8,6 +10,9 @@ import jakarta.inject.Singleton
 import java.time.LocalDateTime
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.time.Duration
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 import org.slf4j.LoggerFactory
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 
@@ -32,6 +37,24 @@ class McpAuthenticationService(
     private val maxFailuresPerHour = 50
     private val lockoutDurationMinutes = 30
     private val keyValidityCheckIntervalMinutes = 5
+
+    /**
+     * Secret-only authentication used to BCrypt the presented secret against every active key
+     * (~80 ms of CPU each) on every MCP call. After one successful match this remembers which key
+     * row the secret belongs to, keyed by an HMAC under a per-process random key, so neither the
+     * secret nor an offline-crackable hash is ever held. The key row is still read on every call,
+     * and the entry is honored only while that row is active, unexpired and carries the same
+     * stored hash; revocation, deletion and rotation therefore take effect immediately.
+     */
+    private data class VerifiedKey(val apiKeyRowId: Long, val keyHash: String)
+    private val verifiedSecrets: Cache<String, VerifiedKey> = Caffeine.newBuilder()
+        .maximumSize(10_000)
+        .expireAfterAccess(Duration.ofHours(1))
+        .build()
+    private val secretFingerprintKey = SecretKeySpec(ByteArray(32).also { secureRandom.nextBytes(it) }, "HmacSHA256")
+
+    /** `lastUsedAt` is informational; writing it on every call turned each read into a write. */
+    private val lastUsedWriteInterval = Duration.ofMinutes(1)
 
     /**
      * Authenticate a full API key string (convenience method).
@@ -79,12 +102,27 @@ class McpAuthenticationService(
                 )
             }
 
-            // Try to find an API key by checking hashes for all active keys
-            for (apiKey in getAllActiveKeys()) {
-                if (verifyApiKeySecret(keySecret, apiKey.keyHash, apiKey.keyId)) {
-                    migrateHashIfNeeded(apiKey, keySecret)
+            val fingerprint = fingerprint(keySecret)
+            verifiedSecrets.getIfPresent(fingerprint)?.let { verified ->
+                val apiKey = apiKeyRepository.findById(verified.apiKeyRowId).orElse(null)
+                if (apiKey != null && apiKey.isActive && apiKey.keyHash == verified.keyHash) {
                     return validateAndReturnKey(apiKey, clientIp, userAgent, requestId, startTime)
                 }
+                verifiedSecrets.invalidate(fingerprint)
+            }
+
+            // Try to find an API key by checking hashes for all active keys
+            val matched = getAllActiveKeys().firstOrNull { verifyApiKeySecret(keySecret, it.keyHash, it.keyId) }
+            if (matched != null) {
+                migrateHashIfNeeded(matched, keySecret)
+                val result = validateAndReturnKey(matched, clientIp, userAgent, requestId, startTime)
+                if (result.success) {
+                    // Re-read so a hash migrated just above is the one remembered.
+                    apiKeyRepository.findById(matched.id).ifPresent {
+                        verifiedSecrets.put(fingerprint, VerifiedKey(it.id, it.keyHash))
+                    }
+                }
+                return result
             }
 
             // No matching key found
@@ -174,8 +212,7 @@ class McpAuthenticationService(
 
             migrateHashIfNeeded(apiKey, keySecret)
 
-            // Update last used timestamp
-            apiKeyRepository.updateLastUsedAt(apiKey.id, LocalDateTime.now())
+            touchLastUsed(apiKey)
 
             // Log successful authentication
             logAuthSuccess(apiKey.id, apiKey.userId, null, clientIp, userAgent, requestId)
@@ -496,6 +533,20 @@ class McpAuthenticationService(
         }
     }
 
+    private fun fingerprint(secret: String): String {
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(secretFingerprintKey)
+        return java.util.HexFormat.of().formatHex(mac.doFinal(secret.toByteArray(Charsets.UTF_8)))
+    }
+
+    private fun touchLastUsed(apiKey: McpApiKey) {
+        val now = LocalDateTime.now()
+        val last = apiKey.lastUsedAt
+        if (last == null || last.isBefore(now.minus(lastUsedWriteInterval))) {
+            apiKeyRepository.updateLastUsedAt(apiKey.id, now)
+        }
+    }
+
     private fun getAllActiveKeys(): List<McpApiKey> {
         return try {
             // SECURITY: Use database-level filtering for efficiency and security
@@ -524,8 +575,7 @@ class McpAuthenticationService(
             )
         }
 
-        // Update last used timestamp
-        apiKeyRepository.updateLastUsedAt(apiKey.id, LocalDateTime.now())
+        touchLastUsed(apiKey)
 
         // Log successful authentication
         logAuthSuccess(apiKey.id, apiKey.userId, null, clientIp, userAgent, requestId)

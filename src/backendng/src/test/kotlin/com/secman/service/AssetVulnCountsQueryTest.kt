@@ -124,9 +124,9 @@ class AssetVulnCountsQueryTest {
         // mandatory — its absence is what left the workgroup view without exception counts.
         assertThat(sql.captured).contains("JOIN asset a ON v.asset_id = a.id")
         // SLA anchor, not scan_timestamp alone: scan_timestamp is refreshed on every re-import.
-        assertThat(sql.captured).contains("COALESCE(v.first_seen_at, v.scan_timestamp) < :thresholdDate")
+        assertThat(sql.captured).contains("v.sla_anchor_at < :thresholdDate")
         // NO_EDR exceptions must never suppress a vulnerability.
-        assertThat(sql.captured).contains("e.kind = 'VULNERABILITY'")
+        assertThat(sql.captured).contains("v.excepted = 1")
     }
 
     @Test

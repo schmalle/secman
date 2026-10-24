@@ -10,45 +10,54 @@ import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
-import java.util.Optional
 
 /** Checks fresh identity and fail-closed behavior before endpoint role rules. */
 class CurrentIdentityRuleTest {
     private val users = mockk<UserRepository>()
     private val rule = CurrentIdentityRule(users)
     private val user = User(id = 1L, username = "alice", email = "alice@example.test", passwordHash = "unused")
+    private fun rows(u: User = user): List<Array<Any?>> =
+        u.roles.ifEmpty { setOf(null) }.map { arrayOf<Any?>(u.enabled, u.username, u.email, it) }
     private fun evaluateIdentity(roles: List<String> = listOf("USER")): SecurityRuleResult? = Mono.from(rule.check(null,
         Authentication.build("alice", roles, mapOf("userId" to "1", "email" to user.email)))).block()
 
     @Test
     fun `current identity leaves resource authorization to subsequent rules`() {
-        every { users.findById(1L) } returns Optional.of(user)
+        every { users.findIdentityRows(1L) } answers { rows() }
         assertEquals(SecurityRuleResult.UNKNOWN, evaluateIdentity())
     }
 
     @Test
+    fun `multiple roles are compared as a set`() {
+        user.roles = mutableSetOf(User.Role.USER, User.Role.VULN)
+        every { users.findIdentityRows(1L) } answers { rows() }
+        assertEquals(SecurityRuleResult.UNKNOWN, evaluateIdentity(listOf("VULN", "USER")))
+        assertEquals(SecurityRuleResult.REJECTED, evaluateIdentity(listOf("USER")))
+    }
+
+    @Test
     fun `deleted identity and stale privilege are rejected`() {
-        every { users.findById(1L) } returns Optional.empty()
+        every { users.findIdentityRows(1L) } returns emptyList()
         assertEquals(SecurityRuleResult.REJECTED, evaluateIdentity())
-        every { users.findById(1L) } returns Optional.of(user)
+        every { users.findIdentityRows(1L) } answers { rows() }
         assertEquals(SecurityRuleResult.REJECTED, evaluateIdentity(listOf("ADMIN")))
     }
 
     @Test
     fun `unavailable identity store fails closed`() {
-        every { users.findById(1L) } throws IllegalStateException("unavailable")
+        every { users.findIdentityRows(1L) } throws IllegalStateException("unavailable")
         assertEquals(SecurityRuleResult.REJECTED, evaluateIdentity())
     }
     @Test
     fun `suspended user cannot reuse a valid signed identity`() {
         user.enabled = false
-        every { users.findById(1L) } returns Optional.of(user)
+        every { users.findIdentityRows(1L) } answers { rows() }
         assertEquals(SecurityRuleResult.REJECTED, evaluateIdentity())
     }
 
     @Test
     fun `only guarded AI buddy routes defer role freshness to live authorization`() {
-        every { users.findById(1L) } returns Optional.of(user)
+        every { users.findIdentityRows(1L) } answers { rows() }
         val stale = Authentication.build("alice", listOf("ADMIN"), mapOf("userId" to "1", "email" to user.email))
         for (path in listOf("/api/ai-buddy/capabilities", "/api/ai-buddy/assets/2/jobs")) {
             assertEquals(SecurityRuleResult.UNKNOWN, Mono.from(rule.check(HttpRequest.GET<Any>(path), stale)).block())

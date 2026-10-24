@@ -56,11 +56,11 @@ open class AssetComplianceTrackingService(
             // matching AwsCleanServerKpiService.recalculate()'s logic.
             val overdueResult = entityManager.createQuery(
                 """
-                SELECT COUNT(v), MIN(COALESCE(v.firstSeenAt, v.scanTimestamp))
+                SELECT COUNT(v), MIN(v.slaAnchorAt)
                 FROM Vulnerability v
                 WHERE v.asset.id = :assetId
                   AND v.excepted = false
-                  AND COALESCE(v.firstSeenAt, v.scanTimestamp) < :thresholdDate
+                  AND v.slaAnchorAt < :thresholdDate
                 """.trimIndent()
             )
                 .setParameter("assetId", assetId)

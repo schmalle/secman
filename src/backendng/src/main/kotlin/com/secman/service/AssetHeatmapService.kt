@@ -22,17 +22,16 @@ open class AssetHeatmapService(
 ) {
     private val log = LoggerFactory.getLogger(AssetHeatmapService::class.java)
 
-    companion object {
-        private const val BATCH_SIZE = 1000
-    }
-
     /**
      * Recalculate the entire heatmap table.
      * Called during materialized view refresh after CrowdStrike import,
      * on startup when the table is empty, or via manual refresh endpoint.
      *
-     * Uses a single aggregate SQL query to compute severity counts per asset,
-     * then writes the results in batches.
+     * One DELETE and one INSERT ... SELECT in a single transaction: the aggregate, the heat level
+     * and the denormalized workgroup ids are all computed by MariaDB. The previous version read
+     * every aggregate row into the JVM and wrote it back through saveAll(), which cannot batch
+     * IDENTITY inserts, so it cost one INSERT round trip per asset. Readers keep seeing the
+     * previous rows until commit (READ COMMITTED), exactly as before.
      *
      * @return number of heatmap entries created
      */
@@ -41,99 +40,55 @@ open class AssetHeatmapService(
         val startTime = System.currentTimeMillis()
         log.info("Starting heatmap recalculation")
 
-        // Step 1: Clear old data
-        clearHeatmap()
-
-        // Step 2: Aggregate vulnerability counts per asset using native SQL
-        @Suppress("UNCHECKED_CAST")
-        val rows = entityManager.createNativeQuery("""
-            SELECT
-                a.id AS asset_id,
-                a.name AS asset_name,
-                a.type AS asset_type,
-                COALESCE(SUM(CASE WHEN v.cvss_severity = 'CRITICAL' THEN 1 ELSE 0 END), 0) AS critical_count,
-                COALESCE(SUM(CASE WHEN v.cvss_severity = 'HIGH' THEN 1 ELSE 0 END), 0) AS high_count,
-                COALESCE(SUM(CASE WHEN v.cvss_severity = 'MEDIUM' THEN 1 ELSE 0 END), 0) AS medium_count,
-                COALESCE(SUM(CASE WHEN v.cvss_severity = 'LOW' THEN 1 ELSE 0 END), 0) AS low_count,
-                COUNT(v.id) AS total_count,
-                a.cloud_account_id,
-                a.ad_domain,
-                a.owner,
-                a.manual_creator_id,
-                a.scan_uploader_id
-            FROM ${com.secman.repository.AssetCurrentnessSql.ASSETS} a
-            LEFT JOIN ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v ON v.asset_id = a.id
-            GROUP BY a.id, a.name, a.type, a.cloud_account_id, a.ad_domain, a.owner, a.manual_creator_id, a.scan_uploader_id
-        """).resultList as List<Array<Any?>>
-
-        log.info("Aggregated vulnerability counts for {} assets", rows.size)
-
-        // Step 3: Build heatmap entries and also denormalize workgroup IDs
-        val workgroupMap = loadWorkgroupMap()
-        val now = LocalDateTime.now()
-
-        val entries = rows.map { row ->
-            val assetId = (row[0] as Number).toLong()
-            val criticalCount = (row[3] as Number).toInt()
-            val highCount = (row[4] as Number).toInt()
-
-            AssetHeatmapEntry(
-                assetId = assetId,
-                assetName = row[1] as String,
-                assetType = row[2] as String,
-                criticalCount = criticalCount,
-                highCount = highCount,
-                mediumCount = (row[5] as Number).toInt(),
-                lowCount = (row[6] as Number).toInt(),
-                totalCount = (row[7] as Number).toInt(),
-                heatLevel = AssetHeatmapEntry.calculateHeatLevel(criticalCount, highCount),
-                cloudAccountId = row[8] as? String,
-                adDomain = row[9] as? String,
-                owner = row[10] as? String,
-                manualCreatorId = (row[11] as? Number)?.toLong(),
-                scanUploaderId = (row[12] as? Number)?.toLong(),
-                workgroupIds = workgroupMap[assetId],
-                lastCalculatedAt = now
+        entityManager.createNativeQuery("DELETE FROM asset_heatmap_entry").executeUpdate()
+        val created = entityManager.createNativeQuery("""
+            INSERT INTO asset_heatmap_entry (
+                asset_id, asset_name, asset_type, critical_count, high_count, medium_count, low_count,
+                total_count, heat_level, cloud_account_id, ad_domain, owner, workgroup_ids,
+                manual_creator_id, scan_uploader_id, last_calculated_at
             )
-        }
-
-        // Step 4: Save in batches
-        entries.chunked(BATCH_SIZE).forEachIndexed { batchIndex, batch ->
-            saveHeatmapBatch(batch)
-            log.debug("Saved heatmap batch {}: {} entries", batchIndex + 1, batch.size)
-        }
+            SELECT
+                c.asset_id, c.asset_name, c.asset_type, c.critical_count, c.high_count, c.medium_count,
+                c.low_count, c.total_count,
+                CASE
+                    WHEN c.critical_count > 0 THEN '${AssetHeatmapEntry.HEAT_RED}'
+                    WHEN c.high_count > 100 THEN '${AssetHeatmapEntry.HEAT_RED}'
+                    WHEN c.high_count > 0 THEN '${AssetHeatmapEntry.HEAT_YELLOW}'
+                    ELSE '${AssetHeatmapEntry.HEAT_GREEN}'
+                END,
+                c.cloud_account_id, c.ad_domain, c.owner, wg.wg_ids,
+                c.manual_creator_id, c.scan_uploader_id, :now
+            FROM (
+                SELECT
+                    a.id AS asset_id,
+                    a.name AS asset_name,
+                    a.type AS asset_type,
+                    COALESCE(SUM(CASE WHEN v.cvss_severity = 'CRITICAL' THEN 1 ELSE 0 END), 0) AS critical_count,
+                    COALESCE(SUM(CASE WHEN v.cvss_severity = 'HIGH' THEN 1 ELSE 0 END), 0) AS high_count,
+                    COALESCE(SUM(CASE WHEN v.cvss_severity = 'MEDIUM' THEN 1 ELSE 0 END), 0) AS medium_count,
+                    COALESCE(SUM(CASE WHEN v.cvss_severity = 'LOW' THEN 1 ELSE 0 END), 0) AS low_count,
+                    COUNT(v.id) AS total_count,
+                    a.cloud_account_id,
+                    a.ad_domain,
+                    a.owner,
+                    a.manual_creator_id,
+                    a.scan_uploader_id
+                FROM ${com.secman.repository.AssetCurrentnessSql.ASSETS} a
+                LEFT JOIN ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v ON v.asset_id = a.id
+                GROUP BY a.id, a.name, a.type, a.cloud_account_id, a.ad_domain, a.owner, a.manual_creator_id, a.scan_uploader_id
+            ) c
+            LEFT JOIN (
+                SELECT aw.asset_id, GROUP_CONCAT(aw.workgroup_id ORDER BY aw.workgroup_id) AS wg_ids
+                FROM asset_workgroups aw
+                JOIN workgroup w ON w.id = aw.workgroup_id
+                WHERE w.enabled = TRUE
+                GROUP BY aw.asset_id
+            ) wg ON wg.asset_id = c.asset_id
+        """).setParameter("now", LocalDateTime.now()).executeUpdate()
 
         val durationMs = System.currentTimeMillis() - startTime
-        log.info("Heatmap recalculation completed: {} entries in {}ms", entries.size, durationMs)
-        return entries.size
-    }
-
-    @Transactional
-    open fun clearHeatmap() {
-        assetHeatmapRepository.deleteAll()
-    }
-
-    @Transactional
-    open fun saveHeatmapBatch(entries: List<AssetHeatmapEntry>) {
-        assetHeatmapRepository.saveAll(entries)
-    }
-
-    /**
-     * Load workgroup IDs per asset as a denormalized comma-separated string.
-     */
-    private fun loadWorkgroupMap(): Map<Long, String?> {
-        @Suppress("UNCHECKED_CAST")
-        val rows = entityManager.createNativeQuery("""
-            SELECT aw.asset_id, GROUP_CONCAT(aw.workgroup_id ORDER BY aw.workgroup_id) AS wg_ids
-            FROM asset_workgroups aw
-            JOIN workgroup w ON w.id = aw.workgroup_id
-            WHERE w.enabled = TRUE
-            GROUP BY aw.asset_id
-        """).resultList as List<Array<Any?>>
-
-        return rows.associate { row ->
-            (row[0] as Number).toLong() to (row[1] as? String)
-        }
+        log.info("Heatmap recalculation completed: {} entries in {}ms", created, durationMs)
+        return created
     }
 
     fun getLastCalculatedAt(): LocalDateTime? {

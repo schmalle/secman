@@ -27,7 +27,8 @@ import java.time.LocalDateTime
         Index(name = "idx_asset_manual_creator", columnList = "manual_creator_id"), // Access control by creator
         Index(name = "idx_asset_scan_uploader", columnList = "scan_uploader_id"),   // Access control by uploader
         Index(name = "idx_asset_network_zone", columnList = "network_zone"),        // Network zone filtering (port-scan addon)
-        Index(name = "idx_asset_crowdstrike_agent_seen_at", columnList = "crowdstrike_agent_seen_at") // EDR-coverage KPI
+        Index(name = "idx_asset_crowdstrike_agent_seen_at", columnList = "crowdstrike_agent_seen_at"), // EDR-coverage KPI
+        Index(name = "idx_asset_observed_at", columnList = "observed_at,id")             // 72-hour current inventory (V295)
     ]
 )
 @Serdeable
@@ -295,6 +296,16 @@ data class Asset(
     @OneToMany(mappedBy = "asset", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     var tags: MutableList<AssetTag> = mutableListOf()
 ) {
+    /**
+     * Observation evidence that decides current inventory (docs/CURRENT_ASSETS.md): Falcon sensor
+     * contact for Falcon-managed assets, verified observation for everything else. MariaDB
+     * computes it from the source columns (V295), so it can never drift from them; the expression is
+     * repeated here only so Hibernate-created test schemas carry the same column. Read-only.
+     */
+    @JsonIgnore
+    @Column(name = "observed_at", insertable = false, updatable = false, columnDefinition = com.secman.repository.AssetCurrentnessSql.OBSERVED_AT_DDL)
+    var observedAt: LocalDateTime? = null
+
     /** Set a user-owned display name without changing CrowdStrike's source identity. */
     fun overrideName(newName: String, actor: String, changedAt: LocalDateTime = LocalDateTime.now()) {
         name = newName

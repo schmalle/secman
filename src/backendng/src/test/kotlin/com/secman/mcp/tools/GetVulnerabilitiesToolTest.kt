@@ -7,7 +7,6 @@ import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
 import com.secman.service.VulnerabilityExceptionService
 import io.micronaut.data.model.Page
-import io.micronaut.data.model.Pageable
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -17,14 +16,14 @@ import org.junit.jupiter.api.Test
 import java.time.LocalDateTime
 
 /**
- * Regression tests for the unbounded reads described on VulnerabilityRepository.findByAssetIdIn.
+ * The tool must page, scope and apply the exception/installer visibility flags in SQL.
  *
- * The no-filter branch of this tool was fixed earlier; the CVE, date-range and severity branches
- * still read every matching row with Pageable.UNPAGED and sliced the result in Kotlin. UNPAGED
- * emits no LIMIT clause, so those branches scanned the multi-million-row vulnerability table into
- * heap — and unlike the no-filter branch they did so for admins as well as delegated users.
+ * History: its filter branches once read every matching row with Pageable.UNPAGED (no LIMIT) and
+ * sliced in Kotlin, and later still dropped excepted/installer rows from an already fetched page,
+ * so pages came back short and `total` counted only the filtered page. Everything now goes through
+ * one paged repository call; these tests pin which filter it receives.
  *
- * This is the tool the extensions/ clients call, so it is the highest-exposure of the three.
+ * This is the tool the extensions/ clients call, so it is the highest-exposure MCP read.
  */
 class GetVulnerabilitiesToolTest {
 
@@ -51,181 +50,134 @@ class GetVulnerabilitiesToolTest {
         every { it.canAccessAsset(any()) } returns true
     }
 
-    private fun onePage(size: Int = 50) = Page.of(listOf(vuln), Pageable.from(0, size), 1L)
-
-    /** Trap: stub every UNPAGED read so buggy code still "works" and the verify is what fails. */
-    private fun stubUnpagedReads() {
+    private fun stubQuery(total: Long = 1L) {
         every {
-            vulnerabilityRepository.findByVulnerabilityIdContainingIgnoreCase(any(), Pageable.UNPAGED)
-        } returns Page.of(listOf(vuln), Pageable.UNPAGED, 1L)
-        every {
-            vulnerabilityRepository.findByScanTimestampBetween(any(), any(), Pageable.UNPAGED)
-        } returns Page.of(listOf(vuln), Pageable.UNPAGED, 1L)
-        every {
-            vulnerabilityRepository.findByCvssSeverity(any(), Pageable.UNPAGED)
-        } returns Page.of(listOf(vuln), Pageable.UNPAGED, 1L)
-        every {
-            vulnerabilityRepository.findByCvssSeverityIn(any(), Pageable.UNPAGED)
-        } returns Page.of(listOf(vuln), Pageable.UNPAGED, 1L)
+            vulnerabilityRepository.findForMcpTool(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+            )
+        } answers { Page.of(listOf(vuln), arg(10), total) }
         every { assetRepository.findByIdIn(any()) } returns listOf(accessibleAsset)
-        every { exceptionService.getActiveExceptions() } returns emptyList()
     }
-
-    private fun assertNoUnpagedRead() {
-        verify(exactly = 0) { vulnerabilityRepository.findByVulnerabilityIdContainingIgnoreCase(any(), Pageable.UNPAGED) }
-        verify(exactly = 0) { vulnerabilityRepository.findByScanTimestampBetween(any(), any(), Pageable.UNPAGED) }
-        verify(exactly = 0) { vulnerabilityRepository.findByCvssSeverity(any(), Pageable.UNPAGED) }
-        verify(exactly = 0) { vulnerabilityRepository.findByCvssSeverityIn(any(), Pageable.UNPAGED) }
-    }
-
-    // ------------------------------------------------------------------ CVE filter
 
     @Test
-    fun `cve search is paged in SQL for a restricted caller`() = runBlocking {
-        stubUnpagedReads()
-        every {
-            vulnerabilityRepository.findByAssetIdInAndVulnerabilityIdContainingIgnoreCase(setOf(1L), "CVE-2026", any())
-        } returns onePage()
+    fun `cve search is scoped and paged in SQL for a restricted caller`() = runBlocking {
+        stubQuery()
 
         val result = tool.execute(mapOf("cveId" to "CVE-2026", "pageSize" to 50), ctx(setOf(1L)))
 
         assertThat(result.isError).isFalse()
-        assertNoUnpagedRead()
         verify {
-            vulnerabilityRepository.findByAssetIdInAndVulnerabilityIdContainingIgnoreCase(
-                setOf(1L), "CVE-2026", match { it.size == 50 }
+            vulnerabilityRepository.findForMcpTool(
+                true, setOf(1L), "CVE-2026", null, null, null, false, any(), false, false,
+                match { it.size == 50 }
             )
         }
     }
 
     @Test
-    fun `cve search is paged in SQL for an admin caller`() = runBlocking {
-        stubUnpagedReads()
-        every {
-            vulnerabilityRepository.findByVulnerabilityIdContainingIgnoreCase("CVE-2026", match<Pageable> { it != Pageable.UNPAGED })
-        } returns onePage()
+    fun `admin caller is unscoped`() = runBlocking {
+        stubQuery()
 
-        val result = tool.execute(mapOf("cveId" to "CVE-2026", "pageSize" to 50), ctx(null))
+        tool.execute(mapOf("cveId" to "CVE-2026", "pageSize" to 50), ctx(null))
 
-        assertThat(result.isError).isFalse()
-        assertNoUnpagedRead()
+        verify {
+            vulnerabilityRepository.findForMcpTool(false, any(), "CVE-2026", null, null, null, false, any(), false, false, any())
+        }
     }
 
-    // ------------------------------------------------------------------ date range
-
     @Test
-    fun `date range is paged in SQL for a restricted caller`() = runBlocking {
-        stubUnpagedReads()
-        every {
-            vulnerabilityRepository.findByAssetIdInAndScanTimestampBetween(setOf(1L), any(), any(), any())
-        } returns onePage()
+    fun `cve takes priority over every other filter`() = runBlocking {
+        stubQuery()
 
-        val result = tool.execute(
+        tool.execute(
             mapOf(
-                "startDate" to "2026-01-01T00:00:00",
-                "endDate" to "2026-02-01T00:00:00",
-                "pageSize" to 50
+                "cveId" to "CVE-2026", "assetId" to 1, "severity" to listOf("HIGH"),
+                "startDate" to "2026-01-01T00:00:00", "endDate" to "2026-02-01T00:00:00", "pageSize" to 50
             ),
             ctx(setOf(1L))
         )
 
-        assertThat(result.isError).isFalse()
-        assertNoUnpagedRead()
         verify {
-            vulnerabilityRepository.findByAssetIdInAndScanTimestampBetween(
-                setOf(1L), any(), any(), match { it.size == 50 }
+            vulnerabilityRepository.findForMcpTool(true, setOf(1L), "CVE-2026", null, null, null, false, any(), false, false, any())
+        }
+    }
+
+    @Test
+    fun `date range is applied in SQL`() = runBlocking {
+        stubQuery()
+
+        tool.execute(
+            mapOf("startDate" to "2026-01-01T00:00:00", "endDate" to "2026-02-01T00:00:00", "pageSize" to 50),
+            ctx(setOf(1L))
+        )
+
+        verify {
+            vulnerabilityRepository.findForMcpTool(
+                true, setOf(1L), null, null,
+                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2026, 2, 1, 0, 0),
+                false, any(), false, false, any()
             )
         }
     }
 
     @Test
-    fun `date range is paged in SQL for an admin caller`() = runBlocking {
-        stubUnpagedReads()
-        every {
-            vulnerabilityRepository.findByScanTimestampBetween(any(), any(), match<Pageable> { it != Pageable.UNPAGED })
-        } returns onePage()
+    fun `severities are applied in SQL`() = runBlocking {
+        stubQuery()
 
-        val result = tool.execute(
-            mapOf(
-                "startDate" to "2026-01-01T00:00:00",
-                "endDate" to "2026-02-01T00:00:00",
-                "pageSize" to 50
-            ),
-            ctx(null)
-        )
+        tool.execute(mapOf("severity" to listOf("CRITICAL", "HIGH"), "pageSize" to 50), ctx(setOf(1L)))
 
-        assertThat(result.isError).isFalse()
-        assertNoUnpagedRead()
-    }
-
-    // ------------------------------------------------------------------ severity
-
-    @Test
-    fun `single severity is paged in SQL for a restricted caller`() = runBlocking {
-        stubUnpagedReads()
-        every {
-            vulnerabilityRepository.findByAssetIdInAndCvssSeverityIn(setOf(1L), listOf("HIGH"), any())
-        } returns onePage()
-
-        val result = tool.execute(mapOf("severity" to listOf("HIGH"), "pageSize" to 50), ctx(setOf(1L)))
-
-        assertThat(result.isError).isFalse()
-        assertNoUnpagedRead()
+        verify {
+            vulnerabilityRepository.findForMcpTool(
+                true, setOf(1L), null, null, null, null, true, listOf("CRITICAL", "HIGH"), false, false, any()
+            )
+        }
     }
 
     @Test
-    fun `multiple severities are paged in SQL for a restricted caller`() = runBlocking {
-        stubUnpagedReads()
-        every {
-            vulnerabilityRepository.findByAssetIdInAndCvssSeverityIn(setOf(1L), listOf("CRITICAL", "HIGH"), any())
-        } returns onePage()
+    fun `asset filter is applied within the caller scope`() = runBlocking {
+        stubQuery()
 
-        val result = tool.execute(
-            mapOf("severity" to listOf("CRITICAL", "HIGH"), "pageSize" to 50),
+        tool.execute(mapOf("assetId" to 1, "pageSize" to 50), ctx(setOf(1L)))
+
+        verify {
+            vulnerabilityRepository.findForMcpTool(true, setOf(1L), null, 1L, null, null, false, any(), false, false, any())
+        }
+    }
+
+    @Test
+    fun `total is the SQL count, not the size of a filtered page`(): Unit = runBlocking {
+        stubQuery(total = 1234L)
+
+        val result = tool.execute(mapOf("pageSize" to 50), ctx(setOf(1L)))
+
+        @Suppress("UNCHECKED_CAST")
+        val content = (result as McpToolResult.Success).content as Map<String, Any?>
+        assertThat(content["total"]).isEqualTo(1234L)
+    }
+
+    @Test
+    fun `including excepted and installer rows is passed through`() = runBlocking {
+        stubQuery()
+
+        tool.execute(
+            mapOf("includeExcepted" to true, "includeInstallerFindings" to true, "pageSize" to 50),
             ctx(setOf(1L))
         )
 
-        assertThat(result.isError).isFalse()
-        assertNoUnpagedRead()
-    }
-
-    @Test
-    fun `severity is paged in SQL for an admin caller`() = runBlocking {
-        stubUnpagedReads()
-        every {
-            vulnerabilityRepository.findByCvssSeverityIn(listOf("CRITICAL", "HIGH"), match<Pageable> { it != Pageable.UNPAGED })
-        } returns onePage()
-
-        val result = tool.execute(
-            mapOf("severity" to listOf("CRITICAL", "HIGH"), "pageSize" to 50),
-            ctx(null)
-        )
-
-        assertThat(result.isError).isFalse()
-        assertNoUnpagedRead()
-    }
-
-    // ------------------------------------------------------------------ untouched paths
-
-    @Test
-    fun `asset-scoped query keeps using the paged repository call`() = runBlocking {
-        stubUnpagedReads()
-        every { vulnerabilityRepository.findByAssetId(1L, any()) } returns onePage()
-
-        val result = tool.execute(mapOf("assetId" to 1, "pageSize" to 50), ctx(setOf(1L)))
-
-        assertThat(result.isError).isFalse()
-        assertNoUnpagedRead()
-        verify { vulnerabilityRepository.findByAssetId(1L, match { it.size == 50 }) }
+        verify {
+            vulnerabilityRepository.findForMcpTool(true, setOf(1L), null, null, null, null, false, any(), true, true, any())
+        }
     }
 
     @Test
     fun `empty accessible set short-circuits without querying`() = runBlocking {
-        stubUnpagedReads()
+        stubQuery()
 
         val result = tool.execute(mapOf("pageSize" to 50), ctx(emptySet()))
 
         assertThat(result.isError).isFalse()
-        assertNoUnpagedRead()
+        verify(exactly = 0) {
+            vulnerabilityRepository.findForMcpTool(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        }
     }
 }

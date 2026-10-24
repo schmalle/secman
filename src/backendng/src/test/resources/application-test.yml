@@ -40,6 +40,9 @@ jpa:
           import_files: test-sequences.sql
         show_sql: false
         format_sql: false
+        # Query-count assertions (com.secman.testutil.QueryCounter); records only inside capture().
+        session_factory:
+          statement_inspector: com.secman.testutil.QueryCounter
 
 # Disable Flyway for tests - use Hibernate schema generation
 flyway:
