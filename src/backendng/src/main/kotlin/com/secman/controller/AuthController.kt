@@ -253,28 +253,20 @@ open class AuthController(
     @Get("/status")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     fun status(authentication: Authentication): HttpResponse<*> {
-        val username = authentication.name
-        val userOptional = userRepository.findByUsername(username)
-
-        if (userOptional.isEmpty) {
-            return HttpResponse.unauthorized<Any>().body(mapOf("error" to "User not found"))
-        }
-
-        val user = userOptional.get()
-        val directAwsCount = userMappingRepository.countDistinctAwsAccountsByEmail(user.email)
-        val sharedAwsCount = awsAccountSharingRepository.countByTargetUserId(user.id!!)
-
-        // Blob-free projection: findByUserId would load the LONGBLOB on every page load.
-        val pictureUpdatedAt = profilePictureRepository.findUpdatedAtByUserId(user.id!!).orElse(null)
+        val row = userRepository.findAuthStatusRows(authentication.name).firstOrNull()
+            ?: return HttpResponse.unauthorized<Any>().body(mapOf("error" to "User not found"))
+        val userId = (row[0] as Number).toLong()
+        val pictureUpdatedAt = row[7] as java.time.Instant?
 
         val response = StatusResponse(
-            id = user.id!!,
-            username = user.username,
-            email = user.email,
-            roles = user.roles.map { it.name },
-            workgroupCount = workgroupRepository.countDirectWorkgroupsByUserEmail(user.email),
-            awsAccountCount = directAwsCount + sharedAwsCount,
-            domainCount = userMappingRepository.countDistinctDomainsByEmail(user.email),
+            id = userId,
+            username = row[1] as String,
+            email = row[2] as String,
+            // Same projection the identity rule uses; the role collection is never hydrated.
+            roles = userRepository.findIdentityRows(userId).mapNotNull { (it[3] as? Enum<*>)?.name },
+            workgroupCount = (row[5] as Number).toLong(),
+            awsAccountCount = (row[3] as Number).toLong() + (row[4] as Number).toLong(),
+            domainCount = (row[6] as Number).toLong(),
             hasProfilePicture = pictureUpdatedAt != null,
             profilePictureUpdatedAt = pictureUpdatedAt
         )

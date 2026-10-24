@@ -230,23 +230,13 @@ micronaut:
     vulnerability_queries:
       maximum-size: 1000
       expire-after-write: 15m
-    # Database optimization caches
-    asset_queries:
-      maximum-size: 500
-      expire-after-write: 10m
     active_exceptions:
       maximum-size: 100
-      expire-after-write: 5m
-    vulnerability_total_count:
-      maximum-size: 10
       expire-after-write: 5m
     # Cached count for admin not_excepted queries (no filters) - avoids expensive COUNT with NOT EXISTS
     vulnerability_not_excepted_count:
       maximum-size: 10
       expire-after-write: 5m
-    workgroup_memberships:
-      maximum-size: 200
-      expire-after-write: 10m
     # CVE description cache
     cve_descriptions:
       maximum-size: 5000
@@ -718,6 +708,13 @@ jpa:
         query:
           plan_cache_max_size: 2048                    # Cache compiled query plans
           plan_parameter_metadata_max_size: 128        # Cache query parameter metadata
+          # Pad IN (:list) binds to the next power of two so lists of 3..2048 ids reuse a
+          # dozen statement shapes instead of one per length (plan and prepared-statement cache hits).
+          in_clause_parameter_padding: true
+        # Initialize lazy associations and collections in IN-batches of up to 64 owners instead of
+        # one SELECT per row (e.g. User.roles across a user list, the default-EAGER @ManyToOne
+        # fields on requirements and assessments). Entity-level @BatchSize still wins where set.
+        default_batch_fetch_size: 64
         jdbc:
           batch_size: 100                              # Batch INSERT/UPDATE statements (CrowdStrike import: aligned with service-level chunks of 500 → 5 JDBC batches/chunk)
           batch_versioned_data: true                   # Enable batching for versioned (optimistic-lock) entities too

@@ -83,7 +83,7 @@ open class AssetFilterService(
         }
         val email = getUserEmail(authentication)
         return if (email != null) {
-            currentIds(assetRepository.findAccessibleAssetIds(getUserId(authentication), email))
+            assetRepository.findCurrentAccessibleIds(getUserId(authentication), email).toSet()
         } else {
             getAccessibleAssetsForScopedUser(authentication).mapNotNull { it.id }.toSet()
         }
@@ -94,7 +94,7 @@ open class AssetFilterService(
         val normalizedDomain = domain?.takeIf { it.isNotBlank() }
         if (normalizedDomain == null && !awsHosted) return getAccessibleAssetIds(authentication)
         if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
-            return currentIds(assetRepository.findIdsWithStatisticsFilters(normalizedDomain, awsHosted))
+            return assetRepository.findCurrentIdsWithStatisticsFilters(normalizedDomain, awsHosted).toSet()
         }
         return getAccessibleAssetIds(authentication).chunked(1000).flatMap { ids ->
             assetRepository.findIdsWithStatisticsFiltersForAssets(ids, normalizedDomain, awsHosted)
@@ -183,7 +183,7 @@ open class AssetFilterService(
 
         // Check if asset is in user's accessible assets
         val email = getUserEmail(authentication)
-        return if (email != null) assetId in assetRepository.findAccessibleAssetIds(getUserId(authentication), email)
+        return if (email != null) assetRepository.countAccessibleById(assetId, getUserId(authentication), email) > 0
         else getAccessibleAssetsMultiQuery(getUserId(authentication), null, currentOnly = false).any { it.id == assetId }
     }
 

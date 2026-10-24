@@ -57,6 +57,18 @@ object VulnQuerySql {
      */
     const val NOT_EXCEPTED = "v.excepted = 0"
 
+    /** Materialized counterpart of `EXISTS(EXCEPTION_MATCH)`; see [NOT_EXCEPTED]. */
+    const val EXCEPTED = "v.excepted = 1"
+
+    /**
+     * SLA status against a bound `:thresholdDate`. `sla_anchor_at` is the generated
+     * `COALESCE(first_seen_at, scan_timestamp)` (V295) — the same anchor as
+     * `VulnerabilityService.calculateOverdueStatus`, so the list filter and the per-row badge agree.
+     * Overdue excludes excepted rows; within-SLA historically does not check exceptions.
+     */
+    const val OVERDUE = "v.sla_anchor_at < :thresholdDate AND $NOT_EXCEPTED"
+    const val WITHIN_SLA = "v.sla_anchor_at >= :thresholdDate"
+
     /**
      * Installer/setup-payload filter, the second materialized visibility flag.
      *

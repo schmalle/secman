@@ -10,7 +10,7 @@ The legacy `last_seen` field remains for compatibility with ingestion. It is not
 
 ## Reads and storage
 
-`AssetCurrentnessSql` and `AssetCurrentnessPolicy` define currentness; `AssetFilterService` retains responsibility for authorization. Operational reads filter before pagination, counting and aggregation. CrowdStrike lookup responses carry actual `observedAt` evidence; the HTTP read guard rechecks it on every request, including cached and forced live results. Missing, future or stale contact cannot be shown through the lookup page.
+`AssetCurrentnessSql` and `AssetCurrentnessPolicy` define currentness; `AssetFilterService` retains responsibility for authorization. In the database the definition lives once, as the generated column `asset.observed_at` (V295, indexed by `idx_asset_observed_at`); SQL filters compare that column with the window instead of repeating the Falcon/non-Falcon expression, so the predicate can range-scan. Operational reads filter before pagination, counting and aggregation. CrowdStrike lookup responses carry actual `observedAt` evidence; the HTTP read guard rechecks it on every request, including cached and forced live results. Missing, future or stale contact cannot be shown through the lookup page.
 
 Native current vulnerability queries require both existing snapshot/severity eligibility and current asset eligibility. Materialized heatmap and outdated-asset readers check current asset IDs at read time, so waiting for an import cannot keep stale assets visible.
 

@@ -2,8 +2,6 @@ package com.secman.mcp.tools
 
 import com.secman.domain.Asset
 import com.secman.domain.McpOperation
-import com.secman.domain.ProductClass
-import com.secman.domain.Vulnerability
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
@@ -130,61 +128,26 @@ open class GetVulnerabilitiesTool(
                 return McpToolResult.error("ASSET_NOT_FOUND", "Asset with ID $assetIdFilter not found")
             }
 
-            // Query based on filters (priority order), applying access control where needed
-            val resultPage = when {
-                // Every branch below applies the access filter AND the paging in SQL. They used to
-                // read all matching rows with Pageable.UNPAGED — which emits no LIMIT — and slice
-                // the result in Kotlin, so cost grew with the table rather than the page size.
-                // Unlike the no-filter branch, those reads were unbounded for admins too.
-
-                // CVE ID search with access control
-                cveIdFilter != null -> {
-                    if (accessibleIds != null) {
-                        vulnerabilityRepository.findByAssetIdInAndVulnerabilityIdContainingIgnoreCase(
-                            accessibleIds, cveIdFilter, pageable
-                        )
-                    } else {
-                        vulnerabilityRepository.findByVulnerabilityIdContainingIgnoreCase(cveIdFilter, pageable)
-                    }
-                }
-
-                // Asset-specific vulnerabilities (already access-checked above)
-                assetIdFilter != null -> vulnerabilityRepository.findByAssetId(assetIdFilter, pageable)
-
-                // Date range filter with access control
-                startDate != null && endDate != null -> {
-                    if (accessibleIds != null) {
-                        vulnerabilityRepository.findByAssetIdInAndScanTimestampBetween(
-                            accessibleIds, startDate, endDate, pageable
-                        )
-                    } else {
-                        vulnerabilityRepository.findByScanTimestampBetween(startDate, endDate, pageable)
-                    }
-                }
-
-                // Severity filter with access control
-                severityFilter != null && severityFilter.isNotEmpty() -> {
-                    val severities = severityFilter.mapNotNull { it as? String }
-                    if (accessibleIds != null) {
-                        vulnerabilityRepository.findByAssetIdInAndCvssSeverityIn(accessibleIds, severities, pageable)
-                    } else {
-                        vulnerabilityRepository.findByCvssSeverityIn(severities, pageable)
-                    }
-                }
-
-                // No filters - get all with access control.
-                // The access filter and the paging both run in SQL. Reading the table with
-                // findAll() and filtering in Kotlin loaded every vulnerability row into heap
-                // (1.1M entities against a 1 GB heap = OutOfMemoryError), and the cost grew
-                // with the table rather than with the page size actually requested.
-                else -> {
-                    if (accessibleIds != null) {
-                        vulnerabilityRepository.findByAssetIdIn(accessibleIds, pageable)
-                    } else {
-                        vulnerabilityRepository.findAll(pageable)
-                    }
-                }
-            }
+            // One filter applies, in priority order (CVE, asset, date range, severity), exactly as
+            // before; the access scope, paging and visibility flags all run in SQL so a page is
+            // never shortened after the fact and `total` counts the same rows the pages contain.
+            val severities = severityFilter?.mapNotNull { it as? String }.orEmpty()
+            val useAsset = cveIdFilter == null && assetIdFilter != null
+            val useDates = cveIdFilter == null && assetIdFilter == null && startDate != null && endDate != null
+            val useSeverity = cveIdFilter == null && assetIdFilter == null && !useDates && severities.isNotEmpty()
+            val resultPage = vulnerabilityRepository.findForMcpTool(
+                scoped = accessibleIds != null,
+                assetIds = accessibleIds ?: listOf(-1L),
+                cveId = cveIdFilter,
+                assetId = if (useAsset) assetIdFilter else null,
+                start = if (useDates) startDate else null,
+                end = if (useDates) endDate else null,
+                filterSeverity = useSeverity,
+                severities = severities.ifEmpty { listOf("") },
+                includeExcepted = includeExcepted,
+                includeInstaller = includeInstallerFindings,
+                pageable = pageable
+            )
 
             // Eagerly hydrate the assets referenced by this page so we never touch
             // a Hibernate proxy outside of an active session. Proxy.id is safe to read
@@ -197,30 +160,8 @@ open class GetVulnerabilitiesTool(
                 assetRepository.findByIdIn(assetIds).associateBy { it.id!! }
             }
 
-            // Filter out excepted vulnerabilities unless explicitly included
-            val exceptionFiltered: List<Vulnerability> = if (!includeExcepted) {
-                val activeExceptions = vulnerabilityExceptionService.getActiveExceptions()
-                resultPage.content.filter { vuln ->
-                    val asset = assetsById[vuln.asset.id] ?: return@filter false
-                    activeExceptions.none { ex -> ex.matches(vuln, asset) }
-                }
-            } else {
-                resultPage.content
-            }
-
-            // Installer/setup payload filter, reading the materialized class. Applied here rather
-            // than in SQL because this tool's query branches are plain derived finders with no
-            // shared WHERE fragment to extend; it therefore inherits the same post-pagination
-            // caveat the exception filter above already has (`total` reflects the filtered page).
-            // UNKNOWN reads as visible, exactly as it does in every SQL surface.
-            val filteredContent: List<Vulnerability> = if (!includeInstallerFindings) {
-                exceptionFiltered.filter { it.productClass != ProductClass.INSTALLER_ARTIFACT }
-            } else {
-                exceptionFiltered
-            }
-
             // Map vulnerabilities to response format using hydrated assets
-            val vulnerabilities = filteredContent.map { vuln ->
+            val vulnerabilities = resultPage.content.map { vuln ->
                 val asset = assetsById[vuln.asset.id]
                 mapOf(
                     "id" to vuln.id,
@@ -237,7 +178,7 @@ open class GetVulnerabilitiesTool(
 
             val response = mapOf(
                 "vulnerabilities" to vulnerabilities,
-                "total" to if (!includeExcepted || !includeInstallerFindings) vulnerabilities.size.toLong() else resultPage.totalSize,
+                "total" to resultPage.totalSize,
                 "page" to page,
                 "pageSize" to pageSize,
                 "totalPages" to resultPage.totalPages,

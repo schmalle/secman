@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude
 import com.secman.repository.AssetRepository
 import com.secman.repository.RiskAssessmentRepository
 import com.secman.repository.RiskRepository
+import io.micronaut.data.model.Pageable
 import io.micronaut.http.annotation.Controller
 import io.micronaut.http.annotation.Get
 import io.micronaut.scheduling.TaskExecutors
@@ -107,32 +108,16 @@ open class ReportController(
     )
 
     @Get("/risk-assessment-summary")
-    @Transactional
+    @Transactional(readOnly = true)
     open fun getRiskAssessmentSummary(): ReportSummaryResponse {
-        val allAssessments = riskAssessmentRepository.findAll()
-        val allRisks = riskRepository.findAll()
         val totalAssets = assetRepository.countCurrent()
 
-        // Assessment summary
-        val assessmentStatusBreakdown = allAssessments
-            .groupBy { it.status }
-            .mapValues { it.value.size.toLong() }
-
-        // Risk summary
-        val riskStatusBreakdown = allRisks
-            .groupBy { it.status }
-            .mapValues { it.value.size.toLong() }
-
-        val riskLevelBreakdown = allRisks
-            .groupBy { (it.riskLevel ?: 0).toString() }
-            .mapValues { it.value.size.toLong() }
+        val assessmentStatusBreakdown = riskAssessmentRepository.countGroupedByStatus().toCountMap()
+        val riskStatusBreakdown = riskRepository.countGroupedByStatus().toCountMap()
+        val riskLevelBreakdown = riskRepository.countGroupedByRiskLevel().toCountMap()
 
         // Asset coverage - count distinct assets that have assessments
-        val assetsWithAssessments = allAssessments
-            .map { it.assessmentBasisId }
-            .distinct()
-            .count()
-            .toLong()
+        val assetsWithAssessments = riskAssessmentRepository.countDistinctAssessmentBasisIds()
 
         val coveragePercentage = if (totalAssets > 0) {
             (assetsWithAssessments.toDouble() / totalAssets.toDouble()) * 100.0
@@ -141,9 +126,7 @@ open class ReportController(
         }
 
         // Recent assessments (last 10, sorted by creation date desc)
-        val recentAssessments = allAssessments
-            .sortedByDescending { it.createdAt }
-            .take(10)
+        val recentAssessments = riskAssessmentRepository.findRecent(Pageable.from(0, 10))
             .map { ra ->
                 RecentAssessmentDto(
                     id = ra.id ?: 0,
@@ -172,11 +155,11 @@ open class ReportController(
 
         return ReportSummaryResponse(
             assessmentSummary = AssessmentSummaryDto(
-                total = allAssessments.size.toLong(),
+                total = assessmentStatusBreakdown.values.sum(),
                 statusBreakdown = assessmentStatusBreakdown
             ),
             riskSummary = RiskSummaryDto(
-                total = allRisks.size.toLong(),
+                total = riskStatusBreakdown.values.sum(),
                 statusBreakdown = riskStatusBreakdown,
                 riskLevelBreakdown = riskLevelBreakdown
             ),
@@ -191,12 +174,11 @@ open class ReportController(
     }
 
     @Get("/risk-mitigation-status")
-    @Transactional
+    @Transactional(readOnly = true)
     open fun getRiskMitigationStatus(): MitigationReportResponse {
-        val allRisks = riskRepository.findAll()
         val today = LocalDate.now()
 
-        val openRisks = allRisks.filter { it.status != "CLOSED" && it.status != "MITIGATED" }
+        val openRisks = riskRepository.findOpen()
         val overdueRisks = openRisks.filter { risk ->
             risk.deadline != null && risk.deadline!! <= today
         }
@@ -229,4 +211,8 @@ open class ReportController(
             risks = riskDtos
         )
     }
+
+    /** (key, count) aggregate rows to the map shape the report DTOs expose. */
+    private fun List<Array<Any?>>.toCountMap(): Map<String, Long> =
+        associate { it[0].toString() to (it[1] as Number).toLong() }
 }

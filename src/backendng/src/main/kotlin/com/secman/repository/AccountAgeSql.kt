@@ -13,12 +13,12 @@ package com.secman.repository
  */
 object AccountAgeSql {
 
-    private const val AGE_ANCHOR = "COALESCE(v.first_seen_at, v.scan_timestamp)"
+    private const val AGE_ANCHOR = "v.sla_anchor_at"
 
     /** Step 1 — rank accounts. `:limit` is interpolated by Micronaut Data as a bind parameter. */
     const val RANK_ACCOUNTS = """
         SELECT a.cloud_account_id                               AS awsAccountId,
-               MIN(COALESCE(v.first_seen_at, v.scan_timestamp)) AS oldestFirstSeen,
+               MIN(v.sla_anchor_at) AS oldestFirstSeen,
                COUNT(*)                                         AS openFindingCount,
                COUNT(DISTINCT a.id)                             AS affectedAssetCount
         FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
@@ -51,7 +51,7 @@ object AccountAgeSql {
                    a.cloud_instance_id AS assetInstanceId,
                    ROW_NUMBER() OVER (
                        PARTITION BY a.cloud_account_id
-                       ORDER BY COALESCE(v.first_seen_at, v.scan_timestamp) ASC, v.vulnerability_id ASC
+                       ORDER BY v.sla_anchor_at ASC, v.vulnerability_id ASC
                    ) AS rn
             FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
             JOIN ${AssetCurrentnessSql.ASSETS} a ON v.asset_id = a.id

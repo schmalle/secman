@@ -152,10 +152,16 @@ const AssetManagement: React.FC = () => {
     fetchWorkgroups();
     getDistinctAdDomains().then(setAdDomainOptions).catch(() => {});
     fetchAssetCount();
+  }, []);
+
+  // Owner candidates list every user; load them when the form that needs them first opens
+  // rather than on every visit to the overview.
+  useEffect(() => {
+    if (!showForm || ownerCandidates.length > 0) return;
     if (isAdmin(getUser()?.roles) || isSecChampion(getUser()?.roles)) {
       fetchOwnerCandidates();
     }
-  }, []);
+  }, [showForm]);
 
   useEffect(() => {
     setSelectedAssetIds(new Set());

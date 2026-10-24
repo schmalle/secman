@@ -50,8 +50,8 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
      *  - Ties for "oldest" now resolve to the lexicographically smallest `vulnerability_id`
      *    instead of whatever order the result set happened to arrive in.
      *  - `workgroup_ids` is ordered ascending. Safe: every reader matches it with
-     *    `LIKE CONCAT('%', :workgroupId, '%')`, which is order-independent, and it is a
-     *    perf hint rather than the auth boundary (see OutdatedAssetService).
+     *    `FIND_IN_SET`, which is order-independent (a substring LIKE matched workgroup 1 inside
+     *    11 or 21), and it is a perf hint rather than the auth boundary (see OutdatedAssetService).
      *
      * MUST be called inside the same transaction as the preceding `deleteAll()` — see
      * MaterializedViewRefreshService.swapMaterializedView for why readers must never observe a
@@ -88,7 +88,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
             SELECT
                 v.asset_id,
                 v.vulnerability_id AS oldest_vuln_id,
-                COALESCE(v.first_seen_at, v.scan_timestamp) AS oldest_anchor,
+                v.sla_anchor_at AS oldest_anchor,
                 COUNT(*) OVER (PARTITION BY v.asset_id) AS total_overdue_count,
                 SUM(CASE WHEN v.cvss_severity = 'CRITICAL' THEN 1 ELSE 0 END)
                     OVER (PARTITION BY v.asset_id) AS critical_count,
@@ -100,13 +100,13 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
                     OVER (PARTITION BY v.asset_id) AS low_count,
                 ROW_NUMBER() OVER (
                     PARTITION BY v.asset_id
-                    ORDER BY COALESCE(v.first_seen_at, v.scan_timestamp) ASC,
+                    ORDER BY v.sla_anchor_at ASC,
                              v.vulnerability_id ASC
                 ) AS rn
             FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
             WHERE v.excepted = 0
               AND v.product_class <> 'INSTALLER_ARTIFACT'
-              AND COALESCE(v.first_seen_at, v.scan_timestamp) < :thresholdDate
+              AND v.sla_anchor_at < :thresholdDate
         ) r
         JOIN asset a ON a.id = r.asset_id
         WHERE r.rn = 1
@@ -129,7 +129,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
         FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
         WHERE v.excepted = 0
           AND v.product_class <> 'INSTALLER_ARTIFACT'
-          AND COALESCE(v.first_seen_at, v.scan_timestamp) < :thresholdDate
+          AND v.sla_anchor_at < :thresholdDate
         """,
         nativeQuery = true
     )
@@ -150,7 +150,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
             WHERE (:workgroupId IS NULL
                 OR :workgroupId = ''
                 OR v.workgroupIds IS NULL
-                OR v.workgroupIds LIKE CONCAT('%', :workgroupId, '%'))
+                OR function('FIND_IN_SET', :workgroupId, v.workgroupIds) > 0)
             AND (:searchTerm IS NULL OR LOWER(v.assetName) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
             AND (:minSeverity IS NULL OR
                 (CASE
@@ -167,7 +167,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
             WHERE (:workgroupId IS NULL
                 OR :workgroupId = ''
                 OR v.workgroupIds IS NULL
-                OR v.workgroupIds LIKE CONCAT('%', :workgroupId, '%'))
+                OR function('FIND_IN_SET', :workgroupId, v.workgroupIds) > 0)
             AND (:searchTerm IS NULL OR LOWER(v.assetName) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
             AND (:minSeverity IS NULL OR
                 (CASE
@@ -247,7 +247,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
         WHERE (:workgroupId IS NULL
             OR :workgroupId = ''
             OR v.workgroupIds IS NULL
-            OR v.workgroupIds LIKE CONCAT('%', :workgroupId, '%'))
+            OR function('FIND_IN_SET', :workgroupId, v.workgroupIds) > 0)
     """)
     fun countOutdatedAssets(workgroupId: String?): Long
 
