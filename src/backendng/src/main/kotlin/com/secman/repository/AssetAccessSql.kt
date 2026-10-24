@@ -59,7 +59,7 @@ object AssetAccessSql {
         WHERE uw.user_id = :userId AND w.enabled = TRUE
     """
 
-    /** Membership test for one asset; same routes as [IDS], stops at the first match. */
+    /** Membership test for one asset; same routes as [IDS], without returning the whole grant set. */
     const val CONTAINS = """
         SELECT COUNT(*) FROM asset a WHERE a.id = :assetId AND a.id IN ($IDS)
     """

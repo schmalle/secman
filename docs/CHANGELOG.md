@@ -1,5 +1,11 @@
 # Changelog (archived from CLAUDE.md)
 
+## 2026-10-24 — database read-path optimization
+
+- V295 adds VIRTUAL generated, indexed `asset.observed_at` (the 72-hour currentness evidence) and `vulnerability.sla_anchor_at` (`COALESCE(first_seen_at, scan_timestamp)`), so both predicates range-scan instead of scanning whole tables. `AssetAccessSql.IDS` is a UNION of indexed grant branches. See `docs/plans/DB_READ_OPTIMIZATION_PLAN.md` §6 for what shipped and what was deferred, and why.
+- Visible behavior changes: overdue/OK filters on the tuned list path now use the same SLA anchor as the per-row badge and the custom-sort path (previously `scan_timestamp` alone), so their counts can change. Exception status on the default list, per-asset counts, CVE/product drilldowns and MCP `get_vulnerabilities` comes from the materialized `excepted` flag. MCP `get_vulnerabilities` returns full pages, a `total` counting every matching row, and current assets only on every filter branch. The outdated-asset workgroup filter matches whole ids.
+- `CurrentIdentityRule` and `/api/auth/status` use projections (no cross-request cache; revocation stays immediate). MCP secret authentication skips the BCrypt scan for a secret it already matched, still checking the key row on every call.
+
 ## 2026-09-27 — MCP vulnerability query E2E regression
 
 - Added an automatically discovered Playwright regression and `scripts/test/test-e2e-mcp-vulnerability-query.sh`. It verifies MCP initialization/discovery, the severity-array schema, default/CVE/severity/asset queries, pagination and hydrated asset names on both HTTP transports. Explicitly delegated non-admin access is tested alongside invalid-key, missing-delegation, missing-permission and ungranted-asset refusals. All fixtures and keys are restricted to the disposable runner database.

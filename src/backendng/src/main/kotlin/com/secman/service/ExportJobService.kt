@@ -640,7 +640,7 @@ open class ExportJobService(
         filters: VulnerabilityExportFilters,
         page: Int,
         size: Int,
-        countMode: String = "exact"
+        countMode: String? = null
     ): com.secman.dto.PaginatedVulnerabilitiesResponse {
         // Every filter comes from the caller so the workbook matches what the UI is showing.
         // These previously were hardcoded nulls, which is why an exported file ignored the

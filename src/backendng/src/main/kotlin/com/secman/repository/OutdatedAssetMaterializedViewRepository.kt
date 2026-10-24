@@ -50,8 +50,9 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
      *  - Ties for "oldest" now resolve to the lexicographically smallest `vulnerability_id`
      *    instead of whatever order the result set happened to arrive in.
      *  - `workgroup_ids` is ordered ascending. Safe: every reader matches it with
-     *    `FIND_IN_SET`, which is order-independent (a substring LIKE matched workgroup 1 inside
-     *    11 or 21), and it is a perf hint rather than the auth boundary (see OutdatedAssetService).
+     *    a comma-delimited LIKE, which is order-independent and matches whole ids (a bare
+     *    substring LIKE matched workgroup 1 inside 11 or 21), and it is a perf hint rather than
+     *    the auth boundary (see OutdatedAssetService).
      *
      * MUST be called inside the same transaction as the preceding `deleteAll()` — see
      * MaterializedViewRefreshService.swapMaterializedView for why readers must never observe a
@@ -150,7 +151,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
             WHERE (:workgroupId IS NULL
                 OR :workgroupId = ''
                 OR v.workgroupIds IS NULL
-                OR function('FIND_IN_SET', :workgroupId, v.workgroupIds) > 0)
+                OR CONCAT(',', v.workgroupIds, ',') LIKE CONCAT('%,', :workgroupId, ',%'))
             AND (:searchTerm IS NULL OR LOWER(v.assetName) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
             AND (:minSeverity IS NULL OR
                 (CASE
@@ -167,7 +168,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
             WHERE (:workgroupId IS NULL
                 OR :workgroupId = ''
                 OR v.workgroupIds IS NULL
-                OR function('FIND_IN_SET', :workgroupId, v.workgroupIds) > 0)
+                OR CONCAT(',', v.workgroupIds, ',') LIKE CONCAT('%,', :workgroupId, ',%'))
             AND (:searchTerm IS NULL OR LOWER(v.assetName) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
             AND (:minSeverity IS NULL OR
                 (CASE
@@ -247,7 +248,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
         WHERE (:workgroupId IS NULL
             OR :workgroupId = ''
             OR v.workgroupIds IS NULL
-            OR function('FIND_IN_SET', :workgroupId, v.workgroupIds) > 0)
+            OR CONCAT(',', v.workgroupIds, ',') LIKE CONCAT('%,', :workgroupId, ',%'))
     """)
     fun countOutdatedAssets(workgroupId: String?): Long
 

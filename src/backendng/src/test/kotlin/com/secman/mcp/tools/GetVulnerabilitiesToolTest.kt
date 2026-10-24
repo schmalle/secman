@@ -145,7 +145,7 @@ class GetVulnerabilitiesToolTest {
     }
 
     @Test
-    fun `total is the SQL count, not the size of a filtered page`() = runBlocking {
+    fun `total is the SQL count, not the size of a filtered page`(): Unit = runBlocking {
         stubQuery(total = 1234L)
 
         val result = tool.execute(mapOf("pageSize" to 50), ctx(setOf(1L)))
