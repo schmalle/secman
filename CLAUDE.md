@@ -327,14 +327,14 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-10-24*
+*Last updated: 2026-10-25*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **Database read-path optimization (2026-10-24)** — V295 adds generated, indexed currentness and SLA-anchor columns; authorization queries use indexed grant branches, and MCP `get_vulnerabilities` now returns full current-asset pages with accurate totals. Auth status uses revocation-immediate projections. See `docs/plans/DB_READ_OPTIMIZATION_PLAN.md` and `docs/CHANGELOG.md`.
+
 - **Current asset visibility (2026-10-14)** — operational inventory now requires verified observation within an inclusive UTC 72-hour window for every role and asset-derived surface. Falcon contact remains authoritative for Falcon-managed assets; other assets use `verified_observed_at`, while stored authorization and ingestion remain separate. See `docs/CURRENT_ASSETS.md` and `docs/CHANGELOG.md`.
 
 - **MCP vulnerability query E2E regression (2026-09-27)** — the automatically discovered Playwright suite now verifies MCP discovery, severity-array schema, filtering, pagination, hydrated asset names, and delegated non-admin authorization on both HTTP transports. It uses only disposable-runner data and generated API keys. See `docs/CHANGELOG.md`.
-
-- **Guest invitation E2E regression (2026-09-27)** — `assessment-guest-invitation.spec.ts` now proves loopback delivery plus anonymous questionnaire load, save, reload, and submit. The public page uses the current token-bound response contract and does not mount the login-only attachment widget. See `docs/CHANGELOG.md`.
