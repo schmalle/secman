@@ -385,14 +385,6 @@ open class MaterializedViewRefreshService(
         }
 
         try {
-            log.info("Warming admin not-excepted vulnerability count cache after materialized view refresh")
-            vulnerabilityService.getCachedNotExceptedCountAdmin()
-        } catch (e: Exception) {
-            failures.add(e)
-            log.error("Not-excepted count cache warm failed (non-fatal): {}", e.message, e)
-        }
-
-        try {
             log.info("Recalculating AWS clean-server KPI after materialized view refresh")
             awsCleanServerKpiService.recalculate(requireSuccess = true)
         } catch (e: Exception) {

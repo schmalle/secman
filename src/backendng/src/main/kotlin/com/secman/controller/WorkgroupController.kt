@@ -20,7 +20,7 @@ import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
-import jakarta.transaction.Transactional
+import io.micronaut.transaction.annotation.Transactional
 import jakarta.validation.ConstraintViolationException
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
@@ -164,7 +164,7 @@ open class WorkgroupController(
      */
     @Get
     @Secured(SecurityRule.IS_AUTHENTICATED)
-    @Transactional
+    @Transactional(readOnly = true)
     open fun listWorkgroups(authentication: Authentication): HttpResponse<List<WorkgroupListResponse>> {
         // ADMIN and SECCHAMPION see every workgroup; regular users see only the
         // workgroups they are members of (privacy default — see /workgroups UX).
@@ -253,7 +253,7 @@ open class WorkgroupController(
      */
     @Get("/{id}")
     @Secured(SecurityRule.IS_AUTHENTICATED)
-    @Transactional
+    @Transactional(readOnly = true)
     open fun getWorkgroup(
         @PathVariable id: Long,
         authentication: Authentication
@@ -440,7 +440,7 @@ open class WorkgroupController(
      */
     @Get("/{id}/users")
     @Secured(SecurityRule.IS_AUTHENTICATED)
-    @Transactional
+    @Transactional(readOnly = true)
     open fun listAssignedUsers(
         @PathVariable id: Long,
         authentication: Authentication
@@ -577,7 +577,7 @@ open class WorkgroupController(
      */
     @Get("/{id}/assets")
     @Secured(SecurityRule.IS_AUTHENTICATED)
-    @Transactional
+    @Transactional(readOnly = true)
     open fun listAssignedAssets(
         @PathVariable id: Long,
         authentication: Authentication
@@ -722,7 +722,7 @@ open class WorkgroupController(
      */
     @Get("/{id}/children")
     @Secured(SecurityRule.IS_AUTHENTICATED)
-    @Transactional
+    @Transactional(readOnly = true)
     open fun getChildren(
         @PathVariable id: Long,
         authentication: Authentication
@@ -757,7 +757,7 @@ open class WorkgroupController(
      */
     @Get("/root")
     @Secured(SecurityRule.IS_AUTHENTICATED)
-    @Transactional
+    @Transactional(readOnly = true)
     open fun getRootWorkgroups(authentication: Authentication): HttpResponse<List<WorkgroupResponse>> {
         val accessibleIds = accessibleWorkgroupIdsOrNull(authentication)
         val roots = if (accessibleIds == null) {
@@ -791,7 +791,7 @@ open class WorkgroupController(
      */
     @Get("/tree")
     @Secured(SecurityRule.IS_AUTHENTICATED)
-    @Transactional
+    @Transactional(readOnly = true)
     open fun getWorkgroupTree(authentication: Authentication): HttpResponse<List<WorkgroupResponse>> {
         val accessibleIds = accessibleWorkgroupIdsOrNull(authentication)
         val all = workgroupService.listAllWorkgroups()
@@ -814,7 +814,7 @@ open class WorkgroupController(
      */
     @Get("/{id}/ancestors")
     @Secured(SecurityRule.IS_AUTHENTICATED)
-    @Transactional
+    @Transactional(readOnly = true)
     open fun getAncestors(@PathVariable id: Long, authentication: Authentication): HttpResponse<List<BreadcrumbItem>> {
         return try {
             val accessibleIds = accessibleWorkgroupIdsOrNull(authentication)
@@ -845,7 +845,7 @@ open class WorkgroupController(
      */
     @Get("/{id}/descendants")
     @Secured(SecurityRule.IS_AUTHENTICATED)
-    @Transactional
+    @Transactional(readOnly = true)
     open fun getDescendants(@PathVariable id: Long, authentication: Authentication): HttpResponse<List<WorkgroupResponse>> {
         val accessibleIds = accessibleWorkgroupIdsOrNull(authentication)
         if (accessibleIds != null && id !in accessibleIds) {
@@ -941,7 +941,7 @@ open class WorkgroupController(
      */
     @Get("/cli/search-assets")
     @Secured("ADMIN", "SECCHAMPION")
-    @Transactional
+    @Transactional(readOnly = true)
     open fun searchAssets(
         @QueryValue(defaultValue = "") pattern: String,
         @QueryValue(defaultValue = "") type: String
@@ -979,7 +979,7 @@ open class WorkgroupController(
      */
     @Get("/{id}/cli/assets")
     @Secured("ADMIN", "SECCHAMPION")
-    @Transactional
+    @Transactional(readOnly = true)
     open fun listWorkgroupAssets(@PathVariable id: Long): HttpResponse<List<CliAssetDto>> {
         return try {
             workgroupService.getWorkgroupById(id)

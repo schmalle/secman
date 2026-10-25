@@ -144,6 +144,29 @@ class SelectedAssetDeletionControllerTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `hostname preview raw JSON includes both arrays when either is empty`() {
+        val hostname = "serialized-${System.nanoTime()}"
+        assets.save(TestDataFactory.createAsset(name = hostname))
+        val auth = token()
+
+        val allMatchedRequest = HttpRequest.POST(
+            "/api/assets/deletion-preview",
+            AssetController.HostnameDeletionPreviewRequest(hostname)
+        ).bearerAuth(auth)
+        val allMatchedJson = client.toBlocking().exchange(allMatchedRequest, String::class.java).body()
+        assertThat(allMatchedJson).contains("\"assets\":[").contains("\"unmatchedHostnames\":[]")
+
+        val missingHostname = "missing-$hostname"
+        val noMatchRequest = HttpRequest.POST(
+            "/api/assets/deletion-preview",
+            AssetController.HostnameDeletionPreviewRequest(missingHostname)
+        ).bearerAuth(auth)
+        val noMatchJson = client.toBlocking().exchange(noMatchRequest, String::class.java).body()
+        assertThat(noMatchJson).contains("\"assets\":[]")
+            .contains("\"unmatchedHostnames\":[\"$missingHostname\"]")
+    }
+
+    @Test
     fun `hostname preview rejects non administrators and invalid lists`() {
         for (auth in listOf(null, token("USER"), token("SECCHAMPION"))) {
             val failure = assertThrows<HttpClientResponseException> { preview("host", auth) }

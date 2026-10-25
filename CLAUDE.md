@@ -4,8 +4,8 @@ Security requirement, vulnerability and risk management platform.
 
 ## Stack
 
-- Backend: Kotlin 2.4.21 / Java 25, Micronaut 5.2.2, Hibernate JPA → `src/backendng/`
-- Frontend: Astro 7.3.8 + React 19 islands, Axios, JWT in the HttpOnly `secman_auth` cookie → `src/frontend/`
+- Backend: Kotlin 2.4.21 / Java 25, Micronaut 5.2.3, Hibernate JPA → `src/backendng/`
+- Frontend: Astro 7.4.2 + React 19 islands, Axios, JWT in the HttpOnly `secman_auth` cookie → `src/frontend/`
 - CLI: Kotlin + Picocli 4.7.7, AWS SDK v2 → `src/cli/`
 - Mobile relay: Go 1.24, **zero third-party dependencies** (stdlib only, incl. its own RFC 8555 ACME client) → `src/relay/`
 - DB: MariaDB 11.4, Flyway + Hibernate auto-migration
@@ -63,7 +63,7 @@ See `docs/AUTHORIZATION_REWORK.md` for assessment assignments, contribution hist
 |---|---|---|
 | Auth | `POST /api/auth/login`, `GET /oauth/{authorize,callback}` | public |
 | Import | `POST /api/import/{upload-xlsx, upload-vulnerability-xlsx, upload-user-mappings[-csv], upload-assets-xlsx}`; `POST /api/scan/upload-nmap` | ADMIN |
-| Assets | `GET/POST /api/assets`, `POST /api/assets/delete-selected` (ADMIN only; 1–250 positive IDs, deduplicated, per-asset results), `DELETE /api/assets/bulk` (ADMIN/SECCHAMPION), `GET /api/assets/export` | mixed |
+| Assets | `GET/POST /api/assets`, `POST /api/assets/deletion-preview` (ADMIN only; 1–250 exact hostnames, bounded preview), `POST /api/assets/delete-selected` (ADMIN only; 1–250 positive IDs, deduplicated, per-asset results), `DELETE /api/assets/bulk` (ADMIN/SECCHAMPION), `GET /api/assets/export` | mixed |
 | Vulns | `GET /api/vulnerabilities/current`; export job: `POST /api/vulnerabilities/export` → `GET .../{jobId}/{status,download}`, `DELETE .../{jobId}`; history `GET .../export/history` (ADMIN/VULN/SECCHAMPION); `GET /api/vulnerability-exceptions`; `POST /api/vulnerability-exception-requests`; `GET .../pending/count`; SSE `GET /api/exception-badge-updates` | mixed |
 | Outdated | `GET /api/outdated-assets[/{id}[/vulnerabilities]]`, `.../{last-refresh,count}`; `POST /api/materialized-view-refresh/trigger` (ADMIN); SSE `GET .../progress`; `GET .../status,history` | mixed |
 | Workgroups | `GET/POST /api/workgroups` (ADMIN), `POST /api/workgroups/{id}/{users,assets}` (ADMIN), `GET/POST/DELETE /api/workgroups/{id}/aws-accounts`, `GET/POST/DELETE /api/workgroups/{id}/ad-domains` | ADMIN/member-scoped |
@@ -327,14 +327,14 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-10-21*
+*Last updated: 2026-10-25*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **Database read-path optimization (2026-10-24)** — V295 adds generated, indexed currentness and SLA-anchor columns; authorization queries use indexed grant branches, and MCP `get_vulnerabilities` now returns full current-asset pages with accurate totals. Auth status uses revocation-immediate projections. See `docs/plans/DB_READ_OPTIMIZATION_PLAN.md` and `docs/CHANGELOG.md`.
+
 - **Current asset visibility (2026-10-14)** — operational inventory now requires verified observation within an inclusive UTC 72-hour window for every role and asset-derived surface. Falcon contact remains authoritative for Falcon-managed assets; other assets use `verified_observed_at`, while stored authorization and ingestion remain separate. See `docs/CURRENT_ASSETS.md` and `docs/CHANGELOG.md`.
 
 - **MCP vulnerability query E2E regression (2026-09-27)** — the automatically discovered Playwright suite now verifies MCP discovery, severity-array schema, filtering, pagination, hydrated asset names, and delegated non-admin authorization on both HTTP transports. It uses only disposable-runner data and generated API keys. See `docs/CHANGELOG.md`.
-
-- **Guest invitation E2E regression (2026-09-27)** — `assessment-guest-invitation.spec.ts` now proves loopback delivery plus anonymous questionnaire load, save, reload, and submit. The public page uses the current token-bound response contract and does not mount the login-only attachment widget. See `docs/CHANGELOG.md`.

@@ -639,7 +639,8 @@ open class ExportJobService(
         isAdmin: Boolean,
         filters: VulnerabilityExportFilters,
         page: Int,
-        size: Int
+        size: Int,
+        countMode: String? = null
     ): com.secman.dto.PaginatedVulnerabilitiesResponse {
         // Every filter comes from the caller so the workbook matches what the UI is showing.
         // These previously were hardcoded nulls, which is why an exported file ignored the
@@ -658,7 +659,8 @@ open class ExportJobService(
             page = page,
             size = size,
             includeInstallerFindings = filters.includeInstallerFindings,
-            seenToday = filters.seenToday
+            seenToday = filters.seenToday,
+            countMode = countMode
         )
     }
 
@@ -749,7 +751,10 @@ open class ExportJobService(
                     isAdmin = isAdmin,
                     filters = filters,
                     page = page,
-                    size = batchSize
+                    size = batchSize,
+                    // COUNTING already fixed totalItems; recounting every batch made the export
+                    // quadratic. Deferred mode detects the last page by fetching one extra row.
+                    countMode = "deferred"
                 )
 
                 response.content.forEach { vuln ->

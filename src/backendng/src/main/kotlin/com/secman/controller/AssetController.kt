@@ -298,9 +298,8 @@ open class AssetController(
     fun getOwnerCandidates(): HttpResponse<List<OwnerCandidate>> {
         val candidates = mutableListOf<OwnerCandidate>()
         candidates.add(OwnerCandidate(AssetOwners.CROWDSTRIKE_IMPORT, AssetOwners.CROWDSTRIKE_IMPORT))
-        val users = userRepository.findAll().sortedBy { it.username.lowercase() }
-        for (user in users) {
-            candidates.add(OwnerCandidate(user.username, "${user.username} (${user.email})"))
+        for ((username, email) in userRepository.findUsernameEmailPairs()) {
+            candidates.add(OwnerCandidate(username as String, "$username ($email)"))
         }
         return HttpResponse.ok(candidates)
     }
@@ -828,7 +827,10 @@ open class AssetController(
 
     @Serdeable
     data class HostnameDeletionPreviewResponse(
-        val assets: List<HostnameDeletionCandidate>, val unmatchedHostnames: List<String>
+        @field:JsonInclude(JsonInclude.Include.ALWAYS)
+        val assets: List<HostnameDeletionCandidate>,
+        @field:JsonInclude(JsonInclude.Include.ALWAYS)
+        val unmatchedHostnames: List<String>
     )
 
     /** Include stored, non-current assets; deletion still uses the reviewed IDs through delete-selected. */

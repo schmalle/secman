@@ -7,7 +7,10 @@ import jakarta.persistence.*
 @MappedSuperclass
 @Serdeable
 abstract class VersionedEntity(
-    @ManyToOne
+    // LAZY: never serialized (@JsonIgnore) and not read through these entities; as an implicit
+    // EAGER ManyToOne it added a Release (and its creator) load to every requirement, use case,
+    // norm and standard fetched.
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "release_id")
     @JsonIgnore
     var release: Release? = null,

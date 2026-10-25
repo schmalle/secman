@@ -31,18 +31,18 @@ dependencies {
     implementation("io.micronaut.cache:micronaut-cache-caffeine")
 
     // Database
-    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.2.3")
+    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.2.4")
     implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.2.0")
     implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.2.0")
-    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.10")
+    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.11")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:8.1.1")
-	runtimeOnly("org.flywaydb:flyway-core:13.10.0")
-	runtimeOnly("org.flywaydb:flyway-mysql:13.10.0")
+	runtimeOnly("org.flywaydb:flyway-core:13.11.1")
+	runtimeOnly("org.flywaydb:flyway-mysql:13.11.1")
 
     // Security
-    implementation("io.micronaut.security:micronaut-security-jwt:5.5.0")
-    implementation("io.micronaut.security:micronaut-security-oauth2:5.5.0")
+    implementation("io.micronaut.security:micronaut-security-jwt:5.5.1")
+    implementation("io.micronaut.security:micronaut-security-oauth2:5.5.1")
 
     // WebAuthn/Passkey support
     implementation("com.webauthn4j:webauthn4j-core:0.31.11.RELEASE")
@@ -63,8 +63,14 @@ dependencies {
     implementation("io.micronaut.views:micronaut-views-thymeleaf")
     implementation("org.thymeleaf:thymeleaf:3.1.5.RELEASE")
 
+    constraints {
+        implementation("ognl:ognl:3.4.13") {
+            because("Fix CVE-2026-113730 in Thymeleaf's transitive expression evaluator")
+        }
+    }
+
     // Serialization
-    implementation("io.micronaut.serde:micronaut-serde-jackson:3.2.4")
+    implementation("io.micronaut.serde:micronaut-serde-jackson:3.2.6")
     
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-reflect:${kotlinVersion}")
@@ -77,12 +83,12 @@ dependencies {
     // Explicit version: the Micronaut platform BOM manages the Jackson 3 coordinate
     // (tools.jackson.module), not this Jackson 2 one. It previously resolved only via a
     // transitive jackson-bom that micronaut-micrometer-bom 6.0.1 dropped.
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.3")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.4")
     // Same story as the Kotlin module above: the dropped jackson-bom took the Java 8
     // time module with it, so every plain ObjectMapper lost Instant support. Without it
     // findAndRegisterModules() finds nothing and Instant fields fail to serialize.
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.22.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.22.4")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     implementation("io.micronaut.reactor:micronaut-reactor")
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")
     
@@ -99,8 +105,8 @@ dependencies {
     runtimeOnly("org.yaml:snakeyaml:2.7")
     
     // Password encoding
-    implementation("org.springframework.security:spring-security-crypto:7.1.1")
-    implementation("org.springframework:spring-core:7.0.9")
+    implementation("org.springframework.security:spring-security-crypto:7.1.2")
+    implementation("org.springframework:spring-core:7.0.10")
     implementation("commons-logging:commons-logging:1.4.0")
     
     // Document generation (Apache POI)

@@ -30,6 +30,35 @@ export interface HostnameDeletionPreview {
   unmatchedHostnames: string[];
 }
 
+/** Validate the wire shape before the deletion modal renders fields or derives asset IDs. */
+export function parseHostnameDeletionPreview(value: unknown): HostnameDeletionPreview {
+  const fail = (): never => {
+    throw new Error('Could not preview hostname deletion because the server returned an invalid response.');
+  };
+  const isObject = (item: unknown): item is Record<string, unknown> =>
+    typeof item === 'object' && item !== null && !Array.isArray(item);
+  const isOptionalString = (item: unknown): boolean =>
+    item === undefined || item === null || typeof item === 'string';
+
+  if (!isObject(value) || !Array.isArray(value.assets) || !Array.isArray(value.unmatchedHostnames) ||
+      !value.unmatchedHostnames.every(hostname => typeof hostname === 'string')) return fail();
+
+  const assets = value.assets.map(asset => {
+    if (!isObject(asset) || !Number.isSafeInteger(asset.id) || Number(asset.id) <= 0 ||
+        typeof asset.name !== 'string' || typeof asset.hostname !== 'string' ||
+        !isOptionalString(asset.cloudAccountId) || !isOptionalString(asset.cloudInstanceId)) return fail();
+    return {
+      id: asset.id as number,
+      name: asset.name,
+      hostname: asset.hostname,
+      ...(typeof asset.cloudAccountId === 'string' ? { cloudAccountId: asset.cloudAccountId } : {}),
+      ...(typeof asset.cloudInstanceId === 'string' ? { cloudInstanceId: asset.cloudInstanceId } : {}),
+    };
+  });
+
+  return { assets, unmatchedHostnames: [...value.unmatchedHostnames] };
+}
+
 export async function previewHostnameDeletion(hostnames: string): Promise<HostnameDeletionPreview> {
   const response = await authenticatedPost('/api/assets/deletion-preview', { hostnames });
   if (!response.ok) {
@@ -38,7 +67,7 @@ export async function previewHostnameDeletion(hostnames: string): Promise<Hostna
       : response.status === 400 && typeof body?.error === 'string' ? body.error
       : 'Could not preview hostname deletion. Please try again.');
   }
-  return response.json();
+  return parseHostnameDeletionPreview(await response.json().catch(() => null));
 }
 
 export async function deleteSelectedAssets(assetIds: number[]): Promise<SelectedAssetDeletionResult[]> {

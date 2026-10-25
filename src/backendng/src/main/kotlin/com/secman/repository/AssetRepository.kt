@@ -39,6 +39,14 @@ interface AssetRepository : JpaRepository<Asset, Long> {
         countQuery = "SELECT COUNT(*) FROM asset a WHERE a.id IN (" + AssetAccessSql.IDS + ") AND a.id IN (" + AssetCurrentnessSql.IDS + ")", nativeQuery = true)
     fun findCurrentAccessiblePage(userId: Long, userEmail: String, pageable: Pageable): Page<Asset>
 
+    /** Current, granted asset ids in one round trip; replaces ids-then-chunked-currentness checks. */
+    @io.micronaut.data.annotation.Query(value = "SELECT a.id FROM asset a WHERE a.id IN (" + AssetAccessSql.IDS + ") AND a.id IN (" + AssetCurrentnessSql.IDS + ")", nativeQuery = true)
+    fun findCurrentAccessibleIds(userId: Long, userEmail: String): List<Long>
+
+    /** Stored-record grant check for one asset, without materializing the whole grant set. */
+    @io.micronaut.data.annotation.Query(value = AssetAccessSql.CONTAINS, nativeQuery = true)
+    fun countAccessibleById(assetId: Long, userId: Long, userEmail: String): Long
+
 
     /**
      * All asset ids as a projection — for the ADMIN/SECCHAMPION short-circuit paths in
@@ -50,10 +58,11 @@ interface AssetRepository : JpaRepository<Asset, Long> {
 
     @io.micronaut.data.annotation.Query("""
         SELECT a.id FROM Asset a
-        WHERE (:domain IS NULL OR LOWER(a.adDomain) = LOWER(:domain))
+        WHERE ${AssetCurrentnessSql.JPQL}
+          AND (:domain IS NULL OR a.adDomain = :domain)
           AND (:awsHosted = false OR (a.cloudAccountId IS NOT NULL AND TRIM(a.cloudAccountId) <> ''))
     """)
-    fun findIdsWithStatisticsFilters(domain: String?, awsHosted: Boolean): List<Long>
+    fun findCurrentIdsWithStatisticsFilters(domain: String?, awsHosted: Boolean): List<Long>
 
     @io.micronaut.data.annotation.Query("""
         SELECT a.id FROM Asset a

@@ -1,7 +1,7 @@
 package com.secman.service
 
 import com.secman.dto.AssetInterventionStatus
-import com.secman.repository.ExceptionMatchSql
+import com.secman.repository.VulnQuerySql
 import jakarta.inject.Singleton
 import jakarta.persistence.EntityManager
 import org.slf4j.LoggerFactory
@@ -13,7 +13,7 @@ import java.time.LocalDateTime
  * This existed as two copy-pasted `countVulnerabilitiesBySeverity` private methods, one in
  * AccountVulnsService and one in WorkgroupVulnsService, and the copies had already drifted:
  * the workgroup copy omitted the `JOIN asset a`, and therefore could not carry the excepted /
- * non-excepted columns at all — ExceptionMatchSql resolves `a.ip`, `a.cloud_account_id` and
+ * non-excepted columns at all — the exception match then resolved `a.ip`, `a.cloud_account_id` and
  * `a.os_version`. That is why /wg-vulns showed no exception breakdown while /account-vulns did.
  * Adding the intervention-status column to two diverging copies would have produced a third
  * divergence, so the query lives here once.
@@ -106,7 +106,9 @@ class AssetVulnCountsQuery(
         // Conditional aggregation: one pass over the asset's vulnerabilities yields every column.
         // COALESCE maps NULL severity to '' so it lands in unknown_count rather than vanishing.
         // The SLA anchor is COALESCE(first_seen_at, scan_timestamp) — scan_timestamp alone is
-        // refreshed on every re-import and would understate true age.
+        // refreshed on every re-import and would understate true age. Exception coverage reads the
+        // materialized `excepted` flag (see VulnQuerySql.NOT_EXCEPTED) instead of evaluating the
+        // non-sargable EXCEPTION_MATCH three times per row.
         val sql = """
             SELECT
                 v.asset_id,
@@ -118,16 +120,9 @@ class AssetVulnCountsQuery(
                 SUM(CASE WHEN COALESCE(v.cvss_severity, '') = ''
                          OR UPPER(v.cvss_severity) NOT IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')
                     THEN 1 ELSE 0 END) as unknown_count,
-                SUM(CASE WHEN EXISTS (
-                    SELECT 1 FROM vulnerability_exception e WHERE ${ExceptionMatchSql.EXCEPTION_MATCH}
-                ) THEN 1 ELSE 0 END) as excepted_count,
-                SUM(CASE WHEN NOT EXISTS (
-                    SELECT 1 FROM vulnerability_exception e WHERE ${ExceptionMatchSql.EXCEPTION_MATCH}
-                ) THEN 1 ELSE 0 END) as non_excepted_count,
-                SUM(CASE WHEN NOT EXISTS (
-                    SELECT 1 FROM vulnerability_exception e WHERE ${ExceptionMatchSql.EXCEPTION_MATCH}
-                ) AND COALESCE(v.first_seen_at, v.scan_timestamp) < :thresholdDate
-                    THEN 1 ELSE 0 END) as non_excepted_overdue_count
+                SUM(CASE WHEN ${VulnQuerySql.EXCEPTED} THEN 1 ELSE 0 END) as excepted_count,
+                SUM(CASE WHEN ${VulnQuerySql.NOT_EXCEPTED} THEN 1 ELSE 0 END) as non_excepted_count,
+                SUM(CASE WHEN ${VulnQuerySql.OVERDUE} THEN 1 ELSE 0 END) as non_excepted_overdue_count
             FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
             JOIN asset a ON v.asset_id = a.id
             WHERE v.asset_id IN (:assetIds)
