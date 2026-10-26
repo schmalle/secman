@@ -186,4 +186,117 @@ class CrowdStrikeImportRecoveryServiceTest {
         assertThat(error.reason).isEqualTo("TOO_MANY_HOSTNAME_MATCHES")
         verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any(), any()) }
     }
+
+    // A renamed host: the stored asset holds the EC2 instance under its old name, bound to an
+    // older Falcon AID the provider no longer returns (production case DBCLSMMES, 2026-10-26).
+    private val instanceId = "i-0f457acbd6c417da4"
+    private val lastContact = java.time.Instant.now().minusSeconds(60)
+    private val instanceBatch = batch.copy(deviceSelection = CrowdStrikeDeviceSelection(
+        batch.deviceSelection!!.selected.copy(instanceId = instanceId, lastSeen = lastContact)))
+    private val renamed = asset.copy(id = 9, name = "OLD-ARCGIS", cloudInstanceId = instanceId, cloudAccountId = "123456789012")
+    private val unexplained = CrowdStrikeIdentityConflict("UNEXPLAINED_AID", "Stored asset has an unverified Falcon device identity")
+
+    private fun staleBinding(lastSeen: java.time.Instant? = lastContact.minusSeconds(86_400), aid: String = "aid-old") =
+        CrowdStrikeAssetIdentity(asset = renamed, crowdStrikeAid = aid, sourceHostname = renamed.name,
+            falconLastSeenAt = lastSeen?.let { java.time.LocalDateTime.ofInstant(it, java.time.ZoneOffset.UTC) })
+
+    private fun stubInstanceOwners(owners: List<Asset>, hostnameMatches: List<Asset> = emptyList(), bindings: List<CrowdStrikeAssetIdentity>) {
+        stub(hostnameMatches + owners, bindings)
+        val remaining = owners.toMutableList()
+        every { assets.findCrowdStrikeReplacementCandidates("ARCGIS", any()) } answers {
+            Page.of(hostnameMatches, Pageable.from(0, 102), hostnameMatches.size.toLong())
+        }
+        every { assets.findCrowdStrikeInstanceOwners(instanceId, "123456789012", any()) } answers {
+            Page.of(remaining.toList(), Pageable.from(0, 102), remaining.size.toLong())
+        }
+        owners.forEach { owner ->
+            every { deletion.deleteAsset(requireNotNull(owner.id), "admin", false, null, any()) } answers {
+                assertThat(arg<(Asset) -> Boolean>(4)(owner)).isTrue()
+                remaining.remove(owner)
+                mockk(relaxed = true)
+            }
+        }
+    }
+
+    @Test
+    fun `nothing in scope reports the original rejection instead of a target change`() {
+        stub(emptyList())
+        every { em.find(Asset::class.java, 7L) } returns asset
+        val error = assertThrows<CrowdStrikeRecoveryBlocked> { service.recover(batch, conflict, "admin") }
+        assertThat(error.reason).isEqualTo("CONFLICT_OUTSIDE_RECOVERY_SCOPE")
+        assertThat(error.message).contains("Blocking asset: 7", "Nothing was deleted")
+        verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { assets.findCrowdStrikeInstanceOwners(any(), any(), any()) }
+    }
+
+    @Test
+    fun `a rejected asset that disappeared before recovery is still a target change`() {
+        stub(emptyList())
+        every { em.find(Asset::class.java, 7L) } returns null
+        val error = assertThrows<CrowdStrikeRecoveryBlocked> { service.recover(batch, conflict, "admin") }
+        assertThat(error.reason).isEqualTo("TARGET_CHANGED")
+    }
+
+    @Test
+    fun `identity-v3 removes a stale holder of the selected EC2 instance under another name`() {
+        stubInstanceOwners(listOf(renamed), bindings = listOf(staleBinding()))
+        assertThat(service.recover(instanceBatch, unexplained, "admin", true)).containsExactly(9L)
+        verify(exactly = 1) { deletion.deleteAsset(9, "admin", false, null, any()) }
+    }
+
+    @Test
+    fun `identity-v3 removes hostname matches and the stale instance holder together`() {
+        stubInstanceOwners(listOf(renamed), listOf(asset), listOf(staleBinding()))
+        every { assets.findCrowdStrikeReplacementCandidates("ARCGIS", any()) } returnsMany listOf(
+            Page.of(listOf(asset), Pageable.from(0, 102), 1), Page.of(listOf(asset), Pageable.from(0, 102), 1),
+            Page.of(emptyList(), Pageable.from(0, 102), 0))
+        assertThat(service.recover(instanceBatch, conflict, "admin", true)).containsExactly(7L, 9L)
+    }
+
+    @Test
+    fun `an instance holder with current undated or selected Falcon contact is never deleted`() {
+        for (binding in listOf(staleBinding(lastSeen = lastContact.plusSeconds(1)), staleBinding(lastSeen = lastContact),
+                staleBinding(lastSeen = null), staleBinding(aid = "aid-one"))) {
+            stubInstanceOwners(listOf(renamed), bindings = listOf(binding))
+            every { em.find(Asset::class.java, any<Long>()) } returns renamed
+            val error = assertThrows<CrowdStrikeRecoveryBlocked> { service.recover(instanceBatch, unexplained, "admin", true) }
+            assertThat(error.reason).describedAs(binding.toString()).isIn("CONFLICT_OUTSIDE_RECOVERY_SCOPE", "UNVERIFIED_SELECTED_OWNER")
+        }
+        verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `unbound CrowdStrike legacy rows holding the instance are removed together`() {
+        // Production shape: two pre-binding rows under old names, no Falcon identity at all.
+        val legacy = listOf(
+            renamed.copy(id = 78636, name = "dev-gmesbclsim-MES-svr", owner = "CrowdStrike Import"),
+            renamed.copy(id = 85110, name = "EC2AMAZ-O1NJUQ8", owner = "CrowdStrike Import",
+                crowdStrikeAgentSeenAt = java.time.LocalDateTime.ofInstant(lastContact.minusSeconds(600), java.time.ZoneOffset.UTC)))
+        stubInstanceOwners(legacy, bindings = emptyList())
+        val duplicate = CrowdStrikeIdentityConflict("DUPLICATE_ASSET_CONFLICT", "Duplicate assets do not have proven superseded Falcon identities")
+        assertThat(service.recover(instanceBatch, duplicate, "admin", true)).containsExactly(78636L, 85110L)
+    }
+
+    @Test
+    fun `unbound holders from other sources, with newer sensor contact or manual provenance are kept and reported`() {
+        val user = mockk<com.secman.domain.User>(relaxed = true)
+        val newer = java.time.LocalDateTime.ofInstant(lastContact, java.time.ZoneOffset.UTC)
+        for (holder in listOf(renamed, renamed.copy(owner = "CrowdStrike Import", crowdStrikeAgentSeenAt = newer),
+                renamed.copy(owner = "CrowdStrike Import", manualCreator = user))) {
+            stubInstanceOwners(listOf(holder), bindings = emptyList())
+            val error = assertThrows<CrowdStrikeRecoveryBlocked> { service.recover(instanceBatch, unexplained, "admin", true) }
+            assertThat(error.reason).isEqualTo("CONFLICT_OUTSIDE_RECOVERY_SCOPE")
+            assertThat(error.message).contains("may be live and were kept: 9.")
+        }
+        verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `the hostname-v2 contract never widens to instance holders`() {
+        stubInstanceOwners(listOf(renamed), bindings = listOf(staleBinding()))
+        val error = assertThrows<CrowdStrikeRecoveryBlocked> { service.recover(instanceBatch, unexplained, "admin") }
+        assertThat(error.reason).isEqualTo("CONFLICT_OUTSIDE_RECOVERY_SCOPE")
+        verify(exactly = 0) { assets.findCrowdStrikeInstanceOwners(any(), any(), any()) }
+        verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any(), any()) }
+    }
 }

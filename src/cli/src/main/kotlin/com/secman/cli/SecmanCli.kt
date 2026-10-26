@@ -495,7 +495,7 @@ class SecmanCli {
                   --client-id <id>         CrowdStrike API client ID (overrides config file)
                   --client-secret <secret> CrowdStrike API client secret (overrides config file)
                   --save                   Save asset and vulnerabilities to database (direct access)
-                  --deleteonfail           With --save, delete failed-hostname matches and verified selected-AID owner, then retry (max twice; ADMIN)
+                  --deleteonfail           With --save, delete failed-hostname matches, verified selected-AID owner and stale EC2-instance holders, then retry (max twice; ADMIN)
                   --verbose                Enable verbose logging
 
                 Examples:
@@ -569,7 +569,7 @@ class SecmanCli {
                   --overdue-threshold <num> Days threshold for overdue vulnerability report (default: 30)
                   --backend-url <url>      Backend API URL (default: SECMAN_BACKEND_URL env var, or http://localhost:8080)
                   --save                   Save to database via backend API
-                  --deleteonfail           With --save, delete failed-hostname matches and verified selected-AID owner, then retry (max twice; ADMIN)
+                  --deleteonfail           With --save, delete failed-hostname matches, verified selected-AID owner and stale EC2-instance holders, then retry (max twice; ADMIN)
                   --dry-run                Query but don't import
                   --verbose                Enable verbose logging
 

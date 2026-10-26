@@ -669,6 +669,17 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     """)
     fun findCrowdStrikeReplacementCandidates(hostname: String, pageable: Pageable): Page<Asset>
 
+    /** Assets holding one EC2 instance in one account, whatever their name; bounded like the hostname lookup. */
+    @io.micronaut.data.annotation.Query(value = """
+        SELECT a FROM Asset a
+        WHERE a.cloudInstanceId = :instanceId AND a.cloudAccountId = :accountId
+        ORDER BY a.id
+    """, countQuery = """
+        SELECT COUNT(a) FROM Asset a
+        WHERE a.cloudInstanceId = :instanceId AND a.cloudAccountId = :accountId
+    """)
+    fun findCrowdStrikeInstanceOwners(instanceId: String, accountId: String, pageable: Pageable): Page<Asset>
+
     @io.micronaut.data.annotation.Query(value = """
         SELECT a FROM Asset a
         WHERE LOWER(COALESCE(a.crowdStrikeHostname, a.name)) IN (:hostnames)
