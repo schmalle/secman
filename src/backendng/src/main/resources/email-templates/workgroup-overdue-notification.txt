@@ -1,0 +1,25 @@
+OVERDUE VULNERABILITIES ON YOUR WORKGROUP ASSETS
+================================================
+
+Hello {userEmail},
+
+{assetCount} asset(s) you are responsible for through your workgroup membership have
+{totalOverdue} vulnerabilities open for more than {thresholdDays} days
+({totalCritical} critical, {totalHigh} high).
+
+Only assets observed within the last 72 hours are included.
+
+AFFECTED ASSETS
+---------------
+{assetTableText}
+
+ACTION REQUIRED
+---------------
+Please remediate these findings or request a vulnerability exception.
+You receive this mail because you are a direct member of the workgroups listed above.
+
+Open current vulnerabilities: {dashboardUrl}
+
+---
+This is an automated notification from the Security Management System (notify-users-overdue).
+Do not reply to this email.

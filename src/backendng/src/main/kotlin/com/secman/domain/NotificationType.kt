@@ -18,5 +18,12 @@ enum class NotificationType {
     /**
      * Notification about new vulnerabilities discovered on user's assets
      */
-    NEW_VULNERABILITY
+    NEW_VULNERABILITY,
+
+    /**
+     * Per-recipient overdue digest from `notify-users-overdue` (workgroup paths only).
+     * Rendered by [com.secman.service.WorkgroupOverdueNotificationService], not by the
+     * outdated-asset templates; its log rows also back the once-per-UTC-day send guard.
+     */
+    OVERDUE_WORKGROUP_DIGEST
 }

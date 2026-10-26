@@ -30,6 +30,8 @@ import com.secman.cli.commands.SendEolNotificationsCommand
 import com.secman.cli.commands.SendExceptionExpiryRemindersCommand
 import com.secman.cli.commands.ServersCommand
 import com.secman.cli.commands.UserAccessOverviewCommand
+import com.secman.cli.commands.ShowNotifiedUsersCommand
+import com.secman.cli.commands.NotifyUsersOverdueCommand
 import com.secman.cli.commands.ReconcileCrowdStrikeIdentitiesCommand
 import io.micronaut.configuration.picocli.PicocliRunner
 import io.micronaut.context.ApplicationContext
@@ -58,6 +60,8 @@ class SecmanCli {
                 when {
                     args.getOrNull(1) == "reconcile-crowdstrike-identities" -> runPicocli(ReconcileCrowdStrikeIdentitiesCommand::class.java, arrayOf("reconcile-crowdstrike-identities", "--help"))
                     args.getOrNull(1) == "user-access-overview" -> runPicocli(UserAccessOverviewCommand::class.java, arrayOf("user-access-overview", "--help"))
+                    args.getOrNull(1) == "show-notified-users" -> runPicocli(ShowNotifiedUsersCommand::class.java, arrayOf("show-notified-users", "--help"))
+                    args.getOrNull(1) == "notify-users-overdue" -> runPicocli(NotifyUsersOverdueCommand::class.java, arrayOf("notify-users-overdue", "--help"))
                     args.size > 2 && args[1] == "query" && args[2] == "servers" -> showCommandHelp("query-servers")
                     args.size > 2 && args[1] == "manage-user-mappings" && args[2] == "s3" -> showCommandHelp("manage-user-mappings-s3")
                     args.size > 1 -> showCommandHelp(args[1])
@@ -292,6 +296,12 @@ class SecmanCli {
             args[0] == "send-notification-users" -> {
                 runPicocli(SendNotificationUsersCommand::class.java, args)
             }
+            args[0] == "show-notified-users" -> {
+                runPicocli(ShowNotifiedUsersCommand::class.java, args)
+            }
+            args[0] == "notify-users-overdue" -> {
+                runPicocli(NotifyUsersOverdueCommand::class.java, args)
+            }
             args[0] == "send-patch-notifications" -> {
                 runPicocli(SendPatchNotificationsCommand::class.java, args)
             }
@@ -389,6 +399,8 @@ class SecmanCli {
                 send-admin-summary     Send system statistics summary email to ADMIN users
                 send-account-finding-age-report  Email accounts with the longest-open findings to ADMIN users
                 send-notification-users  Send vulnerability notifications to users by AWS account
+                notify-users-overdue   Email workgroup members about overdue findings on their assets (ADMIN)
+                show-notified-users    Show which overdue assets notify-users-overdue would mail to a user (ADMIN)
                 send-patch-notifications  Notify users about missing patches, filtered by email first character
                 send-application-register-reminders  Send reminders for stale application register quality checks
                 notify-new-accounts    Notify users about new AWS account mappings created in the last N hours

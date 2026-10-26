@@ -114,6 +114,13 @@ class EmailTemplateService(
                 sb.appendLine()
                 sb.appendLine("${context.totalCount} new vulnerability(ies) detected on your assets.")
             }
+            NotificationType.OVERDUE_WORKGROUP_DIGEST -> {
+                // Normally rendered by WorkgroupOverdueNotificationService; kept for exhaustiveness.
+                sb.appendLine("OVERDUE VULNERABILITIES ON YOUR WORKGROUP ASSETS")
+                sb.appendLine("=" .repeat(50))
+                sb.appendLine()
+                sb.appendLine("Hello ${context.recipientName ?: "Asset Owner"},")
+            }
         }
 
         sb.appendLine()

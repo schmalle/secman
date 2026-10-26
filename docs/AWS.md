@@ -91,8 +91,8 @@ source "$HOME/.sdkman/bin/sdkman-init.sh"
 # Java 25 (Amazon Corretto build via SDKMAN)
 sdk install java 25-amzn
 
-# Gradle 9.7.1 (project version)
-sdk install gradle 9.7.1
+# Gradle 9.8.1 (project version)
+sdk install gradle 9.8.1
 ```
 
 The scripts source `${SDKMAN_DIR}/bin/sdkman-init.sh` themselves, so a fresh

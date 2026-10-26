@@ -2,6 +2,7 @@ package com.secman.repository
 
 import com.secman.domain.NotificationLog
 import com.secman.domain.NotificationType
+import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
 import io.micronaut.data.model.Page
@@ -48,4 +49,11 @@ interface NotificationLogRepository : JpaRepository<NotificationLog, Long> {
      * Count logs by notification type for metrics
      */
     fun countByNotificationType(notificationType: NotificationType): Long
+
+    /** Recipients already mailed successfully since [since]; bounded by one guard window of sends. */
+    @Query("""
+        SELECT DISTINCT LOWER(n.ownerEmail) FROM NotificationLog n
+        WHERE n.notificationType = :notificationType AND n.status = 'SENT' AND n.sentAt >= :since
+    """)
+    fun findSentRecipientEmailsSince(notificationType: NotificationType, since: Instant): List<String>
 }

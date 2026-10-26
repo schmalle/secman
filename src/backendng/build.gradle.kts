@@ -34,7 +34,7 @@ dependencies {
     implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.2.4")
     implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.2.0")
     implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.2.0")
-    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.11")
+    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:4.0.0")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:8.1.1")
 	runtimeOnly("org.flywaydb:flyway-core:13.11.1")
@@ -64,7 +64,7 @@ dependencies {
     implementation("org.thymeleaf:thymeleaf:3.1.5.RELEASE")
 
     constraints {
-        implementation("ognl:ognl:3.4.13") {
+        implementation("ognl:ognl:3.4.17") {
             because("Fix CVE-2026-113730 in Thymeleaf's transitive expression evaluator")
         }
     }
@@ -93,7 +93,7 @@ dependencies {
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.6.5")
+    runtimeOnly("ch.qos.logback:logback-classic:1.6.6")
     // Bridge Log4j to Logback (required for Apache POI)
     runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.26.1")
     // Logstash encoder for JSON logging (Feature 046)
@@ -110,8 +110,8 @@ dependencies {
     implementation("commons-logging:commons-logging:1.4.0")
     
     // Document generation (Apache POI)
-    implementation("org.apache.poi:poi-ooxml:5.5.1")
-    implementation("org.apache.poi:poi-scratchpad:5.5.1")
+    implementation("org.apache.poi:poi-ooxml:6.0.0")
+    implementation("org.apache.poi:poi-scratchpad:6.0.0")
 
     // CSV parsing (Apache Commons CSV) - Feature 016
     implementation("org.apache.commons:commons-csv:1.14.1")
@@ -137,7 +137,7 @@ dependencies {
     testImplementation("io.mockk:mockk:1.14.11")
     // Tests assert on log output via Logback's ListAppender; main code stays
     // slf4j-only (logback-classic is runtimeOnly above).
-    testImplementation("ch.qos.logback:logback-classic:1.6.5")
+    testImplementation("ch.qos.logback:logback-classic:1.6.6")
     testImplementation("org.assertj:assertj-core:3.27.7")
 }
 

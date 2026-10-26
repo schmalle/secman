@@ -276,6 +276,7 @@ class NotificationService(
             NotificationType.OUTDATED_LEVEL1 -> "Action Requested: $assetCount Outdated Asset(s) Detected"
             NotificationType.OUTDATED_LEVEL2 -> "⚠️ URGENT: $assetCount Outdated Asset(s) Require Immediate Action"
             NotificationType.NEW_VULNERABILITY -> "New Vulnerabilities Detected: $assetCount Vulnerability(ies)"
+            NotificationType.OVERDUE_WORKGROUP_DIGEST -> WorkgroupOverdueNotificationService.SUBJECT
         }
     }
 

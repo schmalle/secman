@@ -413,6 +413,99 @@ AWS account sharing. Has no effect without `--notification-user`.
 | `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
 | `--backend-url` | env | `SECMAN_HOST` / `SECMAN_BACKEND_URL` |
 
+### `notify-users-overdue` and `show-notified-users` — workgroup overdue digests
+
+A separate notification function from `send-notification-users`, with its own
+recipient rule and its own email (subject `SecMan: Overdue vulnerabilities on your
+workgroup assets`). A user is mailed about an asset only through the workgroups they
+are a **direct, enabled member** of:
+
+- `DIRECT_ASSIGNMENT` — the asset is assigned to an enabled workgroup the user belongs to.
+- `AWS_WORKGROUP` — an enabled workgroup the user belongs to has a whole-account grant
+  for the asset's AWS account. Assets that appear in the account later are included.
+
+AWS account owner mappings, AWS account sharing, asset `owner`/creator/uploader
+metadata, workgroup hierarchy and ADMIN/SECCHAMPION global visibility never make
+someone a recipient here. Each user gets at most one email per run, listing each asset
+once with every reason it reached them. Full rule, edge cases and examples:
+[`OVERDUE_NOTIFICATIONS.md`](OVERDUE_NOTIFICATIONS.md).
+
+`show-notified-users` is the sender's dry run for one user. It reads, never sends.
+
+```bash
+./scripts/secman show-notified-users --email user@example.com
+./scripts/secman show-notified-users --email user@example.com --days 60 --format json
+./scripts/secman notify-users-overdue --dry-run --verbose
+./scripts/secman notify-users-overdue
+./scripts/secman notify-users-overdue --notification-user user@example.com
+```
+
+`show-notified-users` options:
+
+| Option | Default | Notes |
+|---|---|---|
+| `--email <email>` | required | trimmed and compared case-insensitively |
+| `--days <n>` | 30 | overdue threshold, 1..3650 |
+| `--format table\|json` | table | `json` prints the backend report unchanged |
+| `--backend-url` | env | `SECMAN_HOST` / `SECMAN_BACKEND_URL`; HTTPS, or HTTP to loopback only |
+
+Sample table output:
+
+```text
+User: member@example.com (member, ID 42)
+Status: WOULD_BE_NOTIFIED
+The user would receive one email listing the assets below.
+Threshold: 30 days
+Observation window (UTC): 2026-10-23T09:00 .. 2026-10-26T09:00
+
+WORKGROUPS (direct membership)
+Name | ID | Enabled | Assigned assets | AWS accounts
+aws-DevOps-uuorndojrd | 17 | yes | 0 | 012345678901
+
+OVERDUE ASSETS
+ID | Name | AWS account | Overdue | Critical | High | Medium | Low | Oldest | Reasons
+311 | ip-10-0-1-5 | 012345678901 | 3 | 1 | 2 | 0 | 0 | 64d | AWS_WORKGROUP:aws-DevOps-uuorndojrd/012345678901
+
+Totals: 1 assets, 3 overdue findings (1 critical, 2 high)
+```
+
+The status is one of `USER_NOT_FOUND`, `USER_DISABLED`, `NO_PATHS` (no enabled
+workgroup with assigned assets or AWS accounts), `NO_OVERDUE_ASSETS` and
+`WOULD_BE_NOTIFIED`. Each prints its own explanation line. All five exit `0`.
+
+`notify-users-overdue` options:
+
+| Option | Default | Notes |
+|---|---|---|
+| `--days <n>` | 30 | overdue threshold, 1..3650 |
+| `--dry-run` | false | resolve recipients and print them; send nothing |
+| `--verbose`, `-v` | false | one line per recipient: outcome, asset count, overdue count, workgroups |
+| `--notification-user <email>` | — | process only this user |
+| `--backend-url` | env | as above |
+
+Sample summary:
+
+```text
+Threshold:            30 days
+Recipients resolved:  4
+Emails sent:          4
+Emails failed:        0
+Skipped (already notified today): 0
+Status:               SUCCESS
+```
+
+A recipient who already received this digest successfully during the current UTC
+calendar day is skipped (`SKIPPED_ALREADY_NOTIFIED`), so a repeated or retried run
+does not mail anyone twice. Failed deliveries are not recorded as sent and are retried
+by the next run.
+
+Exit codes (both commands): `0` success or dry run; `1` at least one delivery failed
+(`notify-users-overdue` only); `2` invalid input, including an unknown
+`--notification-user`; `3` authentication or authorization failure; `4` backend or
+transport failure. Credentials come only from `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS`
+(no `--username`/`--password` flags). Backend: `GET /api/overdue-notifications/users`
+and `POST /api/overdue-notifications/send`, both ADMIN only.
+
 ### `send-patch-notifications` — missing-patch emails by email first character
 
 Notifies users about missing patches (overdue vulnerabilities) in deterministic

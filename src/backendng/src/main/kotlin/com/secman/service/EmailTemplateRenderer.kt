@@ -41,7 +41,8 @@ open class EmailTemplateRenderer {
             "aws-account-risk-assessment-reminder",
             "account-welcome",
             "account-onboarding-questionnaire",
-            "account-onboarding-reminder"
+            "account-onboarding-reminder",
+            "workgroup-overdue-notification"
         )
     }
 

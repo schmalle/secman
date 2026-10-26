@@ -95,6 +95,8 @@ export default function NotificationLogs() {
         return 'Outdated (Level 2)';
       case 'NEW_VULNERABILITY':
         return 'New Vulnerability';
+      case 'OVERDUE_WORKGROUP_DIGEST':
+        return 'Overdue (Workgroup)';
       default:
         return type;
     }
@@ -121,6 +123,8 @@ export default function NotificationLogs() {
         return 'badge bg-danger';
       case 'NEW_VULNERABILITY':
         return 'badge bg-info';
+      case 'OVERDUE_WORKGROUP_DIGEST':
+        return 'badge bg-primary';
       default:
         return 'badge bg-secondary';
     }
@@ -182,6 +186,7 @@ export default function NotificationLogs() {
               <option value="OUTDATED_LEVEL1">Outdated (Level 1)</option>
               <option value="OUTDATED_LEVEL2">Outdated (Level 2)</option>
               <option value="NEW_VULNERABILITY">New Vulnerability</option>
+              <option value="OVERDUE_WORKGROUP_DIGEST">Overdue (Workgroup)</option>
             </select>
           </div>
 
