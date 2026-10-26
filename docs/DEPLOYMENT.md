@@ -1,6 +1,6 @@
 # Deployment
 
-Linux production. Backend (`:8080`) + Frontend (`:4321`) behind nginx with SSL termination, MariaDB on `:3306`. Stack: Kotlin 2.4.20/Java 25/Micronaut 5.1 + Astro 7.3/React 19/Node 20 + MariaDB 11.4. Tested on Amazon Linux 2023, Ubuntu 20.04+, RHEL 8+.
+Linux production. Backend (`:8080`) + Frontend (`:4321`) behind nginx with SSL termination, MariaDB on `:3306`. Stack: Kotlin 2.4.21/Java 25/Micronaut 5.2.3 + Astro 7.4.2/React 19/Node 22.23.4+ + MariaDB 11.4. Tested on Amazon Linux 2023, Ubuntu 20.04+, RHEL 8+.
 
 System: 2c/4G/20G minimum, 4c+/8G+/50G+ SSD recommended. Outbound 443 needed for SMTP/CrowdStrike. Inbound 80/443.
 
@@ -9,12 +9,12 @@ System: 2c/4G/20G minimum, 4c+/8G+/50G+ SSD recommended. Outbound 443 needed for
 ```bash
 # Amazon Linux / RHEL
 sudo dnf install -y java-25-amazon-corretto-devel git nginx
-curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo bash -
 sudo dnf install -y nodejs
 
 # Ubuntu / Debian
 sudo apt install -y openjdk-25-jdk git build-essential nginx
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
 
 # MariaDB 11.4 (both)

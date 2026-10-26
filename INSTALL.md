@@ -5,7 +5,7 @@
 | | Version |
 |---|---|
 | JDK | 25 (Amazon Corretto recommended) |
-| Node | 20+ |
+| Node | 22.23.4+ |
 | MariaDB | 11.4+ |
 | Git | 2.x |
 | Docker | optional, deployment only; tests use an external MariaDB |
@@ -17,20 +17,20 @@ System: 2 cores / 4 GB RAM / 20 GB disk minimum (4 cores / 8 GB / 50 GB SSD reco
 ```bash
 # Ubuntu / Debian
 sudo apt install -y openjdk-25-jdk git build-essential
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
 curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version=11.4
 sudo apt install -y mariadb-server mariadb-client
 
 # Amazon Linux 2023 / RHEL
 sudo dnf install -y java-25-amazon-corretto-devel git
-curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo bash -
 sudo dnf install -y nodejs
 curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version=11.4
 sudo dnf install -y MariaDB-server MariaDB-client
 
 # macOS
-brew install openjdk@25 node@20 mariadb@11.4 git
+brew install openjdk@25 node@22 mariadb@11.4 git
 ```
 
 ## Quick start (dev)
