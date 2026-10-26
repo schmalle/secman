@@ -266,11 +266,28 @@ class CrowdStrikeImportRecoveryServiceTest {
     }
 
     @Test
-    fun `an instance holder without Falcon bindings is left alone and reported as out of scope`() {
-        stubInstanceOwners(listOf(renamed), bindings = emptyList())
-        val error = assertThrows<CrowdStrikeRecoveryBlocked> { service.recover(instanceBatch, unexplained, "admin", true) }
-        assertThat(error.reason).isEqualTo("CONFLICT_OUTSIDE_RECOVERY_SCOPE")
-        assertThat(error.message).doesNotContain("current or undated")
+    fun `unbound CrowdStrike legacy rows holding the instance are removed together`() {
+        // Production shape: two pre-binding rows under old names, no Falcon identity at all.
+        val legacy = listOf(
+            renamed.copy(id = 78636, name = "dev-gmesbclsim-MES-svr", owner = "CrowdStrike Import"),
+            renamed.copy(id = 85110, name = "EC2AMAZ-O1NJUQ8", owner = "CrowdStrike Import",
+                crowdStrikeAgentSeenAt = java.time.LocalDateTime.ofInstant(lastContact.minusSeconds(600), java.time.ZoneOffset.UTC)))
+        stubInstanceOwners(legacy, bindings = emptyList())
+        val duplicate = CrowdStrikeIdentityConflict("DUPLICATE_ASSET_CONFLICT", "Duplicate assets do not have proven superseded Falcon identities")
+        assertThat(service.recover(instanceBatch, duplicate, "admin", true)).containsExactly(78636L, 85110L)
+    }
+
+    @Test
+    fun `unbound holders from other sources, with newer sensor contact or manual provenance are kept and reported`() {
+        val user = mockk<com.secman.domain.User>(relaxed = true)
+        val newer = java.time.LocalDateTime.ofInstant(lastContact, java.time.ZoneOffset.UTC)
+        for (holder in listOf(renamed, renamed.copy(owner = "CrowdStrike Import", crowdStrikeAgentSeenAt = newer),
+                renamed.copy(owner = "CrowdStrike Import", manualCreator = user))) {
+            stubInstanceOwners(listOf(holder), bindings = emptyList())
+            val error = assertThrows<CrowdStrikeRecoveryBlocked> { service.recover(instanceBatch, unexplained, "admin", true) }
+            assertThat(error.reason).isEqualTo("CONFLICT_OUTSIDE_RECOVERY_SCOPE")
+            assertThat(error.message).contains("may be live and were kept: 9.")
+        }
         verify(exactly = 0) { deletion.deleteAsset(any(), any(), any(), any(), any()) }
     }
 

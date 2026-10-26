@@ -1144,13 +1144,22 @@ exists. Missing enrollment evidence returns `UNVERIFIED_SELECTED_OWNER`; other
 bindings return `UNEXPLAINED_AID`, including the blocking asset ID. The same
 freshness, protected-reference, target-change and total 101-asset limits apply.
 A similar hostname never adds an outside target. An instance ID adds one only
-under `identity-v3`, for the renamed-host or reinstalled-sensor case: an asset under
-another name that holds the selected EC2 instance (`i-` + 8 or 17 hex digits) in the
-selected cloud account, and whose every Falcon binding is a different AID with a
-stored last contact strictly older than the selected device's. That is the asset the
-normal import rejects with `UNEXPLAINED_AID`. An instance holder without bindings is
-never a target. One with the selected AID follows the selected-owner rule above. One
-with a current, tied or undated binding is preserved and named in the blocking message.
+under `identity-v3`, for the renamed-host or reinstalled-sensor case. It covers an
+asset under another name that holds the selected EC2 instance (`i-` + 8 or 17 hex
+digits) in the selected cloud account and is stale:
+
+- **Bound:** every Falcon binding is a different AID with a stored last contact
+  strictly older than the selected device's. The normal import rejects this with
+  `UNEXPLAINED_AID`.
+- **Unbound:** a row from before identity bindings. The owner must be
+  `CrowdStrike Import`, with no manual creator or scan uploader, and its
+  `crowdstrike_agent_seen_at` must be empty or strictly older. Two or more such rows
+  make the normal import reject with `DUPLICATE_ASSET_CONFLICT`. A single one is
+  adopted by the import anyway.
+
+A holder with the selected AID follows the selected-owner rule above. Every other
+holder is preserved and named in the blocking message: one with a current, tied or
+undated binding, one from another source, or one with newer sensor contact.
 The holder set is rediscovered under lock and must be unchanged.
 The legacy `hostname-v2` contract still returns `CONFLICT_OUTSIDE_HOSTNAME` and never
 widens to instance holders.

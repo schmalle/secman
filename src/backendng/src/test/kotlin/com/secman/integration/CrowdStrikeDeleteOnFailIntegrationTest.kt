@@ -318,6 +318,28 @@ class CrowdStrikeDeleteOnFailIntegrationTest {
     }
 
     @Test
+    fun `pre-binding CrowdStrike rows under old names are replaced by the new hostname`() {
+        // Production DBCLSMMES: two CrowdStrike-owned rows from before identity bindings hold
+        // the instance as dev-gmesbclsim-MES-svr and EC2AMAZ-O1NJUQ8, with no Falcon AID.
+        val device = device()
+        val ids = listOf("dev-${UUID.randomUUID()}", "EC2AMAZ-${UUID.randomUUID()}").map { name ->
+            requireNotNull(assets.save(com.secman.domain.Asset(name = name, type = "SERVER",
+                owner = com.secman.constants.AssetOwners.CROWDSTRIKE_IMPORT,
+                cloudInstanceId = device.instanceId, cloudAccountId = device.cloudAccountId)).id).also { ownedAssetIds.add(it) }
+        }
+        val ordinary = post(payload(device), false)
+        assertThat(ordinary.hostOutcomes.single().errorCode).isEqualTo("DUPLICATE_ASSET_CONFLICT")
+        ids.forEach { assertThat(assets.findById(it)).isPresent() }
+        val recovered = post(payload(device))
+        assertThat(recovered.errors).isEmpty()
+        assertThat(recovered.hostOutcomes.single().recoveryDeletedAssetIds).containsExactlyElementsOf(ids)
+        val replacement = identities.findByCrowdStrikeAidIn(listOf(device.aid)).single().asset
+        assertThat(replacement.id).isNotIn(ids)
+        assertThat(replacement.cloudInstanceId).isEqualTo(device.instanceId)
+        ids.forEach { assertThat(audits.countByAssetId(it)).isEqualTo(1) }
+    }
+
+    @Test
     fun `renamed host whose old Falcon AID has newer contact is reported and preserved`() {
         val old = device()
         importer.importVulnerabilitiesForServer(payload(old, Instant.now().minusSeconds(5)), "test-admin", true)

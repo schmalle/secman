@@ -1,5 +1,6 @@
 package com.secman.service
 
+import com.secman.constants.AssetOwners
 import com.secman.crowdstrike.dto.CrowdStrikeDeviceRecord
 import com.secman.domain.Asset
 import com.secman.dto.CrowdStrikeVulnerabilityBatchDto
@@ -18,12 +19,11 @@ import java.time.ZoneOffset
 /**
  * ADMIN opt-in cleanup of a failed hostname and its verified selected-AID owner.
  *
- * Under `identity-v3` ([recover]'s `includeSelectedOwner`) the scope also covers assets
- * that hold the selected EC2 instance in the selected account under another name, but
- * only while every Falcon binding they carry is another AID with older provider contact.
- * That is the renamed-host or reinstalled-sensor case the normal import rejects with
- * `UNEXPLAINED_AID`. An instance owner without bindings, or with a current one, is never
- * a target.
+ * Under `identity-v3` ([recover]'s `includeSelectedOwner`) the scope also covers stale
+ * assets that hold the selected EC2 instance in the selected account under another name:
+ * the renamed-host or reinstalled-sensor case the normal import rejects with
+ * `UNEXPLAINED_AID` or `DUPLICATE_ASSET_CONFLICT`. See [instanceOwnerTargets] for what
+ * counts as stale; a holder that might be a live machine is reported, never deleted.
  */
 @Singleton
 class CrowdStrikeImportRecoveryService(
@@ -145,10 +145,12 @@ class CrowdStrikeImportRecoveryService(
     /**
      * Assets outside [hostname] that hold the selected device's EC2 instance in its account.
      *
-     * Removable only when each one has at least one Falcon binding and every binding is a
-     * different AID whose last provider contact is strictly older than the selected device's.
-     * An owner with no binding never blocked the import, so it stays untouched; one with a
-     * current or undated binding may be a live machine and is reported instead of deleted.
+     * A bound holder is removable when every Falcon binding is a different AID whose last
+     * provider contact is strictly older than the selected device's. An unbound holder is
+     * removable when the CrowdStrike import alone owns it (no manual creator or scan uploader)
+     * and its recorded sensor contact, if any, is strictly older; that is the legacy row from before identity bindings, which the
+     * import itself would adopt if it were the only one. Everything else, including rows
+     * from other sources, may be a live machine and is reported instead of deleted.
      */
     private fun instanceOwnerTargets(hostname: String, selected: CrowdStrikeDeviceRecord): InstanceOwners {
         val instanceId = selected.instanceId?.trim()
@@ -161,9 +163,12 @@ class CrowdStrikeImportRecoveryService(
         val owners = page.content.filterNot { matchesHostname(it, hostname) }
         if (owners.isEmpty()) return InstanceOwners.NONE
         val bindings = identities.findByAssetIdIn(owners.map { requireNotNull(it.id) }).groupBy { it.asset.id }
-        // Unbound owners are neither targets nor reported: they cannot cause an identity rejection.
-        val (removable, retained) = owners.filterNot { bindings[it.id].isNullOrEmpty() }.partition { owner ->
-            bindings.getValue(owner.id).all { binding ->
+        val (removable, retained) = owners.partition { owner ->
+            val bound = bindings[owner.id].orEmpty()
+            if (bound.isEmpty()) owner.owner == AssetOwners.CROWDSTRIKE_IMPORT &&
+                owner.manualCreator == null && owner.scanUploader == null &&
+                owner.crowdStrikeAgentSeenAt?.let { it < lastSeen } != false
+            else bound.all { binding ->
                 binding.crowdStrikeAid != selected.aid && binding.falconLastSeenAt?.let { it < lastSeen } == true
             }
         }
@@ -182,7 +187,7 @@ class CrowdStrikeImportRecoveryService(
             else "the failed hostname"
         val blocker = assetId?.let { " Blocking asset: $it." } ?: ""
         val holders = if (retained.isEmpty()) "" else
-            " Assets holding the EC2 instance with a current or undated Falcon binding: ${retained.sorted().joinToString(", ")}."
+            " Assets holding the EC2 instance that may be live and were kept: ${retained.sorted().joinToString(", ")}."
         return CrowdStrikeRecoveryBlocked("CONFLICT_OUTSIDE_RECOVERY_SCOPE",
             "The rejection came from an asset delete-on-fail cannot remove; no asset matches $scope." +
                 "$blocker$holders Nothing was deleted")
