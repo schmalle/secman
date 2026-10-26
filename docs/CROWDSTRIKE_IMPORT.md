@@ -1093,7 +1093,7 @@ and is read-only and ADMIN-only. Confirmed deletion reuses ADMIN-only
 ### Delete conflicting assets after a rejected query import
 
 `query servers --hostnames ARCGIS --save --deleteonfail` explicitly authorizes
-hostname and verified selected-AID owner cleanup after a rejected import. Single-host
+hostname, verified selected-AID owner and stale EC2-instance holder cleanup after a rejected import. Single-host
 `query --hostname ARCGIS --save --deleteonfail` and explicit
 `query servers --aid <aid> --save --deleteonfail` use the same behavior. ADMIN
 permission and `--save` are required. Fleet streaming queries reject this flag;
@@ -1143,8 +1143,24 @@ and Falcon supplies last contact. This also works when no exact-hostname asset
 exists. Missing enrollment evidence returns `UNVERIFIED_SELECTED_OWNER`; other
 bindings return `UNEXPLAINED_AID`, including the blocking asset ID. The same
 freshness, protected-reference, target-change and total 101-asset limits apply.
-Matching only an instance ID or a similar hostname never adds an outside target.
-The legacy `hostname-v2` contract still returns `CONFLICT_OUTSIDE_HOSTNAME`.
+A similar hostname never adds an outside target. An instance ID adds one only
+under `identity-v3`, for the renamed-host or reinstalled-sensor case: an asset under
+another name that holds the selected EC2 instance (`i-` + 8 or 17 hex digits) in the
+selected cloud account, and whose every Falcon binding is a different AID with a
+stored last contact strictly older than the selected device's. That is the asset the
+normal import rejects with `UNEXPLAINED_AID`. An instance holder without bindings is
+never a target. One with the selected AID follows the selected-owner rule above. One
+with a current, tied or undated binding is preserved and named in the blocking message.
+The holder set is rediscovered under lock and must be unchanged.
+The legacy `hostname-v2` contract still returns `CONFLICT_OUTSIDE_HOSTNAME` and never
+widens to instance holders.
+
+When nothing is in scope, recovery reports `CONFLICT_OUTSIDE_RECOVERY_SCOPE`. Its message
+names the blocking asset ID when the rejection carried one, and any preserved instance
+holders. `TARGET_CHANGED` is reserved for races: a rejected asset that disappeared, or a
+target that changed while locks were taken. A blocked or rolled-back outcome keeps the
+original rejection as `errorCode` (for example `UNEXPLAINED_AID`), and the message starts
+with `Original rejection: <code>.`. The blocking reason stays in `recoveryReason`.
 Superseded AIDs bound to other
 hostnames are excluded from the recovery retry, including binding retirement;
 their assets, findings, bindings and enrollment history remain unchanged. An original rejection on

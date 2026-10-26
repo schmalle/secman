@@ -1,5 +1,10 @@
 # Changelog (archived from CLAUDE.md)
 
+## 2026-10-26 — delete-on-fail: renamed EC2 hosts and clearer blocking reasons
+
+- `--deleteonfail` (`identity-v3`) now also removes an asset that holds the selected EC2 instance under another name when every Falcon binding on it is a different AID with older provider contact (renamed host or reinstalled sensor). Previously the import rejected such hosts with `UNEXPLAINED_AID`, and recovery found no hostname match. It then stopped with a misleading `TARGET_CHANGED / No assets match the failed hostname`. Instance holders with a current, tied or undated binding, or with no binding, are never deleted.
+- An empty recovery scope now reports `CONFLICT_OUTSIDE_RECOVERY_SCOPE` with the blocking asset IDs. `TARGET_CHANGED` is kept for real races. Blocked or rolled-back outcomes keep the original conflict code as `errorCode` and prefix the message with `Original rejection: <code>.`. See `docs/CROWDSTRIKE_IMPORT.md` §Delete conflicting assets after a rejected query import.
+
 ## 2026-10-26 — workgroup overdue notifications
 
 - **Workgroup overdue notifications (2026-10-26)** — new CLI `notify-users-overdue` sends one deduplicated overdue-vulnerability email per user, and `show-notified-users --email X` shows, for one user, exactly what that run would send and why. Recipients are direct members of enabled workgroups, reached through direct asset assignment or a whole-AWS-account grant. Owner mappings, sharing, metadata and hierarchy are excluded. The commands are separate from the unchanged `send-notification-users`; a per-UTC-day `notification_log` guard prevents re-sends. See `docs/OVERDUE_NOTIFICATIONS.md`.

@@ -296,6 +296,43 @@ class CrowdStrikeDeleteOnFailIntegrationTest {
     }
 
     @Test
+    fun `renamed host whose old Falcon AID has older contact is replaced by the new hostname`() {
+        // Production 2026-10-26: the EC2 instance was stored under its old name with the
+        // previous sensor's AID; recovery used to find no hostname match and stop.
+        val old = device().copy(lastSeen = Instant.now().minusSeconds(3_600))
+        importer.importVulnerabilitiesForServer(payload(old, Instant.now().minusSeconds(3_600)), "test-admin", true)
+        val oldId = identities.findByCrowdStrikeAidIn(listOf(old.aid)).single().asset.id!!
+        val renamed = device().copy(instanceId = old.instanceId)
+        val ordinary = post(payload(renamed), false)
+        assertThat(ordinary.hostOutcomes.single().errorCode).isEqualTo("UNEXPLAINED_AID")
+        assertThat(assets.findById(oldId)).isPresent()
+        val recovered = post(payload(renamed))
+        assertThat(recovered.errors).isEmpty()
+        assertThat(recovered.hostOutcomes.single().recoveryDeletedAssetIds).containsExactly(oldId)
+        val replacement = identities.findByCrowdStrikeAidIn(listOf(renamed.aid)).single().asset
+        assertThat(replacement.crowdStrikeHostname).isEqualTo(renamed.hostname)
+        assertThat(replacement.cloudInstanceId).isEqualTo(old.instanceId)
+        assertThat(assets.findById(oldId)).isEmpty()
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(old.aid))).isEmpty()
+        assertThat(audits.countByAssetId(oldId)).isEqualTo(1)
+    }
+
+    @Test
+    fun `renamed host whose old Falcon AID has newer contact is reported and preserved`() {
+        val old = device()
+        importer.importVulnerabilitiesForServer(payload(old, Instant.now().minusSeconds(5)), "test-admin", true)
+        val oldId = identities.findByCrowdStrikeAidIn(listOf(old.aid)).single().asset.id!!
+        val renamed = device().copy(instanceId = old.instanceId, lastSeen = old.lastSeen!!.minusSeconds(60))
+        val result = post(payload(renamed))
+        val outcome = result.hostOutcomes.single()
+        assertThat(outcome.errorCode).isEqualTo("UNEXPLAINED_AID")
+        assertThat(outcome.recoveryReason).isEqualTo("CONFLICT_OUTSIDE_RECOVERY_SCOPE")
+        assertThat(outcome.message).contains("Original rejection: UNEXPLAINED_AID.", oldId.toString())
+        assertThat(assets.findById(oldId)).isPresent()
+        assertThat(audits.countByAssetId(oldId)).isZero()
+    }
+
+    @Test
     fun `failed retry of unproven duplicates restores both legacy rows without deletion audits`() {
         val device = device()
         val ids = listOf(legacyAsset(device), legacyAsset(device))
