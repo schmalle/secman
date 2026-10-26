@@ -175,12 +175,14 @@ class QueryCommand(
                     result.serversCreated > 0 -> "CREATED"
                     result.serversUpdated > 0 -> "UPDATED"
                     result.hostOutcomes.any { it.status == "SKIPPED_RETENTION" } -> "UNCHANGED (sensor retention)"
+                    result.hostOutcomes.any { it.status == "SKIPPED_SUPERSEDED" } -> "UNCHANGED (superseded bootstrap enrollment)"
+                    result.hostOutcomes.any { it.status == "SKIPPED_SHORT_LIVED" } -> "UNCHANGED (short-lived sensor)"
                     else -> "UNCHANGED (save rejected)"
                 }
                 System.out.println("  - Asset: $status")
                 result.hostOutcomes.forEach { outcome ->
                     outcome.recoverySummary()?.let { System.out.println("  - $it") }
-                    if (outcome.status == "SKIPPED_RETENTION") System.out.println("  - ${outcome.message}")
+                    if (outcome.status in setOf("SKIPPED_RETENTION") + ServersCommand.BOOTSTRAP_SKIPS) System.out.println("  - ${outcome.message}")
                     if (outcome.status != "REJECTED" && outcome.formerInstanceId != null)
                         System.out.println("  - EC2 instance ID (asset ${outcome.assetId}): ${outcome.formerInstanceId} -> ${outcome.instanceId}")
                     outcome.coverage?.let {

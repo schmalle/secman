@@ -36,8 +36,12 @@ class ServersCommand {
 
         internal fun canCaptureAgeSnapshot(result: com.secman.cli.service.BatchStorageResult, failedFetches: Int): Boolean =
             failedFetches == 0 && result.errors.isEmpty() && result.serversProcessed > 0 &&
-                result.serversCreated + result.serversUpdated == result.serversProcessed &&
-                result.hostOutcomes.none { it.status !in setOf("CREATED", "UPDATED") }
+                result.serversCreated + result.serversUpdated +
+                    result.hostOutcomes.count { it.status in BOOTSTRAP_SKIPS } == result.serversProcessed &&
+                result.hostOutcomes.none { it.status !in setOf("CREATED", "UPDATED") + BOOTSTRAP_SKIPS }
+
+        /** Bootstrap sensors are not machines; skipping them is not an import failure. */
+        internal val BOOTSTRAP_SKIPS = setOf("SKIPPED_SUPERSEDED", "SKIPPED_SHORT_LIVED")
     }
 
     private val log = LoggerFactory.getLogger(ServersCommand::class.java)
@@ -183,6 +187,8 @@ class ServersCommand {
                     var totalServersCreated = 0
                     var totalServersUpdated = 0
                     var totalRetentionSkipped = 0
+                    var totalSupersededSkipped = 0
+                    var totalShortLivedSkipped = 0
                     var totalVulnsImported = 0
                     var totalVulnsWithPatchDate = 0
                     var totalVulnsSkipped = 0
@@ -232,6 +238,8 @@ class ServersCommand {
                                 totalServersCreated += result.serversCreated
                                 totalServersUpdated += result.serversUpdated
                                 totalRetentionSkipped += result.hostOutcomes.count { it.status == "SKIPPED_RETENTION" }
+                                totalSupersededSkipped += result.hostOutcomes.count { it.status == "SKIPPED_SUPERSEDED" }
+                                totalShortLivedSkipped += result.hostOutcomes.count { it.status == "SKIPPED_SHORT_LIVED" }
                                 totalVulnsImported += result.vulnerabilitiesImported
                                 totalVulnsWithPatchDate += result.vulnerabilitiesWithPatchDate
                                 totalVulnsSkipped += result.vulnerabilitiesSkipped
@@ -300,6 +308,8 @@ class ServersCommand {
                     System.out.println("  - New $deviceLabel created: $totalServersCreated")
                     System.out.println("  - Existing $deviceLabel updated: $totalServersUpdated")
                     System.out.println("  - Skipped by sensor retention: $totalRetentionSkipped")
+                    System.out.println("  - Skipped as superseded bootstrap enrollment: $totalSupersededSkipped")
+                    System.out.println("  - Skipped as short-lived sensor (< 2 min): $totalShortLivedSkipped")
                     System.out.println("Vulnerabilities imported: $totalVulnsImported")
                     System.out.println("  - With patch publication date: $totalVulnsWithPatchDate")
                     System.out.println("Vulnerabilities skipped: $totalVulnsSkipped")
@@ -312,7 +322,7 @@ class ServersCommand {
                         System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of $totalServersProcessed")
 
                         if (totalErrorCount == 0 && totalRetentionSkipped == 0 &&
-                            totalServersCreated + totalServersUpdated == totalServersProcessed) {
+                            totalServersCreated + totalServersUpdated + totalSupersededSkipped + totalShortLivedSkipped == totalServersProcessed) {
                             captureSnapshotViaHttp(resolvedBackendUrl, totalServersProcessed, totalSystemsWithOverdueVulns, overdueThreshold)
                         } else {
                             System.out.println("Age statistics not saved: some devices were not successfully imported.")
@@ -571,6 +581,8 @@ class ServersCommand {
             }
             val retentionSkipped = result.hostOutcomes.count { it.status == "SKIPPED_RETENTION" }
             System.out.println("  - Skipped by sensor retention: $retentionSkipped")
+            System.out.println("  - Skipped as superseded bootstrap enrollment: ${result.hostOutcomes.count { it.status == "SKIPPED_SUPERSEDED" }}")
+            System.out.println("  - Skipped as short-lived sensor (< 2 min): ${result.hostOutcomes.count { it.status == "SKIPPED_SHORT_LIVED" }}")
             System.out.println("Vulnerabilities imported: ${result.vulnerabilitiesImported}")
             System.out.println("  - With patch publication date: ${result.vulnerabilitiesWithPatchDate}")
             System.out.println("Vulnerabilities skipped: ${result.vulnerabilitiesSkipped}")

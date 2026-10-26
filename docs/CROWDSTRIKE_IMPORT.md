@@ -17,6 +17,45 @@ lookup does not require ranking against unrelated devices. A failed selected fet
 never falls back to another device. Stale responses cannot overwrite newer contact
 or identity observations.
 
+### Short-lived sensors are never imported
+
+A Falcon device whose first-to-last contact spans less than two minutes is skipped
+with status `SKIPPED_SHORT_LIVED`. Such a sensor is a bootstrap enrollment, not a
+machine (production showed 2,108 stored `EC2AMAZ-*` assets with 0–60 s of contact).
+The skip creates no asset, writes no findings and is not a failure: it is absent from
+the failed-hostname list and does not block CLI age statistics. A machine enrolled
+less than two minutes before the query is imported by a later run. Devices without
+a last-contact time follow the sensor retention rules instead. Assets stored before
+this rule are kept but are no longer refreshed through such an AID. Delete-on-fail
+recovery refuses any skipped replacement import.
+
+### Roaming enrollments and bootstrap sensors
+
+Some Windows fleets carry one long-lived Falcon AID from EC2 instance to EC2
+instance. Each new instance first boots as `EC2AMAZ-*` and enrolls a fresh
+bootstrap AID that reports for seconds. Then the persistent AID takes the instance
+over under its own hostname. The import handles both ways this shows up:
+
+- **The machine arrives on an instance that a bootstrap asset already holds.** If
+  Falcon lists that bootstrap AID as superseded on the same instance, its asset is
+  this machine's duplicate. The instance change goes ahead, and the bootstrap asset
+  is retired through the normal duplicate path. An import-only asset with no links is
+  deleted; any other is kept without CrowdStrike findings. A holder bound to any AID
+  outside the selection still rejects with `INSTANCE_ALREADY_BOUND`.
+- **Falcon still lists the bootstrap AID after the machine has moved on.** The
+  device is skipped with status `SKIPPED_SUPERSEDED` when three things hold.
+  Enrollment history records it as superseded on that instance, the successor AID is
+  currently bound, and the successor reported later than the bootstrap. Enrollment
+  order is not evidence: on a fresh machine the persistent AID enrolls seconds after
+  its bootstrap. A skip is not an error. It creates no asset, does not block age
+  statistics and appears in neither the failed-hostname list nor the reconcile
+  exclusions. A bootstrap AID that reports after its successor contradicts that
+  evidence and is imported normally. Delete-on-fail recovery never takes this
+  shortcut.
+
+The order in which a run processes the two AIDs no longer matters. Previously this
+pattern rejected with `INSTANCE_ALREADY_BOUND` or `UNEXPLAINED_AID`.
+
 A hostname-only interactive query defaults to the AID with the most recent valid
 contact and reports the other matching identities. This preference does not retire
 them. If contact ordering changes, the default may change while asset IDs remain
