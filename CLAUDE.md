@@ -84,6 +84,7 @@ See `docs/AUTHORIZATION_REWORK.md` for assessment assignments, contribution hist
 | Notifications | `GET/PUT /api/notification-preferences`; `GET /api/notification-logs`; `.../export` (ADMIN) | mixed |
 | Chat Notifications | `GET /api/notification-events` (event catalogue); `GET/PUT /api/slack/settings`, `POST .../test`; `GET/PUT /api/telegram/settings`, `POST .../test` (self-scoped); `GET/PUT /api/slack/config`, `POST .../test`, `GET/PUT /api/telegram/config` (ADMIN) | mixed |
 | CLI | `POST /api/vulnerabilities/cli-add` (ADMIN/VULN; auto-creates asset) | ADMIN/VULN |
+| Overdue Notifications | `GET /api/overdue-notifications/users?email=&days=` (`show-notified-users`), `POST /api/overdue-notifications/send` (`notify-users-overdue`); workgroup paths only — `docs/OVERDUE_NOTIFICATIONS.md` | ADMIN |
 | Integrations | `/api/integrations/v1`: `GET /summary`, `/findings[/{id}[/attachments/{attachmentId}]]`, `/runs[/{id}]` (asset-scoped); web inventory `GET /web-exposure/summary`, `/web-exposures`, `/web-components` (ADMIN/VULN/SECCHAMPION, asset-scoped); `POST /runs` (assigned service user + asset access); `/scanners` configuration and target binding (ADMIN). MCP mirrors subject/run, findings, exposure, and component reads; `docs/INTEGRATION_RESULTS.md` | mixed |
 | AI Buddy | `GET /api/ai-buddy/capabilities`; `POST /api/ai-buddy/assets/{assetId}/jobs`; `GET .../{jobId}` and `.../{jobId}/report`; `DELETE .../{jobId}`. Authenticated entry points; live BETA eligibility, job ownership, and asset access are enforced in the service. Setup preflight is `POST /api/translation-config/ai-buddy/setup` (ADMIN). See `docs/AI_BUDDY.md` | mixed |
 | Account Onboarding | `GET/POST/PUT/DELETE /api/account-onboarding/questions[/{id}[/choices[/{cid}]]]`, `.../rules[/{id}]`, `GET .../rules/{coverage,matrix}`, `POST .../rules/preview`, `POST .../simulate` (ADMIN/SECCHAMPION); public single-use token `GET/POST /api/public/account-onboarding/{token}` | ADMIN/SECCHAMPION + public |
@@ -327,14 +328,14 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-10-25*
+*Last updated: 2026-10-26*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **Workgroup overdue notifications (2026-10-26)** — new CLI `notify-users-overdue` sends one deduplicated overdue-vulnerability email per user, and `show-notified-users --email X` shows, for one user, exactly what that run would send and why. Recipients are direct members of enabled workgroups, reached through direct asset assignment or a whole-AWS-account grant. Owner mappings, sharing, metadata and hierarchy are excluded. The commands are separate from the unchanged `send-notification-users`; a per-UTC-day `notification_log` guard prevents re-sends. See `docs/OVERDUE_NOTIFICATIONS.md`.
+
 - **Database read-path optimization (2026-10-24)** — V295 adds generated, indexed currentness and SLA-anchor columns; authorization queries use indexed grant branches, and MCP `get_vulnerabilities` now returns full current-asset pages with accurate totals. Auth status uses revocation-immediate projections. See `docs/plans/DB_READ_OPTIMIZATION_PLAN.md` and `docs/CHANGELOG.md`.
 
 - **Current asset visibility (2026-10-14)** — operational inventory now requires verified observation within an inclusive UTC 72-hour window for every role and asset-derived surface. Falcon contact remains authoritative for Falcon-managed assets; other assets use `verified_observed_at`, while stored authorization and ingestion remain separate. See `docs/CURRENT_ASSETS.md` and `docs/CHANGELOG.md`.
-
-- **MCP vulnerability query E2E regression (2026-09-27)** — the automatically discovered Playwright suite now verifies MCP discovery, severity-array schema, filtering, pagination, hydrated asset names, and delegated non-admin authorization on both HTTP transports. It uses only disposable-runner data and generated API keys. See `docs/CHANGELOG.md`.

@@ -1,5 +1,9 @@
 # Changelog (archived from CLAUDE.md)
 
+## 2026-10-26 — workgroup overdue notifications
+
+- **Workgroup overdue notifications (2026-10-26)** — new CLI `notify-users-overdue` sends one deduplicated overdue-vulnerability email per user, and `show-notified-users --email X` shows, for one user, exactly what that run would send and why. Recipients are direct members of enabled workgroups, reached through direct asset assignment or a whole-AWS-account grant. Owner mappings, sharing, metadata and hierarchy are excluded. The commands are separate from the unchanged `send-notification-users`; a per-UTC-day `notification_log` guard prevents re-sends. See `docs/OVERDUE_NOTIFICATIONS.md`.
+
 ## 2026-10-24 — database read-path optimization
 
 - V295 adds VIRTUAL generated, indexed `asset.observed_at` (the 72-hour currentness evidence) and `vulnerability.sla_anchor_at` (`COALESCE(first_seen_at, scan_timestamp)`), so both predicates range-scan instead of scanning whole tables. `AssetAccessSql.IDS` is a UNION of indexed grant branches. See `docs/plans/DB_READ_OPTIMIZATION_PLAN.md` §6 for what shipped and what was deferred, and why.
