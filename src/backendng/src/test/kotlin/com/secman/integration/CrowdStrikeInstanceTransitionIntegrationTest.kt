@@ -229,6 +229,84 @@ class CrowdStrikeInstanceTransitionIntegrationTest {
     }
 
     @Test
+    fun `roaming enrollment absorbs its bootstrap sensor and the stale bootstrap AID is skipped in either order`() {
+        val roaming = device()
+        importer.importVulnerabilitiesForServer(batch(roaming), "test-admin", true)
+        val machineId = assetId(roaming)
+        val newInstance = "i-" + UUID.randomUUID().toString().replace("-", "").take(17)
+        val bootstrap = roaming.copy(aid = UUID.randomUUID().toString().replace("-", ""), hostname = "EC2AMAZ-${UUID.randomUUID().toString().take(7)}",
+            instanceId = newInstance, adDomain = null, firstSeen = Instant.now().minusSeconds(400), lastSeen = Instant.now().minusSeconds(250))
+        deviceAids.add(bootstrap.aid)
+        importer.importVulnerabilitiesForServer(batch(bootstrap), "test-admin", true)
+        val bootstrapAssetId = assetId(bootstrap)
+
+        val arrived = roaming.copy(instanceId = newInstance, lastSeen = Instant.now().minusSeconds(10))
+        importer.importVulnerabilitiesForServer(batch(arrived).copy(
+            deviceSelection = CrowdStrikeDeviceSelection(arrived, listOf(bootstrap))), "test-admin", true)
+        assertThat(assetId(roaming)).isEqualTo(machineId)
+        assertThat(assets.findById(machineId).orElseThrow().cloudInstanceId).isEqualTo(newInstance)
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(bootstrap.aid))).isEmpty()
+        assertThat(assets.findById(bootstrapAssetId)).isEmpty()
+        assertThat(transitionCount(machineId)).isEqualTo(1)
+
+        fun importAlone(device: CrowdStrikeDeviceRecord) =
+            importer.importServerVulnerabilities(listOf(batch(device)), "test-admin", triggerRefresh = false, allowDeviceReplacement = true)
+        // Falcon still lists the bootstrap AID alone, first while the machine holds its instance ...
+        listOf(importAlone(bootstrap), run {
+            // ... and again after the machine has roamed to a further instance.
+            val roamed = roaming.copy(instanceId = "i-" + UUID.randomUUID().toString().replace("-", "").take(17),
+                lastSeen = Instant.now().minusSeconds(5))
+            importer.importVulnerabilitiesForServer(batch(roamed), "test-admin", true)
+            importAlone(bootstrap)
+        }).forEach { result ->
+            assertThat(result.errors).isEmpty()
+            assertThat(result.failedHostnames).isEmpty()
+            assertThat(result.serversCreated + result.serversUpdated).isZero()
+            assertThat(result.hostOutcomes.single().status).isEqualTo("SKIPPED_SUPERSEDED")
+        }
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(bootstrap.aid))).isEmpty()
+
+        // A bootstrap AID that reports after its successor contradicts the evidence and is imported normally.
+        val revived = importAlone(bootstrap.copy(lastSeen = Instant.now().minusSeconds(1)))
+        assertThat(revived.hostOutcomes.single().status).isEqualTo("CREATED")
+    }
+
+    @Test
+    fun `bootstrap AID of a fresh machine is skipped although the machine enrolled after it`() {
+        val bootstrap = device().copy(hostname = "EC2AMAZ-${UUID.randomUUID().toString().take(7)}", adDomain = null,
+            firstSeen = Instant.now().minusSeconds(400), lastSeen = Instant.now().minusSeconds(250))
+        deviceAids.add(bootstrap.aid)
+        val machine = bootstrap.copy(aid = UUID.randomUUID().toString().replace("-", ""),
+            hostname = "fresh-${UUID.randomUUID()}.example.test", adDomain = "example.test",
+            firstSeen = Instant.now().minusSeconds(300), lastSeen = Instant.now().minusSeconds(20))
+        deviceAids.add(machine.aid)
+        importer.importVulnerabilitiesForServer(batch(machine).copy(
+            deviceSelection = CrowdStrikeDeviceSelection(machine, listOf(bootstrap))), "test-admin", true)
+        val result = importer.importServerVulnerabilities(listOf(batch(bootstrap)), "test-admin",
+            triggerRefresh = false, allowDeviceReplacement = true)
+        assertThat(result.errors).isEmpty()
+        assertThat(result.hostOutcomes.single().status).isEqualTo("SKIPPED_SUPERSEDED")
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(bootstrap.aid))).isEmpty()
+    }
+
+    @Test
+    fun `sensor that lived under two minutes is never imported and is not a failure`() {
+        val shortLived = device().let { it.copy(firstSeen = it.lastSeen!!.minusSeconds(119)) }
+        val result = importer.importServerVulnerabilities(listOf(batch(shortLived)), "test-admin",
+            triggerRefresh = false, allowDeviceReplacement = true)
+        assertThat(result.errors).isEmpty()
+        assertThat(result.failedHostnames).isEmpty()
+        assertThat(result.serversCreated + result.serversUpdated).isZero()
+        assertThat(result.hostOutcomes.single().status).isEqualTo("SKIPPED_SHORT_LIVED")
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(shortLived.aid))).isEmpty()
+        assertThat(assets.findByNameIgnoreCase(shortLived.hostname)).isNull()
+
+        val twoMinutes = device().let { it.copy(firstSeen = it.lastSeen!!.minusSeconds(120)) }
+        assertThat(importer.importServerVulnerabilities(listOf(batch(twoMinutes)), "test-admin",
+            triggerRefresh = false, allowDeviceReplacement = true).hostOutcomes.single().status).isEqualTo("CREATED")
+    }
+
+    @Test
     fun `parallel distinct cloud imports do not lock unrelated asset rows`() {
         val devices = (1..18).map { device() }
         val pool = java.util.concurrent.Executors.newFixedThreadPool(3)

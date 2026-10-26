@@ -5,44 +5,85 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/javascript.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/prompts/aws-security-review.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/prompts/secrets-security-review.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/prompts/system-review.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/system_review.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_javascript.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_system_review.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/CLAUDE.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/docs/FIX_PRS.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/docs/FIX_PRS.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/docs/GITHUB_APP_SETUP.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/docs/GITHUB_APP_SETUP.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/docs/SECURITY_SKILLS.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/docs/SECURITY_SKILLS.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/src/secscan/cli.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/src/secscan/cli.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/src/secscan/codex.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/src/secscan/codex.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/src/secscan/prompts.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/src/secscan/prompts.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/src/secscan/pull_requests.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/src/secscan/pull_requests.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/src/secscan/skills.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/src/secscan/skills.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/tests/test_cli_engine.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/tests/test_cli_engine.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/tests/test_codex.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/tests/test_codex.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/tests/test_pull_requests.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/tests/test_pull_requests.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_ai_github/tests/test_skills.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_ai_github/tests/test_skills.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/CHANGELOG.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/CHANGELOG.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/CROWDSTRIKE_IMPORT.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/CROWDSTRIKE_IMPORT.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_intra_mon/docs/SECMAN.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_intra_mon/docs/SECMAN.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_intra_mon/src/secman_intra_mon/cli.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_intra_mon/src/secman_intra_mon/cli.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_intra_mon/src/secman_intra_mon/secman.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_intra_mon/src/secman_intra_mon/secman.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/docs/github-access.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/docs/github-access.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/pyproject.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/cli.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/cli.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/files.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/files.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/github_issues.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/github_issues.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/github_repos.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/github_repos.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/repo_cloner.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/repo_cloner.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/report.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/report.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/repos_cli.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/repos_cli.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/repository_access.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/repository_access.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/review.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/review.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/scanners.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/scanners.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/skills.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/skills.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/tracking.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/tracking.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/tests/test_finding_responses.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/tests/test_finding_responses.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/tests/test_openrouter.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/tests/test_openrouter.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/tests/test_repositories.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/tests/test_repositories.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/tests/test_scan_execution.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/tests/test_scan_execution.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/tests/test_skills.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/tests/test_skills.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/MANIFEST.in" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/MANIFEST.in" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/docs/AI_AGENT.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/docs/AI_AGENT.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/docs/CONFIGURATION.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/docs/CONFIGURATION.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/docs/COVERAGE.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/docs/COVERAGE.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/docs/DATABASE.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/docs/DATABASE.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/docs/REPORTS.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/docs/REPORTS.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/pyproject.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/docs/SAFETY.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/docs/SAFETY.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/docs/SECMAN.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/docs/SECMAN.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/scripts/scan-with-aws-secrets.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/scripts/scan-with-aws-secrets.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/agent.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/agent.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/checks/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/checks/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/checks/headers.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/checks/headers.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/cli.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/cli.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/external_scanners.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/external_scanners.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/http.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/http.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/javascript.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/javascript.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/models.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/orchestrator.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/orchestrator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/prompts/aws-security-review.txt" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/prompts/aws-security-review.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/prompts/secrets-security-review.txt" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/prompts/secrets-security-review.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/prompts/system-review.txt" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/prompts/system-review.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/compare.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/compare.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/html.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/html.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/json_report.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/json_report.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/sarif.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/sarif.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/terminal.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/terminal.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/secman.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/secman.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/storage.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/storage.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/system_review.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/system_review.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/tls.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/tls.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/visual.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/visual.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_agent.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_agent.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_cli.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_cli.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_compare.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_compare.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_header_checks.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_header_checks.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_javascript.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_javascript.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_orchestrator.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_orchestrator.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_reports.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_reports.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_secman_integration_results.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_secman_integration_results.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_system_review.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_system_review.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_tls.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_tls.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_visual.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_visual.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeDeviceReplacementService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeDeviceReplacementService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/integration/CrowdStrikeInstanceTransitionIntegrationTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/integration/CrowdStrikeInstanceTransitionIntegrationTest.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeDeviceReplacementServiceTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeDeviceReplacementServiceTest.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/QueryCommand.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/QueryCommand.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/src/test/kotlin/com/secman/cli/commands/CrowdStrikeIdentityRepairCliTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/test/kotlin/com/secman/cli/commands/CrowdStrikeIdentityRepairCliTest.kt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -169,6 +210,29 @@
     </key>
   </component>
   <component name="RunManager">
+    <configuration default="true" type="DjangoTestsConfigurationType">
+      <module name="secscan" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="RUN_TOOL" value="" />
+      <option name="TARGET" value="" />
+      <option name="SETTINGS_FILE" value="" />
+      <option name="CUSTOM_SETTINGS" value="false" />
+      <option name="USE_OPTIONS" value="false" />
+      <option name="OPTIONS" value="" />
+      <method v="2" />
+    </configuration>
     <configuration name="OAuthServiceTest" type="GradleRunConfiguration" factoryName="Gradle" temporary="true">
       <ExternalSystemSettings>
         <option name="executionName" />
@@ -285,6 +349,52 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
+    <configuration default="true" type="Python.Celery" factoryName="Python.Celery.App">
+      <module name="secscan" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="RUN_TOOL" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="Python.Celery" factoryName="Python.Celery.Task">
+      <module name="secscan" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="RUN_TOOL" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="Python.FlaskServer">
+      <module name="secscan" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="RUN_TOOL" value="" />
+      <option name="launchJavascriptDebuger" value="false" />
+      <method v="2" />
+    </configuration>
     <configuration default="true" type="Tox" factoryName="Tox">
       <module name="backendng" />
       <option name="ENV_FILES" value="" />
@@ -298,6 +408,44 @@
       <option name="DEBUG_JUST_MY_CODE" value="false" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="RUN_TOOL" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="docs" factoryName="Docutils task">
+      <module name="secscan" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <option name="RUN_TOOL" value="" />
+      <option name="docutils_input_file" value="" />
+      <option name="docutils_output_file" value="" />
+      <option name="docutils_params" value="" />
+      <option name="docutils_task" value="" />
+      <option name="docutils_open_in_browser" value="false" />
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="docs" factoryName="Sphinx task">
+      <module name="secscan" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <option name="RUN_TOOL" value="" />
+      <option name="docutils_input_file" value="" />
+      <option name="docutils_output_file" value="" />
+      <option name="docutils_params" value="" />
+      <option name="docutils_task" value="" />
+      <option name="docutils_open_in_browser" value="false" />
       <method v="2" />
     </configuration>
     <configuration default="true" type="tests" factoryName="Autodetect">
@@ -365,6 +513,8 @@
       <workItem from="1785321009839" duration="66000" />
       <workItem from="1791893953553" duration="7000" />
       <workItem from="1792433833462" duration="602000" />
+      <workItem from="1793002486809" duration="3106000" />
+      <workItem from="1793027298001" duration="62000" />
     </task>
     <task id="LOCAL-00001" summary="added source of testdata">
       <option name="closed" value="true" />

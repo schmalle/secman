@@ -40,6 +40,16 @@ class CrowdStrikeIdentityRepairCliTest {
     }
 
     @Test
+    fun `superseded bootstrap enrollment does not block age statistics`() {
+        val bootstrapSkipped = BatchStorageResult(2, 0, 1, 0, 0, 0, emptyList(), hostOutcomes = listOf(
+            CrowdStrikeHostImportOutcome("machine", "UPDATED"), CrowdStrikeHostImportOutcome("EC2AMAZ-BOOT", "SKIPPED_SUPERSEDED")))
+        assertThat(ServersCommand.canCaptureAgeSnapshot(bootstrapSkipped, 0)).isTrue()
+        assertThat(ServersCommand.canCaptureAgeSnapshot(bootstrapSkipped.copy(serversUpdated = 0), 0)).isFalse()
+        assertThat(ServersCommand.canCaptureAgeSnapshot(bootstrapSkipped.copy(hostOutcomes = listOf(
+            CrowdStrikeHostImportOutcome("machine", "UPDATED"), CrowdStrikeHostImportOutcome("EC2AMAZ-NEW", "SKIPPED_SHORT_LIVED"))), 0)).isTrue()
+    }
+
+    @Test
     fun `HTTP request binds expected devices and preview apply mode and rejects incomplete responses`() {
         val mapper = jacksonObjectMapper()
         val server = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)

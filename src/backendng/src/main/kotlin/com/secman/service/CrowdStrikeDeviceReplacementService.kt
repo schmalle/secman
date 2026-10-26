@@ -150,6 +150,14 @@ class CrowdStrikeDeviceReplacementService(
         val changingInstance = knownWinner?.asset?.let {
             !it.cloudInstanceId.isNullOrBlank() && !it.cloudInstanceId.equals(selected.instanceId, ignoreCase = true)
         } == true
+        // A roaming enrollment lands on an instance that first booted with a short-lived
+        // bootstrap sensor. Falcon reports that sensor as superseded on the same instance,
+        // so an asset bound only to it is this machine's duplicate, not a competing owner.
+        val bootstrapAids = selection.superseded
+            .filter { !it.instanceId.isNullOrBlank() && it.instanceId.equals(selected.instanceId, ignoreCase = true) }
+            .map { it.aid }.toSet()
+        fun heldByBootstrap(holder: Asset) = identities.filter { it.asset.id == holder.id }
+            .let { bindings -> bindings.isNotEmpty() && bindings.all { it.crowdStrikeAid in bootstrapAids } }
         requireFreshObservation(identities, selection, changingInstance)
         if (changingInstance) {
             val asset = requireNotNull(knownWinner).asset
@@ -168,7 +176,7 @@ class CrowdStrikeDeviceReplacementService(
             if (knownWinner.falconFirstSeenAt == null || knownWinner.falconFirstSeenAt !=
                 LocalDateTime.ofInstant(requireNotNull(selected.firstSeen), ZoneOffset.UTC))
                 conflict("ENROLLMENT_MISMATCH", "An instance change requires the same verified Falcon enrollment")
-            if (instanceCandidates.any { it.id != asset.id })
+            if (instanceCandidates.any { it.id != asset.id && !heldByBootstrap(it) })
                 conflict("INSTANCE_ALREADY_BOUND", "Incoming EC2 instance already belongs to another asset")
         }
         fun compatible(asset: Asset): Boolean {
@@ -230,8 +238,11 @@ class CrowdStrikeDeviceReplacementService(
         val incomingFirst = LocalDateTime.ofInstant(requireNotNull(selected.firstSeen), ZoneOffset.UTC)
         val storedWinner = current.firstOrNull { it.crowdStrikeAid == selected.aid }
         requireFreshObservation(current, selection, changingInstance)
-        if (changingInstance && (current.size != 1 || current.single().crowdStrikeAid != selected.aid))
-            throw CrowdStrikeIdentityConflict("UNEXPLAINED_AID", "An instance change requires one current Falcon binding")
+        if (changingInstance) {
+            val (own, others) = current.partition { it.asset.id == requireNotNull(knownWinner).asset.id }
+            if (own.size != 1 || own.single().crowdStrikeAid != selected.aid || others.any { it.crowdStrikeAid !in bootstrapAids })
+                throw CrowdStrikeIdentityConflict("UNEXPLAINED_AID", "An instance change requires one current Falcon binding")
+        }
         if (current.any { binding ->
             binding.crowdStrikeAid != selected.aid &&
                 (binding.falconLastSeenAt ?: LocalDateTime.MIN) >=
@@ -274,6 +285,28 @@ class CrowdStrikeDeviceReplacementService(
                 bindings.size != 1 || bindings.singleOrNull()?.crowdStrikeAid != selected.aid ||
                     bindings.singleOrNull()?.falconFirstSeenAt == null
             }), canonical?.cloudInstanceId?.takeIf { changingInstance }, relocatedBindings, preservedHistoricalAids)
+    }
+
+    /**
+     * The persistent AID that already absorbed this instance's bootstrap sensor, or null.
+     * Falcon keeps listing a bootstrap AID after its machine roams on; importing it again
+     * would create a phantom asset or collide with the machine's binding. Evidence must
+     * still hold: the successor has reported more recently. Enrollment order is not
+     * evidence; a fresh machine's persistent AID enrolls seconds after its bootstrap.
+     */
+    fun supersedingEnrollment(selection: CrowdStrikeDeviceSelection): String? {
+        val selected = selection.selected
+        val instanceId = selected.instanceId?.takeIf(String::isNotBlank) ?: return null
+        val lastSeen = selected.lastSeen ?: return null
+        return entityManager.createNativeQuery("""
+            SELECT h.superseded_by FROM crowdstrike_enrollment_history h
+            JOIN crowdstrike_asset_identity i ON i.crowdstrike_aid = h.superseded_by
+            WHERE h.crowdstrike_aid = :aid AND LOWER(h.instance_id) = LOWER(:instance)
+              AND i.falcon_last_seen_at > :lastSeen
+            LIMIT 1
+        """).setParameter("aid", selected.aid).setParameter("instance", instanceId)
+            .setParameter("lastSeen", LocalDateTime.ofInstant(lastSeen, ZoneOffset.UTC))
+            .resultList.firstOrNull() as String?
     }
 
     companion object {

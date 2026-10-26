@@ -1,8 +1,17 @@
 # Changelog (archived from CLAUDE.md)
 
+## 2026-10-26 — CrowdStrike import: short-lived sensors are never imported
+
+- A Falcon device whose first-to-last contact spans less than two minutes is skipped as `SKIPPED_SHORT_LIVED`: no asset, no findings, not a failure, and it does not block CLI age statistics. These are bootstrap enrollments (2,108 such `EC2AMAZ-*` assets were stored). Existing assets are kept. Delete-on-fail now refuses any skipped replacement import, not only a retention skip. See `docs/CROWDSTRIKE_IMPORT.md` §Short-lived sensors are never imported.
+
+## 2026-10-26 — CrowdStrike import: roaming enrollments and bootstrap sensors
+
+- Some Windows fleets (AD domain `aws-ad…`) move one persistent Falcon AID from EC2 instance to EC2 instance, and every new instance briefly enrolls a bootstrap `EC2AMAZ-*` AID first. The import rejected 12 such hosts on 2026-10-26: 5 with `INSTANCE_ALREADY_BOUND`, where an earlier run had made the bootstrap AID into its own asset, and 7 with `UNEXPLAINED_AID`, where a stale bootstrap AID was processed before its machine had moved on.
+- An instance change now absorbs an asset that is bound only to AIDs Falcon reports as superseded on the same instance, and retires it through the existing duplicate path. A selected AID that enrollment history records as superseded by a more recently seen bound AID on the same instance is skipped as `SKIPPED_SUPERSEDED`. That skip is not a failure and does not block CLI age statistics. Holders with foreign AIDs, and bootstrap AIDs that report after their successor, behave as before. See `docs/CROWDSTRIKE_IMPORT.md` §Roaming enrollments and bootstrap sensors.
+
 ## 2026-10-26 — delete-on-fail: renamed EC2 hosts and clearer blocking reasons
 
-- `--deleteonfail` (`identity-v3`) now also removes stale assets that hold the selected EC2 instance under another name (renamed host or reinstalled sensor). A stale asset either has Falcon bindings that are all for a different AID with older contact, or is an unbound `CrowdStrike Import` row from before identity bindings with no newer sensor contact. Previously the import rejected these hosts with `UNEXPLAINED_AID` or `DUPLICATE_ASSET_CONFLICT`. Recovery found no hostname match and stopped with a misleading `TARGET_CHANGED / No assets match the failed hostname`. Production case: DBCLSMMES, two unbound rows named `dev-gmesbclsim-MES-svr` and `EC2AMAZ-O1NJUQ8`. Holders with a current, tied or undated binding, from other sources, or with newer sensor contact are never deleted.
+- `--deleteonfail` (`identity-v3`) now also removes stale assets that hold the selected EC2 instance under another name (renamed host or reinstalled sensor). A stale asset either has Falcon bindings that are all for a different AID with older contact, or is an unbound `CrowdStrike Import` row from before identity bindings with no newer sensor contact. Previously the import rejected these hosts with `UNEXPLAINED_AID` or `DUPLICATE_ASSET_CONFLICT`. Recovery found no hostname match and stopped with a misleading `TARGET_CHANGED / No assets match the failed hostname`. Production case: DBCLSMMES, two unbound rows named `dev-gmes` and `EC2AMAZ-O1Nnnnn`. Holders with a current, tied or undated binding, from other sources, or with newer sensor contact are never deleted.
 - An empty recovery scope now reports `CONFLICT_OUTSIDE_RECOVERY_SCOPE` with the blocking asset IDs. `TARGET_CHANGED` is kept for real races. Blocked or rolled-back outcomes keep the original conflict code as `errorCode` and prefix the message with `Original rejection: <code>.`. See `docs/CROWDSTRIKE_IMPORT.md` §Delete conflicting assets after a rejected query import.
 
 ## 2026-10-26 — workgroup overdue notifications

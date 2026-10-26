@@ -222,6 +222,55 @@ class CrowdStrikeDeviceReplacementServiceTest {
             .isInstanceOf(CrowdStrikeIdentityConflict::class.java).extracting("code").isEqualTo("INSTANCE_ALREADY_BOUND")
     }
 
+    private fun bootstrapHolder(holderAid: String): Triple<Asset, CrowdStrikeDeviceRecord, CrowdStrikeDeviceRecord> {
+        val (asset, binding, incoming) = instanceChange()
+        val bootstrap = incoming.copy(aid = "aid-bootstrap", hostname = "EC2AMAZ-BOOT", adDomain = null,
+            firstSeen = Instant.parse("2026-02-28T23:59:00Z"), lastSeen = Instant.parse("2026-02-28T23:59:05Z"))
+        val holder = Asset(id = 2L, name = bootstrap.hostname, type = "SERVER", owner = "CrowdStrike Import",
+            cloudInstanceId = incoming.instanceId, cloudAccountId = incoming.cloudAccountId)
+        val holderBinding = CrowdStrikeAssetIdentity(asset = holder, crowdStrikeAid = holderAid, sourceHostname = bootstrap.hostname,
+            falconFirstSeenAt = LocalDateTime.ofInstant(requireNotNull(bootstrap.firstSeen), ZoneOffset.UTC),
+            falconLastSeenAt = LocalDateTime.ofInstant(requireNotNull(bootstrap.lastSeen), ZoneOffset.UTC))
+        stub(binding, holderBinding)
+        val owners = mockk<jakarta.persistence.Query>()
+        every { owners.setParameter(any<String>(), any()) } returns owners
+        every { owners.resultList } returns listOf(2L)
+        every { em.createNativeQuery(match { it.contains("SELECT id FROM asset") }) } returns owners
+        return Triple(asset, incoming, bootstrap)
+    }
+
+    @Test
+    fun `roaming enrollment absorbs the bootstrap sensor asset holding its new instance`() {
+        val (asset, incoming, bootstrap) = bootstrapHolder("aid-bootstrap")
+        val payload = incomingBatch(incoming).copy(deviceSelection = CrowdStrikeDeviceSelection(incoming, listOf(bootstrap)))
+        val plan = service.prepare(payload, requireNotNull(payload.deviceSelection))
+        assertThat(plan.asset).isSameAs(asset)
+        assertThat(plan.formerInstanceId).isEqualTo("i-0123456789abcdef0")
+        assertThat(plan.duplicates.map { it.id }).containsExactly(2L)
+    }
+
+    @Test
+    fun `instance holder bound to an AID outside the selection still blocks the instance change`() {
+        val (_, incoming, bootstrap) = bootstrapHolder("aid-foreign")
+        val payload = incomingBatch(incoming).copy(deviceSelection = CrowdStrikeDeviceSelection(incoming, listOf(bootstrap)))
+        assertThatThrownBy { service.prepare(payload, payload.deviceSelection!!) }
+            .isInstanceOf(CrowdStrikeIdentityConflict::class.java).extracting("code").isEqualTo("INSTANCE_ALREADY_BOUND")
+    }
+
+    @Test
+    fun `superseding enrollment lookup needs instance and contact evidence`() {
+        assertThat(service.supersedingEnrollment(CrowdStrikeDeviceSelection(newest.copy(instanceId = null)))).isNull()
+        assertThat(service.supersedingEnrollment(CrowdStrikeDeviceSelection(newest.copy(lastSeen = null)))).isNull()
+        verify(exactly = 0) { em.createNativeQuery(match { it.contains("crowdstrike_enrollment_history") }) }
+        val history = mockk<jakarta.persistence.Query>()
+        every { history.setParameter(any<String>(), any()) } returns history
+        every { history.resultList } returns listOf("aid-persistent")
+        every { em.createNativeQuery(match { it.contains("crowdstrike_enrollment_history") }) } returns history
+        assertThat(service.supersedingEnrollment(CrowdStrikeDeviceSelection(newest))).isEqualTo("aid-persistent")
+        verify { history.setParameter("aid", newest.aid) }
+        verify { history.setParameter("instance", newest.instanceId) }
+    }
+
     @Test
     fun `superseded enrollment moved to another instance preserves the former inventory`() {
         val oldAsset = Asset(id = 1L, name = "Former machine", type = "SERVER", owner = "Human owner",
