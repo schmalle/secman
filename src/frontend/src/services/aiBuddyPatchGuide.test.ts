@@ -19,7 +19,7 @@ test('conditional Firefox targets put a platform check before installation and v
 });
 
 test('investigations and missing targets never manufacture installation instructions', () => {
-  assert.ok(guideSteps({ ...action, evidenceState: 'INSUFFICIENT_INFORMATION' }).every(step => !step.includes('deploy')));
+  assert.ok(guideSteps({ ...action, evidenceState: 'INSUFFICIENT_INFORMATION' }).every(step => !/\b(?:deploy|install|apply)\b/i.test(step)));
   assert.match(guideSteps({ ...action, targetVersion: null }).at(-1)!, /Confirm the exact fix/);
 });
 
