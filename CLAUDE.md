@@ -328,14 +328,14 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-10-26*
+*Last updated: 2026-10-27*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
-- **Workgroup overdue notifications (2026-10-26)** — new CLI `notify-users-overdue` sends one deduplicated overdue-vulnerability email per user, and `show-notified-users --email X` shows, for one user, exactly what that run would send and why. Recipients are direct members of enabled workgroups, reached through direct asset assignment or a whole-AWS-account grant. Owner mappings, sharing, metadata and hierarchy are excluded. The commands are separate from the unchanged `send-notification-users`; a per-UTC-day `notification_log` guard prevents re-sends. See `docs/OVERDUE_NOTIFICATIONS.md`.
+- **CrowdStrike short-lived sensor filtering (2026-10-26)** — Falcon devices observed for less than two minutes are skipped as `SKIPPED_SHORT_LIVED`, creating neither assets nor findings and not blocking CLI age statistics. Existing assets remain, and delete-on-fail refuses skipped replacement imports. See `docs/CROWDSTRIKE_IMPORT.md` and `docs/CHANGELOG.md`.
 
-- **Database read-path optimization (2026-10-24)** — V295 adds generated, indexed currentness and SLA-anchor columns; authorization queries use indexed grant branches, and MCP `get_vulnerabilities` now returns full current-asset pages with accurate totals. Auth status uses revocation-immediate projections. See `docs/plans/DB_READ_OPTIMIZATION_PLAN.md` and `docs/CHANGELOG.md`.
+- **CrowdStrike roaming enrollments and bootstrap sensors (2026-10-26)** — instance moves may absorb holders whose AIDs Falcon records as superseded on that same instance; superseded selected AIDs become non-failing `SKIPPED_SUPERSEDED` results. Foreign, newer, tied, or otherwise unexplained holders retain the prior fail-closed behavior. See `docs/CROWDSTRIKE_IMPORT.md` and `docs/CHANGELOG.md`.
 
-- **Current asset visibility (2026-10-14)** — operational inventory now requires verified observation within an inclusive UTC 72-hour window for every role and asset-derived surface. Falcon contact remains authoritative for Falcon-managed assets; other assets use `verified_observed_at`, while stored authorization and ingestion remain separate. See `docs/CURRENT_ASSETS.md` and `docs/CHANGELOG.md`.
+- **Delete-on-fail renamed-host recovery (2026-10-26)** — `--deleteonfail` can remove stale renamed or legacy-unbound EC2 instance holders only under bounded evidence rules; current, tied, undated, other-source, or newer holders are preserved. Empty recovery scope now reports `CONFLICT_OUTSIDE_RECOVERY_SCOPE`, while real races remain `TARGET_CHANGED`. See `docs/CROWDSTRIKE_IMPORT.md` and `docs/CHANGELOG.md`.
