@@ -48,7 +48,7 @@ Controller groups:
 
 ## Frontend (`src/frontend/`)
 
-Astro pages (77, 23 admin) with React islands; Axios services in `src/services/`.
+Astro pages with React islands; Axios services in `src/services/`.
 
 Auth flow: the JWT lives in the HttpOnly `secman_auth` cookie (`AuthCookieService.AUTH_COOKIE_NAME`), never in JS-readable storage. Axios sends it via `withCredentials: true` (set globally in `utils/csrf.ts`); fetch calls use the `authenticated*` helpers in `utils/auth.ts` / `services/`. `sessionStorage["user"]` holds only the display/role payload — never a token. SSE endpoints take JWT in `?token=` query (EventSource has no header support).
 
