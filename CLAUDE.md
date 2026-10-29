@@ -97,13 +97,13 @@ MCP tool families mirror these (delegation required): `list_/create_/delete_rele
 ## Commands
 
 ```bash
-./gradlew build                                          # backend build + tests
+./scripts/test/run-isolated-e2e.sh --database-only -- ./gradlew build  # backend build + tests
 ./scripts/startbackenddev.sh                             # canonical dev start — outside any sandbox
 ./scripts/startfrontenddev.sh                            # canonical dev start, port 4321 — outside any sandbox
 ./gradlew :cli:shadowJar                                 # build the CLI once
 ./scripts/secman <command>                               # query servers, send-notifications, manage-user-mappings, eol-sync, ...
-./gradlew :backendng:test --tests "*ServiceTest*"        # unit
-./gradlew :backendng:test --tests "*IntegrationTest*"    # integration (external MariaDB, see Test Infrastructure)
+./scripts/runbackendtests.sh --tests "*ServiceTest*"    # unit
+./scripts/runbackendtests.sh --tests "*IntegrationTest*" # integration (disposable MariaDB, see Test Infrastructure)
 ./gradlew :cli:test
 cd src/frontend && npm test                              # frontend unit tier (node:test, no framework dep)
 ./scripts/test-coverage-report.sh                        # name-reference coverage per area (NOT line coverage)

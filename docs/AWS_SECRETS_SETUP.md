@@ -446,8 +446,9 @@ followed by a normal Micronaut startup. If you see:
   `SECMAN_AWS_SECRET_ID` and `AWS_REGION` explicitly.
 
 When the backend is up, stop it with `./scripts/stopbackenddev.sh`. Per
-`CLAUDE.md`, a change is complete only when both `./gradlew build` and a clean
-backend start succeed.
+`CLAUDE.md`, a change is complete only when the build and tests run through
+`./scripts/test/run-isolated-e2e.sh --database-only -- ./gradlew build` and a clean
+backend start succeeds.
 
 ---
 

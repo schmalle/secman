@@ -80,7 +80,8 @@ Notes:
 - The Gradle stage compiles Kotlin inside the container and needs **~4 GB
   RAM**. On Docker Desktop raise the VM memory; on AWS CodeBuild use at least
   `BUILD_GENERAL1_MEDIUM` (7 GB).
-- Tests are skipped in the image build (`-x test`); run `./gradlew build`
+- Tests are skipped in the image build (`-x test`); run
+  `./scripts/test/run-isolated-e2e.sh --database-only -- ./gradlew build`
   in CI before building the image.
 - No secrets are baked into the image — everything is injected at runtime.
 

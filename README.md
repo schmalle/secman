@@ -58,7 +58,7 @@ specs/        historical implementation plans (frozen)
 
 ```bash
 # Build & run
-./gradlew build                          # full build incl. unit + integration tests
+./scripts/test/run-isolated-e2e.sh --database-only -- ./gradlew build  # full build and tests
 ./scripts/startbackenddev.sh            # backend dev (port 8080)
 ./scripts/startfrontenddev.sh           # frontend dev (port 4321)
 
@@ -77,8 +77,8 @@ specs/        historical implementation plans (frozen)
 ./scripts/sync-workgroup-assets-aws.sh --dry-run
 
 # Tests
-./gradlew :backendng:test --tests "*ServiceTest*"      # unit
-./gradlew :backendng:test --tests "*IntegrationTest*"  # integration (external MariaDB, see docs/TESTING.md)
+./scripts/runbackendtests.sh --tests "*ServiceTest*"      # unit
+./scripts/runbackendtests.sh --tests "*IntegrationTest*"  # integration (disposable MariaDB; see docs/TESTING.md)
 ./gradlew :cli:test
 ./tests/e2e/run-e2e.sh                                 # Playwright (pass-cli secrets)
 ./scripts/test/test-e2e-*.sh                           # feature E2E drivers (see docs/SKILLS.md)
