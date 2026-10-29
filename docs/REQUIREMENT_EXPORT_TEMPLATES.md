@@ -285,9 +285,9 @@ Three other code paths build Word documents and are **not** template-aware:
 
 ```bash
 # Unit: validation rules, the example builder, placeholder binding and placement
-./gradlew :backendng:test --tests "*RequirementExportTemplate*"
-./gradlew :backendng:test --tests "*ExampleRequirementExportTemplateBuilderTest*"
-./gradlew :backendng:test --tests "*RequirementControllerWordExportTest*"
+./scripts/runbackendtests.sh --tests "*RequirementExportTemplate*"
+./scripts/runbackendtests.sh --tests "*ExampleRequirementExportTemplateBuilderTest*"
+./scripts/runbackendtests.sh --tests "*RequirementControllerWordExportTest*"
 
 # Frontend logic tier
 cd src/frontend && npm test

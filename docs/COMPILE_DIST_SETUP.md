@@ -90,7 +90,7 @@ the target — it only delivers files.
 | Frontend  | `npm ci && npm run build` (in `src/frontend`)             | `src/frontend/dist/` (static assets)                   |
 
 Tests are skipped (`-x test`) so the script runs at deploy speed. Run
-`./gradlew build` separately if you want the full test suite first.
+`./scripts/test/run-isolated-e2e.sh --database-only -- ./gradlew build` separately if you want the full test suite first.
 
 The artifact JARs are located via a glob (`backendng-*-all.jar`,
 `cli-*-all.jar`), so version bumps in `build.gradle.kts` do not require
@@ -209,7 +209,7 @@ There is no built-in roll-back. If you need one, deploy to a versioned
   operator's responsibility on the target, via the patterns described in
   `docs/PASS_CLI.md` and `docs/ENVIRONMENT.md`.
 - Tests are skipped during build. If you are deploying to anything
-  resembling production, run `./gradlew build` (full test suite) and the
+  resembling production, run `./scripts/test/run-isolated-e2e.sh --database-only -- ./gradlew build` (full test suite) and the
   `/e2ejs` + `/e2evulnexception` E2E gates from CLAUDE.md **before**
   invoking this script.
 - `StrictHostKeyChecking=accept-new` is a convenience trade-off. For

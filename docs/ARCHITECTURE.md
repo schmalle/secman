@@ -25,9 +25,9 @@ Stack: Kotlin 2.4.21 / Java 25 · Micronaut 5.2.3 · Hibernate JPA · Astro 7.4.
 Layered:
 
 ```
-Controller (80)        @Controller, @Secured, validation
+Controller             @Controller, @Secured, validation
    │
-Service (146)          @Singleton, @Transactional, business rules
+Service                @Singleton, @Transactional, business rules
    │
 Repository             CrudRepository / custom JPQL
    │
@@ -48,13 +48,13 @@ Controller groups:
 
 ## Frontend (`src/frontend/`)
 
-Astro pages (77, 23 admin) with React islands; Axios services in `src/services/`.
+Astro pages with React islands; Axios services in `src/services/`.
 
 Auth flow: the JWT lives in the HttpOnly `secman_auth` cookie (`AuthCookieService.AUTH_COOKIE_NAME`), never in JS-readable storage. Axios sends it via `withCredentials: true` (set globally in `utils/csrf.ts`); fetch calls use the `authenticated*` helpers in `utils/auth.ts` / `services/`. `sessionStorage["user"]` holds only the display/role payload — never a token. SSE endpoints take JWT in `?token=` query (EventSource has no header support).
 
 ## CLI (`src/cli/`)
 
-Picocli. ~40 command classes under `commands/`, ~37 distinct command names. **`docs/CLI.md` is the reference** — do not maintain a command list here, it drifts.
+Picocli commands live under `commands/`. **`docs/CLI.md` is the reference** — do not maintain a command list here, it drifts.
 
 Dispatch is a mix, which surprises people: most commands are registered as Picocli `subcommands` on `SecmanCli`, but a few (notably `query servers`, the CrowdStrike ingestion path) are matched by hand in `SecmanCli.kt`'s arg-parsing block. Grep `SecmanCli.kt` for a command name before concluding it does not exist.
 
