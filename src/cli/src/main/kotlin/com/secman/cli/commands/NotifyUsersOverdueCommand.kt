@@ -18,7 +18,7 @@ import java.util.concurrent.Callable
  * 3 authentication, 4 backend failure.
  */
 @Singleton
-@Command(name = "notify-users-overdue", mixinStandardHelpOptions = true, description = ["Email workgroup members about overdue vulnerabilities on their assigned assets and AWS-account assets (ADMIN)"])
+@Command(name = "notify-users-overdue", mixinStandardHelpOptions = true, description = ["Email members of enabled aws- workgroups (case-sensitive prefix) about overdue vulnerabilities on their assigned assets and AWS-account assets (ADMIN)"])
 class NotifyUsersOverdueCommand(private val service: OverdueNotificationCliService) : Callable<Int> {
 
     @Option(names = ["--dry-run"], description = ["Resolve recipients without sending emails"])

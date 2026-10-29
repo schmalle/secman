@@ -16,7 +16,7 @@ import java.time.LocalDateTime
  * Set-based recipient resolution for `notify-users-overdue` and `show-notified-users`.
  *
  * A user receives an asset when the asset has an overdue, non-excepted finding, is current
- * (observed in the 72-hour window), and the user is a direct member of an enabled workgroup
+ * (observed in the 72-hour window), and the user is a direct member of an enabled aws- workgroup
  * that either has the asset assigned (DIRECT_ASSIGNMENT) or holds a whole-account grant for
  * the asset's AWS account (AWS_WORKGROUP). Account-owner mappings, AWS sharing, metadata
  * fields and workgroup hierarchy are deliberately not paths here; they stay with
@@ -69,7 +69,8 @@ open class WorkgroupOverdueRecipientQuery(private val entityManager: EntityManag
     /**
      * `overdue`: current assets with overdue, non-excepted findings and their counts. Both filters
      * use the indexed generated columns (`sla_anchor_at`, `observed_at`, V295).
-     * `matches`: the two recipient paths. The final join drops disabled users.
+     * `matches`: the two recipient paths. BINARY keeps the aws- prefix case-sensitive
+     * regardless of the database collation. The final join drops disabled users.
      */
     private fun matchSql(userFilter: String): String = """
             WITH overdue AS (
@@ -95,6 +96,7 @@ open class WorkgroupOverdueRecipientQuery(private val entityManager: EntityManag
                 FROM asset_workgroups aw
                 JOIN overdue o ON o.asset_id = aw.asset_id
                 JOIN workgroup w ON w.id = aw.workgroup_id AND w.enabled = TRUE
+                    AND BINARY w.name LIKE 'aws-%'
                 JOIN user_workgroups uw ON uw.workgroup_id = w.id
                 WHERE 1 = 1 $userFilter
                 UNION ALL
@@ -102,6 +104,7 @@ open class WorkgroupOverdueRecipientQuery(private val entityManager: EntityManag
                        w.id, w.name, waa.aws_account_id
                 FROM workgroup_aws_account waa
                 JOIN workgroup w ON w.id = waa.workgroup_id AND w.enabled = TRUE
+                    AND BINARY w.name LIKE 'aws-%'
                 JOIN user_workgroups uw ON uw.workgroup_id = w.id
                 JOIN asset a ON a.cloud_account_id = waa.aws_account_id
                 JOIN overdue o ON o.asset_id = a.id

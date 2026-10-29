@@ -81,6 +81,16 @@ class OverdueNotificationCommandsTest {
     }
 
     @Test
+    fun `overview explains case-sensitive prefix and retains excluded memberships`() {
+        val report = mapper.readTree("""{"status":"NO_PATHS","workgroups":[
+            {"name":"AWS-Backend","workgroupId":1,"enabled":true,"assignedAssetCount":8,"awsAccountIds":[]}
+        ],"assets":[],"totalAssets":0,"totalOverdue":0,"totalCritical":0,"totalHigh":0}""")
+        val output = ShowNotifiedUsersCommand.renderOverview(report)
+        assertThat(output).contains("lowercase aws-", "other groups are ignored", "AWS-Backend | 1 | yes | 8")
+        assertThat(output).contains("Totals: 0 assets, 0 overdue findings")
+    }
+
+    @Test
     fun `overview table lists reasons and strips control characters`() {
         val report = mapper.readTree("""
             {"email":"m@example.com","status":"WOULD_BE_NOTIFIED","userId":4,"username":"m","thresholdDays":30,

@@ -70,6 +70,21 @@ class WorkgroupOverdueNotificationServiceTest {
     }
 
     @Test
+    fun `excluded memberships remain visible but do not create notification paths`() {
+        user("excluded@example.com", 5)
+        val excluded = listOf("AWS-Backend", "Aws-DevOps", "root", "team-aws-example")
+            .map { path(assigned = 1).copy(name = it) }
+        every { query.findWorkgroupPaths(5) } returns excluded
+
+        val overview = service.overview("excluded@example.com", 30)
+
+        assertThat(overview.status).isEqualTo(NotifiedUserStatus.NO_PATHS)
+        assertThat(overview.workgroups).isEqualTo(excluded)
+        assertThat(overview.totalAssets).isZero()
+        verify(exactly = 0) { query.findRecipients(any(), 5) }
+    }
+
+    @Test
     fun `overview reports the sender's assets and the same-day guard`() {
         user("member@example.com", 4)
         every { query.findWorkgroupPaths(4) } returns listOf(path())
