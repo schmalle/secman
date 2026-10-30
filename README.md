@@ -16,7 +16,7 @@ Security requirement, vulnerability and risk-assessment platform.
 - AWS account onboarding: imports requesting notifications use a saved welcome-email (default) or risk-assessment policy. The welcome subject and body are editable in the web UI; advanced guided questionnaires remain supported.
 - Risk assessments support SaaS and COTS solution names, searchable existing assessors/respondents, and email-only respondents who need no SecMan account.
 - AuthN: local (BCrypt) + OAuth2/OIDC + Passkey/WebAuthn + optional MFA.
-- AuthZ: 9-role RBAC with row-level filtering on assets (workgroup, ownership, AWS account, AD domain, sharing rules).
+- AuthZ: 10-role RBAC (including the additive BETA eligibility role) with asset access through workgroup, AWS account, AD domain, and sharing grants.
 - AI integration: 90+ tool MCP server (Streamable HTTP) for Claude Desktop/Code, Paperclip, and other MCP clients, with mandatory user delegation.
 - Email: SMTP/SES with retry + audit, Thymeleaf HTML templates, escalation tiers.
 
@@ -86,7 +86,7 @@ specs/        historical implementation plans (frozen)
 
 ## API reference
 
-All endpoints under `/api/*` require `Authorization: Bearer <jwt>` unless noted. SSE endpoints take JWT as `?token=` (EventSource limitation).
+Most endpoints under `/api/*` require authentication unless noted. Browser requests, including SSE EventSource connections, use the HttpOnly `secman_auth` cookie. External clients can use `Authorization: Bearer <jwt>`.
 
 | Endpoint | Method | Roles |
 |---|---|---|
@@ -189,7 +189,7 @@ Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings):
 
 ## Workflow
 
-Branches: `###-feature-name`. Commits: `type(scope): description` (Conventional Commits). PRs need security review for AuthN/AuthZ/crypto/storage changes.
+Branches: `dev` or `task/<name>` created from `dev`; never commit directly to `main` or `master`. Commits: `type(scope): description` (Conventional Commits). PRs need security review for AuthN/AuthZ/crypto/storage changes.
 
 ## Roadmap (open)
 

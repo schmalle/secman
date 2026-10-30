@@ -168,7 +168,7 @@ Each rule names the control that already exists in this repo. **Reuse it — nev
 
 **A02 Cryptographic Failures**
 - Passwords and API-key secrets: `BCryptPasswordEncoder` only. Never SHA-256/MD5/hand-rolled hashing for a secret — the SHA-256 API-key path in `McpAuthenticationService` exists solely to migrate legacy keys, do not extend or imitate it.
-- The JWT lives in the HttpOnly `secman_auth` cookie. Never write a token to `localStorage`, `sessionStorage`, a non-HttpOnly cookie, or any value that lands in a log. The SSE `?token=` query param is the one documented exception (EventSource has no headers).
+- The JWT lives in the HttpOnly `secman_auth` cookie. Never write a token to `localStorage`, `sessionStorage`, a non-HttpOnly cookie, a URL query parameter, or any value that lands in a log. Browser EventSource connections send the cookie with `withCredentials: true`.
 - Secrets come from `pass-cli`/env. No literal credential, key, token or internal host in source, tests, scripts or fixtures.
 - `JwtSigningValidator`, `DatabaseCredentialValidator` and `DatasourceUrlValidator` fail the boot on weak config **by design** — never relax or bypass one to make the backend start.
 
@@ -232,7 +232,7 @@ Code samples in `docs/ARCHITECTURE.md` §Patterns — CSV/Excel import (validate
 - Backend: `@Secured(SecurityRule.IS_AUTHENTICATED)` + `authentication.roles.contains("…")`.
 - Frontend: the JWT lives in the **HttpOnly `secman_auth` cookie** (`AuthCookieService.AUTH_COOKIE_NAME`), not in JS-readable storage. Axios sends it via `withCredentials: true` (set globally in `utils/csrf.ts`); fetch calls use the `authenticated*` helpers in `utils/auth.ts` / `services/`. `sessionStorage["user"]` holds only the display/role payload — never a token.
 - External/CLI clients: `POST /api/auth/login` returns the JWT **only** in `Set-Cookie: secman_auth=…`; clients either retain that cookie or extract the token and re-send it as `Authorization: Bearer …` (both readers stay active).
-- SSE: JWT in `?token=…` query param (EventSource has no header support).
+- SSE: browser EventSource connections send the HttpOnly `secman_auth` cookie with `withCredentials: true`.
 
 ### Chat notifications (Slack / Telegram)
 Publishers stay transport-agnostic: publish a `ChatNotificationEvent` where the work completes;

@@ -63,7 +63,7 @@ if [ $? -eq 0 ]; then
     echo "1. Update your application configuration if needed (see docs/ENVIRONMENT.md)"
     echo "2. Start the Secman backend (Micronaut application)"
     echo "3. Flyway migrations and Hibernate auto-update will create all tables"
-    echo "4. A default admin user (admin/password) is created on first startup if no users exist"
+    echo "4. A default admin user is created on first startup if no users exist; copy its generated password from backend stdout"
     echo ""
 else
     echo ""
