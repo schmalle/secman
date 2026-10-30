@@ -89,7 +89,7 @@ class ExternalHeatmapController(
             } else if (accessibleAssetIds.isEmpty()) {
                 emptyList()
             } else {
-                assetHeatmapRepository.findAll().filter { accessibleAssetIds.contains(it.assetId) }
+                assetHeatmapRepository.findByAssetIds(accessibleAssetIds)
             }
 
             val dtos = entries.map { it.toDto() }
