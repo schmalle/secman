@@ -10,15 +10,16 @@ integration-contract script runs focused tests in the shared-contract clients.
 |---|---|---|
 | `secman_ai_github/` | https://github.com/schmalle/secman_ai_github | GitHub security scanner. Pushes findings into secman. |
 | `secman_app_ios/` | https://github.com/schmalle/secman_app_ios | iOS/iPadOS status app. Talks **only** to the relay, never to secman. |
+| `secman_visual_check/` | https://github.com/schmalle/secman_visual_check | Visual security checker. Pushes retained findings into secman. |
 | `secman_web_check/` | https://github.com/schmalle/secman_web_check | web security checker for secman. |
 | `secman_intra_mon/` | https://github.com/schmalle/secman_intranet_mon | intranet discovery tool for secman. |
-| `secman_source/` | https://github.com/schmalle/secman_source | Local multi-engine source-code security review CLI. Calls neither SecMan nor the relay. |
+| `secman_source/` | https://github.com/schmalle/secman_source | Local multi-engine source-code security review CLI with optional SecMan v1 delivery. |
 
 ## Client and tool categories
 
 The distinction matters for security review, so it is worth stating plainly.
 
-**Backend clients** (`secman_ai_github`, `secman_web_check`, `secman_intra_mon`)
+**Backend clients** (`secman_ai_github`, `secman_visual_check`, `secman_web_check`, `secman_intra_mon`)
 authenticate to secman itself and **write** data — vulnerabilities, assets,
 findings and scan results. They hold
 secman credentials and reach `/api/…` directly. Changing a backend
@@ -36,10 +37,12 @@ contract** (`src/backendng/…/com/secman/relay/RelayDtos.kt`, the section names
 in `RelaySnapshotBuilder`, or the relay's own API under `src/relay/`) can, and
 that contract is versioned with `schemaVersion` for exactly that reason.
 
-**Standalone tools** (`secman_source`) operate on local source trees and call
-AI scanner CLIs or configured model APIs. They do not authenticate to SecMan,
-call its `/api/…` or `/mcp` surfaces, or consume the relay contract, so the
-backend and relay compatibility sweeps below do not apply to them.
+**Hybrid tools** (`secman_source`) operate on local source trees and call AI
+scanner CLIs or configured model APIs without SecMan by default. Its optional
+`SOURCE_CODE` integration authenticates to SecMan and submits through the same
+version-1 discovery/run contract as the other shared-contract clients, so the
+backend compatibility sweep applies when that integration is enabled. It never
+consumes the relay contract.
 
 ## Rediscovering the backend surface
 
