@@ -10,6 +10,8 @@ Secman's central integration-results API.
 |---|---|---|---|
 | GitHub AI scanner | `schmalle/secman_ai_github` | `GITHUB_AI` | Reviews GitHub repositories with pluggable AI/security-review engines and submits retained findings to Secman. |
 | Visual checker | `schmalle/secman_visual_check` | `VISUAL` | Checks web targets, HTTP behavior and screenshots/vision findings and submits retained results to Secman. |
+| Web checker | `schmalle/secman_web_check` | `WEB_SECURITY` | Checks external web exposure and software components and optionally submits retained findings and inventory to Secman. |
+| Source checker | `schmalle/secman_source` | `SOURCE_CODE` | Reviews local source trees and optionally submits retained findings to Secman without resolving findings by absence. |
 
 The extensions are deliberately separate repositories. They are clients of the
 Secman integration contract, not source-code modules that are compiled into the
@@ -49,9 +51,10 @@ migration/rollout notes, see [INTEGRATION_RESULTS.md](INTEGRATION_RESULTS.md).
 
 ## Extension configuration
 
-Both current clients preserve their legacy upload behavior unless a registered
-scanner ID is configured. Setting the scanner ID selects the v1 integration
-contract; it does not by itself enable uploads.
+The GitHub and Visual clients preserve their legacy upload behavior unless a
+registered scanner ID is configured. Setting the scanner ID selects the v1
+integration contract; it does not by itself enable uploads. Web and Source use
+their optional private delivery queues described in `INTEGRATION_RESULTS.md`.
 
 ### GitHub AI scanner
 

@@ -19,7 +19,7 @@ import java.time.ZoneOffset
 
 /**
  * `show-notified-users` and `notify-users-overdue`: overdue-vulnerability digests for the
- * members of enabled workgroups, via direct asset assignment or a whole-AWS-account grant.
+ * members of enabled aws- workgroups, via direct asset assignment or a whole-AWS-account grant.
  *
  * Independent of [UserVulnerabilityNotificationService] (`send-notification-users`), which
  * keeps its own recipient rule. Both commands here read the same [WorkgroupOverdueRecipientQuery]
@@ -82,7 +82,9 @@ open class WorkgroupOverdueNotificationService(
             .copy(userId = user.id, username = user.username, workgroups = workgroups)
         if (!user.enabled) return base
 
-        val hasPath = workgroups.any { it.enabled && (it.assignedAssetCount > 0 || it.awsAccountIds.isNotEmpty()) }
+        val hasPath = workgroups.any {
+            it.enabled && it.name.startsWith("aws-") && (it.assignedAssetCount > 0 || it.awsAccountIds.isNotEmpty())
+        }
         if (!hasPath) return base.copy(status = NotifiedUserStatus.NO_PATHS)
 
         val assets = recipientQuery.findRecipients(runWindow, user.id).firstOrNull()?.assets.orEmpty()

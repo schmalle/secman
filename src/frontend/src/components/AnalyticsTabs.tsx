@@ -1,9 +1,19 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import CurrentVulnerabilitiesTable from './CurrentVulnerabilitiesTable';
-import ExternalExposureAnalytics from './ExternalExposureAnalytics';
-import VulnerabilityStatisticsPage from './statistics/VulnerabilityStatisticsPage';
-import VulnerabilityHeatmap from './VulnerabilityHeatmap';
+import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import './AnalyticsTabs.css';
+
+// Each view is its own chunk, fetched the first time its tab is selected. Imported statically,
+// every visit to /analytics shipped all four, chart.js included, to show the overview table.
+const CurrentVulnerabilitiesTable = lazy(() => import('./CurrentVulnerabilitiesTable'));
+const ExternalExposureAnalytics = lazy(() => import('./ExternalExposureAnalytics'));
+const VulnerabilityStatisticsPage = lazy(() => import('./statistics/VulnerabilityStatisticsPage'));
+const VulnerabilityHeatmap = lazy(() => import('./VulnerabilityHeatmap'));
+
+const TabLoading: React.FC = () => (
+  <div className="d-flex justify-content-center py-5" role="status" aria-live="polite">
+    <div className="spinner-border text-secondary" aria-hidden="true" />
+    <span className="visually-hidden">Loading view…</span>
+  </div>
+);
 
 /**
  * One destination for the vulnerability analysis views that used to be
@@ -153,10 +163,12 @@ const AnalyticsTabs: React.FC = () => {
         className={`analytics-tabs__content flex-grow-1 ${active === 'overview' ? '' : 'overflow-auto'}`}
         style={{ minHeight: 0 }}
       >
-        {active === 'overview' && <CurrentVulnerabilitiesTable embedded />}
-        {active === 'exposure' && <ExternalExposureAnalytics />}
-        {active === 'lense' && <VulnerabilityStatisticsPage />}
-        {active === 'heatmap' && <VulnerabilityHeatmap />}
+        <Suspense fallback={<TabLoading />}>
+          {active === 'overview' && <CurrentVulnerabilitiesTable embedded />}
+          {active === 'exposure' && <ExternalExposureAnalytics />}
+          {active === 'lense' && <VulnerabilityStatisticsPage />}
+          {active === 'heatmap' && <VulnerabilityHeatmap />}
+        </Suspense>
       </div>
     </div>
   );

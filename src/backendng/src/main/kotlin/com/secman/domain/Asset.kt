@@ -28,7 +28,8 @@ import java.time.LocalDateTime
         Index(name = "idx_asset_scan_uploader", columnList = "scan_uploader_id"),   // Access control by uploader
         Index(name = "idx_asset_network_zone", columnList = "network_zone"),        // Network zone filtering (port-scan addon)
         Index(name = "idx_asset_crowdstrike_agent_seen_at", columnList = "crowdstrike_agent_seen_at"), // EDR-coverage KPI
-        Index(name = "idx_asset_observed_at", columnList = "observed_at,id")             // 72-hour current inventory (V295)
+        Index(name = "idx_asset_observed_at", columnList = "observed_at,id"),            // 72-hour current inventory (V295)
+        Index(name = "idx_asset_crowdstrike_match_name", columnList = "crowdstrike_match_name") // CrowdStrike hostname match (V296)
     ]
 )
 @Serdeable
@@ -305,6 +306,14 @@ data class Asset(
     @JsonIgnore
     @Column(name = "observed_at", insertable = false, updatable = false, columnDefinition = com.secman.repository.AssetCurrentnessSql.OBSERVED_AT_DDL)
     var observedAt: LocalDateTime? = null
+
+    /**
+     * `COALESCE(crowdStrikeHostname, name)`, computed by MariaDB (V296) so the CrowdStrike
+     * hostname match can use `idx_asset_crowdstrike_match_name`. Read-only.
+     */
+    @JsonIgnore
+    @Column(name = "crowdstrike_match_name", insertable = false, updatable = false, columnDefinition = com.secman.repository.AssetIdentitySql.MATCH_NAME_DDL)
+    var crowdStrikeMatchName: String? = null
 
     /** Set a user-owned display name without changing CrowdStrike's source identity. */
     fun overrideName(newName: String, actor: String, changedAt: LocalDateTime = LocalDateTime.now()) {

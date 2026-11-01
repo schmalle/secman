@@ -111,9 +111,9 @@ class WorkgroupOverdueNotificationIntegrationTest : BaseIntegrationTest() {
     @Test
     fun `user matching through assignment, two workgroups and an account gets one entry per asset`() {
         val account = "1${suffix.toString().takeLast(11).padStart(11, '0')}"
-        val assigned = group("assigned")
-        val accountGroup = group("account")
-        val secondAccountGroup = group("account-two")
+        val assigned = group("aws-assigned")
+        val accountGroup = group("aws-account")
+        val secondAccountGroup = group("aws-account-two")
         listOf(accountGroup, secondAccountGroup).forEach {
             accountGrants.save(WorkgroupAwsAccount(workgroup = it, awsAccountId = account, createdBy = null))
         }
@@ -141,8 +141,8 @@ class WorkgroupOverdueNotificationIntegrationTest : BaseIntegrationTest() {
         val metadataOwner = user("metadata")
         mappings.save(UserMapping(email = owner.email, user = owner, awsAccountId = account, domain = null))
         sharing.save(AwsAccountSharing(sourceUser = owner, targetUser = shareTarget, createdBy = owner))
-        val enabledGroup = group("enabled")
-        val disabledGroup = group("disabled", enabled = false)
+        val enabledGroup = group("aws-enabled")
+        val disabledGroup = group("aws-disabled", enabled = false)
         accountGrants.save(WorkgroupAwsAccount(workgroup = enabledGroup, awsAccountId = account, createdBy = null))
         accountGrants.save(WorkgroupAwsAccount(workgroup = disabledGroup, awsAccountId = account, createdBy = null))
         join(disabledMember, enabledGroup)
@@ -171,9 +171,53 @@ class WorkgroupOverdueNotificationIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `only exact lowercase prefix contributes through either path with matching overview and dry run`() {
+        val account = "4${suffix.toString().takeLast(11).padStart(11, '0')}"
+        val allowed = group("aws-DevOps")
+        val excluded = listOf("AWS-Backend", "Aws-DevOps", "root", "team-aws-example", " aws-leading")
+            .map { group(it) }
+        val member = user("mixed-prefix").also { join(it, allowed, *excluded.toTypedArray()) }
+        val excludedOnly = user("excluded-only").also { join(it, *excluded.toTypedArray()) }
+        (excluded + allowed).forEach {
+            accountGrants.save(WorkgroupAwsAccount(workgroup = it, awsAccountId = account, createdBy = null))
+        }
+        val shared = asset("shared-prefix", account, excluded.first()).also {
+            overdue(it, "CVE-shared", "Critical")
+            overdue(it, "CVE-shared-high")
+        }
+        val direct = asset("allowed-direct", group = allowed).also { overdue(it, "CVE-direct") }
+        excluded.forEachIndexed { index, group ->
+            asset("excluded-direct-$index", group = group).also { overdue(it, "CVE-excluded-$index") }
+        }
+
+        val result = recipients(member, excludedOnly)
+        assertThat(result.keys).containsExactly(member.email.lowercase())
+        val entries = result.getValue(member.email.lowercase()).assets
+        assertThat(entries.map { it.assetId }).containsExactlyInAnyOrder(shared.id, direct.id)
+        assertThat(entries.flatMap { it.reasons }.map { it.workgroupName }.toSet()).containsExactly(allowed.name)
+        assertThat(entries.sumOf { it.overdueCount }).isEqualTo(3)
+
+        val overview = service.overview(member.email, 30)
+        val dryRun = service.run(30, dryRun = true, notificationUser = member.email, actor = "test")
+        assertThat(overview.totalAssets).isEqualTo(2)
+        assertThat(overview.totalOverdue).isEqualTo(3)
+        assertThat(overview.workgroups.map { it.name }).containsAll(excluded.map { it.name })
+        assertThat(dryRun.recipients.single().assetCount).isEqualTo(overview.totalAssets)
+        assertThat(dryRun.recipients.single().overdueCount).isEqualTo(overview.totalOverdue)
+        assertThat(dryRun.recipients.single().workgroups).containsExactly(allowed.name)
+        assertThat(service.overview(excludedOnly.email, 30).status).isEqualTo(NotifiedUserStatus.NO_PATHS)
+        assertThat(service.run(30, dryRun = true, notificationUser = excludedOnly.email, actor = "test").recipientsResolved).isZero()
+        val recipient = result.getValue(member.email.lowercase())
+        for (body in listOf(service.renderHtml(recipient, 30), service.renderText(recipient, 30))) {
+            assertThat(body).contains(allowed.name)
+            excluded.forEach { assertThat(body).doesNotContain(it.name) }
+        }
+    }
+
+    @Test
     fun `member with paths but only young or excepted findings has no overdue assets`() {
         val account = "3${suffix.toString().takeLast(11).padStart(11, '0')}"
-        val quietGroup = group("quiet")
+        val quietGroup = group("aws-quiet")
         accountGrants.save(WorkgroupAwsAccount(workgroup = quietGroup, awsAccountId = account, createdBy = null))
         val member = user("quiet").also { join(it, quietGroup) }
         asset("young", account).also { overdue(it, "CVE-young", ageDays = 5) }

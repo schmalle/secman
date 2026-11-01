@@ -190,9 +190,13 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * @param name The asset name (hostname, case-insensitive)
      * @return The asset if found, null otherwise
      */
+    // Plain = on purpose: asset is utf8mb4_general_ci (V205), so this is already case-insensitive,
+    // and the derived IgnoreCase form wraps both sides in LOWER(), which defeats idx_asset_name.
+    @io.micronaut.data.annotation.Query("SELECT a FROM Asset a WHERE a.name = :name")
     fun findByNameIgnoreCase(name: String): Asset?
 
-    /** Find an asset by the latest hostname owned by the CrowdStrike import. */
+    /** Find an asset by the latest hostname owned by the CrowdStrike import (case-insensitive via collation). */
+    @io.micronaut.data.annotation.Query("SELECT a FROM Asset a WHERE a.crowdStrikeHostname = :crowdStrikeHostname")
     fun findByCrowdStrikeHostnameIgnoreCase(crowdStrikeHostname: String): Asset?
 
     /**
@@ -202,9 +206,12 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * @param cloudInstanceId The AWS EC2 Instance ID (e.g., "i-0068f94221fe120df")
      * @return The asset if found, null otherwise
      */
+    @io.micronaut.data.annotation.Query("SELECT a FROM Asset a WHERE a.cloudInstanceId = :cloudInstanceId")
     fun findByCloudInstanceIdIgnoreCase(cloudInstanceId: String): Asset?
 
-    @io.micronaut.data.annotation.Query("SELECT a FROM Asset a WHERE LOWER(a.cloudInstanceId) IN (:instanceIds)")
+    // Callers pass lower-cased ids; the general_ci collation matches them against any stored casing
+    // while still letting idx_asset_cloud_instance_account serve the IN list.
+    @io.micronaut.data.annotation.Query("SELECT a FROM Asset a WHERE a.cloudInstanceId IN (:instanceIds)")
     fun findByNormalizedCloudInstanceIdIn(instanceIds: Collection<String>): List<Asset>
 
     @io.micronaut.data.annotation.Query("""
@@ -644,8 +651,8 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      */
     @io.micronaut.data.annotation.Query("""
         SELECT a FROM Asset a
-        WHERE LOWER(a.name) = LOWER(:name) 
-        OR LOWER(a.name) LIKE LOWER(CONCAT(:name, '.%'))
+        WHERE a.name = :name
+        OR a.name LIKE CONCAT(:name, '.%')
     """)
     fun findPotentialDuplicates(name: String): List<Asset>
 
@@ -655,17 +662,17 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      */
     @io.micronaut.data.annotation.Query("""
         SELECT a FROM Asset a
-        WHERE LOWER(COALESCE(a.crowdStrikeHostname, a.name)) = LOWER(:name)
-        OR LOWER(COALESCE(a.crowdStrikeHostname, a.name)) LIKE LOWER(CONCAT(:name, '.%'))
+        WHERE a.crowdStrikeMatchName = :name
+        OR a.crowdStrikeMatchName LIKE CONCAT(:name, '.%')
     """)
     fun findPotentialCrowdStrikeMatches(name: String): List<Asset>
 
     @io.micronaut.data.annotation.Query(value = """
         SELECT a FROM Asset a
-        WHERE LOWER(COALESCE(a.crowdStrikeHostname, a.name)) = LOWER(:hostname)
+        WHERE a.crowdStrikeMatchName = :hostname
     """, countQuery = """
         SELECT COUNT(a) FROM Asset a
-        WHERE LOWER(COALESCE(a.crowdStrikeHostname, a.name)) = LOWER(:hostname)
+        WHERE a.crowdStrikeMatchName = :hostname
     """)
     fun findCrowdStrikeReplacementCandidates(hostname: String, pageable: Pageable): Page<Asset>
 
@@ -682,11 +689,11 @@ interface AssetRepository : JpaRepository<Asset, Long> {
 
     @io.micronaut.data.annotation.Query(value = """
         SELECT a FROM Asset a
-        WHERE LOWER(COALESCE(a.crowdStrikeHostname, a.name)) IN (:hostnames)
+        WHERE a.crowdStrikeMatchName IN (:hostnames)
         ORDER BY a.id
     """, countQuery = """
         SELECT COUNT(a) FROM Asset a
-        WHERE LOWER(COALESCE(a.crowdStrikeHostname, a.name)) IN (:hostnames)
+        WHERE a.crowdStrikeMatchName IN (:hostnames)
     """)
     fun findStoredByExactHostnames(hostnames: List<String>, pageable: Pageable): Page<Asset>
 

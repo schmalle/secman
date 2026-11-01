@@ -415,6 +415,12 @@ AWS account sharing. Has no effect without `--notification-user`.
 
 ### `notify-users-overdue` and `show-notified-users` — workgroup overdue digests
 
+Both commands count assets only through enabled workgroups whose names start with
+the exact, case-sensitive prefix `aws-`. For example, `aws-DevOps` qualifies but
+`AWS-Backend-Operations`, `Aws-DevOps`, and `root` do not. This applies to direct
+asset assignments and AWS-account grants. Other memberships remain visible in the
+overview for diagnosis but contribute no affected assets or findings.
+
 A separate notification function from `send-notification-users`, with its own
 recipient rule and its own email (subject `SecMan: Overdue vulnerabilities on your
 workgroup assets`). A user is mailed about an asset only through the workgroups they
@@ -459,6 +465,7 @@ Threshold: 30 days
 Observation window (UTC): 2026-10-23T09:00 .. 2026-10-26T09:00
 
 WORKGROUPS (direct membership)
+Only enabled workgroups whose names start with lowercase aws- contribute to overdue asset totals; other groups are ignored.
 Name | ID | Enabled | Assigned assets | AWS accounts
 aws-DevOps-uuorndojrd | 17 | yes | 0 | 012345678901
 

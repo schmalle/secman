@@ -63,7 +63,7 @@ class ShowNotifiedUsersCommand(
         fun statusLine(report: JsonNode): String = when (report.path("status").asText()) {
             "USER_NOT_FOUND" -> "No user account exists with this email. Nothing would be sent."
             "USER_DISABLED" -> "The user account is disabled. Disabled users are never notified."
-            "NO_PATHS" -> "The user is not a direct member of any enabled workgroup with assigned assets or AWS accounts. Nothing would be sent."
+            "NO_PATHS" -> "The user is not a direct member of any enabled workgroup whose name starts with lowercase aws- with assigned assets or AWS accounts. Nothing would be sent."
             "NO_OVERDUE_ASSETS" -> "The user has notification paths, but none of their current assets has overdue findings. Nothing would be sent."
             "WOULD_BE_NOTIFIED" -> "The user would receive one email listing the assets below."
             else -> "Unknown status ${text(report.path("status"))}"
@@ -83,6 +83,7 @@ class ShowNotifiedUsersCommand(
             if (report.path("status").asText() == "USER_NOT_FOUND") return@buildString
 
             appendLine("\nWORKGROUPS (direct membership)")
+            appendLine("Only enabled workgroups whose names start with lowercase aws- contribute to overdue asset totals; other groups are ignored.")
             appendLine("Name | ID | Enabled | Assigned assets | AWS accounts")
             for (group in report.path("workgroups")) {
                 appendLine("${text(group.path("name"))} | ${text(group.path("workgroupId"))} | " +

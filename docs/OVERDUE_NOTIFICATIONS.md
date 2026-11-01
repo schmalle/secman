@@ -23,10 +23,15 @@ User U is mailed about asset A when all of the following hold:
    Falcon-managed assets use Falcon sensor contact, other assets `verified_observed_at`
    (the rule in [`CURRENT_ASSETS.md`](CURRENT_ASSETS.md)).
 3. U is an **enabled** user.
-4. U is a **direct member** of an **enabled** workgroup W, and at least one of these holds:
+4. U is a **direct member** of an **enabled** workgroup W whose name starts with
+   the exact, case-sensitive prefix **`aws-`**, and at least one of these holds:
    - **`DIRECT_ASSIGNMENT`**: A is assigned to W.
    - **`AWS_WORKGROUP`**: W has a whole-account grant (`workgroup_aws_account`) for
      A's `cloud_account_id`. Assets that enter the account after the grant are included.
+
+`aws-DevOps-example` qualifies; `AWS-Backend-Operations`, `Aws-DevOps-example`,
+`root`, and `team-aws-example` do not. This applies to both paths. An asset reached
+through eligible and excluded groups is counted once, with only eligible reasons.
 
 Nothing else makes someone a recipient. These grant **nothing** here:
 
@@ -86,7 +91,10 @@ nothing from it. `WorkgroupOverdueNotificationIntegrationTest` reproduces this s
 
 `show-notified-users` and `notify-users-overdue` read the same query result. The
 overview equals the sender's dry run for that user, except that the overview also
-reports the user's workgroups, including disabled ones, to explain a `NO_PATHS` result.
+reports all of the user's workgroups, including disabled ones and names without the
+`aws-` prefix, to explain a `NO_PATHS` result. Their assigned-asset counts are
+membership information, not affected-asset totals. Only eligible workgroups count
+when deciding whether the user has a notification path.
 
 The send loop is not transactional: each recipient costs one SMTP round-trip.
 `AwsAccountRecipientResolver` is not used and is unchanged, so `send-notification-users`,
