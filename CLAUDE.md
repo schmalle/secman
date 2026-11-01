@@ -334,8 +334,9 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **Speed and simplification pass (2026-11-01)** — vulnerability exports page by keyset instead of OFFSET (same rows and order, `id` tiebreaker added); V296 indexed `asset.crowdstrike_match_name` and `=`-based identity finders (collation keeps them case-insensitive); cli-add sibling sync is one UPDATE; JWT claims built once in `SecmanTokenIssuer`; `/analytics` tabs lazy-load. See `docs/CHANGELOG.md`.
+
 - **CrowdStrike short-lived sensor filtering (2026-10-26)** — Falcon devices observed for less than two minutes are skipped as `SKIPPED_SHORT_LIVED`, creating neither assets nor findings and not blocking CLI age statistics. Existing assets remain, and delete-on-fail refuses skipped replacement imports. See `docs/CROWDSTRIKE_IMPORT.md` and `docs/CHANGELOG.md`.
 
 - **CrowdStrike roaming enrollments and bootstrap sensors (2026-10-26)** — instance moves may absorb holders whose AIDs Falcon records as superseded on that same instance; superseded selected AIDs become non-failing `SKIPPED_SUPERSEDED` results. Foreign, newer, tied, or otherwise unexplained holders retain the prior fail-closed behavior. See `docs/CROWDSTRIKE_IMPORT.md` and `docs/CHANGELOG.md`.
 
-- **Delete-on-fail renamed-host recovery (2026-10-26)** — `--deleteonfail` can remove stale renamed or legacy-unbound EC2 instance holders only under bounded evidence rules; current, tied, undated, other-source, or newer holders are preserved. Empty recovery scope now reports `CONFLICT_OUTSIDE_RECOVERY_SCOPE`, while real races remain `TARGET_CHANGED`. See `docs/CROWDSTRIKE_IMPORT.md` and `docs/CHANGELOG.md`.

@@ -1,6 +1,7 @@
 package com.secman.controller
 
 import com.secman.domain.DashboardPreference
+import com.secman.security.requireUserId
 import com.secman.repository.DashboardPreferenceRepository
 import io.micronaut.http.annotation.*
 import io.micronaut.security.annotation.Secured
@@ -29,7 +30,7 @@ open class DashboardPreferenceController(
      */
     @Get
     fun getUserPreferences(authentication: Authentication): DashboardPreferenceResponse {
-        val userId = getUserIdFromAuthentication(authentication)
+        val userId = authentication.requireUserId()
 
         val preference = dashboardPreferenceRepository.findByUserId(userId)
             .orElseGet {
@@ -48,7 +49,7 @@ open class DashboardPreferenceController(
         @Valid @Body request: UpdatePreferenceRequest,
         authentication: Authentication
     ): DashboardPreferenceResponse {
-        val userId = getUserIdFromAuthentication(authentication)
+        val userId = authentication.requireUserId()
 
         val existing = dashboardPreferenceRepository.findByUserId(userId)
 
@@ -127,16 +128,4 @@ open class DashboardPreferenceController(
         }
     }
 
-    /**
-     * Extract user ID from authentication object
-     */
-    private fun getUserIdFromAuthentication(authentication: Authentication): Long {
-        val userId = authentication.attributes["userId"]
-        return when (userId) {
-            is Long -> userId
-            is Int -> userId.toLong()
-            is String -> userId.toLong()
-            else -> throw IllegalStateException("Unable to determine user ID from authentication")
-        }
-    }
 }

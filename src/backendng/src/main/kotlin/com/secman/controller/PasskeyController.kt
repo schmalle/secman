@@ -8,7 +8,7 @@ import io.micronaut.http.annotation.*
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
-import io.micronaut.security.token.generator.TokenGenerator
+import com.secman.security.SecmanTokenIssuer
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Inject
 import jakarta.validation.Valid
@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory
 open class PasskeyController(
     private val webAuthnService: WebAuthnService,
     private val userRepository: UserRepository,
-    private val tokenGenerator: TokenGenerator,
+    private val tokenIssuer: SecmanTokenIssuer,
     private val authCookieService: AuthCookieService
 ) {
     private val logger = LoggerFactory.getLogger(PasskeyController::class.java)
@@ -142,17 +142,8 @@ open class PasskeyController(
 
             val user = credential.user
 
-            // Generate JWT token using the same pattern as AuthController.login()
-            val userDetails = mapOf(
-                "sub" to user.username,
-                "username" to user.username,
-                "email" to user.email,
-                "roles" to user.roles.map { it.name },
-                "iss" to "secman-backend-ng",
-                "userId" to user.id.toString()
-            )
-
-            val tokenOptional = tokenGenerator.generateToken(userDetails)
+            // Same claims as every other login path (SecmanTokenIssuer)
+            val tokenOptional = tokenIssuer.issue(user)
             if (tokenOptional.isEmpty) {
                 logger.error("Failed to generate JWT token for passkey authentication")
                 return HttpResponse.serverError<Any>().body(mapOf("error" to "Authentication failed"))

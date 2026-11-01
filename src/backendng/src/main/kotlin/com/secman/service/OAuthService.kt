@@ -19,7 +19,7 @@ import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
 import io.micronaut.http.client.exceptions.HttpClientResponseException
 import io.micronaut.http.client.exceptions.ReadTimeoutException
-import io.micronaut.security.token.generator.TokenGenerator
+import com.secman.security.SecmanTokenIssuer
 import io.micronaut.scheduling.annotation.Async
 import io.micronaut.scheduling.annotation.Scheduled
 import jakarta.transaction.Transactional
@@ -153,7 +153,7 @@ open class OAuthService(
     private val userMappingRepository: UserMappingRepository,
     private val awsAccountSharingRepository: AwsAccountSharingRepository,
     private val workgroupRepository: WorkgroupRepository,
-    private val tokenGenerator: TokenGenerator,
+    private val tokenIssuer: SecmanTokenIssuer,
     private val objectMapper: ObjectMapper,
     private val microsoftErrorMapper: MicrosoftErrorMapper,
     private val adminNotificationService: AdminNotificationService,
@@ -558,16 +558,7 @@ open class OAuthService(
 
                 // Step 5: Generate JWT token
                 logger.info("[{}] Step 5: Generating JWT token...", correlationId)
-                val userDetails = mapOf(
-                    "sub" to user.username,
-                    "username" to user.username,
-                    "email" to user.email,
-                    "roles" to user.roles.map { it.name },
-                    "iss" to "secman-backend-ng",
-                    "userId" to user.id.toString()
-                )
-
-                val tokenOptional = tokenGenerator.generateToken(userDetails)
+                val tokenOptional = tokenIssuer.issue(user)
                 if (tokenOptional.isEmpty) {
                     logger.error("[{}] JWT token generation FAILED for user: {}", correlationId, user.username)
                     deleteOAuthStateQuietly(state)

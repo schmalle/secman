@@ -14,3 +14,15 @@ fun Authentication.hasAnyRole(vararg candidates: String): Boolean =
     candidates.any { roles.contains(it) }
 
 fun Authentication.isAdmin(): Boolean = hasRole("ADMIN")
+
+/**
+ * The caller's user id from the `userId` JWT claim, which [SecmanTokenIssuer] writes as a string.
+ * Throws [IllegalStateException] when the claim is absent and [NumberFormatException] when it is
+ * not a number, the behaviour the per-controller copies this replaces had.
+ */
+fun Authentication.requireUserId(): Long = when (val userId = attributes["userId"]) {
+    is Long -> userId
+    is Int -> userId.toLong()
+    is String -> userId.toLong()
+    else -> throw IllegalStateException("Unable to determine user ID from authentication")
+}

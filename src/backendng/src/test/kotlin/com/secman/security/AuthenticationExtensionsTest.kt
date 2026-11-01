@@ -36,4 +36,22 @@ class AuthenticationExtensionsTest {
         assertThat(authWithRoles("SECCHAMPION").isAdmin()).isFalse()
         assertThat(authWithRoles().isAdmin()).isFalse()
     }
+
+    private fun authWithUserId(value: Any?): Authentication =
+        Authentication.build("reader", listOf("USER"), if (value == null) emptyMap() else mapOf("userId" to value))
+
+    @Test
+    fun `requireUserId accepts the string claim the issuer writes and numeric attributes`() {
+        assertThat(authWithUserId("17").requireUserId()).isEqualTo(17L)
+        assertThat(authWithUserId(17L).requireUserId()).isEqualTo(17L)
+        assertThat(authWithUserId(17).requireUserId()).isEqualTo(17L)
+    }
+
+    @Test
+    fun `requireUserId fails loudly on a missing or malformed claim`() {
+        org.assertj.core.api.Assertions.assertThatThrownBy { authWithUserId(null).requireUserId() }
+            .isInstanceOf(IllegalStateException::class.java)
+        org.assertj.core.api.Assertions.assertThatThrownBy { authWithUserId("not-a-number").requireUserId() }
+            .isInstanceOf(NumberFormatException::class.java)
+    }
 }

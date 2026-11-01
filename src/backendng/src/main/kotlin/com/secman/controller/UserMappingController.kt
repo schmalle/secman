@@ -1,6 +1,7 @@
 package com.secman.controller
 
 import com.secman.domain.MappingStatus
+import com.secman.security.requireUserId
 import com.secman.dto.*
 import com.secman.repository.UserMappingRepository
 import com.secman.service.UserMappingService
@@ -47,7 +48,7 @@ open class UserMappingController(
         logger.info("Creating user mapping: email=${request.email}, aws=${request.awsAccountId}, ip=${request.ipAddress}")
 
         return try {
-            val userId = getUserIdFromAuthentication(authentication)
+            val userId = authentication.requireUserId()
             val result = userMappingService.createMapping(userId, request)
 
             HttpResponse.status<UserMappingResponse>(HttpStatus.CREATED)
@@ -272,7 +273,7 @@ open class UserMappingController(
         logger.info("Updating user mapping: id=$id, email=${request.email}, aws=${request.awsAccountId}, ip=${request.ipAddress}")
 
         return try {
-            val userId = getUserIdFromAuthentication(authentication)
+            val userId = authentication.requireUserId()
             val result = userMappingService.updateMapping(userId, id, request)
 
             HttpResponse.ok(result)
@@ -424,28 +425,16 @@ open class UserMappingController(
     }
 
     /**
-     * Like [getUserIdFromAuthentication], but returns null instead of throwing
+     * Like [com.secman.security.requireUserId], but returns null instead of throwing
      * when the user id cannot be determined (used where a fallback exists).
      */
     private fun getUserIdFromAuthenticationOrNull(authentication: Authentication): Long? {
         return try {
-            getUserIdFromAuthentication(authentication)
+            authentication.requireUserId()
         } catch (e: Exception) {
             logger.warn("Could not resolve user id from authentication: ${e.message}")
             null
         }
     }
 
-    /**
-     * Extract user ID from authentication object
-     */
-    private fun getUserIdFromAuthentication(authentication: Authentication): Long {
-        val userId = authentication.attributes["userId"]
-        return when (userId) {
-            is Long -> userId
-            is Int -> userId.toLong()
-            is String -> userId.toLong()
-            else -> throw IllegalStateException("Unable to determine user ID from authentication")
-        }
-    }
 }

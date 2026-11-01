@@ -1,6 +1,7 @@
 package com.secman.controller
 
 import com.secman.dto.CreateAwsAccountSharingRequest
+import com.secman.security.requireUserId
 import com.secman.dto.SourceAwsAccountResponse
 import com.secman.dto.UpdateAwsAccountSharingRequest
 import com.secman.domain.MappingStatus
@@ -53,7 +54,7 @@ open class AwsAccountSharingController(
             } else {
                 // Non-privileged users (including VULN) see only rules they are
                 // personally involved in — as source OR target.
-                val userId = getUserIdFromAuthentication(authentication)
+                val userId = authentication.requireUserId()
                 awsAccountSharingService.listSharingRulesForInvolvedUser(userId, page ?: 0, size ?: 20)
             }
             HttpResponse.ok(result)
@@ -86,7 +87,7 @@ open class AwsAccountSharingController(
         )
 
         return try {
-            val currentUserId = getUserIdFromAuthentication(authentication)
+            val currentUserId = authentication.requireUserId()
 
             // Users without manage-any access can only share their own accounts —
             // the request must not name a different source user by id or email.
@@ -211,7 +212,7 @@ open class AwsAccountSharingController(
 
         return try {
             if (!hasFullManagementAccess(authentication)) {
-                val currentUserId = getUserIdFromAuthentication(authentication)
+                val currentUserId = authentication.requireUserId()
                 if (!awsAccountSharingService.isOwnedByUser(id, currentUserId)) {
                     return HttpResponse.status<Any>(HttpStatus.FORBIDDEN).body(mapOf(
                         "error" to "Forbidden",
@@ -261,7 +262,7 @@ open class AwsAccountSharingController(
         if (!hasFullViewAccess(authentication)) {
             // Non-privileged users can only enumerate THEIR OWN accounts —
             // the picker only matters for them when they're sharing-out.
-            val currentUserId = getUserIdFromAuthentication(authentication)
+            val currentUserId = authentication.requireUserId()
             val currentUser = userRepository.findById(currentUserId).orElse(null)
                 ?: return HttpResponse.status<Any>(HttpStatus.FORBIDDEN).body(mapOf(
                     "error" to "Forbidden",
@@ -304,7 +305,7 @@ open class AwsAccountSharingController(
         return try {
             // Users without manage-any access can only delete their own rules
             if (!hasFullManagementAccess(authentication)) {
-                val currentUserId = getUserIdFromAuthentication(authentication)
+                val currentUserId = authentication.requireUserId()
                 if (!awsAccountSharingService.isOwnedByUser(id, currentUserId)) {
                     return HttpResponse.status<Any>(HttpStatus.FORBIDDEN).body(mapOf(
                         "error" to "Forbidden",
@@ -321,15 +322,6 @@ open class AwsAccountSharingController(
         }
     }
 
-    private fun getUserIdFromAuthentication(authentication: Authentication): Long {
-        val userId = authentication.attributes["userId"]
-        return when (userId) {
-            is Long -> userId
-            is Int -> userId.toLong()
-            is String -> userId.toLong()
-            else -> throw IllegalStateException("Unable to determine user ID from authentication")
-        }
-    }
 
     /**
      * GET /api/aws-account-sharing/users - Lightweight user list for the sharing form.

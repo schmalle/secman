@@ -16,7 +16,7 @@ import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.authentication.UsernamePasswordCredentials
 import io.micronaut.security.rules.SecurityRule
-import io.micronaut.security.token.generator.TokenGenerator
+import com.secman.security.SecmanTokenIssuer
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Inject
 import jakarta.transaction.Transactional
@@ -34,7 +34,7 @@ open class AuthController(
     private val userMappingRepository: UserMappingRepository,
     private val awsAccountSharingRepository: AwsAccountSharingRepository,
     private val workgroupRepository: WorkgroupRepository,
-    private val tokenGenerator: TokenGenerator,
+    private val tokenIssuer: SecmanTokenIssuer,
     private val inputValidationService: InputValidationService,
     private val authCookieService: AuthCookieService,
     private val activeUserTracker: ActiveUserTracker,
@@ -190,16 +190,7 @@ open class AuthController(
         }
 
         // Generate JWT token
-        val userDetails = mapOf(
-            "sub" to user.username,
-            "username" to user.username,
-            "email" to user.email,
-            "roles" to user.roles.map { it.name },
-            "iss" to "secman-backend-ng",
-            "userId" to user.id.toString()
-        )
-        
-        val tokenOptional = tokenGenerator.generateToken(userDetails)
+        val tokenOptional = tokenIssuer.issue(user)
         
         if (tokenOptional.isEmpty) {
             return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to generate token"))
@@ -315,16 +306,7 @@ open class AuthController(
         val user = userOptional.get()
 
         // Generate a fresh JWT token
-        val userDetails = mapOf(
-            "sub" to user.username,
-            "username" to user.username,
-            "email" to user.email,
-            "roles" to user.roles.map { it.name },
-            "iss" to "secman-backend-ng",
-            "userId" to user.id.toString()
-        )
-
-        val tokenOptional = tokenGenerator.generateToken(userDetails)
+        val tokenOptional = tokenIssuer.issue(user)
 
         if (tokenOptional.isEmpty) {
             return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to generate token"))
