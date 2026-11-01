@@ -665,6 +665,28 @@ open class ExportJobService(
     }
 
     /**
+     * One export page continuing from [after], declared like [fetchVulnerabilityPageForExport].
+     * Positional paging keeps every batch the same cost; the OFFSET form re-read all earlier
+     * batches, so a large export grew quadratically.
+     */
+    @Transactional(TxType.REQUIRES_NEW)
+    open fun fetchVulnerabilityExportBatch(
+        accessibleAssetIds: Set<Long>,
+        isAdmin: Boolean,
+        filters: VulnerabilityExportFilters,
+        page: Int,
+        after: VulnerabilityExportCursor?,
+        size: Int
+    ): VulnerabilityExportPage = vulnerabilityService.getCurrentVulnerabilitiesExportPage(
+        accessibleAssetIds = accessibleAssetIds,
+        isAdmin = isAdmin,
+        filters = filters,
+        page = page,
+        after = after,
+        size = size
+    )
+
+    /**
      * Process vulnerability export
      * Uses jobId and calls transactional helper methods for all DB operations.
      *
@@ -729,6 +751,7 @@ open class ExportJobService(
 
             var rowNum = 1
             var page = 0
+            var cursor: VulnerabilityExportCursor? = null
             val batchSize = memoryConfig.batchSize
             var hasMore = true
             var lastProgressUpdate = System.currentTimeMillis()
@@ -745,16 +768,16 @@ open class ExportJobService(
                 }
 
                 val batchStart = System.currentTimeMillis()
-                // Use the REQUIRES_NEW wrapper — see fetchVulnerabilityPageForExport.
-                val response = fetchVulnerabilityPageForExport(
+                // Called like fetchVulnerabilityPageForExport always was. COUNTING already fixed
+                // totalItems, so batches never count; the last page is detected by fetching one
+                // extra row.
+                val response = fetchVulnerabilityExportBatch(
                     accessibleAssetIds = accessibleAssetIds,
                     isAdmin = isAdmin,
                     filters = filters,
                     page = page,
-                    size = batchSize,
-                    // COUNTING already fixed totalItems; recounting every batch made the export
-                    // quadratic. Deferred mode detects the last page by fetching one extra row.
-                    countMode = "deferred"
+                    after = cursor,
+                    size = batchSize
                 )
 
                 response.content.forEach { vuln ->
@@ -786,6 +809,7 @@ open class ExportJobService(
                 }
 
                 hasMore = response.hasNext
+                cursor = response.next
                 page++
             }
 

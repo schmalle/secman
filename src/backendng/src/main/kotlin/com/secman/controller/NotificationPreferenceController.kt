@@ -1,6 +1,7 @@
 package com.secman.controller
 
 import com.secman.domain.NotificationPreference
+import com.secman.security.requireUserId
 import com.secman.repository.NotificationPreferenceRepository
 import io.micronaut.http.annotation.*
 import io.micronaut.security.annotation.Secured
@@ -30,7 +31,7 @@ open class NotificationPreferenceController(
      */
     @Get
     fun getUserPreferences(authentication: Authentication): NotificationPreferenceResponse {
-        val userId = getUserIdFromAuthentication(authentication)
+        val userId = authentication.requireUserId()
 
         val preference = notificationPreferenceRepository.findByUserId(userId)
             .orElseGet {
@@ -52,7 +53,7 @@ open class NotificationPreferenceController(
         @Valid @Body request: UpdatePreferenceRequest,
         authentication: Authentication
     ): NotificationPreferenceResponse {
-        val userId = getUserIdFromAuthentication(authentication)
+        val userId = authentication.requireUserId()
 
         val existing = notificationPreferenceRepository.findByUserId(userId)
 
@@ -104,16 +105,4 @@ open class NotificationPreferenceController(
         }
     }
 
-    /**
-     * Extract user ID from authentication object
-     */
-    private fun getUserIdFromAuthentication(authentication: Authentication): Long {
-        val userId = authentication.attributes["userId"]
-        return when (userId) {
-            is Long -> userId
-            is Int -> userId.toLong()
-            is String -> userId.toLong()
-            else -> throw IllegalStateException("Unable to determine user ID from authentication")
-        }
-    }
 }

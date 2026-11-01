@@ -72,44 +72,43 @@ const ClassificationRuleManager: React.FC = () => {
     'IS_NULL', 'IS_NOT_NULL'
   ];
 
+  // Runs once. The access decision is made by whichever comes first: a user already on window,
+  // the userLoaded event, or the 2 s fallback. The `settled` guard and the cleanup keep a late
+  // timer from overwriting an admin's access after the event, and keep rules from loading twice.
   useEffect(() => {
-    const checkAdminRole = () => {
-      if (window.currentUser) {
-        const roles = window.currentUser.roles ?? [];
-        const hasAccess = roles.includes('ADMIN') || roles.includes('SECCHAMPION');
-        setIsAdmin(hasAccess);
-        setIsLoadingAuth(false);
+    let settled = false;
+    let fallback: ReturnType<typeof setTimeout> | undefined;
 
-        if (hasAccess) {
-          loadRules();
-        }
-      } else {
-        // If currentUser isn't loaded yet, wait for the event
-        const handleUserLoaded = () => {
-          const roles = window.currentUser?.roles ?? [];
-          const hasAccess = roles.includes('ADMIN') || roles.includes('SECCHAMPION');
-          setIsAdmin(hasAccess);
-          setIsLoadingAuth(false);
-
-          if (hasAccess) {
-            loadRules();
-          }
-        };
-        
-        window.addEventListener('userLoaded', handleUserLoaded, { once: true });
-
-        // Set a timeout in case the event never fires
-        setTimeout(() => {
-          if (isLoadingAuth) {
-            setIsLoadingAuth(false);
-            setIsAdmin(false);
-          }
-        }, 2000);
+    const settle = (roles: string[] | null) => {
+      if (settled) return;
+      settled = true;
+      if (fallback !== undefined) clearTimeout(fallback);
+      window.removeEventListener('userLoaded', handleUserLoaded);
+      const hasAccess = roles !== null && (roles.includes('ADMIN') || roles.includes('SECCHAMPION'));
+      setIsAdmin(hasAccess);
+      setIsLoadingAuth(false);
+      if (hasAccess) {
+        loadRules();
       }
     };
 
-    checkAdminRole();
-  }, [isLoadingAuth]);
+    function handleUserLoaded() {
+      settle(window.currentUser?.roles ?? []);
+    }
+
+    if (window.currentUser) {
+      settle(window.currentUser.roles ?? []);
+    } else {
+      window.addEventListener('userLoaded', handleUserLoaded);
+      fallback = setTimeout(() => settle(null), 2000);
+    }
+
+    return () => {
+      settled = true;
+      if (fallback !== undefined) clearTimeout(fallback);
+      window.removeEventListener('userLoaded', handleUserLoaded);
+    };
+  }, []);
 
   const loadRules = async () => {
     setLoading(true);

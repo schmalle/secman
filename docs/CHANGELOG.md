@@ -1,5 +1,14 @@
 # Changelog (archived from CLAUDE.md)
 
+## 2026-11-01 — speed and simplification pass
+
+- **Speed and simplification pass (2026-11-01)** — vulnerability exports page by keyset instead of OFFSET (same rows and order, `id` tiebreaker added); V296 indexed `asset.crowdstrike_match_name` and `=`-based identity finders (collation keeps them case-insensitive); cli-add sibling sync is one UPDATE; JWT claims built once in `SecmanTokenIssuer`; `/analytics` tabs lazy-load. See `docs/CHANGELOG.md`.
+- **Export paging**: vulnerability exports (async job and the two synchronous paths) page by position (keyset) instead of `OFFSET`, so a large export costs linear rather than quadratic reads. Rows and order are unchanged: plain exports keep the list order `import_timestamp DESC, asset_name, vulnerability_id` with `id` added as the final tiebreaker (which also removes possible duplicated/skipped rows at page boundaries when those three tie), and CVE-filtered or seen-today exports keep `scan_timestamp DESC, id`. Statuses other than `not_excepted`/`overdue`/`excepted`/`ok` keep the previous path. Logic in `VulnerabilityExportKeyset.kt`.
+- **Asset identity lookups**: V296 adds VIRTUAL generated, indexed `asset.crowdstrike_match_name` = `COALESCE(crowdstrike_hostname, name)`. CrowdStrike hostname matching and the name / cloud-instance finders compare with plain `=`/prefix `LIKE` instead of `LOWER(...)`; the asset table is `utf8mb4_general_ci` (V205), so matching stays case-insensitive while the indexes become usable. Repository method names are unchanged.
+- **cli-add**: aligning sibling `import_timestamp`s is one `UPDATE` (`alignImportTimestampForAsset`) instead of a load-and-update per finding.
+- **Simplification**: `CrowdStrikeVulnerabilityService` reduced to its one live entry point (unused Falcon OAuth client, token cache and mapping removed); session JWT claims built once in `SecmanTokenIssuer` for password, refresh, passkey and OAuth logins; `Authentication.requireUserId()` replaces four identical controller helpers; four unused `VulnerabilityRepository` finders removed.
+- **Frontend**: `/analytics` lazy-loads each tab (default tab JS 363 KB → 80 KB raw, 118 KB → 25 KB gzip); `ClassificationRuleManager` no longer loads rules twice or lets a stale 2 s timer hide the page from an admin.
+
 ## 2026-10-26 — CrowdStrike import: short-lived sensors are never imported
 
 - A Falcon device whose first-to-last contact spans less than two minutes is skipped as `SKIPPED_SHORT_LIVED`: no asset, no findings, not a failure, and it does not block CLI age statistics. These are bootstrap enrollments (2,108 such `EC2AMAZ-*` assets were stored). Existing assets are kept. Delete-on-fail now refuses any skipped replacement import, not only a retention skip. See `docs/CROWDSTRIKE_IMPORT.md` §Short-lived sensors are never imported.
