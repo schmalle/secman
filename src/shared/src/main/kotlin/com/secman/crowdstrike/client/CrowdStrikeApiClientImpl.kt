@@ -63,6 +63,9 @@ open class CrowdStrikeApiClientImpl(
     @field:Value("\${secman.crowdstrike.max-parallel-batches:10}")
     protected var configuredMaxParallelBatches: Int = 10
 
+    /** Base backoff before restarting a batch whose cursor Falcon lost; tests shorten it. */
+    protected var lostCursorBackoffMs: Long = 2000L
+
     /**
      * Query vulnerabilities for a specific hostname
      *
@@ -640,20 +643,7 @@ open class CrowdStrikeApiClientImpl(
                 }
                 throw CrowdStrikeException("Channel error querying installed products page $currentPage: ${e.message}", e)
             } catch (e: HttpClientException) {
-                val message = e.message.orEmpty()
-                // A read-phase network failure (e.g. "Can't assign requested address" /
-                // EADDRNOTAVAIL under sustained paging) surfaces as an HttpClientException
-                // wrapping an IOException, so it never reaches the IOException arm above.
-                // Walk the cause chain so any such transient I/O failure is retried instead
-                // of aborting the whole multi-page run.
-                val hasIoCause = generateSequence(e.cause) { it.cause }.any { it is IOException }
-                val isTransient = hasIoCause ||
-                    message.contains("Connection closed", ignoreCase = true) ||
-                    message.contains("Channel closed", ignoreCase = true) ||
-                    message.contains("closed before response", ignoreCase = true) ||
-                    message.contains("reading HTTP response", ignoreCase = true) ||
-                    message.contains("aggregating", ignoreCase = true)
-                if (isTransient && retryInstalledProductsPage(currentPage, "HTTP client error", e)) {
+                if (isTransientHttpClientError(e) && retryInstalledProductsPage(currentPage, "HTTP client error", e)) {
                     continue
                 }
                 throw CrowdStrikeException("HTTP client error querying installed products page $currentPage: ${e.message}", e)
@@ -1162,12 +1152,42 @@ open class CrowdStrikeApiClientImpl(
         val failedDeviceIds: Set<String> = emptySet()
     )
 
+    /** A 404 on a follow-up page: the cursor is gone, not the data. Restarting from page 1 is safe. */
+    private class SpotlightCursorNotFoundException :
+        CrowdStrikeException("Spotlight 404 does not prove an empty snapshot")
+
+    /**
+     * Runs one batch, restarting it from page 1 when Falcon 404s mid-pagination. Each attempt
+     * starts with empty state, so rows from an aborted attempt never leak into the result.
+     * Once the restarts are used up, the 404 propagates and the batch fails closed as before.
+     */
+    private fun queryBatchRestartingOnLostCursor(
+        batchIndex: Int, totalBatches: Int, deviceIds: List<String>, severity: String,
+        minDaysOpen: Int, limit: Int, config: FalconConfigDto,
+        metadataByDeviceId: Map<String, DeviceMetadata>
+    ): BatchQueryOutcome {
+        var restarts = 0
+        while (true) {
+            try {
+                return queryBatchVulnerabilities(batchIndex, totalBatches, deviceIds, severity,
+                    minDaysOpen, limit, config, metadataByDeviceId)
+            } catch (e: SpotlightCursorNotFoundException) {
+                if (restarts >= MAX_LOST_CURSOR_RESTARTS) throw e
+                restarts++
+                val backoffMs = restarts * lostCursorBackoffMs
+                log.warn(">>> Batch {}/{}: Spotlight 404 mid-pagination, restarting batch from page 1 ({}/{}) after {}ms",
+                    batchIndex + 1, totalBatches, restarts, MAX_LOST_CURSOR_RESTARTS, backoffMs)
+                Thread.sleep(backoffMs)
+            }
+        }
+    }
+
     private fun queryBatchWithSplitting(
         batchIndex: Int, totalBatches: Int, deviceIds: List<String>, severity: String,
         minDaysOpen: Int, limit: Int, config: FalconConfigDto,
         metadataByDeviceId: Map<String, DeviceMetadata>
     ): BatchQueryOutcome {
-        val result = queryBatchVulnerabilities(batchIndex, totalBatches, deviceIds, severity,
+        val result = queryBatchRestartingOnLostCursor(batchIndex, totalBatches, deviceIds, severity,
             minDaysOpen, limit, config, metadataByDeviceId)
         if (!result.pageCapReached || deviceIds.size <= 1) return result
         // Retry only the bounded page-cap case. Cursor anomalies remain failures, not retries.
@@ -1358,7 +1378,8 @@ open class CrowdStrikeApiClientImpl(
                             }
                         }
                     }
-                    404 -> throw CrowdStrikeException("Spotlight 404 does not prove an empty snapshot")
+                    404 -> throw if (afterToken != null) SpotlightCursorNotFoundException()
+                        else CrowdStrikeException("Spotlight 404 does not prove an empty snapshot")
                     429 -> {
                         val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
                         throw RateLimitException("Rate limit exceeded on batch ${batchIndex + 1}", retryAfter)
@@ -1375,7 +1396,8 @@ open class CrowdStrikeApiClientImpl(
                         token = getAuthToken(config)
                         continue
                     }
-                    404 -> throw CrowdStrikeException("Spotlight 404 does not prove an empty snapshot")
+                    404 -> throw if (afterToken != null) SpotlightCursorNotFoundException()
+                        else CrowdStrikeException("Spotlight 404 does not prove an empty snapshot")
                     429 -> {
                         val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
                         log.warn(">>> Batch {}/{}: Rate limit, retrying after {}s",
@@ -1411,10 +1433,7 @@ open class CrowdStrikeApiClientImpl(
                 }
                 throw CrowdStrikeException("Channel error during batch ${batchIndex + 1}: ${e.message}", e)
             } catch (e: io.micronaut.http.client.exceptions.HttpClientException) {
-                val isTransient = e.message?.contains("Channel closed") == true ||
-                    e.message?.contains("aggregating") == true ||
-                    e.message?.contains("Connection closed") == true
-                if (isTransient && retryTransientError(batchIndex, totalBatches, pageCount, "HTTP client error", e)) {
+                if (isTransientHttpClientError(e) && retryTransientError(batchIndex, totalBatches, pageCount, "HTTP client error", e)) {
                     continue
                 }
                 throw CrowdStrikeException("HTTP client error during batch ${batchIndex + 1}: ${e.message}", e)
@@ -2206,8 +2225,23 @@ open class CrowdStrikeApiClientImpl(
         return values.firstOrNull { !it.isNullOrBlank() }
     }
 
+    /**
+     * A read-phase network failure (connection reset, EADDRNOTAVAIL under sustained paging)
+     * surfaces as an HttpClientException wrapping an IOException, so it never reaches an
+     * IOException catch arm. Walk the cause chain so such failures are retried instead of
+     * failing the page; the phrases cover resets Micronaut reports without a cause.
+     */
+    private fun isTransientHttpClientError(e: HttpClientException): Boolean {
+        val message = e.message.orEmpty()
+        return generateSequence(e.cause) { it.cause }.any { it is IOException } ||
+            TRANSIENT_HTTP_CLIENT_PHRASES.any { message.contains(it, ignoreCase = true) }
+    }
+
     private companion object {
+        val TRANSIENT_HTTP_CLIENT_PHRASES = listOf(
+            "Connection closed", "Channel closed", "closed before response", "reading HTTP response", "aggregating")
         const val MAX_IP_ADDRESSES_PER_DEVICE = 100
+        const val MAX_LOST_CURSOR_RESTARTS = 2
     }
 
     /** Falcon device entities expose current addresses as scalar fields and may also return arrays. */
