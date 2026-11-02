@@ -16,13 +16,13 @@ Security requirement, vulnerability and risk-assessment platform.
 - AWS account onboarding: imports requesting notifications use a saved welcome-email (default) or risk-assessment policy. The welcome subject and body are editable in the web UI; advanced guided questionnaires remain supported.
 - Risk assessments support SaaS and COTS solution names, searchable existing assessors/respondents, and email-only respondents who need no SecMan account.
 - AuthN: local (BCrypt) + OAuth2/OIDC + Passkey/WebAuthn + optional MFA.
-- AuthZ: 9-role RBAC with row-level filtering on assets (workgroup, ownership, AWS account, AD domain, sharing rules).
+- AuthZ: 10-role RBAC with row-level filtering on assets (workgroup, ownership, AWS account, AD domain, sharing rules).
 - AI integration: 90+ tool MCP server (Streamable HTTP) for Claude Desktop/Code, Paperclip, and other MCP clients, with mandatory user delegation.
 - Email: SMTP/SES with retry + audit, Thymeleaf HTML templates, escalation tiers.
 
 ## Stack
 
-Kotlin 2.4.21 / Java 25 · Micronaut 5.2.3 · Hibernate JPA · Astro 7.4.2 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.8.1 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2 · Go 1.24 (mobile relay).
+Kotlin 2.4.21 / Java 25 · Micronaut 5.2.3 · Hibernate JPA · Astro 7.4.4 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.8.1 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2 · Go 1.24 (mobile relay).
 
 ## Quick Start (development)
 
@@ -189,7 +189,7 @@ Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings):
 
 ## Workflow
 
-Branches: `###-feature-name`. Commits: `type(scope): description` (Conventional Commits). PRs need security review for AuthN/AuthZ/crypto/storage changes.
+Branches: `dev` is the integration branch; use `task/<name>` branches from `dev` for isolated work. Commits: `type(scope): description` (Conventional Commits). PRs need security review for AuthN/AuthZ/crypto/storage changes.
 
 ## Roadmap (open)
 
