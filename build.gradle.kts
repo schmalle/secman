@@ -2,7 +2,7 @@ plugins {
     id("org.jetbrains.kotlin.jvm") version "2.4.21" apply false
     id("org.jetbrains.kotlin.plugin.allopen") version "2.4.21" apply false
     id("org.jetbrains.kotlin.plugin.jpa") version "2.4.21" apply false
-    id("com.google.devtools.ksp") version "2.3.12" apply false
+    id("com.google.devtools.ksp") version "2.3.13" apply false
     id("io.micronaut.application") version "5.0.2" apply false
     id("io.micronaut.library") version "5.0.2" apply false
     id("io.micronaut.aot") version "5.0.2" apply false
