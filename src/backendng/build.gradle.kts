@@ -37,8 +37,8 @@ dependencies {
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:4.0.0")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:8.1.1")
-	runtimeOnly("org.flywaydb:flyway-core:13.11.1")
-	runtimeOnly("org.flywaydb:flyway-mysql:13.11.1")
+	runtimeOnly("org.flywaydb:flyway-core:13.12.0")
+	runtimeOnly("org.flywaydb:flyway-mysql:13.12.0")
 
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt:5.5.1")
@@ -53,7 +53,7 @@ dependencies {
     implementation("jakarta.validation:jakarta.validation-api")
 
     // XSS Prevention - Feature 047
-    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20261011.1")
+    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20261031.1")
 
     // Email
     implementation("io.micronaut.email:micronaut-email-javamail:3.2.0")
@@ -180,6 +180,7 @@ allOpen {
 
 graalvmNative.toolchainDetection.set(false)
 micronaut {
+    version("5.2.4")
     runtime("netty")
     processing {
         incremental(true)
