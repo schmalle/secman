@@ -1,5 +1,9 @@
 # Changelog (archived from CLAUDE.md)
 
+## 2026-11-02 — CrowdStrike lost-cursor recovery
+
+- **CrowdStrike lost-cursor recovery (2026-11-02)** — the batched Stage-2 Spotlight vulnerability query now treats a 404 after pagination begins as a lost cursor: it discards that attempt's accumulated rows and restarts the batch from page 1, at most twice with linear backoff. A persistent mid-pagination 404 or any first-page 404 still fails the batch closed, so an incomplete lookup cannot replace its stored host snapshot. The same transient-HTTP classifier now covers wrapped I/O failures and Micronaut's connection/read/aggregation messages on both installed-product and vulnerability paging paths. Focused tests pin connection-reset retry, restart-without-duplicate rows, the bounded restart count, and unchanged first-page fail-closed behavior. See `docs/CROWDSTRIKE_IMPORT.md` §Incomplete query semantics.
+
 ## 2026-11-01 — speed and simplification pass
 
 - **Speed and simplification pass (2026-11-01)** — vulnerability exports page by keyset instead of OFFSET (same rows and order, `id` tiebreaker added); V296 indexed `asset.crowdstrike_match_name` and `=`-based identity finders (collation keeps them case-insensitive); cli-add sibling sync is one UPDATE; JWT claims built once in `SecmanTokenIssuer`; `/analytics` tabs lazy-load. See `docs/CHANGELOG.md`.
