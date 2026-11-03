@@ -50,7 +50,7 @@ Controller groups:
 
 Astro pages (77, 23 admin) with React islands; Axios services in `src/services/`.
 
-Auth flow: the JWT lives in the HttpOnly `secman_auth` cookie (`AuthCookieService.AUTH_COOKIE_NAME`), never in JS-readable storage. Axios sends it via `withCredentials: true` (set globally in `utils/csrf.ts`); fetch calls use the `authenticated*` helpers in `utils/auth.ts` / `services/`. `sessionStorage["user"]` holds only the display/role payload — never a token. SSE endpoints take JWT in `?token=` query (EventSource has no header support).
+Auth flow: the JWT lives in the HttpOnly `secman_auth` cookie (`AuthCookieService.AUTH_COOKIE_NAME`), never in JS-readable storage. Axios sends it via `withCredentials: true` (set globally in `utils/csrf.ts`); fetch calls use the `authenticated*` helpers in `utils/auth.ts` / `services/`. `sessionStorage["user"]` holds only the display/role payload — never a token. Browser EventSource connections send the cookie with `withCredentials: true`.
 
 ## CLI (`src/cli/`)
 
@@ -81,7 +81,7 @@ Relationship cheatsheet:
 | Asset ↔ Workgroup | M:N | |
 | Asset → Vulnerability | 1:N | **no JPA cascade** (see CrowdStrike pattern) |
 | Asset → ScanResult | 1:N | |
-| User → Asset (manualCreator/scanUploader) | 1:N | drives access control |
+| User → Asset (manualCreator/scanUploader) | 1:N | provenance metadata; does not grant access |
 | Requirement ↔ Norm | M:N | |
 | Workgroup → Workgroup | self-ref | nested hierarchies |
 | User → User (AWS sharing) | M:N | directional, non-transitive |
@@ -101,7 +101,7 @@ aws_account_sharing, identity_providers, oauth_states, maintenance_banners, app_
 
 ## Access control
 
-Roles: `USER`, `ADMIN`, `VULN`, `RELEASE_MANAGER`, `REQ`, `REQADMIN`, `RISK`, `SECCHAMPION`, `REPORT`.
+Roles: `USER`, `ADMIN`, `VULN`, `RELEASE_MANAGER`, `REQ`, `REQADMIN`, `RISK`, `SECCHAMPION`, `REPORT`, `BETA` (additive feature eligibility).
 
 Asset access (any of):
 1. ADMIN **or SECCHAMPION** role (universal access)
