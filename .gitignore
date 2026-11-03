@@ -2,6 +2,7 @@ src/adread/adread.env.local
 
 
 3rdparty/
+./.claude/skills/cov-security-review/
 
 # Dependencies
 backendng/bin/
