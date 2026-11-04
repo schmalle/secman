@@ -91,8 +91,9 @@ to migrate legacy keys. Do not extend or imitate it.
 Credentials are **never returned** by an API — expose a `…Configured: Boolean`
 instead, and accept `***HIDDEN***` back to mean "keep the stored value".
 
-The SSE `?token=` query parameter is the one documented exception to
-cookie-only transport (`EventSource` has no headers).
+Browser SSE clients send the HttpOnly cookie with `withCredentials: true`.
+`QueryParameterTokenReader` still accepts `?token=` for legacy clients, but new
+callers must not put JWTs in URLs because they can appear in logs and history.
 
 `config/JwtSigningValidator.kt`, `config/DatabaseCredentialValidator.kt` and
 `config/DatasourceUrlValidator.kt` fail the boot on weak config **by design**.
