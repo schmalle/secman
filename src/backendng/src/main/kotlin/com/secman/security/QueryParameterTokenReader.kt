@@ -7,19 +7,12 @@ import jakarta.inject.Singleton
 import java.util.Optional
 
 /**
- * Custom TokenReader that supports JWT authentication via query parameter.
+ * Retains query-parameter JWT support for legacy clients.
  *
- * **Use Case**:
- * - SSE Endpoint: `/api/exception-badge-updates?token=<token>`
- *
- * **Note**: This TokenReader works alongside the default HttpHeaderTokenReader.
- * Micronaut Security will try all registered TokenReaders, so requests can use
- * either the Authorization header OR the query parameter.
- *
- * **Security Notes**:
- * - Query parameter tokens may be logged in access logs (use HTTPS)
- * - SSE EventSource API doesn't support custom headers, requiring this fallback
- * - Only use query parameters for SSE endpoints; prefer Authorization header for REST APIs
+ * Browser EventSource callers use the HttpOnly `secman_auth` cookie, and external
+ * clients can use the Authorization header. New callers should not put JWTs in
+ * URLs: access logs, browser history and Referer headers may expose them.
+ * Micronaut Security tries this reader alongside the cookie and header readers.
  */
 @Singleton
 class QueryParameterTokenReader : TokenReader<HttpRequest<*>> {
