@@ -77,7 +77,7 @@ finalize → emit SSE COMPLETED event, close sink.
 
 ## SSE progress
 
-`GET /api/risk-assessments/{id}/ai-suggestions/jobs/{jobId}/events` returns `text/event-stream`. One event per completed requirement (type `PROGRESS`, with `requirementId`, `band`, running counters) plus a terminal event (`COMPLETED | FAILED | CANCELLED`) before the stream closes. EventSource clients pass the JWT in `?token=` (browsers can't set headers on EventSource — same pattern as `/api/exception-badge-updates`).
+`GET /api/risk-assessments/{id}/ai-suggestions/jobs/{jobId}/events` returns `text/event-stream`. One event per completed requirement (type `PROGRESS`, with `requirementId`, `band`, running counters) plus a terminal event (`COMPLETED | FAILED | CANCELLED`) before the stream closes. Browser EventSource clients send the HttpOnly `secman_auth` cookie with `withCredentials: true`, as `/api/exception-badge-updates` does. Do not put the JWT in the URL.
 
 The frontend (`AiPrefillModal`) tries SSE first and falls back to polling `GET /jobs/{jobId}` if EventSource errors.
 
