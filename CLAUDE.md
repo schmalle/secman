@@ -257,7 +257,7 @@ Per server: `findOrCreateAsset` → `vulnerabilityRepository.deleteByAssetId()` 
 
 ## Test Infrastructure
 
-JUnit 6, Mockk, AssertJ, `@MicronautTest`. Integration tests run against an **external MariaDB** (no Docker/Testcontainers). **`junit-jupiter-params` is not on the classpath** — `@ParameterizedTest` will not compile; loop inside a plain `@Test`. Helpers in `src/backendng/src/test/kotlin/com/secman/testutil/`:
+JUnit 6, Mockk, AssertJ, `@MicronautTest`. Integration tests run against an **external MariaDB** (no Docker/Testcontainers). `junit-jupiter-params` is on the backend test classpath; `@ParameterizedTest` is available. Helpers in `src/backendng/src/test/kotlin/com/secman/testutil/`:
 - `BaseIntegrationTest` — base for DB-backed tests; datasource comes from `application-test.yml`.
 - `TestDataFactory` — admin/vuln/regular user, asset, vulnerability builders.
 - `TestAuthHelper` — JWT login → bearer token.

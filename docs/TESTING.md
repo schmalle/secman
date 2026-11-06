@@ -68,7 +68,7 @@ src/frontend/
 
 Naming: file `<Class>Test.kt`. Method either `addVulnerabilityFromCli_createsNewAsset` (descriptive) or `@DisplayName("VS-001: …")`. ID prefixes used in DisplayName tags: `VS-*` (VulnerabilityService), `VI-*` (Vuln Integration), `CLI-*` (CLI), `EC-*` (edge cases), `ES-*` (ExcelSanitizer), `AID-*` (AWS instance-id recognition).
 
-> **Do not add a test dependency without checking the classpath.** `junit-jupiter-params` is *not* declared, so `@ParameterizedTest` does not compile — loop inside a plain `@Test` and attach `.as("…")` to each assertion instead. The frontend tier deliberately has **no** test-framework dependency at all.
+> **Check the classpath before adding a test dependency.** The backend declares `junit-jupiter-params`, so `@ParameterizedTest` is available. The frontend tier deliberately has **no** test-framework dependency at all.
 
 ## Patterns
 
@@ -285,7 +285,7 @@ secrets, and no `pass-cli` — only Node ≥ 22 for `--experimental-strip-types`
 | Tests pass alone, fail together | unique test data (`"host-${System.nanoTime()}"`); cleanup in `@AfterEach`; per-test transactions |
 | `npm ci` fails with "lock file's X does not satisfy Y" | `package-lock.json` drifted from `package.json`, which makes the whole frontend gate unrunnable. `npm install` to rewrite the lock, then re-run `npm ci` to confirm, and commit the lock |
 | `npm test`: `ERR_MODULE_NOT_FOUND` on a component path | the module is `.tsx`; JSX cannot be imported. Extract the logic to a sibling `.ts` module (see [Frontend](#frontend-nodetest-zero-dependencies)) |
-| `@ParameterizedTest` unresolved | `junit-jupiter-params` is not on the classpath. Loop inside a plain `@Test` |
+| `@ParameterizedTest` unresolved | Check that the test imports `org.junit.jupiter.params.ParameterizedTest` and that the backend test dependency on `junit-jupiter-params` is present |
 
 ## Current asset visibility
 
