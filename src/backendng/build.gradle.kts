@@ -37,8 +37,8 @@ dependencies {
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:4.0.0")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:8.1.1")
-	runtimeOnly("org.flywaydb:flyway-core:13.12.0")
-	runtimeOnly("org.flywaydb:flyway-mysql:13.12.0")
+	runtimeOnly("org.flywaydb:flyway-core:13.12.1")
+	runtimeOnly("org.flywaydb:flyway-mysql:13.12.1")
 
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt:5.5.1")
@@ -53,7 +53,7 @@ dependencies {
     implementation("jakarta.validation:jakarta.validation-api")
 
     // XSS Prevention - Feature 047
-    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20261102.1")
+    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20261103.2")
 
     // Email
     implementation("io.micronaut.email:micronaut-email-javamail:3.2.0")
@@ -120,7 +120,7 @@ dependencies {
     implementation("commons-net:commons-net:3.13.0")
 
     // HTML processing for email
-    implementation("org.jsoup:jsoup:1.23.2")
+    implementation("org.jsoup:jsoup:1.24.1")
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")
