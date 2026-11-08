@@ -72,8 +72,8 @@ import jakarta.inject.Singleton
         "  # Preview owner emails without sending or persisting anything",
         "  secman manage-user-mappings import -f m.csv --onboarding-mode WELCOME_ONLY --dry-run",
         "",
-        "Exit codes: 0 success (skips are NOT failures) - 1 import or onboarding failure -",
-        "2 invalid options.",
+        "Exit codes: 0 success (skips are NOT failures) - 1 import, link or onboarding failure -",
+        "2 invalid options - 4 imported, but workgroups need attention (no owner, no members, owner conflict).",
         ""
     ]
 )
@@ -541,7 +541,7 @@ class ImportCommand(
             }
 
             // Workgroup linking (only present when the file carried display_name values).
-            val linkFailures = WorkgroupLinkPrinter.print(result.workgroupLinks)
+            val links = WorkgroupLinkPrinter.print(result.workgroupLinks)
 
             if (result.errors.isNotEmpty()) {
                 println("❌ Errors: ${result.errors.size} failure(s)")
@@ -554,11 +554,12 @@ class ImportCommand(
             println()
 
             // Exit status
-            if (result.errors.isNotEmpty() || linkFailures > 0) {
+            if (result.errors.isNotEmpty() || links.failures > 0) {
+                val reasons = WorkgroupLinkPrinter.describeFailures(result.errors.size, links)
                 if (dryRun) {
-                    println("✗ Validation failed (dry-run)")
+                    println("✗ Validation failed (dry-run): $reasons")
                 } else {
-                    println("✗ Import completed with errors")
+                    println("✗ Import completed with errors: $reasons")
                 }
                 System.exit(1)
             } else {
@@ -579,6 +580,10 @@ class ImportCommand(
                         println("⚠️  $onboardingFailures account(s) could not be onboarded")
                         System.exit(1)
                     }
+                }
+                if (links.attention > 0) {
+                    println("⚠️  ${WorkgroupLinkPrinter.describeAttention(links)}")
+                    System.exit(WorkgroupLinkPrinter.EXIT_ATTENTION)
                 }
             }
 

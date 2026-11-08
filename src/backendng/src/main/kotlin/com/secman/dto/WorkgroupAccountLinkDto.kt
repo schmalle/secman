@@ -48,8 +48,19 @@ data class WorkgroupAccountLinkInfo(
  *
  * The counters cover every processed pair; [links] is capped at
  * `WorkgroupAccountLinkService.MAX_REPORTED_LINKS` so a 5,000-account import cannot
- * return a 5,000-element array. [truncated] says the cap was hit — the counters stay
- * accurate either way, and nothing is dropped silently.
+ * return a 5,000-element array. Failures and workgroups needing attention are sorted
+ * ahead of clean rows before the cap, so the cap only ever hides clean rows.
+ *
+ * Two different caps, reported separately because they mean different things:
+ * - [reportTruncated]: every pair was processed, only [links] is shortened.
+ * - [inputTruncated]: more pairs existed than one run processes; the rest were NOT linked.
+ * [truncated] is kept as `reportTruncated || inputTruncated` for older clients.
+ *
+ * [statusReasonCounts] counts the not-READY reconciliation reasons over every processed
+ * pair (e.g. MISSING_OWNER, NO_MEMBERS), so a capped [links] list still explains them.
+ * [staleAccounts] counts accounts linked to an AWS-managed workgroup but absent from
+ * this run's input; [staleLinks] samples them. Report only — nothing is unlinked.
+ * Null when it could not be computed (input or stored links over the cap).
  */
 @Serdeable
 data class WorkgroupAccountLinkSummary(
@@ -67,7 +78,20 @@ data class WorkgroupAccountLinkSummary(
     val membersAdded: Int = 0,
     val assetsRemoved: Long = 0,
     val emptyWorkgroups: Int = 0,
-    val disabledWorkgroups: Int = 0
+    val disabledWorkgroups: Int = 0,
+    val reportTruncated: Boolean = false,
+    val inputTruncated: Boolean = false,
+    val statusReasonCounts: Map<String, Int> = emptyMap(),
+    val staleAccounts: Int? = null,
+    val staleLinks: List<StaleWorkgroupAccountLink> = emptyList()
+)
+
+/** An account still linked to an AWS-managed workgroup that the import no longer lists. */
+@Serdeable
+data class StaleWorkgroupAccountLink(
+    val awsAccountId: String,
+    val workgroupName: String,
+    val workgroupEnabled: Boolean
 )
 
 /**

@@ -38,6 +38,7 @@ class WorkgroupAccountLinkServiceTest {
     @BeforeEach
     fun setUp() {
         every { workgroupAwsAccountRepository.findByWorkgroupId(any()) } returns emptyList()
+        every { workgroupAwsAccountRepository.findManagedAccountLinks(any()) } returns emptyList()
         every { reconciliationService.reconcile(any(), any(), any(), any(), any()) } returns AwsWorkgroupReconciliationService.Outcome()
         service = WorkgroupAccountLinkService(
             workgroupRepository,
@@ -385,5 +386,75 @@ class WorkgroupAccountLinkServiceTest {
 
         assertThat(summary.processed).isZero()
         verify(exactly = 0) { workgroupRepository.findByNameIgnoreCase(any()) }
+    }
+
+    // --- Reporting: cap ordering, truncation kinds, reasons, stale links ---
+
+    @Test
+    fun `a failure past the report cap is still listed, first`() {
+        existingWorkgroup("aws-any")
+        every { workgroupAwsAccountRepository.existsByWorkgroupIdAndAwsAccountId(any(), any()) } returns true
+        val clean = (1..WorkgroupAccountLinkService.MAX_REPORTED_LINKS + 10).map {
+            pair(accountId = "%012d".format(it), displayName = "Acct-$it")
+        }
+        val summary = service.link(clean + pair(displayName = "bad_name"), actorId = 7L, dryRun = false)
+
+        assertThat(summary.links).hasSize(WorkgroupAccountLinkService.MAX_REPORTED_LINKS)
+        assertThat(summary.links.first().error).contains("only letters, numbers")
+        assertThat(summary.failed).isEqualTo(1)
+        assertThat(summary.reportTruncated).isTrue()
+        assertThat(summary.inputTruncated).isFalse()
+        assertThat(summary.truncated).isTrue()
+    }
+
+    @Test
+    fun `attention rows sort ahead of clean rows and reasons are counted over every pair`() {
+        existingWorkgroup("aws-any")
+        every { workgroupAwsAccountRepository.existsByWorkgroupIdAndAwsAccountId(any(), any()) } returns true
+        every { reconciliationService.reconcile(any(), any(), any(), any(), "000000000002") } returns
+            AwsWorkgroupReconciliationService.Outcome("NO_MATCH", 0, true, "UNCHANGED_DISABLED", "MISSING_OWNER")
+        every { reconciliationService.reconcile(any(), any(), any(), any(), "000000000001") } returns
+            AwsWorkgroupReconciliationService.Outcome("ALREADY_MEMBER", 0, false, "UNCHANGED_ENABLED", "READY")
+
+        val summary = service.link(
+            listOf(pair("000000000001", "Clean"), pair("000000000002", "Ownerless")),
+            actorId = 7L, dryRun = false
+        )
+
+        assertThat(summary.links.map { it.awsAccountId }).containsExactly("000000000002", "000000000001")
+        assertThat(summary.statusReasonCounts).containsExactlyEntriesOf(mapOf("MISSING_OWNER" to 1))
+        assertThat(summary.reportTruncated).isFalse()
+        assertThat(summary.truncated).isFalse()
+    }
+
+    @Test
+    fun `linked accounts missing from the input are reported, never unlinked`() {
+        existingWorkgroup("aws-DevOps-x")
+        every { workgroupAwsAccountRepository.existsByWorkgroupIdAndAwsAccountId(any(), any()) } returns true
+        every { workgroupAwsAccountRepository.findManagedAccountLinks(any()) } returns listOf(
+            arrayOf<Any>(ACCOUNT, "aws-DevOps-x", true),
+            arrayOf<Any>("111111111111", "aws-closed", true),
+            arrayOf<Any>("222222222222", "aws-gone", false)
+        )
+
+        val summary = service.link(listOf(pair()), actorId = 7L, dryRun = false)
+
+        assertThat(summary.staleAccounts).isEqualTo(2)
+        assertThat(summary.staleLinks.map { it.awsAccountId }).containsExactly("111111111111", "222222222222")
+        assertThat(summary.staleLinks.first().workgroupEnabled).isTrue()
+        verify(exactly = 0) { workgroupAwsAccountRepository.delete(any()) }
+    }
+
+    @Test
+    fun `stale report is withheld when the stored links exceed the read bound`() {
+        existingWorkgroup("aws-DevOps-x")
+        every { workgroupAwsAccountRepository.existsByWorkgroupIdAndAwsAccountId(any(), any()) } returns true
+        every { workgroupAwsAccountRepository.findManagedAccountLinks(any()) } returns
+            List(WorkgroupAccountLinkService.MAX_PAIRS + 1) { arrayOf<Any>("%012d".format(it), "aws-x", true) }
+
+        val summary = service.link(listOf(pair()), actorId = 7L, dryRun = false)
+
+        assertThat(summary.staleAccounts).isNull()
+        assertThat(summary.staleLinks).isEmpty()
     }
 }

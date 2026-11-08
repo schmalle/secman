@@ -1,5 +1,9 @@
 # Changelog (archived from CLAUDE.md)
 
+## 2026-11-08 — AWS workgroup linking: honest reports and exit codes
+
+- **AWS workgroup linking robustness (2026-11-08)** — a 2,211-account `import-s3` printed "More accounts exist than this run reported. Re-run to continue" and exited 1 with no visible cause. `truncated` mixed up the 500-row report cap with the 20,000-pair input cap; it is now split into `reportTruncated` and `inputTruncated` (`truncated` kept). `links[]` sorts failures and attention rows ahead of clean rows before the cap, and every validation rejection is logged server-side, so a failed account can no longer vanish past row 500. New `statusReasonCounts` and a report-only `staleAccounts`/`staleLinks` (accounts linked to an AWS-managed workgroup but absent from the input). The CLI lists only failed/attention rows unless `--verbose`/`--dry-run`, prints the counters last, names every exit-1 cause on the closing line, and exits **4** instead of 1 when nothing failed but workgroups need attention (`MISSING_OWNER`, `NO_MEMBERS`, owner conflict). `UserMappingController` now runs on the blocking executor; `/bulk` previously ran its ~80 s import on a Netty event-loop thread. See `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md` §Reading the result.
+
 ## 2026-11-08 — async user-mapping bulk import
 
 - **Async user-mapping bulk import (2026-11-08)** — the CLI's `manage-user-mappings import`/`import-s3` now starts `POST /api/user-mappings/bulk/jobs` and polls `.../{jobId}/status` instead of holding one request open: on ~2200 accounts the synchronous `POST /bulk` took ~80 s, past production's 60 s load-balancer idle timeout, so the CLI got a 504 while the backend committed fine. Job state is in memory (single backend, owner emails not persisted), one import at a time (409), falls back to the synchronous endpoint on older backends. See `docs/CLI.md` and `docs/CHANGELOG.md`.

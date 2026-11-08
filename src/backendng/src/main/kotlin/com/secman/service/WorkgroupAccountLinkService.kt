@@ -1,6 +1,7 @@
 package com.secman.service
 
 import com.secman.domain.Workgroup
+import com.secman.dto.StaleWorkgroupAccountLink
 import com.secman.dto.WorkgroupAccountLinkInfo
 import com.secman.dto.WorkgroupAccountLinkSummary
 import com.secman.repository.UserMappingRepository
@@ -92,6 +93,8 @@ open class WorkgroupAccountLinkService(
                 MAX_PAIRS, deduped.size
             )
         }
+        // Only a complete input can say which linked accounts it no longer lists.
+        val stale = if (capped) null else findStaleLinks(deduped.mapTo(HashSet()) { it.awsAccountId })
 
         val ownersByName = deduped.groupBy { workgroupNameFor(it.displayName).lowercase() }
             .mapValues { (_, candidates) -> candidates.mapNotNull { it.ownerEmail }.toSet() }
@@ -103,7 +106,7 @@ open class WorkgroupAccountLinkService(
                 linkOne(pair.copy(ownerEmail = owners.singleOrNull()), actorId, dryRun, owners.size > 1,
                     accountsByName.getValue(workgroupNameFor(pair.displayName).lowercase()).size > 1)
             }
-        return summarize(results, dryRun, truncatedInput = capped)
+        return summarize(results, dryRun, truncatedInput = capped, stale = stale)
     }
 
     /**
@@ -151,7 +154,11 @@ open class WorkgroupAccountLinkService(
         )
 
         val summary = link(pairs, actorId, dryRun)
-        return if (truncated) summary.copy(truncated = true) else summary
+        return if (truncated) {
+            summary.copy(truncated = true, inputTruncated = true, staleAccounts = null, staleLinks = emptyList())
+        } else {
+            summary
+        }
     }
 
     /**
@@ -209,17 +216,27 @@ open class WorkgroupAccountLinkService(
             error = message
         )
 
+        // A rejection before any DB work threw nothing, so without this line the server
+        // log would hold no trace of which account failed once the report is capped.
+        fun rejected(message: String): WorkgroupAccountLinkInfo {
+            log.warn(
+                "Workgroup link rejected: awsAccountId={}, workgroup={}, reason={}",
+                UserMappingService.sanitizeForMessage(pair.awsAccountId), safeWorkgroupName, message
+            )
+            return failure(message)
+        }
+
         if (!ACCOUNT_ID_PATTERN.matches(pair.awsAccountId)) {
-            return failure(
+            return rejected(
                 "AWS account ID must be exactly 12 numeric digits " +
                     "(got '${UserMappingService.sanitizeForMessage(pair.awsAccountId)}')"
             )
         }
 
-        validateWorkgroupName(workgroupName)?.let { return failure(it) }
-        if (accountConflict) return failure("Multiple imported accounts target the same workgroup; no workgroup changes made")
+        validateWorkgroupName(workgroupName)?.let { return rejected(it) }
+        if (accountConflict) return rejected("Multiple imported accounts target the same workgroup; no workgroup changes made")
         if (pair.ownerEmail != null && !com.secman.util.EmailAddressValidator.isValidRecipient(pair.ownerEmail)) {
-            return failure("Invalid account owner email")
+            return rejected("Invalid account owner email")
         }
 
         return try {
@@ -234,10 +251,10 @@ open class WorkgroupAccountLinkService(
 
             val workgroup = existing ?: createWorkgroup(workgroupName, actorId)
             val workgroupId = workgroup.id
-                ?: return failure("Workgroup '$safeWorkgroupName' has no id after creation")
+                ?: return rejected("Workgroup '$safeWorkgroupName' has no id after creation")
 
             if (workgroupAwsAccountRepository.findByWorkgroupId(workgroupId).any { it.awsAccountId != pair.awsAccountId }) {
-                return failure("Workgroup has a different AWS account; existing assignments preserved")
+                return rejected("Workgroup has a different AWS account; existing assignments preserved")
             }
 
             if (!workgroup.ownerEmail.isNullOrBlank()) {
@@ -342,10 +359,43 @@ open class WorkgroupAccountLinkService(
         else -> candidate.isAfter(current)
     }
 
+    /**
+     * Accounts linked to an AWS-managed workgroup that [importedAccounts] does not list —
+     * typically closed accounts whose workgroups (and member access) outlive them.
+     * Null when the stored links exceed the read bound, so a partial answer is never
+     * presented as a complete one.
+     */
+    private fun findStaleLinks(importedAccounts: Set<String>): Pair<Int, List<StaleWorkgroupAccountLink>>? {
+        val rows = workgroupAwsAccountRepository.findManagedAccountLinks(Pageable.from(0, MAX_PAIRS + 1))
+        if (rows.size > MAX_PAIRS) {
+            log.warn("Stale-link report skipped: more than {} AWS-managed workgroup links are stored", MAX_PAIRS)
+            return null
+        }
+        val stale = rows.mapNotNull { row ->
+            val accountId = row[0] as? String ?: return@mapNotNull null
+            if (accountId in importedAccounts) return@mapNotNull null
+            StaleWorkgroupAccountLink(
+                awsAccountId = accountId,
+                workgroupName = UserMappingService.sanitizeForMessage(row[1] as? String ?: ""),
+                workgroupEnabled = row[2] as? Boolean ?: false
+            )
+        }
+        return stale.size to stale.take(MAX_REPORTED_STALE_LINKS)
+    }
+
+    /** Lower sorts first: failures, then rows needing attention, then clean rows. */
+    private fun reportPriority(link: WorkgroupAccountLinkInfo): Int = when {
+        link.error != null -> 0
+        link.ownerOutcome == "CONFLICT" || link.emptyMembership ||
+            link.statusReason !in CLEAN_STATUS_REASONS -> 1
+        else -> 2
+    }
+
     private fun summarize(
         results: List<WorkgroupAccountLinkInfo>,
         dryRun: Boolean,
-        truncatedInput: Boolean
+        truncatedInput: Boolean,
+        stale: Pair<Int, List<StaleWorkgroupAccountLink>>?
     ): WorkgroupAccountLinkSummary = WorkgroupAccountLinkSummary(
         processed = results.size,
         workgroupsCreated = results.count { it.workgroupCreated && it.error == null },
@@ -358,10 +408,18 @@ open class WorkgroupAccountLinkService(
         membersAdded = results.count { it.memberOutcome in setOf("ADDED", "WOULD_ADD") },
         assetsRemoved = results.sumOf { it.assetsRemoved },
         emptyWorkgroups = results.count { it.emptyMembership },
-        disabledWorkgroups = results.count { it.statusReason !in setOf("", "READY") },
+        disabledWorkgroups = results.count { it.statusReason !in CLEAN_STATUS_REASONS },
         dryRun = dryRun,
-        links = results.take(MAX_REPORTED_LINKS),
-        truncated = truncatedInput || results.size > MAX_REPORTED_LINKS
+        // sortedBy is stable: input order is kept within each priority band.
+        links = results.sortedBy(::reportPriority).take(MAX_REPORTED_LINKS),
+        truncated = truncatedInput || results.size > MAX_REPORTED_LINKS,
+        reportTruncated = results.size > MAX_REPORTED_LINKS,
+        inputTruncated = truncatedInput,
+        statusReasonCounts = results.map { it.statusReason }
+            .filter { it !in CLEAN_STATUS_REASONS }
+            .groupingBy { it }.eachCount(),
+        staleAccounts = stale?.first,
+        staleLinks = stale?.second.orEmpty()
     )
 
     companion object {
@@ -373,6 +431,12 @@ open class WorkgroupAccountLinkService(
 
         /** Upper bound on the per-account rows returned to a caller. Counters stay exact. */
         const val MAX_REPORTED_LINKS = 500
+
+        /** Upper bound on sampled stale links; [WorkgroupAccountLinkSummary.staleAccounts] stays exact. */
+        const val MAX_REPORTED_STALE_LINKS = 100
+
+        /** Reconciliation reasons that need no operator action ("" = not evaluated, e.g. a failure). */
+        private val CLEAN_STATUS_REASONS = setOf("", "READY")
 
         private const val MAX_WORKGROUP_NAME_LENGTH = 100
         private const val WORKGROUP_DESCRIPTION = "Auto-created from AWS account display name"

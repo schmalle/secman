@@ -48,7 +48,8 @@ import picocli.CommandLine.*
         "  secman manage-user-mappings link-workgroups",
         "",
         "Exit codes: 0 success (accounts already linked are NOT failures) -",
-        "1 workgroup reconciliation failed or a workgroup remains disabled/incomplete.",
+        "1 one or more accounts could not be linked -",
+        "4 nothing failed, but workgroups remain disabled/incomplete (no owner, no members, owner conflict).",
         ""
     ]
 )
@@ -56,9 +57,9 @@ import picocli.CommandLine.*
  * `manage-user-mappings link-workgroups` — links AWS accounts to workgroups from the
  * display names already stored on user mappings, so no file has to be supplied.
  *
- * Exit status comes from [WorkgroupLinkPrinter.print], which counts only real
- * failures: an already-linked account is an idempotent no-op. That is what makes
- * re-running the documented way to finish a run the backend reported as truncated.
+ * Exit status comes from [WorkgroupLinkPrinter.print]: 1 for accounts that failed to
+ * link, [WorkgroupLinkPrinter.EXIT_ATTENTION] for workgroups the source data leaves
+ * disabled. An already-linked account is an idempotent no-op, never a failure.
  */
 class LinkWorkgroupsCommand(
     private val userMappingCliService: UserMappingCliService
@@ -99,7 +100,7 @@ class LinkWorkgroupsCommand(
                 authToken = token
             )
 
-            val failures = WorkgroupLinkPrinter.print(summary)
+            val outcome = WorkgroupLinkPrinter.print(summary)
             println()
 
             if (summary.processed == 0) {
@@ -107,9 +108,12 @@ class LinkWorkgroupsCommand(
                 println("Run an import of a mapping file that carries display_name first.")
             }
 
-            if (failures > 0) {
-                println("✗ Completed with $failures failure(s)")
+            if (outcome.failures > 0) {
+                println("✗ Completed with errors: ${WorkgroupLinkPrinter.describeFailures(0, outcome)}")
                 System.exit(1)
+            } else if (outcome.attention > 0) {
+                println("⚠️  ${WorkgroupLinkPrinter.describeAttention(outcome)}")
+                System.exit(WorkgroupLinkPrinter.EXIT_ATTENTION)
             } else if (dryRun) {
                 println("✓ Dry run complete")
             } else {
