@@ -103,7 +103,8 @@ captured, or accounts whose workgroup was missing at the time. The source is the
 | MCP | `link_workgroup_aws_accounts` (ADMIN + User Delegation), arg `dryRun` |
 
 Idempotent: run it as often as you like. Accounts already assigned come back as
-`alreadyLinked`, but empty membership or account conflicts still produce a non-zero exit status.
+`alreadyLinked`. A failed row exits 1; empty membership, disabled workgroups or owner
+conflicts with no failed row exit 4 (see [Reading the result](#reading-the-result)).
 
 ## Account-only workgroups
 
@@ -137,7 +138,8 @@ Status outcomes are `ENABLED`, `DISABLED`, `UNCHANGED_ENABLED`, or
 `UNCHANGED_DISABLED`; previews use `WOULD_ENABLE`/`WOULD_DISABLE` for transitions.
 Reasons are `READY`, `MISSING_OWNER`, `NO_MEMBERS`, `ACCOUNT_MISMATCH`,
 `DIRECT_ASSETS_REMAIN`, or `MEMBERSHIP_LIMIT`. Skipped reconciliation is
-`NOT_EVALUATED`. Disabled/incomplete results cause CLI exit 1, including dry-run.
+`NOT_EVALUATED`. Disabled/incomplete results cause CLI exit 4 (attention), including
+dry-run, unless a row also failed (exit 1).
 Account conflicts are reported without replacing existing assignments or enabling
 the group. Dry-run includes planned owner/member/account additions and link removals,
 but changes no data. Status writes and access-cache invalidation are transactional.
@@ -170,7 +172,7 @@ would resolve to a different, wrong workgroup) and the drop is reported in `erro
 | Account id not 12 digits | Error row; no workgroup lookup at all |
 | Display name blank/absent | Not a linking candidate; the mapping imports normally |
 | One bad row among many | Only that row fails; the rest still link |
-| More than 20,000 (account, name) pairs | Capped, logged and flagged `truncated` — re-run to continue |
+| More than 20,000 (account, name) pairs | Capped, logged and flagged `inputTruncated`; the rest is **not** linked (re-running repeats the same first 20,000) |
 
 ### Renamed accounts
 
@@ -213,11 +215,26 @@ and `onboarding`:
 | `linked` | New assignments made (or that would be) |
 | `alreadyLinked` | Account assignments that already existed; other relationships may still change |
 | `failed` | Rows carrying an `error` |
-| `truncated` | More exists than this run reported; re-run to continue |
-| `links[]` | Per-account detail, capped at 500 rows (the counters stay exact) |
+| `reportTruncated` | Every pair was processed; only `links[]` is shortened |
+| `inputTruncated` | More pairs existed than one run processes; the rest were not linked |
+| `truncated` | `reportTruncated || inputTruncated`, kept for older clients |
+| `statusReasonCounts` | Not-READY reasons counted over every pair (e.g. `MISSING_OWNER`) |
+| `staleAccounts` / `staleLinks[]` | Accounts linked to an AWS-managed workgroup but absent from this input (count exact, list capped at 100). Report only: nothing is unlinked. `null` when it could not be computed |
+| `links[]` | Per-account detail, capped at 500 rows (the counters stay exact). Failures sort first, then attention rows, so the cap only hides clean rows |
 
-A CLI exit status of 1 means a failed row, owner conflict, or unresolved empty
-membership. `alreadyLinked` alone does not cause one.
+Every rejected row is also logged server-side (`Workgroup link rejected: awsAccountId=…`).
+
+CLI exit status (`import`, `import-s3`, `link-workgroups`):
+
+| Code | Meaning |
+|---|---|
+| 0 | Clean |
+| 1 | A failed row (or, for imports, an import/delivery error); the closing line names each cause |
+| 4 | Nothing failed, but workgroups need attention: no owner (`MISSING_OWNER` — set the `cov:owner` tag), owner without a SecMan user (`NO_MEMBERS`), owner conflict |
+
+`alreadyLinked` alone never causes a non-zero exit. The CLI lists only failed and
+attention rows unless `--verbose` (on `import-s3`) or `--dry-run` is given; the
+counters print last.
 
 ## Testing
 

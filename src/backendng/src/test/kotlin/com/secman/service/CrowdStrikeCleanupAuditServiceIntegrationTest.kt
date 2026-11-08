@@ -9,6 +9,7 @@ import com.secman.testutil.BaseIntegrationTest
 import jakarta.inject.Inject
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.LocalDateTime
 
@@ -34,6 +35,15 @@ open class CrowdStrikeCleanupAuditServiceIntegrationTest : BaseIntegrationTest()
 
     @Inject
     lateinit var assetRepository: AssetRepository
+
+    @Inject
+    lateinit var importLease: CrowdStrikeImportRunLease
+
+    /** Braked (scheduled) runs refuse to delete unless a CLI import completed in the last 24 hours. */
+    @BeforeEach
+    fun recordHealthyImport() {
+        importLease.finish(importLease.start("cli"), "cli", successful = true)
+    }
 
     @AfterEach
     fun tearDown() {

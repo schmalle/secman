@@ -64,8 +64,17 @@ class UserMappingCliService(
         httpClient = DefaultHttpClient(URI.create(backendUrl), config)
     }
 
+    /** Pause between job status polls; tests shorten it. */
+    internal var bulkJobPollInterval: Duration = Duration.ofSeconds(3)
+
     companion object {
         const val MAX_IMPORT_ROWS = 100_000
+
+        /** Give up waiting for a bulk import job after this long. */
+        val BULK_JOB_MAX_WAIT: Duration = Duration.ofMinutes(60)
+
+        /** Consecutive failed status polls tolerated before giving up. */
+        const val BULK_JOB_MAX_POLL_FAILURES = 5
 
         /**
          * Upper bound for `--risk-deadline-days`, mirroring
@@ -740,20 +749,12 @@ class UserMappingCliService(
         try {
             val javaClient = javaHttpClientFactory.create(insecureMode)
 
-            val httpRequest = java.net.http.HttpRequest.newBuilder()
-                .uri(URI.create("$backendUrl/api/user-mappings/bulk"))
-                .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer $authToken")
-                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(jsonBody))
-                .timeout(Duration.ofSeconds(120))
-                .build()
+            val response = sendBulk(javaClient, backendUrl, authToken, jsonBody)
 
-            val response = javaClient.send(httpRequest, java.net.http.HttpResponse.BodyHandlers.ofString())
-
-            when (response.statusCode()) {
+            when (response.status) {
                 200 -> {
                     @Suppress("UNCHECKED_CAST")
-                    val responseBody = objectMapper.readValue(response.body(), Map::class.java) as Map<String, Any?>
+                    val responseBody = objectMapper.readValue(response.body, Map::class.java) as Map<String, Any?>
 
                     @Suppress("UNCHECKED_CAST")
                     val comparison = (responseBody["comparison"] as? Map<String, Any?>)?.let {
@@ -860,11 +861,11 @@ class UserMappingCliService(
                 400 -> {
                     val errorBody = try {
                         @Suppress("UNCHECKED_CAST")
-                        objectMapper.readValue(response.body(), Map::class.java) as Map<String, Any?>
+                        objectMapper.readValue(response.body, Map::class.java) as Map<String, Any?>
                     } catch (_: Exception) { null }
                     throw IllegalArgumentException(errorBody?.get("message")?.toString() ?: "Bad request")
                 }
-                else -> throw IllegalArgumentException("Backend API error: ${response.statusCode()}")
+                else -> throw IllegalArgumentException("Backend API error: ${response.status}")
             }
         } catch (e: IllegalArgumentException) {
             throw e
@@ -1090,6 +1091,7 @@ class UserMappingCliService(
                 error = it["error"]?.toString()
             )
         } ?: emptyList()
+        val truncated = (body["truncated"] as? Boolean) ?: false
 
         return CliWorkgroupLinkSummary(
             ownersSet = (body["ownersSet"] as? Number)?.toInt() ?: 0,
@@ -1105,8 +1107,21 @@ class UserMappingCliService(
             alreadyLinked = (body["alreadyLinked"] as? Number)?.toInt() ?: 0,
             failed = (body["failed"] as? Number)?.toInt() ?: 0,
             dryRun = (body["dryRun"] as? Boolean) ?: false,
-            truncated = (body["truncated"] as? Boolean) ?: false,
-            links = links
+            truncated = truncated,
+            links = links,
+            reportTruncated = (body["reportTruncated"] as? Boolean) ?: (truncated && "inputTruncated" !in body),
+            inputTruncated = (body["inputTruncated"] as? Boolean) ?: false,
+            statusReasonCounts = (body["statusReasonCounts"] as? Map<String, Any?>)
+                ?.mapNotNull { (reason, count) -> (count as? Number)?.let { reason to it.toInt() } }
+                ?.toMap() ?: emptyMap(),
+            staleAccounts = (body["staleAccounts"] as? Number)?.toInt(),
+            staleLinks = (body["staleLinks"] as? List<Map<String, Any?>>)?.map {
+                CliStaleWorkgroupLink(
+                    awsAccountId = it["awsAccountId"]?.toString() ?: "",
+                    workgroupName = it["workgroupName"]?.toString() ?: "",
+                    workgroupEnabled = (it["workgroupEnabled"] as? Boolean) ?: false
+                )
+            } ?: emptyList()
         )
     }
 
@@ -1117,6 +1132,136 @@ class UserMappingCliService(
      * Uses java.net.http directly for the same reason [postBulk] does — Micronaut Serde
      * cannot introspect the loosely-typed response body.
      */
+    /** Outcome of the bulk call, whichever endpoint answered it. */
+    private data class BulkHttpResult(val status: Int, val body: String)
+
+    /**
+     * Run the import as a backend job and poll it to completion, so the result never
+     * depends on a proxy keeping one request open for the whole import (a load balancer's
+     * 60 s idle timeout turned a successful import into a 504). A backend without the job
+     * endpoint answers 404, and the synchronous `POST /bulk` is used as before.
+     *
+     * A finished job is returned as a 200 carrying the same body `POST /bulk` would return.
+     */
+    private fun sendBulk(
+        javaClient: java.net.http.HttpClient,
+        backendUrl: String,
+        authToken: String,
+        jsonBody: String
+    ): BulkHttpResult {
+        val start = javaClient.send(
+            bulkPost("$backendUrl/api/user-mappings/bulk/jobs", authToken, jsonBody, Duration.ofSeconds(60)),
+            java.net.http.HttpResponse.BodyHandlers.ofString()
+        )
+        return when (start.statusCode()) {
+            202 -> {
+                val jobId = readJson(start.body())["jobId"]?.toString()
+                    ?: throw IllegalArgumentException("Backend accepted the bulk import but returned no job id")
+                awaitBulkJob(javaClient, backendUrl, authToken, jobId)
+            }
+            404 -> {
+                log.info("Bulk import job endpoint not available, using synchronous POST /api/user-mappings/bulk")
+                val sync = javaClient.send(
+                    bulkPost("$backendUrl/api/user-mappings/bulk", authToken, jsonBody, Duration.ofSeconds(120)),
+                    java.net.http.HttpResponse.BodyHandlers.ofString()
+                )
+                BulkHttpResult(sync.statusCode(), sync.body())
+            }
+            409 -> throw IllegalArgumentException(
+                "Another user-mapping bulk import is still running" +
+                    (readJsonOrNull(start.body())?.get("jobId")?.let { " (job $it)" } ?: "") +
+                    "; retry once it has finished"
+            )
+            else -> BulkHttpResult(start.statusCode(), start.body())
+        }
+    }
+
+    /**
+     * Poll until the job is terminal. Only a definite answer ends the wait: COMPLETED,
+     * FAILED, 404 (job lost) or an auth refusal. Transient proxy errors are retried up to
+     * [BULK_JOB_MAX_POLL_FAILURES] in a row, because giving up would abandon an import that
+     * is still running on the backend.
+     */
+    private fun awaitBulkJob(
+        javaClient: java.net.http.HttpClient,
+        backendUrl: String,
+        authToken: String,
+        jobId: String
+    ): BulkHttpResult {
+        log.info("Bulk import running as backend job {}", jobId)
+        val statusRequest = java.net.http.HttpRequest.newBuilder()
+            .uri(URI.create("$backendUrl/api/user-mappings/bulk/jobs/$jobId/status"))
+            .header("Authorization", "Bearer $authToken")
+            .GET()
+            .timeout(Duration.ofSeconds(30))
+            .build()
+        val deadline = System.nanoTime() + BULK_JOB_MAX_WAIT.toNanos()
+        var consecutiveFailures = 0
+
+        while (true) {
+            if (System.nanoTime() > deadline) {
+                throw IllegalArgumentException(
+                    "Bulk import job $jobId did not finish within ${BULK_JOB_MAX_WAIT.toMinutes()} minutes; " +
+                        "it may still complete on the backend"
+                )
+            }
+            Thread.sleep(bulkJobPollInterval.toMillis())
+
+            val response = try {
+                javaClient.send(statusRequest, java.net.http.HttpResponse.BodyHandlers.ofString())
+            } catch (e: java.io.IOException) {
+                if (++consecutiveFailures >= BULK_JOB_MAX_POLL_FAILURES) throw e
+                log.warn("Polling bulk import job {} failed ({}), retrying", jobId, e.message)
+                continue
+            }
+
+            when (val code = response.statusCode()) {
+                200 -> consecutiveFailures = 0
+                404 -> throw IllegalArgumentException(
+                    "Bulk import job $jobId is no longer known to the backend (restarted?). " +
+                        "Mappings may be partially imported; re-run the import, it is idempotent"
+                )
+                401, 403 -> return BulkHttpResult(code, response.body())
+                else -> {
+                    // A proxy hiccup (502/503/504) must not abandon a job that is still running.
+                    if (++consecutiveFailures >= BULK_JOB_MAX_POLL_FAILURES) {
+                        throw IllegalArgumentException("Backend API error while polling bulk import job $jobId: $code")
+                    }
+                    log.warn("Polling bulk import job {} returned HTTP {}, retrying", jobId, code)
+                    continue
+                }
+            }
+
+            val status = readJson(response.body())
+            when (status["status"]?.toString()) {
+                "COMPLETED" -> return BulkHttpResult(200, objectMapper.writeValueAsString(status["result"]))
+                "FAILED" -> throw IllegalArgumentException(
+                    status["errorMessage"]?.toString() ?: "Bulk import job $jobId failed"
+                )
+            }
+        }
+    }
+
+    private fun bulkPost(
+        url: String,
+        authToken: String,
+        jsonBody: String,
+        timeout: Duration
+    ): java.net.http.HttpRequest = java.net.http.HttpRequest.newBuilder()
+        .uri(URI.create(url))
+        .header("Content-Type", "application/json")
+        .header("Authorization", "Bearer $authToken")
+        .POST(java.net.http.HttpRequest.BodyPublishers.ofString(jsonBody))
+        .timeout(timeout)
+        .build()
+
+    @Suppress("UNCHECKED_CAST")
+    private fun readJson(body: String): Map<String, Any?> =
+        objectMapper.readValue(body, Map::class.java) as Map<String, Any?>
+
+    private fun readJsonOrNull(body: String): Map<String, Any?>? =
+        try { readJson(body) } catch (_: Exception) { null }
+
     fun linkWorkgroupAccounts(
         dryRun: Boolean,
         backendUrl: String,
@@ -1224,8 +1369,11 @@ data class MappingResult(
  * Outcome of linking AWS accounts to the workgroups named after their display
  * names. Mirrors the backend's `WorkgroupAccountLinkSummary`.
  *
- * [truncated] means more accounts were processed than [links] reports, or more
- * exist than one run covers — printed so a capped run never reads as a complete one.
+ * [reportTruncated]: every account was processed, [links] is shortened (the backend
+ * sorts failures and attention rows first). [inputTruncated]: more accounts existed
+ * than one run processes and the rest were NOT linked. An older backend sends only
+ * [truncated]; it is then read as [reportTruncated], its far more common cause.
+ * [staleAccounts] is null when the backend did not (or could not) compute it.
  */
 data class CliWorkgroupLinkSummary(
     val ownersSet: Int = 0,
@@ -1242,7 +1390,19 @@ data class CliWorkgroupLinkSummary(
     val failed: Int = 0,
     val dryRun: Boolean = false,
     val truncated: Boolean = false,
-    val links: List<CliWorkgroupLink> = emptyList()
+    val links: List<CliWorkgroupLink> = emptyList(),
+    val reportTruncated: Boolean = false,
+    val inputTruncated: Boolean = false,
+    val statusReasonCounts: Map<String, Int> = emptyMap(),
+    val staleAccounts: Int? = null,
+    val staleLinks: List<CliStaleWorkgroupLink> = emptyList()
+)
+
+/** An account linked to an AWS-managed workgroup that the import no longer lists. */
+data class CliStaleWorkgroupLink(
+    val awsAccountId: String,
+    val workgroupName: String,
+    val workgroupEnabled: Boolean
 )
 
 /** One account's linking outcome. Three shapes: linked / alreadyLinked / error. */

@@ -29,8 +29,9 @@ open class CrowdStrikeCleanupAuditService @Inject constructor(
 
     constructor(cleanupService: CrowdStrikeAssetCleanupService, runRepository: CrowdStrikeCleanupRunRepository,
                 assetRepository: AssetRepository, notificationService: CrowdStrikeCleanupNotificationService,
-                clock: Clock, includeLegacyDefault: Boolean = false)
-        : this(cleanupService, runRepository, assetRepository, notificationService, includeLegacyDefault) {
+                clock: Clock, includeLegacyDefault: Boolean = false,
+                importLease: CrowdStrikeImportRunLease = CrowdStrikeImportRunLease())
+        : this(cleanupService, runRepository, assetRepository, notificationService, includeLegacyDefault, importLease) {
         this.clock = clock
     }
 

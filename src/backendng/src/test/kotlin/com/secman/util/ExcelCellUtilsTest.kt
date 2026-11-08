@@ -84,16 +84,14 @@ class ExcelCellUtilsTest {
     }
 
     @Test
-    fun `numeric formula cell renders as formula text (no evaluator wired)`() {
-        // Pins current production behavior: the NUMERIC cached-result branch formats
-        // via DataFormatter WITHOUT a FormulaEvaluator, which renders the formula
-        // string itself, not the cached value. (String-result formulas DO return the
-        // cached string via richStringCellValue — covered below.)
+    fun `numeric formula cell renders its cached result`() {
+        // Since Apache POI 6, DataFormatter formats a formula cell's cached result even
+        // without a FormulaEvaluator; POI 5 rendered the formula text ("1+2") instead.
         val cell = row.createCell(0)
         cell.cellFormula = "1+2"
         workbook.creationHelper.createFormulaEvaluator().evaluateFormulaCell(cell)
 
-        assertThat(ExcelCellUtils.getCellValueAsString(cell)).isEqualTo("1+2")
+        assertThat(ExcelCellUtils.getCellValueAsString(cell)).isEqualTo("3")
     }
 
     @Test

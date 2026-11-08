@@ -163,8 +163,10 @@ class CrowdStrikeSnapshotIntegrationTest : BaseIntegrationTest() {
 
     @Test
     fun `proven retired duplicate with manual relationships keeps inventory and loses only Falcon data`() {
-        val device = device()
-        val retired = device.copy(aid = "old-${device.aid}", firstSeen = device.firstSeen!!.minusSeconds(1))
+        // Only a shared cloud instance proves the retired AID was the same machine; a hostname alone does not.
+        val device = device().let { it.copy(instanceId = "i-${it.aid}", cloudAccountId = "account-snapshot") }
+        val retired = device.copy(aid = "old-${device.aid}", firstSeen = device.firstSeen!!.minusSeconds(1),
+            lastSeen = device.lastSeen!!.minusSeconds(3600))
         val duplicate = assets.save(Asset(name = device.hostname, type = "SERVER", owner = "Human owner", verifiedObservedAt = LocalDateTime.now(java.time.ZoneOffset.UTC).minusMinutes(1)))
         identities.save(CrowdStrikeAssetIdentity(asset = duplicate, crowdStrikeAid = retired.aid, sourceHostname = device.hostname))
         val canonical = assets.save(Asset(name = "Display ${device.hostname}", crowdStrikeHostname = device.hostname, type = "SERVER", owner = "Human owner"))

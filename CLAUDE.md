@@ -72,7 +72,7 @@ See `docs/AUTHORIZATION_REWORK.md` for assessment assignments, contribution hist
 | Public Standard Download | `GET /api/requirements/export/{docx,xlsx}` with optional `standard`/`standardId` + `release`/`releaseId` (`release=latest` → ACTIVE release, 404 if none); `GET /api/standards/public` (slim `{id,name}` list). All `IS_ANONYMOUS` by explicit decision — `docs/PUBLIC_STANDARD_DOWNLOAD.md` | public |
 | Export Templates | `GET /api/requirement-export-templates[/latest]` (auth); `GET .../example`, `POST /api/requirement-export-templates`, `POST .../validate`, `GET .../{id}[/download,/usage]`, `POST .../{id}/{activate,deactivate}`, `DELETE .../{id}` (ADMIN/REQADMIN). Company Word template for requirement exports — `docs/REQUIREMENT_EXPORT_TEMPLATES.md` | mixed |
 | CrowdStrike | `POST/GET /api/crowdstrike/{servers/import,vulnerabilities/save,vulnerabilities}` (ADMIN/VULN); authoritative refresh `POST /api/crowdstrike/vulnerabilities/sync` (ADMIN); `GET /api/crowdstrike/last-checkin` (PUBLIC, `text/plain` ISO-8601 or `"never"`); stale-asset cleanup `GET /api/crowdstrike/cleanup/{config,runs}` + `POST .../run-now` (ADMIN) — `run-now` replays the 02:30 scheduled policy **with the safety brake**, unlike the brake-free `POST /api/assets/delete-not-seen-by-crowdstrike`; see `docs/ENVIRONMENT.md` §CrowdStrike stale-asset cleanup | mixed |
-| User Mappings | `GET /api/user-mappings/{current,applied-history}`, `POST/PUT/DELETE /api/user-mappings[/{id}]`; `POST /api/user-mappings/link-workgroup-accounts` (links AWS accounts to the workgroup named `aws-<display name>`, creating it when missing — `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`) | ADMIN |
+| User Mappings | `GET /api/user-mappings/{current,applied-history}`, `POST/PUT/DELETE /api/user-mappings[/{id}]`; `POST /api/user-mappings/bulk/jobs` → `GET .../bulk/jobs/{jobId}/status` (async bulk import used by the CLI; 409 while one runs; synchronous `POST .../bulk` kept); `POST /api/user-mappings/link-workgroup-accounts` (links AWS accounts to the workgroup named `aws-<display name>`, creating it when missing — `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`) | ADMIN |
 | AWS Sharing | `GET/POST /api/aws-account-sharing`, `DELETE .../{id}` | ADMIN |
 | Heatmap | `GET /api/vulnerability-heatmap`; `POST .../refresh` (ADMIN); `GET /api/external/vulnerability-heatmap` (API-key, CORS) | mixed |
 | EOL | `GET /api/eol/{findings,summary,assets/{id},catalog/status,products/{product}/assets}` (auth, asset-scoped); `GET /api/eol/repositories/top` (ADMIN/SECCHAMPION); `POST /api/eol/{catalog/sync,notifications/send}` (ADMIN); `GET/POST /api/admin/email-broadcast/eol/{product-recipients,product,jobs/{id}}` (ADMIN/SECCHAMPION, "contact affected owners"). Source is operator config (`secman.eol.base-url` + `allowed-hosts`, a pair) | mixed |
@@ -328,14 +328,14 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-11-06*
+*Last updated: 2026-11-08*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **AWS workgroup linking robustness (2026-11-08)** — link summaries split `truncated` into `reportTruncated` (500-row `links[]` cap) and `inputTruncated` (20,000-pair cap, rest NOT linked); `links[]` sorts failures/attention rows first, every rejection is logged, plus `statusReasonCounts` and report-only `staleAccounts`/`staleLinks`. CLI exits **4** when nothing failed but workgroups need attention. `UserMappingController` runs on the blocking executor. See `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`.
+
+- **Async user-mapping bulk import (2026-11-08)** — the CLI's `manage-user-mappings import`/`import-s3` now starts `POST /api/user-mappings/bulk/jobs` and polls `.../{jobId}/status` instead of holding one request open: on ~2200 accounts the synchronous `POST /bulk` took ~80 s, past production's 60 s load-balancer idle timeout, so the CLI got a 504 while the backend committed fine. Job state is in memory (single backend, owner emails not persisted), one import at a time (409), falls back to the synchronous endpoint on older backends. See `docs/CLI.md` and `docs/CHANGELOG.md`.
+
 - **CrowdStrike lost-cursor recovery (2026-11-02)** — a Stage-2 Spotlight 404 after pagination begins restarts that batch from page 1 at most twice with backoff, discarding rows from the aborted attempt; a persistent or first-page 404 still fails closed. See `docs/CROWDSTRIKE_IMPORT.md` and `docs/CHANGELOG.md`.
-
-- **Speed and simplification pass (2026-11-01)** — vulnerability exports page by keyset instead of OFFSET (same rows and order, `id` tiebreaker added); V296 indexed `asset.crowdstrike_match_name` and `=`-based identity finders (collation keeps them case-insensitive); cli-add sibling sync is one UPDATE; JWT claims built once in `SecmanTokenIssuer`; `/analytics` tabs lazy-load. See `docs/CHANGELOG.md`.
-
-- **CrowdStrike short-lived sensor filtering (2026-10-26)** — Falcon devices observed for less than two minutes are skipped as `SKIPPED_SHORT_LIVED`, creating neither assets nor findings and not blocking CLI age statistics. Existing assets remain, and delete-on-fail refuses skipped replacement imports. See `docs/CROWDSTRIKE_IMPORT.md` and `docs/CHANGELOG.md`.

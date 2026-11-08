@@ -108,8 +108,18 @@ normalize() {   # normalize <file> -> canonical form on stdout
 
 # --- Tier 1: structural ------------------------------------------------------
 
+# Local-only skills, gitignored in .claude/.gitignore and deliberately absent
+# from .agents/skills/. Space-separated top-level skill directory names.
+EXCLUDED_SKILLS="cov-security-review"
+
 list_rel() {  # list_rel <root> -> paths relative to that root, sorted
-    ( cd "$1" && find . -type f -name '*.md' | sed 's|^\./||' | sort )
+    local skill
+    ( cd "$1" && find . -type f -name '*.md' | sed 's|^\./||' | sort ) \
+    | while IFS= read -r rel; do
+        skill="${rel%%/*}"
+        case " $EXCLUDED_SKILLS " in *" $skill "*) continue ;; esac
+        echo "$rel"
+    done
 }
 
 list_rel "$CLAUDE_ROOT" > "$TMP/claude.files"

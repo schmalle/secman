@@ -258,6 +258,17 @@ class ImportUserMappingsTool(
                             "disabledWorkgroups" to links.disabledWorkgroups,
                             "dryRun" to links.dryRun,
                             "truncated" to links.truncated,
+                            "reportTruncated" to links.reportTruncated,
+                            "inputTruncated" to links.inputTruncated,
+                            "statusReasonCounts" to links.statusReasonCounts,
+                            "staleAccounts" to links.staleAccounts,
+                            "staleLinks" to links.staleLinks.map { stale ->
+                                mapOf(
+                                    "awsAccountId" to stale.awsAccountId,
+                                    "workgroupName" to stale.workgroupName,
+                                    "workgroupEnabled" to stale.workgroupEnabled
+                                )
+                            },
                             "links" to links.links.map { link ->
                                 mapOf(
                                     "awsAccountId" to link.awsAccountId,
