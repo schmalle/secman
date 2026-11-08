@@ -43,7 +43,8 @@ import jakarta.inject.Singleton
  * - Supports AWS credential chain (env vars, profiles, IAM roles)
  * - Auto-detects format from file extension or content
  * - Dry-run mode for validation without importing
- * - Cron-friendly exit codes (0=success, 1=partial, 2+=fatal)
+ * - Cron-friendly exit codes (0=success, 1=partial, 2=fatal S3/argument, 3=unexpected,
+ *   4=imported cleanly but workgroups need attention — see [WorkgroupLinkPrinter.EXIT_ATTENTION])
  * - 10MB file size limit
  * - Automatic temp file cleanup
  * - Requires ADMIN role
@@ -70,7 +71,9 @@ import jakarta.inject.Singleton
         "  secman manage-user-mappings import-s3 --onboarding-mode WELCOME_ONLY",
         "Bucket/key default to AWS_ACCOUNT_BUCKET_NAME / AWS_ACCOUNT_BUCKET_KEY_NAME.",
         "Known accounts do not trigger welcome mail, including newly added owners of known accounts.",
-        "Dry run saves nothing and sends no mail. FAILED or PENDING delivery exits with code 1."
+        "Dry run saves nothing and sends no mail. FAILED or PENDING delivery exits with code 1.",
+        "Exit codes: 0 success - 1 import, link, delivery or onboarding failure - 2 S3 or argument error -",
+        "3 unexpected error - 4 imported, but workgroups need attention (no owner, no members, owner conflict)."
     ]
 )
 class ImportS3Command(
@@ -245,7 +248,8 @@ class ImportS3Command(
     @Option(
         names = ["--verbose", "-v"],
         description = [
-            "Used with --send-email: print per-recipient send status."
+            "Used with --send-email: print per-recipient send status. Also lists every " +
+                "workgroup-linking account, not only failures and attention items."
         ]
     )
     var verbose: Boolean = false
@@ -575,13 +579,16 @@ class ImportS3Command(
             } else if (result.notificationSent) {
                 println("Operator summary email sent to ${result.notificationRecipient}")
             }
-            val linkFailures = WorkgroupLinkPrinter.print(result.workgroupLinks)
+            val links = WorkgroupLinkPrinter.print(result.workgroupLinks, verbose)
             // Exit status (T019-T022: cron-friendly exit codes)
-            if (result.errors.isNotEmpty() || linkFailures > 0 || result.notificationError != null) {
+            if (result.errors.isNotEmpty() || links.failures > 0 || result.notificationError != null) {
+                val reasons = WorkgroupLinkPrinter.describeFailures(
+                    result.errors.size, links, result.notificationError != null
+                )
                 if (dryRun) {
-                    println("Validation failed (dry-run)")
+                    println("Validation failed (dry-run): $reasons")
                 } else {
-                    println("Import completed with errors")
+                    println("Import completed with errors: $reasons")
                 }
                 // Exit code 1: partial success (some errors)
                 System.exit(1)
@@ -601,6 +608,10 @@ class ImportS3Command(
                         println("Warning: $onboardingFailures account(s) could not be onboarded")
                         System.exit(1)
                     }
+                }
+                if (links.attention > 0) {
+                    println("Warning: ${WorkgroupLinkPrinter.describeAttention(links)}")
+                    System.exit(WorkgroupLinkPrinter.EXIT_ATTENTION)
                 }
                 // Exit code 0: success
             }

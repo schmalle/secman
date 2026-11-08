@@ -9,6 +9,8 @@ import io.micronaut.data.model.Pageable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
 import io.micronaut.http.annotation.*
+import io.micronaut.scheduling.TaskExecutors
+import io.micronaut.scheduling.annotation.ExecuteOn
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
@@ -27,6 +29,10 @@ import org.slf4j.LoggerFactory
  */
 @Controller("/api/user-mappings")
 @Secured(SecurityRule.IS_AUTHENTICATED)
+// Every endpoint here is JDBC-bound, and /bulk plus /link-workgroup-accounts run for a
+// minute on a large account file. On the Netty event loop that stalled every other
+// request sharing the loop thread.
+@ExecuteOn(TaskExecutors.BLOCKING)
 open class UserMappingController(
     @Inject private val userMappingService: UserMappingService,
     @Inject private val userMappingRepository: UserMappingRepository,

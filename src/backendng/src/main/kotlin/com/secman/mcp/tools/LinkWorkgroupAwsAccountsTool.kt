@@ -20,7 +20,8 @@ import org.slf4j.LoggerFactory
  * - dryRun: report what would be linked without creating workgroups or assignments.
  *
  * Returns processed, workgroupsCreated, linked, alreadyLinked, failed, dryRun, truncated
- * and a bounded links[] array. A links[] entry carries either `error` (failed),
+ * (plus reportTruncated / inputTruncated), statusReasonCounts, staleAccounts / staleLinks
+ * and a bounded links[] array with failures sorted first. A links[] entry carries either `error` (failed),
  * `alreadyLinked` (an idempotent no-op, not a failure) or `linked`.
  */
 @Singleton
@@ -88,9 +89,21 @@ class LinkWorkgroupAwsAccountsTool(
                     "emptyWorkgroups" to summary.emptyWorkgroups,
                     "disabledWorkgroups" to summary.disabledWorkgroups,
                     "dryRun" to summary.dryRun,
-                    // True when more accounts were processed than links[] reports, or more
-                    // exist than one run covers — never a silent cap.
+                    // truncated = reportTruncated || inputTruncated, kept for older callers.
+                    // reportTruncated: all processed, links[] shortened (failures first).
+                    // inputTruncated: more accounts existed than one run processes.
                     "truncated" to summary.truncated,
+                    "reportTruncated" to summary.reportTruncated,
+                    "inputTruncated" to summary.inputTruncated,
+                    "statusReasonCounts" to summary.statusReasonCounts,
+                    "staleAccounts" to summary.staleAccounts,
+                    "staleLinks" to summary.staleLinks.map { stale ->
+                        mapOf(
+                            "awsAccountId" to stale.awsAccountId,
+                            "workgroupName" to stale.workgroupName,
+                            "workgroupEnabled" to stale.workgroupEnabled
+                        )
+                    },
                     "links" to summary.links.map { link ->
                         mapOf(
                             "awsAccountId" to link.awsAccountId,

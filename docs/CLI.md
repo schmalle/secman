@@ -688,7 +688,9 @@ including what happens to renamed accounts: `docs/AWS_ACCOUNT_WORKGROUP_LINKING.
 ```
 
 **`link-workgroups` exit codes:** `0` success (accounts already linked are **not**
-failures), `1` one or more accounts could not be linked.
+failures), `1` one or more accounts could not be linked, `4` nothing failed but
+workgroups remain disabled/incomplete (no owner, no members, owner conflict). `import`
+and `import-s3` use the same `4`; see `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md` §Reading the result.
 
 #### `list --send-email` (Feature 085)
 

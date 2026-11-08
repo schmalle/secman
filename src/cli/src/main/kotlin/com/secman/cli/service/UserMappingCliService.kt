@@ -1090,6 +1090,7 @@ class UserMappingCliService(
                 error = it["error"]?.toString()
             )
         } ?: emptyList()
+        val truncated = (body["truncated"] as? Boolean) ?: false
 
         return CliWorkgroupLinkSummary(
             ownersSet = (body["ownersSet"] as? Number)?.toInt() ?: 0,
@@ -1105,8 +1106,21 @@ class UserMappingCliService(
             alreadyLinked = (body["alreadyLinked"] as? Number)?.toInt() ?: 0,
             failed = (body["failed"] as? Number)?.toInt() ?: 0,
             dryRun = (body["dryRun"] as? Boolean) ?: false,
-            truncated = (body["truncated"] as? Boolean) ?: false,
-            links = links
+            truncated = truncated,
+            links = links,
+            reportTruncated = (body["reportTruncated"] as? Boolean) ?: (truncated && "inputTruncated" !in body),
+            inputTruncated = (body["inputTruncated"] as? Boolean) ?: false,
+            statusReasonCounts = (body["statusReasonCounts"] as? Map<String, Any?>)
+                ?.mapNotNull { (reason, count) -> (count as? Number)?.let { reason to it.toInt() } }
+                ?.toMap() ?: emptyMap(),
+            staleAccounts = (body["staleAccounts"] as? Number)?.toInt(),
+            staleLinks = (body["staleLinks"] as? List<Map<String, Any?>>)?.map {
+                CliStaleWorkgroupLink(
+                    awsAccountId = it["awsAccountId"]?.toString() ?: "",
+                    workgroupName = it["workgroupName"]?.toString() ?: "",
+                    workgroupEnabled = (it["workgroupEnabled"] as? Boolean) ?: false
+                )
+            } ?: emptyList()
         )
     }
 
@@ -1224,8 +1238,11 @@ data class MappingResult(
  * Outcome of linking AWS accounts to the workgroups named after their display
  * names. Mirrors the backend's `WorkgroupAccountLinkSummary`.
  *
- * [truncated] means more accounts were processed than [links] reports, or more
- * exist than one run covers — printed so a capped run never reads as a complete one.
+ * [reportTruncated]: every account was processed, [links] is shortened (the backend
+ * sorts failures and attention rows first). [inputTruncated]: more accounts existed
+ * than one run processes and the rest were NOT linked. An older backend sends only
+ * [truncated]; it is then read as [reportTruncated], its far more common cause.
+ * [staleAccounts] is null when the backend did not (or could not) compute it.
  */
 data class CliWorkgroupLinkSummary(
     val ownersSet: Int = 0,
@@ -1242,7 +1259,19 @@ data class CliWorkgroupLinkSummary(
     val failed: Int = 0,
     val dryRun: Boolean = false,
     val truncated: Boolean = false,
-    val links: List<CliWorkgroupLink> = emptyList()
+    val links: List<CliWorkgroupLink> = emptyList(),
+    val reportTruncated: Boolean = false,
+    val inputTruncated: Boolean = false,
+    val statusReasonCounts: Map<String, Int> = emptyMap(),
+    val staleAccounts: Int? = null,
+    val staleLinks: List<CliStaleWorkgroupLink> = emptyList()
+)
+
+/** An account linked to an AWS-managed workgroup that the import no longer lists. */
+data class CliStaleWorkgroupLink(
+    val awsAccountId: String,
+    val workgroupName: String,
+    val workgroupEnabled: Boolean
 )
 
 /** One account's linking outcome. Three shapes: linked / alreadyLinked / error. */

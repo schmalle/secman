@@ -42,6 +42,19 @@ interface WorkgroupAwsAccountRepository : JpaRepository<WorkgroupAwsAccount, Lon
     fun countPerWorkgroup(): List<Array<Any>>
 
     /**
+     * (awsAccountId, workgroupName, workgroupEnabled) for every account linked to an
+     * AWS-managed workgroup. Paged by the caller so the read stays bounded; used only to
+     * report accounts an import no longer lists.
+     */
+    @Query("""
+        SELECT waa.awsAccountId, w.name, w.enabled
+        FROM WorkgroupAwsAccount waa JOIN waa.workgroup w
+        WHERE w.awsAccountManaged = true
+        ORDER BY waa.awsAccountId
+    """)
+    fun findManagedAccountLinks(pageable: io.micronaut.data.model.Pageable): List<Array<Any>>
+
+    /**
      * Nullify the createdBy reference when a user is deleted.
      * Preserves the workgroup→AWS-account assignment (the access rule
      * still applies) while detaching the actor for audit history. The

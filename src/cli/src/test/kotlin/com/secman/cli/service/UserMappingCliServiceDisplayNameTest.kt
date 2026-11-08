@@ -32,6 +32,29 @@ class UserMappingCliServiceDisplayNameTest {
         assertEquals("NOT_EVALUATED", legacy.links.single().statusOutcome)
     }
 
+    @Test
+    fun `truncation kinds, reason counts and stale links survive parsing`() {
+        val parse = UserMappingCliService::class.java.getDeclaredMethod("parseWorkgroupLinks", Any::class.java)
+        parse.isAccessible = true
+        val result = parse.invoke(service, mapOf(
+            "truncated" to true, "reportTruncated" to true, "inputTruncated" to false,
+            "statusReasonCounts" to mapOf("MISSING_OWNER" to 28),
+            "staleAccounts" to 16,
+            "staleLinks" to listOf(mapOf("awsAccountId" to "111111111111", "workgroupName" to "aws-closed", "workgroupEnabled" to true))
+        )) as CliWorkgroupLinkSummary
+        assertTrue(result.reportTruncated)
+        assertEquals(false, result.inputTruncated)
+        assertEquals(mapOf("MISSING_OWNER" to 28), result.statusReasonCounts)
+        assertEquals(16, result.staleAccounts)
+        assertEquals(CliStaleWorkgroupLink("111111111111", "aws-closed", true), result.staleLinks.single())
+
+        // An older backend sends only `truncated`: read as the report cap, never as lost work.
+        val legacy = parse.invoke(service, mapOf("truncated" to true)) as CliWorkgroupLinkSummary
+        assertTrue(legacy.reportTruncated)
+        assertEquals(false, legacy.inputTruncated)
+        assertNull(legacy.staleAccounts)
+    }
+
     private fun tempFile(suffix: String, content: String): File {
         val file = Files.createTempFile("mapping-test-", suffix).toFile()
         file.deleteOnExit()
