@@ -1,6 +1,5 @@
 package com.secman.service
 
-import com.secman.domain.Asset
 import com.secman.domain.CrowdStrikeCleanupRun
 import com.secman.domain.CrowdStrikeCleanupStatus
 import com.secman.dto.CleanupCandidateReason
@@ -64,20 +63,46 @@ class CrowdStrikeCleanupAuditServiceTest {
         verify(exactly = 0) { notificationService.notifyAdmins(any()) }
     }
 
+    // run() selects once with a dry run, sizes the brake from that selection, then hands the
+    // same selection to the deleting call. These helpers stub the two calls separately.
+    private fun selection(candidates: Int, otherTracked: Long, days: Int = 30) = CrowdStrikeAssetCleanupResponse(
+        days = days, cutoff = nowLdt.minusDays(days.toLong()), dryRun = true,
+        candidateCount = candidates, deletedCount = 0, skippedCount = 0,
+        candidates = (1..candidates).map { i ->
+            CrowdStrikeAssetCleanupCandidateDto(i.toLong(), "a$i", nowLdt.minusDays(days + 1L), CleanupCandidateReason.TIMESTAMP_STALE)
+        },
+        errors = emptyList(),
+        // PROTECTED_INVENTORY is not part of the tracked denominator; RECENT_IMPORT is.
+        exclusions = mapOf("RECENT_IMPORT" to otherTracked, "PROTECTED_INVENTORY" to 1_000L)
+    )
+
+    private fun stubSelection(actor: String, selection: CrowdStrikeAssetCleanupResponse) {
+        every { cleanupService.cleanup(selection.days, true, actor, false, any(), any()) } returns selection
+    }
+
+    private fun stubDeletion(actor: String, response: CrowdStrikeAssetCleanupResponse) {
+        every { cleanupService.cleanup(response.days, false, actor, false, any(), any(), any()) } returns response
+    }
+
+    /** Scheduled (braked) runs also require a successful CLI import within the last 24 hours. */
+    private fun serviceAfterHealthyImport(): CrowdStrikeCleanupAuditService {
+        val lease = CrowdStrikeImportRunLease()
+        lease.finish(lease.start("cli"), "cli", successful = true)
+        return CrowdStrikeCleanupAuditService(cleanupService, runRepository, assetRepository, notificationService,
+            clock, importLease = lease)
+    }
+
+    private fun deleted(count: Int, errors: List<CrowdStrikeAssetCleanupErrorDto> = emptyList()) =
+        CrowdStrikeAssetCleanupResponse(
+            days = 30, cutoff = nowLdt.minusDays(30), dryRun = false,
+            candidateCount = count + errors.size, deletedCount = count, skippedCount = errors.size,
+            candidates = emptyList(), errors = errors
+        )
+
     @Test
     fun `successful run with deletions persists SUCCESS audit and notifies admins`() {
-        val cutoff = nowLdt.minusDays(30)
-        every { cleanupService.cleanup(30, false, "scheduler", false, any()) } returns CrowdStrikeAssetCleanupResponse(
-            days = 30,
-            cutoff = cutoff,
-            dryRun = false,
-            candidateCount = 2,
-            deletedCount = 2,
-            skippedCount = 0,
-            candidates = listOf(CrowdStrikeAssetCleanupCandidateDto(1, "a", cutoff.minusDays(1), CleanupCandidateReason.TIMESTAMP_STALE)),
-            errors = emptyList()
-        )
-        every { assetRepository.countCrowdStrikeTracked() } returns 100L
+        stubSelection("scheduler", selection(candidates = 2, otherTracked = 98))
+        stubDeletion("scheduler", deleted(2))
         val saved = slot<CrowdStrikeCleanupRun>()
         every { runRepository.save(capture(saved)) } answers { firstArg<CrowdStrikeCleanupRun>().apply { id = 42L } }
 
@@ -93,18 +118,8 @@ class CrowdStrikeCleanupAuditServiceTest {
 
     @Test
     fun `run with errors records PARTIAL status and notifies`() {
-        val cutoff = nowLdt.minusDays(30)
-        every { cleanupService.cleanup(30, false, "admin", false, any()) } returns CrowdStrikeAssetCleanupResponse(
-            days = 30,
-            cutoff = cutoff,
-            dryRun = false,
-            candidateCount = 2,
-            deletedCount = 1,
-            skippedCount = 1,
-            candidates = emptyList(),
-            errors = listOf(CrowdStrikeAssetCleanupErrorDto(9, "bad", "lock"))
-        )
-        every { assetRepository.countCrowdStrikeTracked() } returns 50L
+        stubSelection("admin", selection(candidates = 2, otherTracked = 48))
+        stubDeletion("admin", deleted(1, listOf(CrowdStrikeAssetCleanupErrorDto(9, "bad", "lock"))))
         every { runRepository.save(any()) } answers { firstArg<CrowdStrikeCleanupRun>().apply { id = 7L } }
 
         val result = service.run(days = 30, dryRun = false, triggeredBy = "admin")
@@ -115,22 +130,11 @@ class CrowdStrikeCleanupAuditServiceTest {
 
     @Test
     fun `safety brake aborts when candidate ratio exceeds limit and never calls cleanup service`() {
-        val cutoff = nowLdt.minusDays(30)
         // 6 candidates / 50 tracked = 12% > 10% limit
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff, cutoff) } returns
-            (1..6).map { i ->
-                Asset(
-                    id = i.toLong(),
-                    name = "a$i",
-                    type = "SERVER",
-                    owner = "x",
-                    crowdStrikeLastImportedAt = cutoff.minusDays(1)
-                )
-            }
-        every { assetRepository.countCrowdStrikeTracked() } returns 50L
+        stubSelection("scheduler", selection(candidates = 6, otherTracked = 44))
         every { runRepository.save(any()) } answers { firstArg<CrowdStrikeCleanupRun>().apply { id = 99L } }
 
-        val result = service.run(
+        val result = serviceAfterHealthyImport().run(
             days = 30, dryRun = false, triggeredBy = "scheduler", maxDeletePercent = 10
         )
 
@@ -138,103 +142,81 @@ class CrowdStrikeCleanupAuditServiceTest {
         assertThat(result.deletedCount).isEqualTo(0)
         assertThat(result.candidateCount).isEqualTo(6)
         assertThat(result.errors).hasSize(1)
-        verify(exactly = 0) { cleanupService.cleanup(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { cleanupService.cleanup(any(), false, any(), any(), any(), any(), any()) }
         verify(exactly = 1) { notificationService.notifyAdmins(any()) }
     }
 
     @Test
     fun `safety brake passes through when ratio is within limit`() {
-        val cutoff = nowLdt.minusDays(30)
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff, cutoff) } returns
-            listOf(
-                Asset(
-                    id = 1L,
-                    name = "a",
-                    type = "SERVER",
-                    owner = "x",
-                    crowdStrikeLastImportedAt = cutoff.minusDays(1)
-                )
-            )
-        every { assetRepository.countCrowdStrikeTracked() } returns 100L
-        every { cleanupService.cleanup(30, false, "scheduler", false, any()) } returns CrowdStrikeAssetCleanupResponse(
-            days = 30,
-            cutoff = cutoff,
-            dryRun = false,
-            candidateCount = 1,
-            deletedCount = 1,
-            skippedCount = 0,
-            candidates = emptyList(),
-            errors = emptyList()
-        )
+        // 1 candidate / 100 tracked = 1% <= 10% limit
+        stubSelection("scheduler", selection(candidates = 1, otherTracked = 99))
+        stubDeletion("scheduler", deleted(1))
         every { runRepository.save(any()) } answers { firstArg<CrowdStrikeCleanupRun>().apply { id = 1L } }
 
-        val result = service.run(
+        val result = serviceAfterHealthyImport().run(
             days = 30, dryRun = false, triggeredBy = "scheduler", maxDeletePercent = 10
         )
 
         assertThat(result.status).isEqualTo("SUCCESS")
-        verify(exactly = 1) { cleanupService.cleanup(30, false, "scheduler", false, any()) }
+        verify(exactly = 1) { cleanupService.cleanup(30, false, "scheduler", false, any(), any(), any()) }
     }
 
     @Test
-    fun `safety brake fails closed when tracked count is unavailable but candidates exist`() {
-        val cutoff = nowLdt.minusDays(30)
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff, cutoff) } returns listOf(
-            Asset(id = 1L, name = "a1", type = "SERVER", owner = "x", crowdStrikeLastImportedAt = cutoff.minusDays(1))
-        )
-        // safeTotalCombined swallows this into 0 — the brake must then ABORT, not
-        // silently run unbraked (the fail-open bug that let outages become mass deletes).
-        every { assetRepository.countCrowdStrikeTracked() } throws RuntimeException("DB down")
+    fun `braked run aborts without a recent successful import and never deletes`() {
+        stubSelection("scheduler", selection(candidates = 1, otherTracked = 99))
         every { runRepository.save(any()) } answers { firstArg<CrowdStrikeCleanupRun>().apply { id = 100L } }
 
+        // setUp's service has a fresh lease: no CLI import has completed since startup.
         val result = service.run(days = 30, dryRun = false, triggeredBy = "scheduler", maxDeletePercent = 10)
 
-        assertThat(result.status).isEqualTo("ABORTED_SAFETY_BRAKE")
+        assertThat(result.status).isEqualTo("ABORTED_IMPORT_HEALTH")
         assertThat(result.deletedCount).isEqualTo(0)
-        verify(exactly = 0) { cleanupService.cleanup(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { cleanupService.cleanup(any(), false, any(), any(), any(), any(), any()) }
+        verify(exactly = 1) { notificationService.notifyAdmins(any()) }
+    }
+
+    @Test
+    fun `selection failure fails closed and never deletes`() {
+        every { cleanupService.cleanup(30, true, "scheduler", false, any(), any()) } throws RuntimeException("DB down")
+        every { runRepository.save(any()) } answers { firstArg<CrowdStrikeCleanupRun>().apply { id = 101L } }
+
+        val result = serviceAfterHealthyImport().run(days = 30, dryRun = false, triggeredBy = "scheduler", maxDeletePercent = 10)
+
+        assertThat(result.status).isEqualTo("FAILED")
+        assertThat(result.deletedCount).isEqualTo(0)
+        verify(exactly = 0) { cleanupService.cleanup(any(), false, any(), any(), any(), any(), any()) }
         verify(exactly = 1) { notificationService.notifyAdmins(any()) }
     }
 
     @Test
     fun `brake and cleanup share one cutoff instant`() {
         val cutoff = nowLdt.minusDays(30)
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(cutoff, cutoff) } returns emptyList()
-        every { assetRepository.countCrowdStrikeTracked() } returns 100L
-        var cutoffSeenByCleanup: LocalDateTime? = null
-        every { cleanupService.cleanup(30, false, "scheduler", false, any()) } answers {
-            cutoffSeenByCleanup = arg(4)
-            CrowdStrikeAssetCleanupResponse(
-                days = 30, cutoff = cutoff, dryRun = false,
-                candidateCount = 0, deletedCount = 0, skippedCount = 0,
-                candidates = emptyList(), errors = emptyList()
-            )
+        var selectionCutoff: LocalDateTime? = null
+        var deletionCutoff: LocalDateTime? = null
+        every { cleanupService.cleanup(30, true, "scheduler", false, any(), any()) } answers {
+            selectionCutoff = arg(4)
+            selection(candidates = 0, otherTracked = 100)
+        }
+        every { cleanupService.cleanup(30, false, "scheduler", false, any(), any(), any()) } answers {
+            deletionCutoff = arg(4)
+            deleted(0)
         }
         every { runRepository.save(any()) } answers { firstArg<CrowdStrikeCleanupRun>().apply { id = 5L } }
 
-        service.run(days = 30, dryRun = false, triggeredBy = "scheduler", maxDeletePercent = 10)
+        serviceAfterHealthyImport().run(days = 30, dryRun = false, triggeredBy = "scheduler", maxDeletePercent = 10)
 
-        // The brake's candidate query above was stubbed for this exact cutoff; the
-        // cleanup must receive the same instant, not a second clock read.
-        assertThat(cutoffSeenByCleanup).isEqualTo(cutoff)
+        // Selection (which sizes the brake) and deletion must see the same instant, not two clock reads.
+        assertThat(selectionCutoff).isEqualTo(cutoff)
+        assertThat(deletionCutoff).isEqualTo(cutoff)
     }
 
     @Test
-    fun `safety brake skipped when total tracked is zero`() {
-        every { assetRepository.findCrowdStrikeStaleExcludingAgentSeen(any(), any()) } returns emptyList()
-        every { assetRepository.countCrowdStrikeTracked() } returns 0L
-        every { cleanupService.cleanup(any(), any(), any(), any(), any()) } returns CrowdStrikeAssetCleanupResponse(
-            days = 30,
-            cutoff = nowLdt.minusDays(30),
-            dryRun = false,
-            candidateCount = 0,
-            deletedCount = 0,
-            skippedCount = 0,
-            candidates = emptyList(),
-            errors = emptyList()
-        )
+    fun `run with nothing to delete is SUCCESS and does not notify`() {
+        stubSelection("scheduler", selection(candidates = 0, otherTracked = 0))
+        stubDeletion("scheduler", deleted(0))
         every { runRepository.save(any()) } answers { firstArg<CrowdStrikeCleanupRun>().apply { id = 1L } }
 
-        val result = service.run(
+        val result = serviceAfterHealthyImport().run(
             days = 30, dryRun = false, triggeredBy = "scheduler", maxDeletePercent = 10
         )
 

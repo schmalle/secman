@@ -217,6 +217,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     @io.micronaut.data.annotation.Query("""
         SELECT a FROM Asset a WHERE a.crowdStrikeLastImportedAt IS NOT NULL
             OR a.owner = :ownerLiteral
+            ORDER BY a.id
     """, countQuery = "SELECT COUNT(a) FROM Asset a WHERE a.crowdStrikeLastImportedAt IS NOT NULL OR a.owner = :ownerLiteral")
     fun findCleanupPopulation(ownerLiteral: String, pageable: io.micronaut.data.model.Pageable): io.micronaut.data.model.Page<Asset>
 

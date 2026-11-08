@@ -7,7 +7,6 @@ import com.secman.dto.CrowdStrikeAssetCleanupErrorDto
 import com.secman.dto.CrowdStrikeAssetCleanupResponse
 import com.secman.repository.AssetRepository
 import io.micronaut.data.model.Pageable
-import io.micronaut.data.model.Sort
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 import java.time.ZoneOffset
@@ -44,7 +43,7 @@ open class CrowdStrikeAssetCleanupService(
             var page = 0
             do {
                 val population = assetRepository.findCleanupPopulation(AssetOwners.CROWDSTRIKE_IMPORT,
-                    Pageable.from(page++, 200, Sort.of(Sort.Order.asc("id"))))
+                    Pageable.from(page++, 200))
                 population.content.forEach { asset ->
                     val excluded = retentionPolicy.exclusion(asset, basis, includeLegacy, cutoff, agentCutoff)
                     if (excluded != null) exclusions[excluded] = (exclusions[excluded] ?: 0L) + 1

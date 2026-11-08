@@ -33,7 +33,10 @@ class CrowdStrikeLatestDeviceIntegrationTest : BaseIntegrationTest() {
         val winner = assets.save(Asset(name = "User display name $hostname", crowdStrikeHostname = hostname,
             nameOverriddenAt = LocalDateTime.now(), nameOverriddenBy = "test-admin", type = "DATABASE", owner = "User owner"))
         val old = assets.save(Asset(name = hostname, crowdStrikeHostname = hostname, type = "SERVER", owner = "CrowdStrike Import"))
-        val oldRecord = CrowdStrikeDeviceRecord("old-${old.id}", hostname, firstSeen = Instant.parse("2026-01-01T00:00:00Z"))
+        // Only a shared cloud instance proves both AIDs were one machine; a hostname alone does not.
+        val oldRecord = CrowdStrikeDeviceRecord("old-${old.id}", hostname, instanceId = "i-latest-${old.id}",
+            cloudAccountId = "account-latest", firstSeen = Instant.parse("2026-01-01T00:00:00Z"),
+            lastSeen = Instant.parse("2026-01-15T00:00:00Z"))
         val newRecord = oldRecord.copy(aid = "new-${winner.id}", firstSeen = Instant.parse("2026-02-01T00:00:00Z"),
             lastSeen = Instant.now().minusSeconds(60), productType = "Domain Controller")
         identities.save(CrowdStrikeAssetIdentity(asset = old, crowdStrikeAid = oldRecord.aid, sourceHostname = hostname))
@@ -47,7 +50,7 @@ class CrowdStrikeLatestDeviceIntegrationTest : BaseIntegrationTest() {
         em.flush()
         // An HTTP import starts with no managed entities from fixture creation.
         em.clear()
-        val batch = CrowdStrikeVulnerabilityBatchDto(hostname, null, null, null, null, null, null,
+        val batch = CrowdStrikeVulnerabilityBatchDto(hostname, null, newRecord.cloudAccountId, newRecord.instanceId, null, null, null,
             vulnerabilities = emptyList(), runSeverities = listOf("HIGH"), crowdStrikeAids = setOf(newRecord.aid),
             deviceSelection = CrowdStrikeDeviceSelection(newRecord, listOf(oldRecord)))
         repeat(2) {

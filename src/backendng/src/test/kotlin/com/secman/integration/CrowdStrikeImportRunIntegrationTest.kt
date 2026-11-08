@@ -45,7 +45,7 @@ class CrowdStrikeImportRunIntegrationTest : BaseIntegrationTest() {
                 error("Expected active-run conflict")
             } catch (e: HttpClientResponseException) {
                 val body = e.response.getBody(Map::class.java).orElseThrow()
-                assertThat(body["error"]).isEqualTo("An import run is already active")
+                assertThat(body["error"]).isEqualTo("An import or cleanup is already active")
                 assertThat(java.time.Instant.parse(body["expiresAt"].toString())).isAfter(java.time.Instant.now())
             }
             denied("$endpoint/$runId/heartbeat", otherToken, HttpStatus.CONFLICT)

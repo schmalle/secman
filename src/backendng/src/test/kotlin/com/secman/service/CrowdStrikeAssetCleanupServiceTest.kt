@@ -10,7 +10,6 @@ import io.mockk.slot
 import io.mockk.verify
 import io.micronaut.data.model.Page
 import io.micronaut.data.model.Pageable
-import io.micronaut.data.model.Sort
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
@@ -27,7 +26,7 @@ class CrowdStrikeAssetCleanupServiceTest {
     private lateinit var service: CrowdStrikeAssetCleanupService
 
     private val clock = Clock.fixed(Instant.parse("2026-05-07T10:00:00Z"), ZoneOffset.UTC)
-    private val firstPage = Pageable.from(0, 200, Sort.of(Sort.Order.asc("id")))
+    private val firstPage = Pageable.from(0, 200)
 
     @BeforeEach
     fun setUp() {
@@ -199,7 +198,7 @@ class CrowdStrikeAssetCleanupServiceTest {
     fun `paginated population includes candidates from both rules across page boundaries`() {
         val timestampStale = (1L..200L).map { asset(it, "stale-$it", LocalDateTime.of(2026, 4, 1, 10, 0)) }
         val legacy = legacyAsset(201L, "legacy-next-page")
-        val secondPage = Pageable.from(1, 200, Sort.of(Sort.Order.asc("id")))
+        val secondPage = Pageable.from(1, 200)
         every { assetRepository.findCleanupPopulation(AssetOwners.CROWDSTRIKE_IMPORT, firstPage) } returns
             Page.of(timestampStale, firstPage, 201)
         every {
