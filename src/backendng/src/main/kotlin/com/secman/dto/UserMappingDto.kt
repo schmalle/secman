@@ -157,6 +157,28 @@ data class AccountRiskAssessmentInfo(
     val error: String? = null
 )
 
+/** 202 body of `POST /api/user-mappings/bulk/jobs`. */
+@Serdeable
+data class BulkImportJobStartedResponse(
+    val jobId: String,
+    val status: String
+)
+
+/**
+ * Body of `GET /api/user-mappings/bulk/jobs/{jobId}/status`. [result] is set only when
+ * [status] is COMPLETED and is exactly what the synchronous `POST /bulk` returns.
+ */
+@Serdeable
+data class BulkImportJobStatusResponse(
+    val jobId: String,
+    val status: String,
+    val createdAt: java.time.Instant,
+    val startedAt: java.time.Instant? = null,
+    val completedAt: java.time.Instant? = null,
+    val errorMessage: String? = null,
+    val result: BulkUserMappingResponse? = null
+)
+
 @Serdeable
 data class BulkUserMappingResponse(
     val totalProcessed: Int,

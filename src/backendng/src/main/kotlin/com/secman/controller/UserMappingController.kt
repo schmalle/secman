@@ -31,7 +31,8 @@ open class UserMappingController(
     @Inject private val userMappingService: UserMappingService,
     @Inject private val userMappingRepository: UserMappingRepository,
     @Inject private val bulkImportService: com.secman.service.UserMappingBulkImportService,
-    @Inject private val workgroupAccountLinkService: com.secman.service.WorkgroupAccountLinkService
+    @Inject private val workgroupAccountLinkService: com.secman.service.WorkgroupAccountLinkService,
+    @Inject private val bulkImportJobService: com.secman.service.UserMappingBulkImportJobService
 ) {
     private val logger = LoggerFactory.getLogger(UserMappingController::class.java)
 
@@ -196,6 +197,76 @@ open class UserMappingController(
                 )
             )
         }
+    }
+
+    /**
+     * POST /api/user-mappings/bulk/jobs - start the bulk import as a background job.
+     *
+     * Same request and validation as `POST /bulk`, but answers 202 with a job id at once;
+     * the caller polls `GET /bulk/jobs/{jobId}/status`. Exists because the synchronous call
+     * outlives the production load balancer's idle timeout (504 while the import succeeds).
+     * 409 while another bulk import is still running.
+     */
+    @Post("/bulk/jobs")
+    @Secured("ADMIN")
+    open fun startBulkImportJob(
+        @Body request: BulkUserMappingRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        bulkImportService.validate(request)?.let { validationError ->
+            return HttpResponse.badRequest(
+                mapOf(
+                    "error" to "Validation Error",
+                    "message" to validationError
+                )
+            )
+        }
+
+        return try {
+            val started = bulkImportJobService.start(
+                request, getUserIdFromAuthenticationOrNull(authentication), authentication.name
+            )
+            HttpResponse.status<BulkImportJobStartedResponse>(HttpStatus.ACCEPTED).body(started)
+        } catch (e: com.secman.service.BulkImportJobConflictException) {
+            logger.warn("Bulk import job rejected, job {} already running: actor={}", e.existingJobId, authentication.name)
+            HttpResponse.status<Map<String, String>>(HttpStatus.CONFLICT).body(
+                mapOf(
+                    "error" to "Conflict",
+                    "message" to "A user-mapping bulk import is already running",
+                    "jobId" to e.existingJobId
+                )
+            )
+        } catch (e: Exception) {
+            logger.error("Failed to start bulk import job: actor={}", authentication.name, e)
+            HttpResponse.serverError(
+                mapOf(
+                    "error" to "Internal Server Error",
+                    "message" to "Failed to start bulk import job"
+                )
+            )
+        }
+    }
+
+    /**
+     * GET /api/user-mappings/bulk/jobs/{jobId}/status - poll a job started above.
+     *
+     * 404 when the job is unknown, expired, lost to a backend restart, or was started by
+     * another user. `result` is set only on COMPLETED.
+     */
+    @Get("/bulk/jobs/{jobId}/status")
+    @Secured("ADMIN")
+    open fun getBulkImportJobStatus(
+        @PathVariable jobId: String,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        val status = bulkImportJobService.getStatus(jobId, authentication.name)
+        return status?.let { HttpResponse.ok(it) }
+            ?: HttpResponse.status<Map<String, String>>(HttpStatus.NOT_FOUND).body(
+                mapOf(
+                    "error" to "Not Found",
+                    "message" to "Bulk import job not found"
+                )
+            )
     }
 
     /**

@@ -743,6 +743,7 @@ Opt-in notification when the import introduces AWS account IDs not previously pr
 - The optional summary subject is `New AWS accounts imported into SecMan`. Owner welcome subject/body are configured in the web UI.
 - `--dry-run --createnotify` reports which accounts would trigger notification (if any) but sends no email.
 - Notification requires the bulk endpoint (`POST /api/user-mappings/bulk`); the CLI fails when it is unavailable rather than silently importing without the requested notification.
+- The import runs as a backend job: the CLI calls `POST /api/user-mappings/bulk/jobs` (202 + `jobId`) and polls `GET /api/user-mappings/bulk/jobs/{jobId}/status` every 3 s (up to 60 min) until `COMPLETED` (whose `result` is exactly what the synchronous `POST /api/user-mappings/bulk` returns) or `FAILED`. No load balancer or proxy idle timeout applies to a long import. Up to 5 consecutive failed polls (e.g. a proxy 502/504) are tolerated. A backend without the job endpoint (404) is called synchronously as before. A second import while one runs gets 409. Job state is in memory: after a backend restart mid-job the poll returns 404 and the CLI asks you to re-run, which is safe because the import is idempotent.
 
 **Exit codes:**
 
