@@ -32,28 +32,28 @@ dependencies {
 
     // Database
     implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.2.4")
-    implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.2.0")
-    implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.2.0")
+    implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.2.1")
+    implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.2.1")
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:4.0.0")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:8.1.1")
-	runtimeOnly("org.flywaydb:flyway-core:13.11.1")
-	runtimeOnly("org.flywaydb:flyway-mysql:13.11.1")
+	runtimeOnly("org.flywaydb:flyway-core:13.12.0")
+	runtimeOnly("org.flywaydb:flyway-mysql:13.12.0")
 
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt:5.5.1")
     implementation("io.micronaut.security:micronaut-security-oauth2:5.5.1")
 
     // WebAuthn/Passkey support
-    implementation("com.webauthn4j:webauthn4j-core:0.31.11.RELEASE")
-    implementation("com.webauthn4j:webauthn4j-metadata:0.31.11.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-core:0.32.0.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-metadata:0.32.0.RELEASE")
 
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")
     implementation("jakarta.validation:jakarta.validation-api")
 
     // XSS Prevention - Feature 047
-    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20261011.1")
+    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20261102.1")
 
     // Email
     implementation("io.micronaut.email:micronaut-email-javamail:3.2.0")
@@ -180,6 +180,7 @@ allOpen {
 
 graalvmNative.toolchainDetection.set(false)
 micronaut {
+    version("5.2.4")
     runtime("netty")
     processing {
         incremental(true)

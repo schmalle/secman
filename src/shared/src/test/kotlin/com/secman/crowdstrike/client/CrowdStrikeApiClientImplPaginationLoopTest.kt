@@ -254,6 +254,72 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         assertThat(spotlightCalls(requests)).isEqualTo(52)
     }
 
+    private val fastRestartClient = object : CrowdStrikeApiClientImpl(httpClient, authService) {
+        init { lostCursorBackoffMs = 0L }
+    }
+
+    private fun thrown404(): Nothing =
+        throw io.micronaut.http.client.exceptions.HttpClientResponseException("not found", HttpResponse.notFound<Any>())
+
+    /** Serves metadata, then Spotlight answers from [spotlight], called with the 1-based Spotlight call number. */
+    private fun stubSpotlight(spotlight: (call: Int, uri: String) -> HttpResponse<Map<*, *>>): MutableList<HttpRequest<Any>> {
+        val requests = mutableListOf<HttpRequest<Any>>()
+        var spotlightCall = 0
+        every { blockingClient.exchange(capture(requests), Map::class.java) } answers {
+            val uri = firstArg<HttpRequest<Any>>().uri.toString()
+            when {
+                uri.contains("/devices/entities/devices/v2") -> HttpResponse.ok(metadataResponse("device-1"))
+                uri.contains("/spotlight/combined/vulnerabilities/v1") -> spotlight(++spotlightCall, uri)
+                else -> error("Unexpected request: $uri")
+            }
+        }
+        return requests
+    }
+
+    @Test
+    fun `mid-pagination 404 restarts the batch from page 1 without duplicating rows`() {
+        // Attempt 1: page 1 ok, page 2 -> 404 (lost cursor). Attempt 2: both pages ok.
+        val requests = stubSpotlight { call, _ ->
+            when (call) {
+                1, 3 -> HttpResponse.ok(spotlightPage(listOf(vulnResource("v1"), vulnResource("v2")), "A", 3))
+                2 -> thrown404()
+                else -> HttpResponse.ok(spotlightPage(listOf(vulnResource("v3")), "B", 3))
+            }
+        }
+        val result = fastRestartClient.queryVulnerabilitiesByDeviceIdsDetailed(
+            listOf("device-1"), "HIGH", 0, config, limit = 2)
+
+        assertThat(spotlightCalls(requests)).isEqualTo(4)
+        val spotlightUris = requests.map { it.uri.toString() }.filter { it.contains("/spotlight/") }
+        assertThat(spotlightUris[2]).doesNotContain("after=")
+        assertThat(result.vulnerabilities.map { it.id }).containsExactly("v1", "v2", "v3")
+        assertThat(result.failedDeviceIds).isEmpty()
+    }
+
+    @Test
+    fun `persistent mid-pagination 404 still fails closed after bounded restarts`() {
+        val requests = stubSpotlight { call, _ ->
+            if (call % 2 == 1) HttpResponse.ok(spotlightPage(listOf(vulnResource("v1"), vulnResource("v2")), "A", 3))
+            else thrown404()
+        }
+        assertThatThrownBy {
+            fastRestartClient.queryVulnerabilitiesByDeviceIdsDetailed(listOf("device-1"), "HIGH", 0, config, limit = 2)
+        }.hasMessageContaining("404 does not prove")
+
+        // 1 initial attempt + 2 restarts, two Spotlight calls each.
+        assertThat(spotlightCalls(requests)).isEqualTo(6)
+    }
+
+    @Test
+    fun `first-page 404 is not restarted and fails closed`() {
+        val requests = stubSpotlight { _, _ -> thrown404() }
+        assertThatThrownBy {
+            fastRestartClient.queryVulnerabilitiesByDeviceIdsDetailed(listOf("device-1"), "HIGH", 0, config, limit = 2)
+        }.hasMessageContaining("404 does not prove")
+
+        assertThat(spotlightCalls(requests)).isEqualTo(1)
+    }
+
     @Test
     fun `page cap discards incomplete results`() {
         stubSpotlightPages((1..50).map {

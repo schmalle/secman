@@ -18,7 +18,7 @@
     "@popperjs/core": "2.11.8",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "astro": "7.4.4",
+    "astro": "7.4.5",
     "axios": "1.21.0",
     "bootstrap": "5.3.8",
     "bootstrap-icons": "1.13.2",
@@ -37,7 +37,7 @@
     "@types/node": "26.6.6",
     "@typescript-eslint/eslint-plugin": "8.72.1",
     "@typescript-eslint/parser": "8.72.1",
-    "eslint": "10.13.0",
+    "eslint": "10.14.0",
     "eslint-plugin-react": "7.37.5",
     "eslint-plugin-react-hooks": "7.1.1"
   },

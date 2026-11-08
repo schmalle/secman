@@ -4,12 +4,12 @@ Security requirement, vulnerability and risk management platform.
 
 ## Stack
 
-- Backend: Kotlin 2.4.21 / Java 25, Micronaut 5.2.3, Hibernate JPA → `src/backendng/`
-- Frontend: Astro 7.4.2 + React 19 islands, Axios, JWT in the HttpOnly `secman_auth` cookie → `src/frontend/`
+- Backend: Kotlin 2.4.21 / Java 25, Micronaut 5.2.4, Hibernate JPA → `src/backendng/`
+- Frontend: Astro 7.4.5 + React 19 islands, Axios, JWT in the HttpOnly `secman_auth` cookie → `src/frontend/`
 - CLI: Kotlin + Picocli 4.7.7, AWS SDK v2 → `src/cli/`
 - Mobile relay: Go 1.24, **zero third-party dependencies** (stdlib only, incl. its own RFC 8555 ACME client) → `src/relay/`
 - DB: MariaDB 11.4, Flyway + Hibernate auto-migration
-- Build: Gradle 9.8.1 (Kotlin DSL)
+- Build: Gradle 9.8.2 (Kotlin DSL)
 - MCP: Streamable HTTP / JSON-RPC 2.0. `X-MCP-User-Email` header is **mandatory** on `tools/list` and `tools/call` (only `initialize` and `ping` exempt).
 
 ## Roles (RBAC)
@@ -168,7 +168,7 @@ Each rule names the control that already exists in this repo. **Reuse it — nev
 
 **A02 Cryptographic Failures**
 - Passwords and API-key secrets: `BCryptPasswordEncoder` only. Never SHA-256/MD5/hand-rolled hashing for a secret — the SHA-256 API-key path in `McpAuthenticationService` exists solely to migrate legacy keys, do not extend or imitate it.
-- The JWT lives in the HttpOnly `secman_auth` cookie. Never write a token to `localStorage`, `sessionStorage`, a non-HttpOnly cookie, or any value that lands in a log. The SSE `?token=` query param is the one documented exception (EventSource has no headers).
+- The JWT lives in the HttpOnly `secman_auth` cookie. Never write a token to `localStorage`, `sessionStorage`, a non-HttpOnly cookie, a URL query parameter, or any value that lands in a log. Browser EventSource connections send the cookie with `withCredentials: true`.
 - Secrets come from `pass-cli`/env. No literal credential, key, token or internal host in source, tests, scripts or fixtures.
 - `JwtSigningValidator`, `DatabaseCredentialValidator` and `DatasourceUrlValidator` fail the boot on weak config **by design** — never relax or bypass one to make the backend start.
 
@@ -232,7 +232,7 @@ Code samples in `docs/ARCHITECTURE.md` §Patterns — CSV/Excel import (validate
 - Backend: `@Secured(SecurityRule.IS_AUTHENTICATED)` + `authentication.roles.contains("…")`.
 - Frontend: the JWT lives in the **HttpOnly `secman_auth` cookie** (`AuthCookieService.AUTH_COOKIE_NAME`), not in JS-readable storage. Axios sends it via `withCredentials: true` (set globally in `utils/csrf.ts`); fetch calls use the `authenticated*` helpers in `utils/auth.ts` / `services/`. `sessionStorage["user"]` holds only the display/role payload — never a token.
 - External/CLI clients: `POST /api/auth/login` returns the JWT **only** in `Set-Cookie: secman_auth=…`; clients either retain that cookie or extract the token and re-send it as `Authorization: Bearer …` (both readers stay active).
-- SSE: JWT in `?token=…` query param (EventSource has no header support).
+- SSE: browser EventSource connections send the HttpOnly `secman_auth` cookie with `withCredentials: true`.
 
 ### Chat notifications (Slack / Telegram)
 Publishers stay transport-agnostic: publish a `ChatNotificationEvent` where the work completes;
@@ -257,7 +257,7 @@ Per server: `findOrCreateAsset` → `vulnerabilityRepository.deleteByAssetId()` 
 
 ## Test Infrastructure
 
-JUnit 6, Mockk, AssertJ, `@MicronautTest`. Integration tests run against an **external MariaDB** (no Docker/Testcontainers). **`junit-jupiter-params` is not on the classpath** — `@ParameterizedTest` will not compile; loop inside a plain `@Test`. Helpers in `src/backendng/src/test/kotlin/com/secman/testutil/`:
+JUnit 6, Mockk, AssertJ, `@MicronautTest`. Integration tests run against an **external MariaDB** (no Docker/Testcontainers). `junit-jupiter-params` is on the backend test classpath; `@ParameterizedTest` is available. Helpers in `src/backendng/src/test/kotlin/com/secman/testutil/`:
 - `BaseIntegrationTest` — base for DB-backed tests; datasource comes from `application-test.yml`.
 - `TestDataFactory` — admin/vuln/regular user, asset, vulnerability builders.
 - `TestAuthHelper` — JWT login → bearer token.
@@ -328,15 +328,14 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-11-01*
+*Last updated: 2026-11-06*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **CrowdStrike lost-cursor recovery (2026-11-02)** — a Stage-2 Spotlight 404 after pagination begins restarts that batch from page 1 at most twice with backoff, discarding rows from the aborted attempt; a persistent or first-page 404 still fails closed. See `docs/CROWDSTRIKE_IMPORT.md` and `docs/CHANGELOG.md`.
+
 - **Speed and simplification pass (2026-11-01)** — vulnerability exports page by keyset instead of OFFSET (same rows and order, `id` tiebreaker added); V296 indexed `asset.crowdstrike_match_name` and `=`-based identity finders (collation keeps them case-insensitive); cli-add sibling sync is one UPDATE; JWT claims built once in `SecmanTokenIssuer`; `/analytics` tabs lazy-load. See `docs/CHANGELOG.md`.
 
 - **CrowdStrike short-lived sensor filtering (2026-10-26)** — Falcon devices observed for less than two minutes are skipped as `SKIPPED_SHORT_LIVED`, creating neither assets nor findings and not blocking CLI age statistics. Existing assets remain, and delete-on-fail refuses skipped replacement imports. See `docs/CROWDSTRIKE_IMPORT.md` and `docs/CHANGELOG.md`.
-
-- **CrowdStrike roaming enrollments and bootstrap sensors (2026-10-26)** — instance moves may absorb holders whose AIDs Falcon records as superseded on that same instance; superseded selected AIDs become non-failing `SKIPPED_SUPERSEDED` results. Foreign, newer, tied, or otherwise unexplained holders retain the prior fail-closed behavior. See `docs/CROWDSTRIKE_IMPORT.md` and `docs/CHANGELOG.md`.
-

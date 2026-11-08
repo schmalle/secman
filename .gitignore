@@ -2,6 +2,7 @@ src/adread/adread.env.local
 
 
 3rdparty/
+./.claude/skills/cov-security-review/
 
 # Dependencies
 backendng/bin/
@@ -138,3 +139,5 @@ extensions/secman_source/
 .ori/state.sqlite-shm
 .ori/state.sqlite-wal
 .context/
+review.cloudfile.txt
+review.cov.txt

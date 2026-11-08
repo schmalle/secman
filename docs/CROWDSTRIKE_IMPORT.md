@@ -811,7 +811,9 @@ group.
 
 Hostname-specific lookups expose failed AIDs. A failed device query, cursor loop,
 404 after pagination starts, exhausted timeout retry, or page cap makes the lookup
-incomplete. Such a lookup cannot replace its stored host snapshot; a multi-host save may still
+incomplete. In the batched Stage-2 query, a 404 after pagination starts (Falcon lost
+the cursor) first restarts that batch from page 1, at most twice with backoff, and
+discards the aborted attempt's rows; only a persisting 404 fails the batch. Such a lookup cannot replace its stored host snapshot; a multi-host save may still
 import independent complete hosts. Read-only queries
 may show partial findings with an explicit warning; save failures return nonzero. Product-filtered single-host lookups are read-only:
 `--product` with `--save` refuses replacement. Severity-filtered saves forward the

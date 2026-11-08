@@ -5,85 +5,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dataSources.local.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.local.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/kotlinc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/kotlinc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/CHANGELOG.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/CHANGELOG.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/CROWDSTRIKE_IMPORT.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/CROWDSTRIKE_IMPORT.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_intra_mon/docs/SECMAN.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_intra_mon/docs/SECMAN.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_intra_mon/src/secman_intra_mon/cli.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_intra_mon/src/secman_intra_mon/cli.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/extensions/secman_intra_mon/src/secman_intra_mon/secman.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_intra_mon/src/secman_intra_mon/secman.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/docs/github-access.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/docs/github-access.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/pyproject.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/cli.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/cli.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/files.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/files.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/github_issues.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/github_issues.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/github_repos.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/github_repos.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/models.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/repo_cloner.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/repo_cloner.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/report.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/report.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/repos_cli.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/repos_cli.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/repository_access.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/repository_access.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/review.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/review.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/scanners.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/scanners.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/skills.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/skills.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/tracking.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/tracking.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/tests/test_finding_responses.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/tests/test_finding_responses.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/tests/test_openrouter.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/tests/test_openrouter.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/tests/test_repositories.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/tests/test_repositories.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/tests/test_scan_execution.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/tests/test_scan_execution.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_source/tests/test_skills.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/tests/test_skills.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/MANIFEST.in" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/MANIFEST.in" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/docs/AI_AGENT.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/docs/AI_AGENT.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/docs/CONFIGURATION.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/docs/CONFIGURATION.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/docs/COVERAGE.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/docs/COVERAGE.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/docs/DATABASE.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/docs/DATABASE.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/docs/REPORTS.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/docs/REPORTS.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/docs/SAFETY.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/docs/SAFETY.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/docs/SECMAN.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/docs/SECMAN.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/scripts/scan-with-aws-secrets.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/scripts/scan-with-aws-secrets.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/agent.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/agent.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/checks/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/checks/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/checks/headers.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/checks/headers.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/cli.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/cli.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/external_scanners.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/external_scanners.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/http.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/http.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/javascript.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/javascript.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/models.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/orchestrator.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/orchestrator.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/prompts/aws-security-review.txt" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/prompts/aws-security-review.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/prompts/secrets-security-review.txt" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/prompts/secrets-security-review.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/prompts/system-review.txt" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/prompts/system-review.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/compare.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/compare.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/html.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/html.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/json_report.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/json_report.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/sarif.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/sarif.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/terminal.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/reports/terminal.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/secman.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/secman.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/storage.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/storage.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/system_review.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/system_review.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/tls.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/tls.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/src/visual.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/src/visual.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_agent.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_agent.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_cli.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_cli.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_compare.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_compare.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_header_checks.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_header_checks.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_javascript.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_javascript.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_orchestrator.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_orchestrator.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_reports.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_reports.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_secman_integration_results.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_secman_integration_results.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_system_review.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_system_review.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_tls.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_tls.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_visual.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_web_check/tests/test_visual.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeDeviceReplacementService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeDeviceReplacementService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/integration/CrowdStrikeInstanceTransitionIntegrationTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/integration/CrowdStrikeInstanceTransitionIntegrationTest.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeDeviceReplacementServiceTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeDeviceReplacementServiceTest.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/QueryCommand.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/QueryCommand.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/test/kotlin/com/secman/cli/commands/CrowdStrikeIdentityRepairCliTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/test/kotlin/com/secman/cli/commands/CrowdStrikeIdentityRepairCliTest.kt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -209,7 +137,7 @@
       <recent name="$PROJECT_DIR$/scripts/install" />
     </key>
   </component>
-  <component name="RunManager">
+  <component name="RunManager" selected="Gradle.backendng [build]">
     <configuration default="true" type="DjangoTestsConfigurationType">
       <module name="secscan" />
       <option name="ENV_FILES" value="" />
@@ -232,97 +160,6 @@
       <option name="USE_OPTIONS" value="false" />
       <option name="OPTIONS" value="" />
       <method v="2" />
-    </configuration>
-    <configuration name="OAuthServiceTest" type="GradleRunConfiguration" factoryName="Gradle" temporary="true">
-      <ExternalSystemSettings>
-        <option name="executionName" />
-        <option name="externalProjectPath" value="$PROJECT_DIR$/src/backendng" />
-        <option name="externalSystemIdString" value="GRADLE" />
-        <option name="scriptParameters" value="" />
-        <option name="taskDescriptions">
-          <list />
-        </option>
-        <option name="taskNames">
-          <list>
-            <option value=":test" />
-            <option value="--tests" />
-            <option value="&quot;com.secman.service.OAuthServiceTest&quot;" />
-          </list>
-        </option>
-        <option name="vmOptions" />
-      </ExternalSystemSettings>
-      <ExternalSystemDebugServerProcess>false</ExternalSystemDebugServerProcess>
-      <ExternalSystemReattachDebugProcess>true</ExternalSystemReattachDebugProcess>
-      <ExternalSystemDebugDisabled>false</ExternalSystemDebugDisabled>
-      <DebugAllEnabled>false</DebugAllEnabled>
-      <RunAsTest>true</RunAsTest>
-      <GradleProfilingDisabled>false</GradleProfilingDisabled>
-      <GradleCoverageDisabled>false</GradleCoverageDisabled>
-      <method v="2" />
-    </configuration>
-    <configuration name="backendng [build]" type="GradleRunConfiguration" factoryName="Gradle" temporary="true">
-      <ExternalSystemSettings>
-        <option name="executionName" />
-        <option name="externalProjectPath" value="$PROJECT_DIR$/src/backendng" />
-        <option name="externalSystemIdString" value="GRADLE" />
-        <option name="scriptParameters" />
-        <option name="taskDescriptions">
-          <list />
-        </option>
-        <option name="taskNames">
-          <list>
-            <option value="build" />
-          </list>
-        </option>
-        <option name="vmOptions" />
-      </ExternalSystemSettings>
-      <ExternalSystemDebugServerProcess>true</ExternalSystemDebugServerProcess>
-      <ExternalSystemReattachDebugProcess>true</ExternalSystemReattachDebugProcess>
-      <ExternalSystemDebugDisabled>false</ExternalSystemDebugDisabled>
-      <DebugAllEnabled>false</DebugAllEnabled>
-      <RunAsTest>false</RunAsTest>
-      <GradleProfilingDisabled>false</GradleProfilingDisabled>
-      <GradleCoverageDisabled>false</GradleCoverageDisabled>
-      <method v="2" />
-    </configuration>
-    <configuration name="ApplicationKt (1)" type="MicronautRunConfigurationType" factoryName="Micronaut" nameIsGenerated="true">
-      <option name="MAIN_CLASS_NAME" value="com.secman.ApplicationKt" />
-      <module name="secman.backendng.main" />
-      <option name="alternativeJrePath" />
-      <option name="alternativeJrePathEnabled" value="false" />
-      <option name="mainClass" value="com.secman.ApplicationKt" />
-      <option name="passParentEnvs" value="true" />
-      <option name="programParameters" />
-      <option name="vmParameters" />
-      <method v="2">
-        <option name="Make" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="ApplicationKt" type="MicronautRunConfigurationType" factoryName="Micronaut" nameIsGenerated="true">
-      <option name="MAIN_CLASS_NAME" value="com.secman.ApplicationKt" />
-      <module name="secman-backend-ng.main" />
-      <option name="alternativeJrePath" />
-      <option name="alternativeJrePathEnabled" value="false" />
-      <option name="mainClass" value="com.secman.ApplicationKt" />
-      <option name="passParentEnvs" value="true" />
-      <option name="programParameters" />
-      <option name="vmParameters" />
-      <method v="2">
-        <option name="Make" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="SecmanCliKt" type="MicronautRunConfigurationType" factoryName="Micronaut" nameIsGenerated="true">
-      <option name="MAIN_CLASS_NAME" value="com.secman.cli.SecmanCliKt" />
-      <module name="secman.cli.main" />
-      <option name="alternativeJrePath" />
-      <option name="alternativeJrePathEnabled" value="false" />
-      <option name="mainClass" value="com.secman.cli.SecmanCliKt" />
-      <option name="passParentEnvs" value="true" />
-      <option name="programParameters" />
-      <option name="vmParameters" />
-      <method v="2">
-        <option name="Make" enabled="true" />
-      </method>
     </configuration>
     <configuration default="true" type="PythonConfigurationType" factoryName="Python">
       <module name="backendng" />
@@ -488,12 +325,112 @@
       <option name="USE_PATTERN" value="false" />
       <method v="2" />
     </configuration>
+    <configuration name="OAuthServiceTest" type="GradleRunConfiguration" factoryName="Gradle" temporary="true">
+      <ExternalSystemSettings>
+        <option name="executionName" />
+        <option name="externalProjectPath" value="$PROJECT_DIR$/src/backendng" />
+        <option name="externalSystemIdString" value="GRADLE" />
+        <option name="scriptParameters" value="" />
+        <option name="taskDescriptions">
+          <list />
+        </option>
+        <option name="taskNames">
+          <list>
+            <option value=":test" />
+            <option value="--tests" />
+            <option value="&quot;com.secman.service.OAuthServiceTest&quot;" />
+          </list>
+        </option>
+        <option name="vmOptions" />
+      </ExternalSystemSettings>
+      <ExternalSystemDebugServerProcess>false</ExternalSystemDebugServerProcess>
+      <ExternalSystemReattachDebugProcess>true</ExternalSystemReattachDebugProcess>
+      <ExternalSystemDebugDisabled>false</ExternalSystemDebugDisabled>
+      <DebugAllEnabled>false</DebugAllEnabled>
+      <RunAsTest>true</RunAsTest>
+      <GradleProfilingDisabled>false</GradleProfilingDisabled>
+      <GradleCoverageDisabled>false</GradleCoverageDisabled>
+      <method v="2" />
+    </configuration>
+    <configuration name="backendng [build]" type="GradleRunConfiguration" factoryName="Gradle" temporary="true">
+      <ExternalSystemSettings>
+        <option name="executionName" />
+        <option name="externalProjectPath" value="$PROJECT_DIR$/src/backendng" />
+        <option name="externalSystemIdString" value="GRADLE" />
+        <option name="scriptParameters" />
+        <option name="taskDescriptions">
+          <list />
+        </option>
+        <option name="taskNames">
+          <list>
+            <option value="build" />
+          </list>
+        </option>
+        <option name="vmOptions" />
+      </ExternalSystemSettings>
+      <ExternalSystemDebugServerProcess>true</ExternalSystemDebugServerProcess>
+      <ExternalSystemReattachDebugProcess>true</ExternalSystemReattachDebugProcess>
+      <ExternalSystemDebugDisabled>false</ExternalSystemDebugDisabled>
+      <DebugAllEnabled>false</DebugAllEnabled>
+      <RunAsTest>false</RunAsTest>
+      <GradleProfilingDisabled>false</GradleProfilingDisabled>
+      <GradleCoverageDisabled>false</GradleCoverageDisabled>
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="JetRunConfigurationType">
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration default="true" type="KotlinStandaloneScriptRunConfigurationType">
+      <option name="filePath" />
+      <method v="2" />
+    </configuration>
+    <configuration name="ApplicationKt (1)" type="MicronautRunConfigurationType" factoryName="Micronaut" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="com.secman.ApplicationKt" />
+      <module name="secman.backendng.main" />
+      <option name="alternativeJrePath" />
+      <option name="alternativeJrePathEnabled" value="false" />
+      <option name="mainClass" value="com.secman.ApplicationKt" />
+      <option name="passParentEnvs" value="true" />
+      <option name="programParameters" />
+      <option name="vmParameters" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="ApplicationKt" type="MicronautRunConfigurationType" factoryName="Micronaut" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="com.secman.ApplicationKt" />
+      <module name="secman-backend-ng.main" />
+      <option name="alternativeJrePath" />
+      <option name="alternativeJrePathEnabled" value="false" />
+      <option name="mainClass" value="com.secman.ApplicationKt" />
+      <option name="passParentEnvs" value="true" />
+      <option name="programParameters" />
+      <option name="vmParameters" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="SecmanCliKt" type="MicronautRunConfigurationType" factoryName="Micronaut" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="com.secman.cli.SecmanCliKt" />
+      <module name="secman.cli.main" />
+      <option name="alternativeJrePath" />
+      <option name="alternativeJrePathEnabled" value="false" />
+      <option name="mainClass" value="com.secman.cli.SecmanCliKt" />
+      <option name="passParentEnvs" value="true" />
+      <option name="programParameters" />
+      <option name="vmParameters" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-js-predefined-d6986cc7102b-4abd2a77f808-JavaScript-PY-262.10968.92" />
-        <option value="bundled-python-sdk-73a66231627c-5bd6d13a2a75-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-262.10968.92" />
+        <option value="bundled-jdk-30f59d01ecdd-2df11533d9fe-intellij.indexing.shared.core-IU-262.11879.100" />
+        <option value="bundled-js-predefined-d6986cc7102b-4abd2a77f808-JavaScript-IU-262.11879.100" />
       </set>
     </attachedChunks>
   </component>
