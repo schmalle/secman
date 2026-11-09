@@ -49,6 +49,7 @@ Stack: Kotlin 2.4.21 / Java 25 · Micronaut 5.2.4 · Hibernate JPA · Astro 7.4.
 | [EOL.md](./EOL.md) | End-of-life catalogue, matching, owner mail, repository ranking |
 | [RELAY.md](./RELAY.md) | Zero-trust mobile relay (Go, DMZ) and the iOS app |
 | [AWS.md](./AWS.md) | AWS account mapping, sharing and access rules |
+| [AWS_ACCOUNT_WORKGROUP_LINKING.md](./AWS_ACCOUNT_WORKGROUP_LINKING.md) | Display-name workgroup linking and import result handling |
 | [RACE_CONDITIONS.md](./RACE_CONDITIONS.md) | Known races and the guards that close them |
 | [CHANGELOG.md](./CHANGELOG.md) | Full change history (archived from CLAUDE.md) |
 | [PASS_CLI.md](./PASS_CLI.md) | `pass-cli` (Proton Pass) secret resolution |
