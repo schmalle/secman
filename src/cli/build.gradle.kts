@@ -27,13 +27,13 @@ dependencies {
     // Jackson for YAML/JSON
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.4")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.23.0")
     
     // CSV export
     implementation("org.apache.commons:commons-csv:1.14.1")
 
     // AWS SDK for S3 (Feature 065 - S3 User Mapping Import)
-    implementation(platform("software.amazon.awssdk:bom:2.57.8"))
+    implementation(platform("software.amazon.awssdk:bom:2.57.12"))
     implementation("software.amazon.awssdk:s3")
     
     // Kotlin
@@ -51,7 +51,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.3")
     testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.3")
-    testImplementation("io.mockk:mockk:1.14.11")
+    testImplementation("io.mockk:mockk:1.14.12")
     testImplementation("org.assertj:assertj-core:3.27.7")
 }
 

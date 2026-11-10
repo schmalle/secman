@@ -4,8 +4,8 @@ Security requirement, vulnerability and risk management platform.
 
 ## Stack
 
-- Backend: Kotlin 2.4.21 / Java 25, Micronaut 5.2.4, Hibernate JPA → `src/backendng/`
-- Frontend: Astro 7.4.5 + React 19 islands, Axios, JWT in the HttpOnly `secman_auth` cookie → `src/frontend/`
+- Backend: Kotlin 2.4.21 / Java 25, Micronaut 5.2.5, Hibernate JPA → `src/backendng/`
+- Frontend: Astro 7.4.8 + React 19 islands, Axios, JWT in the HttpOnly `secman_auth` cookie → `src/frontend/`
 - CLI: Kotlin + Picocli 4.7.7, AWS SDK v2 → `src/cli/`
 - Mobile relay: Go 1.24, **zero third-party dependencies** (stdlib only, incl. its own RFC 8555 ACME client) → `src/relay/`
 - DB: MariaDB 11.4, Flyway + Hibernate auto-migration
@@ -328,7 +328,7 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-11-08*
+*Last updated: 2026-11-10*
 
 ## Recent Changes
 
