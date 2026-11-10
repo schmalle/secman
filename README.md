@@ -104,6 +104,7 @@ Most endpoints under `/api/*` require authentication unless noted. Browser reque
 | `/api/vulnerability-heatmap[/refresh]`, `/api/external/vulnerability-heatmap` | GET/POST | auth/API key |
 | `/api/import/upload-{xlsx,nmap-xml,vulnerability-xlsx,user-mappings[-csv],assets-xlsx}` | POST | ADMIN |
 | `/api/user-mappings[/...]` | GET/POST/PUT/DELETE | ADMIN |
+| `/api/user-mappings/bulk/jobs`, `.../bulk/jobs/{jobId}/status` | POST/GET | ADMIN (background bulk import; status visible to its starter) |
 | `/api/identity-providers[/{id}[/test]]` | GET/POST/PUT/DELETE | ADMIN |
 | `/api/maintenance-banners[/active|/{id}]` | GET/POST/PUT/DELETE | ADMIN (active: public) |
 | `/api/users/profile[/change-password,mfa-{status,toggle}]` | GET/PUT | auth |
@@ -173,6 +174,7 @@ Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings):
 | [docs/EOL.md](docs/EOL.md) | End-of-life catalogue, matching, owner mail, repository ranking |
 | [docs/RELAY.md](docs/RELAY.md) | Zero-trust mobile relay (Go, DMZ) and the iOS app |
 | [docs/AWS.md](docs/AWS.md) | AWS account mapping, sharing and access rules |
+| [docs/AWS_ACCOUNT_WORKGROUP_LINKING.md](docs/AWS_ACCOUNT_WORKGROUP_LINKING.md) | Display-name workgroup linking during AWS account imports |
 | [docs/SKILLS.md](docs/SKILLS.md) | Which agent skill to use when, and what each one writes |
 | [docs/RACE_CONDITIONS.md](docs/RACE_CONDITIONS.md) | Known races and the guards that close them |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Full change history (archived from CLAUDE.md) |

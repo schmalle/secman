@@ -51,13 +51,20 @@ committed — a workgroup that cannot be created never costs you the mappings th
 
 | Surface | Field |
 |---|---|
-| CLI `manage-user-mappings import` | `display_name` in the Cloud Custodian JSON, or the optional `display_name` CSV column |
+| CLI `manage-user-mappings import` | `display_name` in the Cloud Custodian JSON, or the optional `display_name` CSV column; uses the background bulk-import job and polls for its result |
 | REST `POST /api/user-mappings/bulk` | `mappings[].displayName` |
+| REST `POST /api/user-mappings/bulk/jobs` | Same body as `/bulk`; returns `202` with `jobId` and `status`; poll `GET /api/user-mappings/bulk/jobs/{jobId}/status` for the final result |
 | MCP `import_user_mappings` | `mappings[].displayName` |
 | REST `POST /api/import/upload-user-mappings-csv` | the optional `display_name` column |
 
 A file with no display names links nothing and is not reported on at all — which is why
 existing Excel and plain-CSV imports behave exactly as they did before.
+
+The job endpoint runs the same import as synchronous `/bulk`. It returns `409` while
+another bulk import is active. Only the ADMIN who started a job can poll it; an
+unknown job or one lost after a backend restart returns `404`. Completed jobs are
+held in memory for one hour, so poll promptly. The CLI falls back to synchronous
+`/bulk` when a backend does not have the job endpoint.
 
 ```bash
 # Preview: nothing is created, nothing is assigned
