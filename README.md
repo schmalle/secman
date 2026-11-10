@@ -104,6 +104,7 @@ Most endpoints under `/api/*` require authentication unless noted. Browser reque
 | `/api/vulnerability-heatmap[/refresh]`, `/api/external/vulnerability-heatmap` | GET/POST | auth/API key |
 | `/api/import/upload-{xlsx,nmap-xml,vulnerability-xlsx,user-mappings[-csv],assets-xlsx}` | POST | ADMIN |
 | `/api/user-mappings[/...]` | GET/POST/PUT/DELETE | ADMIN |
+| `/api/user-mappings/bulk/jobs`, `.../bulk/jobs/{jobId}/status` | POST/GET | ADMIN (start a background import and poll its status) |
 | `/api/identity-providers[/{id}[/test]]` | GET/POST/PUT/DELETE | ADMIN |
 | `/api/maintenance-banners[/active|/{id}]` | GET/POST/PUT/DELETE | ADMIN (active: public) |
 | `/api/users/profile[/change-password,mfa-{status,toggle}]` | GET/PUT | auth |

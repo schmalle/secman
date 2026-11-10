@@ -53,11 +53,20 @@ committed — a workgroup that cannot be created never costs you the mappings th
 |---|---|
 | CLI `manage-user-mappings import` | `display_name` in the Cloud Custodian JSON, or the optional `display_name` CSV column |
 | REST `POST /api/user-mappings/bulk` | `mappings[].displayName` |
+| REST `POST /api/user-mappings/bulk/jobs` | Same request body; starts a background import and returns `202` with `jobId` and `status` |
 | MCP `import_user_mappings` | `mappings[].displayName` |
 | REST `POST /api/import/upload-user-mappings-csv` | the optional `display_name` column |
 
 A file with no display names links nothing and is not reported on at all — which is why
 existing Excel and plain-CSV imports behave exactly as they did before.
+
+For large REST imports, poll `GET /api/user-mappings/bulk/jobs/{jobId}/status` as the
+same ADMIN user. `PENDING` and `RUNNING` have no result; `COMPLETED` includes the same
+import and linking result as the synchronous `/bulk` response; `FAILED` includes an
+`errorMessage`. A concurrent job returns `409`. Job state is held in memory, so a
+backend restart or expiry makes polling return `404`; rerun the idempotent import.
+The CLI import command uses this job API automatically and falls back to `/bulk` when
+an older backend does not provide it.
 
 ```bash
 # Preview: nothing is created, nothing is assigned
