@@ -24,7 +24,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:${kotlinVersion}")
     
     // Jackson for JSON
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.4")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.23.0")
     
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")
@@ -41,7 +41,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.3")
     testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.3")
-    testImplementation("io.mockk:mockk:1.14.11")
+    testImplementation("io.mockk:mockk:1.14.12")
     testImplementation("org.assertj:assertj-core:3.27.7")
 }
 
