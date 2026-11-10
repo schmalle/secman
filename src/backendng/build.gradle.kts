@@ -31,14 +31,14 @@ dependencies {
     implementation("io.micronaut.cache:micronaut-cache-caffeine")
 
     // Database
-    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.2.4")
+    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.2.5")
     implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.2.1")
     implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.2.1")
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:4.0.0")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:8.1.1")
-	runtimeOnly("org.flywaydb:flyway-core:13.12.0")
-	runtimeOnly("org.flywaydb:flyway-mysql:13.12.0")
+	runtimeOnly("org.flywaydb:flyway-core:13.12.1")
+	runtimeOnly("org.flywaydb:flyway-mysql:13.12.1")
 
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt:5.5.1")
@@ -53,7 +53,7 @@ dependencies {
     implementation("jakarta.validation:jakarta.validation-api")
 
     // XSS Prevention - Feature 047
-    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20261102.1")
+    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20261107.1")
 
     // Email
     implementation("io.micronaut.email:micronaut-email-javamail:3.2.0")
@@ -61,7 +61,7 @@ dependencies {
 
     // Email templates (Thymeleaf) - Feature 035
     implementation("io.micronaut.views:micronaut-views-thymeleaf")
-    implementation("org.thymeleaf:thymeleaf:3.1.5.RELEASE")
+    implementation("org.thymeleaf:thymeleaf:3.1.6.RELEASE")
 
     constraints {
         implementation("ognl:ognl:3.4.17") {
@@ -83,11 +83,11 @@ dependencies {
     // Explicit version: the Micronaut platform BOM manages the Jackson 3 coordinate
     // (tools.jackson.module), not this Jackson 2 one. It previously resolved only via a
     // transitive jackson-bom that micronaut-micrometer-bom 6.0.1 dropped.
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.4")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.23.0")
     // Same story as the Kotlin module above: the dropped jackson-bom took the Java 8
     // time module with it, so every plain ObjectMapper lost Instant support. Without it
     // findAndRegisterModules() finds nothing and Instant fields fail to serialize.
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.22.4")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.23.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     implementation("io.micronaut.reactor:micronaut-reactor")
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")
@@ -120,7 +120,7 @@ dependencies {
     implementation("commons-net:commons-net:3.13.0")
 
     // HTML processing for email
-    implementation("org.jsoup:jsoup:1.23.2")
+    implementation("org.jsoup:jsoup:1.24.1")
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")
@@ -134,7 +134,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-params:6.1.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.3")
     testImplementation("io.micronaut.test:micronaut-test-junit5:5.2.0")
-    testImplementation("io.mockk:mockk:1.14.11")
+    testImplementation("io.mockk:mockk:1.14.12")
     // Tests assert on log output via Logback's ListAppender; main code stays
     // slf4j-only (logback-classic is runtimeOnly above).
     testImplementation("ch.qos.logback:logback-classic:1.6.6")
@@ -180,7 +180,7 @@ allOpen {
 
 graalvmNative.toolchainDetection.set(false)
 micronaut {
-    version("5.2.4")
+    version("5.2.5")
     runtime("netty")
     processing {
         incremental(true)
