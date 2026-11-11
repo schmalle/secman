@@ -160,6 +160,24 @@ interface UserRepository : JpaRepository<User, Long> {
     @Query("UPDATE User u SET u.lastLogin = :now WHERE u.id = :id AND (u.lastLogin IS NULL OR u.lastLogin < :notAfter)")
     fun touchLastLogin(id: Long, now: Instant, notAfter: Instant): Int
 
+    /**
+     * Ids whose last activity (last login, else creation) is before [cutoff], longest-inactive
+     * first. Paged so a large backlog never loads at once.
+     */
+    @Query(
+        value = """
+            SELECT id FROM users
+            WHERE COALESCE(last_login, created_at) < :cutoff
+            ORDER BY COALESCE(last_login, created_at), id
+        """,
+        nativeQuery = true
+    )
+    fun findIdsWithActivityBefore(cutoff: Instant, pageable: io.micronaut.data.model.Pageable): List<Long>
+
+    /** Users the cleanup cannot judge: neither a login nor a creation time. */
+    @Query("SELECT COUNT(u) FROM User u WHERE u.lastLogin IS NULL AND u.createdAt IS NULL")
+    fun countNoActivityBaseline(): Long
+
     /** Integration scanners that run as this user; `service_user_id` is a NOT NULL FK. */
     @Query("SELECT COUNT(s) FROM IntegrationScanner s WHERE s.serviceUserId = :userId")
     fun countIntegrationScannersByServiceUser(userId: Long): Long
