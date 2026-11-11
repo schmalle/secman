@@ -33,6 +33,8 @@ import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import io.micronaut.transaction.TransactionOperations
+import java.sql.Connection
 
 /**
  * End-to-end behaviour of the inactive-user cleanup against a real schema. Mail is mocked:
@@ -51,6 +53,7 @@ class InactiveUserCleanupServiceIntegrationTest {
     @Inject lateinit var mcpApiKeyRepository: McpApiKeyRepository
     @Inject lateinit var runRepository: UserCleanupRunRepository
     @Inject lateinit var itemRepository: UserCleanupRunItemRepository
+    @Inject lateinit var transactions: TransactionOperations<Connection>
 
     @MockBean(InactiveUserWarningMailer::class)
     fun mockMailer(): InactiveUserWarningMailer = mockk()
@@ -126,6 +129,50 @@ class InactiveUserCleanupServiceIntegrationTest {
         assertThat(result.outcome).isEqualTo(UserCleanupOutcome.SKIPPED)
         assertThat(result.reason).isEqualTo(InactiveUserCleanupService.REASON_ACTIVE_AGAIN)
         assertThat(userRepository.existsById(target.id!!)).isTrue()
+    }
+
+    @Test
+    fun `login committed while the re-check waits is seen and the user is kept`() {
+        val target = user(inactiveDays = 400, warnedDaysAgo = 31)
+        val locked = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val pool = Executors.newFixedThreadPool(2)
+        try {
+            // A login updates the user row and holds it uncommitted while the executor re-checks.
+            val login = pool.submit {
+                transactions.executeWrite { status ->
+                    status.connection.prepareStatement("UPDATE users SET last_login = UTC_TIMESTAMP(6) WHERE id = ?").use {
+                        it.setLong(1, target.id!!)
+                        it.executeUpdate()
+                    }
+                    locked.countDown()
+                    release.await(30, TimeUnit.SECONDS)
+                }
+            }
+            assertThat(locked.await(30, TimeUnit.SECONDS)).isTrue()
+            val result = pool.submit<com.secman.dto.UserCleanupItemDto> {
+                executor.deleteIfStillEligible(target.id!!, now, live)
+            }
+            Thread.sleep(1500)
+            release.countDown()
+            login.get(30, TimeUnit.SECONDS)
+
+            assertThat(result.get(60, TimeUnit.SECONDS).reason).isEqualTo(InactiveUserCleanupService.REASON_ACTIVE_AGAIN)
+            assertThat(userRepository.existsById(target.id!!)).isTrue()
+        } finally {
+            release.countDown()
+            pool.shutdownNow()
+        }
+    }
+
+    @Test
+    fun `executor re-checks exclusions such as a role granted after selection`() {
+        val promoted = user(inactiveDays = 400, warnedDaysAgo = 31, roles = setOf(User.Role.ADMIN))
+
+        val result = executor.deleteIfStillEligible(promoted.id!!, now, live)
+
+        assertThat(result.reason).isEqualTo("ADMIN")
+        assertThat(userRepository.existsById(promoted.id!!)).isTrue()
     }
 
     @Test

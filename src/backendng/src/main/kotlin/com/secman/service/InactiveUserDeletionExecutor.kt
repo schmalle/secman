@@ -19,13 +19,14 @@ open class InactiveUserDeletionExecutor(
     private val userRepository: UserRepository,
     private val workgroupRepository: WorkgroupRepository,
     private val awsAccountSharingRepository: AwsAccountSharingRepository,
-    private val validator: UserDeletionValidator,
+    private val exclusions: InactiveUserExclusions,
     private val userService: UserService
 ) {
 
-    /** Re-check against committed data, then delete; returns what happened instead of throwing on a skip. */
+    /** Lock the row, re-check activity and every exclusion against committed data, then delete; returns what happened instead of throwing on a skip. */
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     open fun deleteIfStillEligible(userId: Long, now: Instant, config: UserCleanupConfig): UserCleanupItemDto {
+        userRepository.lockForUpdate(userId)
         val user = userRepository.findByIdWithWorkgroups(userId).orElse(null)
             ?: return UserCleanupItemDto(userId, "", "", null, UserCleanupOutcome.SKIPPED, InactiveUserCleanupService.REASON_GONE)
         fun item(outcome: UserCleanupOutcome, reason: String? = null, details: Map<String, List<Long>> = emptyMap()) =
@@ -35,9 +36,7 @@ open class InactiveUserDeletionExecutor(
             !InactiveUserEligibility.hasValidWarning(user, now, config.warningDays)) {
             return item(UserCleanupOutcome.SKIPPED, InactiveUserCleanupService.REASON_ACTIVE_AGAIN)
         }
-        if (!validator.validateUserDeletion(userId).canDelete) {
-            return item(UserCleanupOutcome.SKIPPED, InactiveUserCleanupService.REASON_BLOCKING_REFERENCES)
-        }
+        exclusions.reason(user, config)?.let { return item(UserCleanupOutcome.SKIPPED, it) }
 
         // Read what the deletion will leave behind before the rows disappear.
         val orphaned = user.workgroups.mapNotNull { it.id }.filter { workgroupRepository.countUsersByWorkgroupId(it) <= 1 }

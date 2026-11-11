@@ -183,6 +183,14 @@ interface UserRepository : JpaRepository<User, Long> {
     @Query("UPDATE User u SET u.inactivityWarningSentAt = :sentAt WHERE u.id = :id")
     fun markInactivityWarningSent(id: Long, sentAt: Instant): Int
 
+    /**
+     * Lock the user row for the rest of the transaction. Must be the transaction's first read:
+     * InnoDB then takes its snapshot after the lock, so a login that committed while we waited
+     * is visible and one that starts later blocks until the deletion commits.
+     */
+    @Query(value = "SELECT id FROM users WHERE id = :id FOR UPDATE", nativeQuery = true)
+    fun lockForUpdate(id: Long): List<Long>
+
     /** Integration scanners that run as this user; `service_user_id` is a NOT NULL FK. */
     @Query("SELECT COUNT(s) FROM IntegrationScanner s WHERE s.serviceUserId = :userId")
     fun countIntegrationScannersByServiceUser(userId: Long): Long

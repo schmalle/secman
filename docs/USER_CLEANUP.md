@@ -47,10 +47,13 @@ longest-inactive first, at most 20,000 per run (`inputTruncated` in the summary 
 3. **Safety brake.** If the deletable users exceed `max-delete-percent` of *all* users, no
    one is deleted (`ABORTED_BRAKE`); warnings still go out. The brake is a hard stop: clear
    a genuine backlog by raising `max-delete-percent` once.
-4. **Deletion**, at most `max-users-per-run`, each in its own transaction after re-reading
-   the user. Someone who logged in meanwhile is `SKIPPED/ACTIVE_AGAIN`. Other skip reasons:
+4. **Deletion**, at most `max-users-per-run`, each in its own transaction that first locks
+   the user row (`SELECT … FOR UPDATE`), then re-checks activity, the warning and every
+   exclusion. Someone who logged in meanwhile is `SKIPPED/ACTIVE_AGAIN`; a login racing the deletion
+   waits for the lock and is seen. Other skip reasons:
    `NOT_WARNED` (inactive, warning younger than `warning-days`), `RUN_CAP`, `SAFETY_BRAKE`.
 5. **Record.** One `user_cleanup_run` row and one `user_cleanup_run_item` per user acted on,
+   each item saved the moment it happens so a later failure cannot lose it,
    including the deleted user's id, username and email (decided: this is the only record of
    who was removed; kept indefinitely). A chat event `INACTIVE_USER_CLEANUP_COMPLETED` carries
    counts only.
@@ -77,6 +80,7 @@ assessment or created a release.
 - **Personal AWS/AD mappings** are deleted; the next mapping import recreates them as
   future-user mappings. **AWS account sharing** is deleted in both directions; the
   counterparts are listed in the item's details.
+- The same complete deletion runs for `DELETE /api/users/{id}`, MCP `delete_user` and the nightly job. V298 deactivated MCP API keys whose owner had already been deleted before this release.
 - **MCP API keys**, Slack/Telegram settings, notification subscriptions and preferences,
   dashboard preferences, profile picture and relay identities are deleted.
 - **Assessment assignments** are revoked (kept as history); export and AI-suggestion jobs

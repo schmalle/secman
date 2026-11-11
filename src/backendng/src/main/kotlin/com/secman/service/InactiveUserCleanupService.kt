@@ -12,7 +12,6 @@ import com.secman.dto.UserCleanupItemDto
 import com.secman.dto.UserCleanupRunSummary
 import com.secman.event.ChatNotificationEvent
 import com.secman.event.ChatNotificationEvent.ChatField
-import com.secman.repository.McpApiKeyRepository
 import com.secman.repository.UserCleanupRunItemRepository
 import com.secman.repository.UserCleanupRunRepository
 import com.secman.repository.UserRepository
@@ -22,7 +21,6 @@ import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.time.Instant
-import java.time.LocalDateTime
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** A second run while one is active; runs share one in-memory guard (single backend). */
@@ -43,8 +41,7 @@ class UserCleanupMisconfiguredException(reason: String) : RuntimeException("Inac
 open class InactiveUserCleanupService(
     private val defaultConfig: UserCleanupConfig,
     private val userRepository: UserRepository,
-    private val mcpApiKeyRepository: McpApiKeyRepository,
-    private val validator: UserDeletionValidator,
+    private val exclusions: InactiveUserExclusions,
     private val mailer: InactiveUserWarningMailer,
     private val executor: InactiveUserDeletionExecutor,
     private val runRepository: UserCleanupRunRepository,
@@ -60,25 +57,32 @@ open class InactiveUserCleanupService(
         config.validate()?.let { throw UserCleanupMisconfiguredException(it) }
         if (!running.compareAndSet(false, true)) throw UserCleanupInProgressException()
         val actor = sanitize(triggeredBy)
-        val run = runRepository.save(
-            UserCleanupRun(triggeredBy = actor, startedAt = Instant.now(), status = UserCleanupRunStatus.FAILED,
-                dryRun = config.dryRun, inactiveDays = config.inactiveDays)
-        )
+        var run: UserCleanupRun? = null
         try {
-            log.info("Inactive user cleanup started: runId={} triggeredBy={} dryRun={}", run.id, actor, config.dryRun)
-            val summary = evaluate(config, live = !config.dryRun).copy(runId = run.id)
-            record(run, summary)
+            val saved = runRepository.save(
+                UserCleanupRun(triggeredBy = actor, startedAt = Instant.now(), status = UserCleanupRunStatus.FAILED,
+                    dryRun = config.dryRun, inactiveDays = config.inactiveDays)
+            )
+            run = saved
+            log.info("Inactive user cleanup started: runId={} triggeredBy={} dryRun={}", saved.id, actor, config.dryRun)
+            // Items are stored as they happen, so a failure later in the run cannot lose the
+            // record of who was already deleted.
+            val summary = evaluate(config, live = !config.dryRun) { itemRepository.save(toEntity(saved.id!!, it)) }
+                .copy(runId = saved.id)
+            record(saved, summary)
             publish(summary)
             log.info(
                 "Inactive user cleanup finished: runId={} status={} candidates={} deleted={} warned={} skipped={} errors={}",
-                run.id, summary.status, summary.candidateCount, summary.deletedCount, summary.warnedCount,
+                saved.id, summary.status, summary.candidateCount, summary.deletedCount, summary.warnedCount,
                 summary.skippedCount, summary.errorCount
             )
             return summary.copy(items = emptyList())
         } catch (e: Exception) {
-            run.finishedAt = Instant.now()
-            runRepository.update(run)
-            log.error("Inactive user cleanup failed: runId={} triggeredBy={}", run.id, actor, e)
+            run?.let {
+                it.finishedAt = Instant.now()
+                runCatching { runRepository.update(it) }
+            }
+            log.error("Inactive user cleanup failed: runId={} triggeredBy={}", run?.id, actor, e)
             throw e
         } finally {
             running.set(false)
@@ -88,16 +92,43 @@ open class InactiveUserCleanupService(
     /** What a run would do right now with the deployed settings, as a dry run. Persists nothing. */
     open fun preview(): UserCleanupRunSummary {
         defaultConfig.validate()?.let { throw UserCleanupMisconfiguredException(it) }
-        return evaluate(defaultConfig.copy(dryRun = true), live = false)
+        return evaluate(defaultConfig.copy(dryRun = true), live = false) {}
     }
 
-    private fun evaluate(config: UserCleanupConfig, live: Boolean): UserCleanupRunSummary {
+    /** One pass in the fixed phase order; [persist] stores each item the moment it is produced. */
+    private fun evaluate(
+        config: UserCleanupConfig,
+        live: Boolean,
+        persist: (UserCleanupItemDto) -> Unit
+    ): UserCleanupRunSummary {
         val now = Instant.now()
         val (candidates, truncated) = loadCandidates(now, config)
         val items = mutableListOf<UserCleanupItemDto>()
+        val emit: (UserCleanupItemDto) -> Unit = { persist(it); items += it }
+
+        val (toWarn, deletable) = classify(candidates, now, config, live, emit)
+        toWarn.take(config.maxUsersPerRun).forEach { emit(warn(it, now, config, live)) }
+        toWarn.drop(config.maxUsersPerRun).forEach { emit(item(it, UserCleanupOutcome.SKIPPED, REASON_RUN_CAP)) }
+
+        val brakeTripped = deletable.size.toLong() * 100 > config.maxDeletePercent.toLong() * userRepository.count()
+        deletePhase(deletable, brakeTripped, now, config, live, emit)
+
+        val status = when {
+            !live -> UserCleanupRunStatus.DRY_RUN
+            brakeTripped -> UserCleanupRunStatus.ABORTED_BRAKE
+            else -> UserCleanupRunStatus.COMPLETED
+        }
+        return summarize(status, !live, candidates.size, brakeTripped, truncated, items)
+            .copy(noActivityBaselineCount = userRepository.countNoActivityBaseline())
+    }
+
+    /** Split candidates into (to warn, deletable); excluded and not-yet-warned users are emitted as skipped. */
+    private fun classify(
+        candidates: List<User>, now: Instant, config: UserCleanupConfig, live: Boolean,
+        emit: (UserCleanupItemDto) -> Unit
+    ): Pair<List<User>, List<User>> {
         val toWarn = mutableListOf<User>()
         val deletable = mutableListOf<User>()
-
         for (user in candidates) {
             val inactive = InactiveUserEligibility.isInactive(user, now, config.inactiveDays)
             // A dry run assumes the warning went out, so it shows the eventual impact.
@@ -109,37 +140,32 @@ open class InactiveUserCleanupService(
             }
             // Exclusions are checked only for users the run would act on; the validator is the
             // expensive part. Excluded users are never warned about a deletion that cannot happen.
-            val exclusion = exclusionReason(user, config)
+            val exclusion = exclusions.reason(user, config)
             when {
-                exclusion != null -> items += item(user, UserCleanupOutcome.SKIPPED, exclusion)
-                action == null -> items += item(user, UserCleanupOutcome.SKIPPED, REASON_NOT_WARNED)
+                exclusion != null -> emit(item(user, UserCleanupOutcome.SKIPPED, exclusion))
+                action == null -> emit(item(user, UserCleanupOutcome.SKIPPED, REASON_NOT_WARNED))
                 else -> action += user
             }
         }
+        return toWarn to deletable
+    }
 
-        toWarn.take(config.maxUsersPerRun).forEach { items += warn(it, now, config, live) }
-        toWarn.drop(config.maxUsersPerRun).forEach { items += item(it, UserCleanupOutcome.SKIPPED, REASON_RUN_CAP) }
-
-        val brakeTripped = deletable.size.toLong() * 100 > config.maxDeletePercent.toLong() * userRepository.count()
+    /** Dry run reports, a tripped brake skips everyone, otherwise delete up to the per-run cap. */
+    private fun deletePhase(
+        deletable: List<User>, brakeTripped: Boolean, now: Instant, config: UserCleanupConfig, live: Boolean,
+        emit: (UserCleanupItemDto) -> Unit
+    ) {
         when {
-            !live -> deletable.forEach { items += item(it, UserCleanupOutcome.WOULD_DELETE) }
+            !live -> deletable.forEach { emit(item(it, UserCleanupOutcome.WOULD_DELETE)) }
             brakeTripped -> {
                 log.warn("Inactive user cleanup brake tripped: deletable={} maxDeletePercent={}", deletable.size, config.maxDeletePercent)
-                deletable.forEach { items += item(it, UserCleanupOutcome.SKIPPED, REASON_BRAKE) }
+                deletable.forEach { emit(item(it, UserCleanupOutcome.SKIPPED, REASON_BRAKE)) }
             }
             else -> {
-                deletable.take(config.maxUsersPerRun).forEach { items += delete(it, now, config) }
-                deletable.drop(config.maxUsersPerRun).forEach { items += item(it, UserCleanupOutcome.SKIPPED, REASON_RUN_CAP) }
+                deletable.take(config.maxUsersPerRun).forEach { emit(delete(it, now, config)) }
+                deletable.drop(config.maxUsersPerRun).forEach { emit(item(it, UserCleanupOutcome.SKIPPED, REASON_RUN_CAP)) }
             }
         }
-
-        val status = when {
-            !live -> UserCleanupRunStatus.DRY_RUN
-            brakeTripped -> UserCleanupRunStatus.ABORTED_BRAKE
-            else -> UserCleanupRunStatus.COMPLETED
-        }
-        return summarize(status, !live, candidates.size, brakeTripped, truncated, items)
-            .copy(noActivityBaselineCount = userRepository.countNoActivityBaseline())
     }
 
     /** Users inside the warning window, longest-inactive first, bounded by [MAX_CANDIDATES]. */
@@ -154,17 +180,6 @@ open class InactiveUserCleanupService(
         return users to truncated
     }
 
-    private fun exclusionReason(user: User, config: UserCleanupConfig): String? {
-        val keyCutoff = LocalDateTime.now().minusDays(config.inactiveDays.toLong())
-        return when {
-            user.serviceAccount -> REASON_SERVICE_ACCOUNT
-            user.isAdmin() -> REASON_ADMIN
-            mcpApiKeyRepository.findByUserId(user.id!!).any { it.lastUsedAt?.isAfter(keyCutoff) == true } -> REASON_RECENT_KEY_USE
-            !validator.validateUserDeletion(user.id!!).canDelete -> REASON_BLOCKING_REFERENCES
-            else -> null
-        }
-    }
-
     private fun warn(user: User, now: Instant, config: UserCleanupConfig, live: Boolean): UserCleanupItemDto {
         if (!live) return item(user, UserCleanupOutcome.WOULD_WARN)
         if (!mailer.send(user, InactiveUserEligibility.deletionDate(user, now, config))) {
@@ -177,9 +192,7 @@ open class InactiveUserCleanupService(
 
     private fun delete(user: User, now: Instant, config: UserCleanupConfig): UserCleanupItemDto = try {
         executor.deleteIfStillEligible(user.id!!, now, config).also {
-            if (it.outcome == UserCleanupOutcome.DELETED) {
-                log.info("Inactive user deleted: target userId={} outcome=DELETED", user.id)
-            }
+            log.info("Inactive user cleanup: target userId={} outcome={} reason={}", user.id, it.outcome, it.reason)
         }
     } catch (e: Exception) {
         log.error("Inactive user deletion failed: target userId={}", user.id, e)
@@ -208,14 +221,13 @@ open class InactiveUserCleanupService(
         )
     }
 
+    private fun toEntity(runId: Long, item: UserCleanupItemDto) = UserCleanupRunItem(
+        runId = runId, userId = item.userId, username = item.username, email = item.email,
+        lastActivityAt = item.lastActivityAt, outcome = item.outcome, reason = item.reason,
+        detailsJson = item.details.takeIf { it.isNotEmpty() }?.let(objectMapper::writeValueAsString)
+    )
+
     private fun record(run: UserCleanupRun, summary: UserCleanupRunSummary) {
-        itemRepository.saveAll(summary.items.map {
-            UserCleanupRunItem(
-                runId = run.id!!, userId = it.userId, username = it.username, email = it.email,
-                lastActivityAt = it.lastActivityAt, outcome = it.outcome, reason = it.reason,
-                detailsJson = it.details.takeIf { d -> d.isNotEmpty() }?.let(objectMapper::writeValueAsString)
-            )
-        })
         run.status = summary.status
         run.finishedAt = Instant.now()
         run.candidateCount = summary.candidateCount
