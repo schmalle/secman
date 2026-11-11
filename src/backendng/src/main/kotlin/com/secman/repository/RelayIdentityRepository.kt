@@ -1,5 +1,6 @@
 package com.secman.repository
 
+import io.micronaut.data.annotation.Query
 import com.secman.domain.RelayIdentity
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
@@ -22,4 +23,7 @@ interface RelayIdentityRepository : JpaRepository<RelayIdentity, Long> {
     fun deleteByUserIdAndProvider(userId: Long, provider: String): Long
 
     fun countByUserId(userId: Long): Long
+
+    @Query("DELETE FROM RelayIdentity r WHERE r.userId = :userId")
+    fun deleteByUserId(userId: Long): Int
 }

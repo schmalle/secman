@@ -275,7 +275,7 @@ open class AssessmentWorkflowService(
     @Transactional
     open fun authorizeAi(job: AiSuggestionJob): RiskAssessment {
         val assessment = locked(job.riskAssessmentId)
-        val actor = users.findById(job.triggeredByUserId).orElse(null)?.takeIf { it.enabled } ?: denied()
+        val actor = job.triggeredByUserId?.let { users.findById(it).orElse(null) }?.takeIf { it.enabled } ?: denied()
         if (actor.roles.none { it == User.Role.ADMIN || it == User.Role.SECCHAMPION } ||
             assessment.status != "STARTED" || assessment.assignmentVersion != job.assignmentVersion) denied()
         job.apiKeyId?.let { keyId ->
@@ -294,7 +294,7 @@ open class AssessmentWorkflowService(
         requireUnsubmitted(assessment.id!!, listOf(requirementId))
         val existing = responses.findByRiskAssessmentIdAndRequirementId(assessment.id!!, requirementId)
         if (existing != null && existing.source != ResponseSource.AI_GENERATED) return
-        val actor = users.findById(job.triggeredByUserId).orElseThrow()
+        val actor = users.findById(job.triggeredByUserId ?: denied()).orElseThrow()
         assessment.answerRevision++
         val response = existing ?: Response(answerType = answer, riskAssessment = assessment,
             requirement = requirements.findById(requirementId).orElseThrow())

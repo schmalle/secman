@@ -1,5 +1,6 @@
 package com.secman.repository
 
+import io.micronaut.data.annotation.Query
 import com.secman.domain.ExportJob
 import com.secman.domain.ExportJobStatus
 import com.secman.domain.ExportType
@@ -58,4 +59,8 @@ interface ExportJobRepository : JpaRepository<ExportJob, String> {
      * Find all jobs in any of the given statuses (post-insert concurrency-cap recheck)
      */
     fun findByStatusIn(statuses: List<ExportJobStatus>): List<ExportJob>
+
+    /** Export history keeps the username; only the id link to a deleted user is detached. */
+    @Query("UPDATE ExportJob j SET j.actorUserId = NULL WHERE j.actorUserId = :userId")
+    fun nullifyActorForUser(userId: Long): Int
 }

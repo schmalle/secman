@@ -50,7 +50,8 @@ open class UserService(
     @Inject private val demandClassificationResultRepository: DemandClassificationResultRepository,
     @Inject private val maintenanceBannerRepository: MaintenanceBannerRepository,
     @Inject private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository,
-    @Inject private val workgroupAdDomainRepository: WorkgroupAdDomainRepository
+    @Inject private val workgroupAdDomainRepository: WorkgroupAdDomainRepository,
+    @Inject private val userSideDataRepositories: UserSideDataRepositories
 ) {
 
     fun getAllUsers(): List<User> {
@@ -150,14 +151,14 @@ open class UserService(
         workgroupAwsAccountRepository.nullifyCreatedByForUser(id)
         workgroupAdDomainRepository.nullifyCreatedByForUser(id)
 
-        // 8. Delete user.
-        //    NOTE: NOT-NULL User FKs that are NOT cleaned up here will still
-        //    block deletion if the user owns rows there:
-        //      - risk_assessment.assessor_id, requestor_id
-        //      - demand.requestor_id
-        //      - requirement_file.uploaded_by
-        //    These need a schema migration to make them nullable before they
-        //    can be nullified the same way. Tracked as a follow-up.
+        // 8. Rows that hold a plain user id without a foreign key would silently outlive the
+        //    user — above all an MCP API key that could keep authenticating.
+        userSideDataRepositories.removeFor(id)
+
+        // 9. Delete user.
+        //    NOT NULL User FKs still block deletion; UserDeletionValidator reports them
+        //    (risk assessment assessor/requestor, demand requestor, requirement file
+        //    uploader, integration scanner service user).
         userRepository.deleteById(id)
         return true
     }

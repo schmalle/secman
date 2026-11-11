@@ -15,4 +15,11 @@ interface AssessmentAssignmentRepository : JpaRepository<AssessmentAssignment, L
 
     @Query("UPDATE AssessmentAssignment a SET a.reminderSentAt = NULL WHERE a.id = :id AND a.reminderSentAt = :claimedAt")
     fun releaseReminder(id: Long, claimedAt: LocalDateTime): Int
+
+    /**
+     * Revoke rather than delete: assignments also match by email, so a revoked row keeps a
+     * later account with the same address from inheriting access, and the history survives.
+     */
+    @Query("UPDATE AssessmentAssignment a SET a.revoked = true WHERE a.userId = :userId AND a.revoked = false")
+    fun revokeForUser(userId: Long): Int
 }

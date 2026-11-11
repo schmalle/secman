@@ -30,8 +30,9 @@ class AiSuggestionJob(
     @Column(name = "risk_assessment_id", nullable = false)
     var riskAssessmentId: Long,
 
-    @Column(name = "triggered_by_user_id", nullable = false)
-    var triggeredByUserId: Long,
+    /** Null once the triggering user has been deleted; the job stays as history. */
+    @Column(name = "triggered_by_user_id")
+    var triggeredByUserId: Long?,
 
     @Column(name = "assignment_version", nullable = false)
     var assignmentVersion: Long = -1,
