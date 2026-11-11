@@ -13,6 +13,7 @@ import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 import java.time.Instant
 
+/** DRY_RUN: nothing sent or deleted. ABORTED_BRAKE: warnings sent, deletions refused. FAILED: threw mid-run. */
 @Serdeable
 enum class UserCleanupRunStatus { COMPLETED, DRY_RUN, ABORTED_BRAKE, FAILED }
 

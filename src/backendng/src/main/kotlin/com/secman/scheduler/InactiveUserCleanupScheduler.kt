@@ -9,6 +9,7 @@ import io.micronaut.scheduling.annotation.Scheduled
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 
+/** `secman.user-cleanup.enabled=false`; `run-now` turns it into 409. */
 class UserCleanupDisabledException : RuntimeException("Inactive user cleanup is disabled (secman.user-cleanup.enabled=false)")
 
 /**
@@ -22,6 +23,7 @@ open class InactiveUserCleanupScheduler(
 ) {
     private val log = LoggerFactory.getLogger(InactiveUserCleanupScheduler::class.java)
 
+    /** Cron entry point: never throws, so one bad night cannot kill the scheduler thread. */
     @Scheduled(cron = "0 15 3 * * ?")
     open fun runScheduledCleanup() {
         try {

@@ -23,6 +23,7 @@ open class InactiveUserDeletionExecutor(
     private val userService: UserService
 ) {
 
+    /** Re-check against committed data, then delete; returns what happened instead of throwing on a skip. */
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     open fun deleteIfStillEligible(userId: Long, now: Instant, config: UserCleanupConfig): UserCleanupItemDto {
         val user = userRepository.findByIdWithWorkgroups(userId).orElse(null)

@@ -25,7 +25,9 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.util.concurrent.atomic.AtomicBoolean
 
+/** A second run while one is active; runs share one in-memory guard (single backend). */
 class UserCleanupInProgressException : RuntimeException("An inactive user cleanup run is already in progress")
+/** [UserCleanupConfig.validate] refused the settings; nothing ran. */
 class UserCleanupMisconfiguredException(reason: String) : RuntimeException("Inactive user cleanup misconfigured: $reason")
 
 /**
@@ -143,14 +145,9 @@ open class InactiveUserCleanupService(
     /** Users inside the warning window, longest-inactive first, bounded by [MAX_CANDIDATES]. */
     private fun loadCandidates(now: Instant, config: UserCleanupConfig): Pair<List<User>, Boolean> {
         val cutoff = now.minus(Duration.ofDays((config.inactiveDays - config.warningDays).toLong()))
-        val ids = mutableListOf<Long>()
-        var page = 0
-        while (ids.size < MAX_CANDIDATES) {
-            val batch = userRepository.findIdsWithActivityBefore(cutoff, Pageable.from(page++, PAGE_SIZE))
-            ids += batch
-            if (batch.size < PAGE_SIZE) break
-        }
-        val truncated = ids.size >= MAX_CANDIDATES
+        // One bounded query; ids are small, so 20,001 of them is a few hundred KB at most.
+        val ids = userRepository.findIdsWithActivityBefore(cutoff, Pageable.from(0, MAX_CANDIDATES + 1))
+        val truncated = ids.size > MAX_CANDIDATES
         val users = ids.take(MAX_CANDIDATES).chunked(PAGE_SIZE).flatMap { chunk ->
             userRepository.findByIdIn(chunk).sortedBy { chunk.indexOf(it.id) }
         }
@@ -162,7 +159,7 @@ open class InactiveUserCleanupService(
         return when {
             user.serviceAccount -> REASON_SERVICE_ACCOUNT
             user.isAdmin() -> REASON_ADMIN
-            mcpApiKeyRepository.findByUserId(user.id!!).any { it.lastUsedAt?.isAfter(keyCutoff) == true } -> REASON_ACTIVE_API_KEY
+            mcpApiKeyRepository.findByUserId(user.id!!).any { it.lastUsedAt?.isAfter(keyCutoff) == true } -> REASON_RECENT_KEY_USE
             !validator.validateUserDeletion(user.id!!).canDelete -> REASON_BLOCKING_REFERENCES
             else -> null
         }
@@ -267,7 +264,7 @@ open class InactiveUserCleanupService(
     companion object {
         const val REASON_SERVICE_ACCOUNT = "SERVICE_ACCOUNT"
         const val REASON_ADMIN = "ADMIN"
-        const val REASON_ACTIVE_API_KEY = "ACTIVE_API_KEY"
+        const val REASON_RECENT_KEY_USE = "ACTIVE_API_KEY"
         const val REASON_BLOCKING_REFERENCES = "BLOCKING_REFERENCES"
         const val REASON_NOT_WARNED = "NOT_WARNED"
         const val REASON_ACTIVE_AGAIN = "ACTIVE_AGAIN"

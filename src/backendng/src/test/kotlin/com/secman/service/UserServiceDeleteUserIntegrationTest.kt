@@ -67,6 +67,7 @@ class UserServiceDeleteUserIntegrationTest {
     @Inject lateinit var assessmentAssignmentRepository: AssessmentAssignmentRepository
 
     private var tag = ""
+    private val createdUserIds = mutableListOf<Long>()
 
     @BeforeEach
     fun newTag() {
@@ -80,44 +81,45 @@ class UserServiceDeleteUserIntegrationTest {
         exportJobRepository.deleteAll()
         riskAssessmentRepository.deleteAll()
         assetRepository.deleteAll()
-        userRepository.findAll().filter { it.username.endsWith(tag) }.forEach { userService.deleteUser(it.id!!) }
+        createdUserIds.filter { userRepository.existsById(it) }.forEach { userService.deleteUser(it) }
+        createdUserIds.clear()
     }
 
     @Test
     fun `deleteUser removes side rows`() {
-        val target = userRepository.save(TestDataFactory.createRegularUser("target-$tag", "target-$tag@secman.test"))
-        val id = target.id!!
+        val target = saveUser("target")
+        val userId = target.id!!
         val assessment = assessmentFor(respondent = target)
 
-        mcpApiKeyRepository.save(McpApiKey(keyId = "test-key-id-$tag", keyHash = "h", name = "key", userId = id, permissions = "ASSETS_READ"))
-        slackRepository.save(UserSlackSettings(userId = id))
-        telegramRepository.save(UserTelegramSettings(userId = id))
+        mcpApiKeyRepository.save(McpApiKey(keyId = "test-key-id-$tag", keyHash = "h", name = "key", userId = userId, permissions = "ASSETS_READ"))
+        slackRepository.save(UserSlackSettings(userId = userId))
+        telegramRepository.save(UserTelegramSettings(userId = userId))
         subscriptionRepository.save(
-            UserNotificationSubscription(userId = id, channel = NotificationChannel.SLACK,
+            UserNotificationSubscription(userId = userId, channel = NotificationChannel.SLACK,
                 eventType = NotificationEventType.CROWDSTRIKE_REPORT_COMPLETED)
         )
-        notificationPreferenceRepository.save(NotificationPreference(userId = id))
-        dashboardPreferenceRepository.save(DashboardPreference(userId = id))
-        relayIdentityRepository.save(RelayIdentity(userId = id, provider = "apple", providerSubject = "s-$tag"))
-        val exportJob = exportJobRepository.save(ExportJob(id = "e-$tag", username = target.username, actorUserId = id))
+        notificationPreferenceRepository.save(NotificationPreference(userId = userId))
+        dashboardPreferenceRepository.save(DashboardPreference(userId = userId))
+        relayIdentityRepository.save(RelayIdentity(userId = userId, provider = "apple", providerSubject = "s-$tag"))
+        val exportJob = exportJobRepository.save(ExportJob(id = "e-$tag", username = target.username, actorUserId = userId))
         val aiJob = aiSuggestionJobRepository.save(
-            AiSuggestionJob(riskAssessmentId = assessment.id!!, triggeredByUserId = id, initiatingUserId = id,
+            AiSuggestionJob(riskAssessmentId = assessment.id!!, triggeredByUserId = userId, initiatingUserId = userId,
                 model = "m", scope = AiSuggestionScope.WHOLE_ASSESSMENT)
         )
         val assignment = assessmentAssignmentRepository.save(
-            AssessmentAssignment(assessmentId = assessment.id!!, userId = id, email = target.email, role = "RESPONDENT")
+            AssessmentAssignment(assessmentId = assessment.id!!, userId = userId, email = target.email, role = "RESPONDENT")
         )
 
-        assertThat(userService.deleteUser(id)).isTrue()
+        assertThat(userService.deleteUser(userId)).isTrue()
 
-        assertThat(userRepository.existsById(id)).isFalse()
-        assertThat(mcpApiKeyRepository.findByUserId(id)).isEmpty()
-        assertThat(slackRepository.findByUserId(id)).isEmpty
-        assertThat(telegramRepository.findByUserId(id)).isEmpty
-        assertThat(subscriptionRepository.findByUserIdAndChannel(id, NotificationChannel.SLACK)).isEmpty()
-        assertThat(notificationPreferenceRepository.findByUserId(id)).isEmpty
-        assertThat(dashboardPreferenceRepository.findByUserId(id)).isEmpty
-        assertThat(relayIdentityRepository.findByUserId(id)).isEmpty()
+        assertThat(userRepository.existsById(userId)).isFalse()
+        assertThat(mcpApiKeyRepository.findByUserId(userId)).isEmpty()
+        assertThat(slackRepository.findByUserId(userId)).isEmpty
+        assertThat(telegramRepository.findByUserId(userId)).isEmpty
+        assertThat(subscriptionRepository.findByUserIdAndChannel(userId, NotificationChannel.SLACK)).isEmpty()
+        assertThat(notificationPreferenceRepository.findByUserId(userId)).isEmpty
+        assertThat(dashboardPreferenceRepository.findByUserId(userId)).isEmpty
+        assertThat(relayIdentityRepository.findByUserId(userId)).isEmpty()
         assertThat(exportJobRepository.findById(exportJob.id).get().actorUserId).isNull()
         aiSuggestionJobRepository.findById(aiJob.id!!).get().let {
             assertThat(it.triggeredByUserId).isNull()
@@ -128,7 +130,7 @@ class UserServiceDeleteUserIntegrationTest {
 
     @Test
     fun `deleteUser detaches respondent instead of refusing`() {
-        val target = userRepository.save(TestDataFactory.createRegularUser("resp-$tag", "resp-$tag@secman.test"))
+        val target = saveUser("resp")
         val assessment = assessmentFor(respondent = target)
 
         assertThat(userService.deleteUser(target.id!!)).isTrue()
@@ -136,8 +138,12 @@ class UserServiceDeleteUserIntegrationTest {
         assertThat(riskAssessmentRepository.findById(assessment.id!!).get().respondent).isNull()
     }
 
+    private fun saveUser(prefix: String): User =
+        userRepository.save(TestDataFactory.createRegularUser("$prefix-$tag", "$prefix-$tag@secman.test"))
+            .also { createdUserIds += it.id!! }
+
     private fun assessmentFor(respondent: User): RiskAssessment {
-        val owner = userRepository.save(TestDataFactory.createRegularUser("owner-$tag", "owner-$tag@secman.test"))
+        val owner = saveUser("owner")
         val asset = assetRepository.save(TestDataFactory.createAsset(name = "asset-$tag"))
         return riskAssessmentRepository.save(
             RiskAssessment(

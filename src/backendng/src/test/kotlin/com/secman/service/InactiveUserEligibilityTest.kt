@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.time.Instant
 
+/** Date rules: fallback to created_at, strict boundaries, warning validity. */
 class InactiveUserEligibilityTest {
 
     private val now = Instant.parse("2026-11-11T03:15:00Z")

@@ -30,6 +30,7 @@ class UserSideDataRepositories(
     private val aiSuggestionJobs: AiSuggestionJobRepository,
     private val assessmentAssignments: AssessmentAssignmentRepository
 ) {
+    /** Called by deleteUser just before the user row goes, inside the same transaction. */
     fun removeFor(userId: Long) {
         mcpApiKeys.deleteByUserId(userId)
         slackSettings.deleteByUserId(userId)

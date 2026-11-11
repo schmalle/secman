@@ -14,19 +14,17 @@ import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 import java.time.Instant
 
+/** WOULD_* only in dry runs; WARNING_FAILED leaves the user unwarned and so not deletable. */
 @Serdeable
 enum class UserCleanupOutcome { DELETED, WOULD_DELETE, WOULD_WARN, SKIPPED, WARNED, WARNING_FAILED, ERROR }
 
+@Entity
+@Serdeable
+@Table(name = "user_cleanup_run_item", indexes = [Index(name = "idx_user_cleanup_item_run_outcome", columnList = "run_id, outcome")])
 /**
  * What a run did to one user. Username and email are kept on purpose (decided): after the
  * user row is gone this is the only record of who was removed.
  */
-@Entity
-@Serdeable
-@Table(
-    name = "user_cleanup_run_item",
-    indexes = [Index(name = "idx_user_cleanup_item_run_outcome", columnList = "run_id, outcome")]
-)
 data class UserCleanupRunItem(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

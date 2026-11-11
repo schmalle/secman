@@ -3,6 +3,7 @@ package com.secman.config
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
+/** The defaults are the safe rollout state; invalid combinations must refuse to run. */
 class UserCleanupConfigTest {
 
     @Test

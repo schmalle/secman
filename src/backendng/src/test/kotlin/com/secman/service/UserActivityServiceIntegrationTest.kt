@@ -31,11 +31,11 @@ class UserActivityServiceIntegrationTest {
 
     @Test
     fun `recordLogin always updates`() {
-        val id = userWithLastLogin(Instant.now().minus(Duration.ofMinutes(5)))
+        val userId = userWithLastLogin(Instant.now().minus(Duration.ofMinutes(5)))
 
-        activity.recordLogin(id)
+        activity.recordLogin(userId)
 
-        assertThat(lastLogin(id)).isAfter(Instant.now().minus(Duration.ofMinutes(1)))
+        assertThat(lastLogin(userId)).isAfter(Instant.now().minus(Duration.ofMinutes(1)))
     }
 
     @Test

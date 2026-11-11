@@ -91,6 +91,7 @@ See `docs/AUTHORIZATION_REWORK.md` for assessment assignments, contribution hist
 | Welcome email test | `POST /api/account-onboarding/welcome-test` (`recipient`, `accountIds`): one sample, no import or production notification writes | ADMIN |
 | Product Classification | `GET/POST /api/product-classification/rules`, `PUT/DELETE .../rules/{id}`, `POST .../test`, `POST .../reclassify`, `GET .../stats` (ADMIN). Marks installer/setup payloads so vuln + EOL reads can hide them — `docs/CROWDSTRIKE_IMPORT.md` | ADMIN |
 | Mobile Relay | `GET /api/relay/{status,sections,devices,identities}`, `POST /api/relay/{publish,enrollments,revocations,identities,principals/publish}`, `DELETE /api/relay/identities/{id}` | ADMIN |
+| User Cleanup | `GET /api/user-cleanup/{config,preview,runs[/{id}]}`, `POST /api/user-cleanup/run-now` (scheduled policy, brake included; 409 disabled/running). Nightly inactive-account warning + deletion — `docs/USER_CLEANUP.md` | ADMIN |
 
 MCP tool families mirror these (delegation required): `list_/create_/delete_release`, `set_release_status`, `compare_releases`; `create_use_case`; `create_risk_assessment`, `list_risk_assessments`, `get_risk_assessment_questionnaire`, `save_risk_assessment_answers`, `submit_risk_assessment`, `evaluate_risk_assessment`; `list_workgroup_aws_accounts`, `add_/remove_workgroup_aws_account`, `link_workgroup_aws_accounts`, `list_workgroup_ad_domains`, `add_/remove_workgroup_ad_domain`; `list_/create_/delete_aws_account_sharing`; `get_vulnerability_heatmap`, `refresh_vulnerability_heatmap`; `simulate_account_onboarding`, `list_/preview_account_onboarding_rules`; etc. See `docs/MCP.md` and `docs/MCP_RISK_ASSESSMENT_LIFECYCLE.md`.
 
@@ -328,14 +329,14 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-11-10*
+*Last updated: 2026-11-11*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **Inactive user cleanup (2026-11-11)** — opt-in nightly job (03:15, `USER_CLEANUP_ENABLED`, dry-run by default) warns users 30 days before and then deletes accounts inactive for 365 days, through `UserDeletionValidator` + `UserService.deleteUser`; ADMINs, service accounts, recent MCP-key owners and blocked users are skipped, a 10 % safety brake stops all deletions, every run is recorded per user. Passkey logins and delegated MCP calls (daily throttle) now set `last_login`. `deleteUser` now also removes MCP API keys, chat settings, preferences and relay identities, and the validator blocks only on NOT NULL references, so the manual delete no longer refuses e.g. assessment respondents or release creators. ADMIN endpoints `/api/user-cleanup/*`. See `docs/USER_CLEANUP.md`.
+
 - **AWS workgroup linking robustness (2026-11-08)** — link summaries split `truncated` into `reportTruncated` (500-row `links[]` cap) and `inputTruncated` (20,000-pair cap, rest NOT linked); `links[]` sorts failures/attention rows first, every rejection is logged, plus `statusReasonCounts` and report-only `staleAccounts`/`staleLinks`. CLI exits **4** when nothing failed but workgroups need attention. `UserMappingController` runs on the blocking executor. See `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`.
 
 - **Async user-mapping bulk import (2026-11-08)** — the CLI's `manage-user-mappings import`/`import-s3` now starts `POST /api/user-mappings/bulk/jobs` and polls `.../{jobId}/status` instead of holding one request open: on ~2200 accounts the synchronous `POST /bulk` took ~80 s, past production's 60 s load-balancer idle timeout, so the CLI got a 504 while the backend committed fine. Job state is in memory (single backend, owner emails not persisted), one import at a time (409), falls back to the synchronous endpoint on older backends. See `docs/CLI.md` and `docs/CHANGELOG.md`.
-
-- **CrowdStrike lost-cursor recovery (2026-11-02)** — a Stage-2 Spotlight 404 after pagination begins restarts that batch from page 1 at most twice with backoff, discarding rows from the aborted attempt; a persistent or first-page 404 still fails closed. See `docs/CROWDSTRIKE_IMPORT.md` and `docs/CHANGELOG.md`.

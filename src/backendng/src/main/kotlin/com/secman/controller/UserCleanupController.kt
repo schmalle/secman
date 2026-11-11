@@ -40,9 +40,11 @@ open class UserCleanupController(
 ) {
     private val log = LoggerFactory.getLogger(UserCleanupController::class.java)
 
+    /** Generic client-facing error; the detail goes to the server log (A05). */
     @Serdeable
     data class ErrorResponse(val error: String)
 
+    /** One run with a page of its per-user items and the total item count for paging. */
     @Serdeable
     data class RunDetail(val run: UserCleanupRun, val items: List<UserCleanupRunItem>, val totalItems: Long)
 

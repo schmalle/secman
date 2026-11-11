@@ -8,6 +8,7 @@ import io.mockk.verify
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 
+/** The cron must honour the enabled flag and pass the deployed config, brake included. */
 class InactiveUserCleanupSchedulerTest {
 
     private val service = mockk<InactiveUserCleanupService>(relaxed = true)

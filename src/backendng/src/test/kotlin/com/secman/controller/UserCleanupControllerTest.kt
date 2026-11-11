@@ -11,6 +11,7 @@ import io.mockk.mockk
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
+/** Exception-to-status mapping of run-now; generic bodies only. */
 class UserCleanupControllerTest {
 
     private val scheduler = mockk<InactiveUserCleanupScheduler>()

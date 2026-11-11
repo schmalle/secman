@@ -39,6 +39,7 @@ data class UserCleanupRunSummary(
     val items: List<UserCleanupItemDto> = emptyList()
 )
 
+/** Deployed cleanup settings as `GET /api/user-cleanup/config` reports them. */
 @Serdeable
 data class UserCleanupConfigDto(
     val enabled: Boolean,
