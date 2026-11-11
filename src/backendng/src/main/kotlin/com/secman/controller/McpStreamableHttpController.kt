@@ -1,5 +1,6 @@
 package com.secman.controller
 
+import com.secman.service.UserActivityService
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
@@ -37,6 +38,7 @@ class McpStreamableHttpController(
     @Inject private val authService: McpAuthenticationService,
     @Inject private val toolRegistry: McpToolRegistry,
     @Inject private val delegationService: McpDelegationService,
+    @Inject private val userActivityService: UserActivityService,
     @Inject private val accessControlService: McpAccessControlService,
     @Inject private val auditService: McpAuditService,
     @Inject private val toolPermissionService: McpToolPermissionService,
@@ -288,6 +290,9 @@ class McpStreamableHttpController(
                 validation.errorMessage ?: "Delegation validation failed"
             ))
         }
+
+        // Delegated MCP work is activity for the inactive-user cleanup (throttled to daily).
+        userActivityService.recordDelegatedActivity(validation.user!!.id!!)
 
         return DelegatedCaller.Authorized(
             apiKey = mcpApiKey,

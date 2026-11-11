@@ -153,6 +153,13 @@ interface UserRepository : JpaRepository<User, Long> {
 
     fun countByLastLoginGreaterThanEqual(since: Instant): Long
 
+    /**
+     * Set last_login to [now] unless it is already at or after [notAfter]. One bounded UPDATE,
+     * so high-frequency callers (MCP delegation) write at most once per throttle window.
+     */
+    @Query("UPDATE User u SET u.lastLogin = :now WHERE u.id = :id AND (u.lastLogin IS NULL OR u.lastLogin < :notAfter)")
+    fun touchLastLogin(id: Long, now: Instant, notAfter: Instant): Int
+
     /** Integration scanners that run as this user; `service_user_id` is a NOT NULL FK. */
     @Query("SELECT COUNT(s) FROM IntegrationScanner s WHERE s.serviceUserId = :userId")
     fun countIntegrationScannersByServiceUser(userId: Long): Long
