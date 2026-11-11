@@ -153,5 +153,9 @@ interface UserRepository : JpaRepository<User, Long> {
 
     fun countByLastLoginGreaterThanEqual(since: Instant): Long
 
+    /** Integration scanners that run as this user; `service_user_id` is a NOT NULL FK. */
+    @Query("SELECT COUNT(s) FROM IntegrationScanner s WHERE s.serviceUserId = :userId")
+    fun countIntegrationScannersByServiceUser(userId: Long): Long
+
     fun countByLastLoginIsNull(): Long
 }

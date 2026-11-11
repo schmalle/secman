@@ -9,9 +9,7 @@ class UserDeletionValidator(
     private val userRepository: UserRepository,
     private val demandRepository: DemandRepository,
     private val riskAssessmentRepository: RiskAssessmentRepository,
-    private val releaseRepository: ReleaseRepository,
-    private val demandClassificationRuleRepository: DemandClassificationRuleRepository,
-    private val demandClassificationResultRepository: DemandClassificationResultRepository
+    private val requirementFileRepository: RequirementFileRepository
 ) {
 
     @Serdeable
@@ -61,19 +59,6 @@ class UserDeletionValidator(
             )
         }
 
-        // Check Demands where user is approver (nullable, but still informative)
-        val demandsAsApprover = demandRepository.findByApproverId(userId)
-        if (demandsAsApprover.isNotEmpty()) {
-            blockingReferences.add(
-                BlockingReference(
-                    entityType = "Demand",
-                    count = demandsAsApprover.size,
-                    role = "approver",
-                    details = "User is the approver for ${demandsAsApprover.size} demand(s)"
-                )
-            )
-        }
-
         // Check Risk Assessments where user is assessor (non-nullable)
         val riskAssessmentsAsAssessor = riskAssessmentRepository.findByAssessorId(userId)
         if (riskAssessmentsAsAssessor.isNotEmpty()) {
@@ -100,54 +85,29 @@ class UserDeletionValidator(
             )
         }
 
-        // Check Risk Assessments where user is respondent (nullable, but still informative)
-        val riskAssessmentsAsRespondent = riskAssessmentRepository.findByRespondentId(userId)
-        if (riskAssessmentsAsRespondent.isNotEmpty()) {
+        // Only NOT NULL foreign keys block. Nullable references (demand approver, assessment
+        // respondent, release / classification-rule creator, classification overrider) are
+        // nulled by UserService.deleteUser and must not keep an account alive.
+        val requirementFiles = requirementFileRepository.countByUploadedById(userId).toInt()
+        if (requirementFiles > 0) {
             blockingReferences.add(
                 BlockingReference(
-                    entityType = "RiskAssessment",
-                    count = riskAssessmentsAsRespondent.size,
-                    role = "respondent",
-                    details = "User is the respondent for ${riskAssessmentsAsRespondent.size} risk assessment(s)"
+                    entityType = "RequirementFile",
+                    count = requirementFiles,
+                    role = "uploader",
+                    details = "User uploaded $requirementFiles requirement file(s)"
                 )
             )
         }
 
-        // Check Releases where user is creator (nullable, but still informative)
-        val releasesAsCreator = releaseRepository.findByCreatedBy_Id(userId)
-        if (releasesAsCreator.isNotEmpty()) {
+        val scanners = userRepository.countIntegrationScannersByServiceUser(userId).toInt()
+        if (scanners > 0) {
             blockingReferences.add(
                 BlockingReference(
-                    entityType = "Release",
-                    count = releasesAsCreator.size,
-                    role = "creator",
-                    details = "User created ${releasesAsCreator.size} release(s)"
-                )
-            )
-        }
-
-        // Check Demand Classification Rules where user is creator (nullable, but still informative)
-        val classificationRulesAsCreator = demandClassificationRuleRepository.findByCreatedBy_Id(userId)
-        if (classificationRulesAsCreator.isNotEmpty()) {
-            blockingReferences.add(
-                BlockingReference(
-                    entityType = "DemandClassificationRule",
-                    count = classificationRulesAsCreator.size,
-                    role = "creator",
-                    details = "User created ${classificationRulesAsCreator.size} classification rule(s)"
-                )
-            )
-        }
-
-        // Check Demand Classification Results where user overrode classification (nullable, but still informative)
-        val classificationResultsAsOverrider = demandClassificationResultRepository.findByOverriddenBy_Id(userId)
-        if (classificationResultsAsOverrider.isNotEmpty()) {
-            blockingReferences.add(
-                BlockingReference(
-                    entityType = "DemandClassificationResult",
-                    count = classificationResultsAsOverrider.size,
-                    role = "overrider",
-                    details = "User overrode ${classificationResultsAsOverrider.size} classification result(s)"
+                    entityType = "IntegrationScanner",
+                    count = scanners,
+                    role = "service_user",
+                    details = "User is the service user of $scanners integration scanner(s)"
                 )
             )
         }
