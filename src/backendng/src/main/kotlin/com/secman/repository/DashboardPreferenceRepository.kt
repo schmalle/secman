@@ -1,5 +1,6 @@
 package com.secman.repository
 
+import io.micronaut.data.annotation.Query
 import com.secman.domain.DashboardPreference
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
@@ -14,4 +15,7 @@ interface DashboardPreferenceRepository : JpaRepository<DashboardPreference, Lon
      * Find dashboard KPI visibility preference by user ID
      */
     fun findByUserId(userId: Long): Optional<DashboardPreference>
+
+    @Query("DELETE FROM DashboardPreference p WHERE p.userId = :userId")
+    fun deleteByUserId(userId: Long): Int
 }

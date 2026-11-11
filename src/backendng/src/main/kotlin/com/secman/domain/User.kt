@@ -15,7 +15,8 @@ import java.time.Instant
     indexes = [
         // Query optimization indexes
         Index(name = "idx_user_email", columnList = "email"),      // Email lookups for OAuth/mappings
-        Index(name = "idx_user_username", columnList = "username") // Username lookups
+        Index(name = "idx_user_username", columnList = "username"), // Username lookups
+        Index(name = "idx_user_last_login", columnList = "last_login") // Inactive-user cleanup
     ]
 )
 @Serdeable
@@ -98,7 +99,15 @@ data class User(
      * Updated on each successful authentication (local or OAuth)
      */
     @Column(name = "last_login")
-    var lastLogin: Instant? = null
+    var lastLogin: Instant? = null,
+
+    /**
+     * When the inactive-account deletion warning was sent. Only counts while newer than the
+     * last activity, so logging in invalidates it without any reset.
+     */
+    @JsonIgnore
+    @Column(name = "inactivity_warning_sent_at")
+    var inactivityWarningSentAt: Instant? = null
 ) {
     /**
      * User roles for access control

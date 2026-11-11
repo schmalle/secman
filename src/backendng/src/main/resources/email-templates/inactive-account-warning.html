@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Your SecMan account will be deleted</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #222; max-width: 640px; margin: 0 auto; padding: 24px;">
+  <p style="text-align: center;">
+    <img src="cid:secman-logo" alt="SecMan" style="max-height: 64px;">
+  </p>
+
+  <h2 style="color: #b45309;">Your account will be deleted on or after {deletionDate}</h2>
+
+  <p>Hello {username},</p>
+
+  <p>Nobody has signed in to your SecMan account for almost a year. Accounts that stay unused
+     for {inactiveDays} days are deleted automatically, together with their workgroup
+     memberships, personal AWS-account and AD-domain mappings and API keys.</p>
+
+  <p>If you still need the account, sign in once before <strong>{deletionDate}</strong>.</p>
+
+  <p>
+    <a href="{loginUrl}"
+       style="background: #1f4e79; color: #fff; padding: 10px 18px; text-decoration: none; border-radius: 4px;">
+      Sign in to SecMan
+    </a>
+  </p>
+
+  <p style="color: #555; font-size: 0.9em;">
+    If the button does not work, open
+    <a href="{loginUrl}" style="color: #1f4e79;">{loginUrl}</a>.
+    If you no longer need the account, there is nothing to do.
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 32px 0 16px;">
+
+  <p style="color: #777; font-size: 0.85em;">
+    You are receiving this because this email address belongs to a SecMan account. If you
+    think this is a mistake, contact your SecMan administrator.
+  </p>
+</body>
+</html>

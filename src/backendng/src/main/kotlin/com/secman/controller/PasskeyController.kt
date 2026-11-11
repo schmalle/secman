@@ -1,5 +1,6 @@
 package com.secman.controller
 
+import com.secman.service.UserActivityService
 import com.secman.repository.UserRepository
 import com.secman.service.AuthCookieService
 import com.secman.service.WebAuthnService
@@ -22,7 +23,8 @@ open class PasskeyController(
     private val webAuthnService: WebAuthnService,
     private val userRepository: UserRepository,
     private val tokenIssuer: SecmanTokenIssuer,
-    private val authCookieService: AuthCookieService
+    private val authCookieService: AuthCookieService,
+    private val userActivityService: UserActivityService
 ) {
     private val logger = LoggerFactory.getLogger(PasskeyController::class.java)
 
@@ -150,6 +152,7 @@ open class PasskeyController(
             }
 
             val token = tokenOptional.get()
+            userActivityService.recordLogin(user.id!!)
 
             return HttpResponse.ok(mapOf(
                 "success" to true,

@@ -42,7 +42,8 @@ open class EmailTemplateRenderer {
             "account-welcome",
             "account-onboarding-questionnaire",
             "account-onboarding-reminder",
-            "workgroup-overdue-notification"
+            "workgroup-overdue-notification",
+            "inactive-account-warning"
         )
     }
 
