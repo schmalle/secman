@@ -1,22 +1,17 @@
 ---
 name: humanizer
 description: >
-  Make source code read as though a careful person wrote and maintained it:
-  crisp comments that explain why rather than restate what, names a stranger
-  can predict, functions that fit on a screen (50 lines target, 100 hard),
-  files under 1000 lines, and layout that matches the file it lives in
-  instead of generator boilerplate. Measures with
-  `./scripts/humanizer-scan.sh` (BLOCK for what this change introduced,
-  REVIEW for what it inherited), applies the safe fixes directly, and
-  proposes the risky ones — renames and file splits break Jackson field
-  names, JPA columns, Micronaut bean wiring, MCP tool ids and the
-  `extensions/` clients silently. Use this skill whenever the user says
-  "humanizer", "humanize", "clean up this code", "make this readable",
-  "add comments", "comment this properly", "this function is too long",
-  "split this class", "these names are terrible", "make it look
-  hand-written", "code hygiene", "readability pass", or asks for a tidy-up
-  before committing — and use it proactively after generating a large
-  amount of new code, which is exactly when the machine tells are freshest.
+  Make source code read as though a careful person wrote it: comments that
+  explain why, predictable names, functions under 50 lines (100 hard), files
+  under 1000 lines, layout that matches the surrounding file. Measures with
+  `./scripts/humanizer-scan.sh` (BLOCK for what this change introduced, REVIEW
+  for what it inherited), applies safe fixes, and proposes risky ones, because
+  renames and file splits silently break Jackson fields, JPA columns,
+  Micronaut wiring, MCP tool ids and the `extensions/` clients. Use when the
+  user says "humanizer", "humanize", "clean up this code", "make this
+  readable", "comment this properly", "this function is too long", "split this
+  class", "code hygiene", "readability pass", or asks for a tidy-up before
+  committing, and proactively after generating a lot of new code.
 ---
 
 > **Sync policy (two-way, mandatory)**: This file and

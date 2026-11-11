@@ -83,9 +83,13 @@ reach the vault and the process fails to start.
 confused (`e2eexception` vs `e2evulnexception`, `importtest` vs
 `crowdstrike-vuln-match`, the two AWS-account skills).
 
+Subagents follow the same two-way rule: `.claude/agents/<name>.md` ↔
+`.codex/agents/<name>.toml` (`description` and `developer_instructions` identical
+to the Markdown description and body). The same gate checks them. No skill spawns
+either one. Only `.codex/agents/` is versioned; the rest of `.codex/` stays local.
+
 Not mirrored, Claude Code only: the `speckit.*` commands in `.claude/commands/`
-(spec-driven-development pipeline, see `docs/SKILLS_AND_AGENTS.md`) and the two
-subagents in `.claude/agents/`, which no skill spawns.
+(spec-driven-development pipeline, see `docs/SKILLS_AND_AGENTS.md`).
 
 ## Style
 - Kotlin: 4-space indent, `UpperCamelCase` types, constructor injection, immutable data classes; ktlint if configured.

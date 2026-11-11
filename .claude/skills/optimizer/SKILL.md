@@ -1,22 +1,18 @@
 ---
 name: optimizer
 description: >
-  Make secman code faster and stop the same code existing in five places —
-  the two halves of one problem, because the slow query here is usually the
-  slow query that got copied. Finds unbounded and in-memory-filtered queries,
-  repository calls inside loops, transactions held across HTTP or SMTP,
-  serial round-trips on the pages users wait for, timers that outlive their
-  component, I/O under a held lock, and blocks of code duplicated across or
-  within files. Measures with `./scripts/optimizer-scan.sh` (BLOCK for what
-  this change introduced, REVIEW for what it inherited), applies the safe
-  fixes, and proposes the ones that need a decision. Use this skill whenever
+  Make secman code faster and remove duplicated code — often the same problem,
+  since a slow query tends to get copied. Finds unbounded or
+  in-memory-filtered queries, repository calls in loops, transactions held
+  across HTTP or SMTP, serial round-trips on user-facing pages, leaked timers,
+  I/O under a held lock, and duplicated blocks. Measures with
+  `./scripts/optimizer-scan.sh` (BLOCK for what this change introduced, REVIEW
+  for what it inherited), applies safe fixes, and proposes the rest. Use when
   the user says "optimizer", "optimize", "make this faster", "this is slow",
-  "performance", "speed this up", "N+1", "why does this page take so long",
-  "reduce duplication", "this is copy-pasted", "DRY this up", "we have three
-  copies of this", "remove duplicate code", or asks for a performance or
-  duplication pass before merging — and use it proactively after generating
-  a large amount of new code, which is when pasted blocks and unbounded
-  queries are freshest and cheapest to remove.
+  "performance", "N+1", "why does this page take so long", "reduce
+  duplication", "this is copy-pasted", "DRY this up", "remove duplicate code",
+  or asks for a performance or duplication pass, and proactively after
+  generating a lot of new code.
 ---
 
 > **Sync policy (two-way, mandatory)**: This file and

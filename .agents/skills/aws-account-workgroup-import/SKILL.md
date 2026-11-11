@@ -1,23 +1,17 @@
 ---
 name: aws-account-workgroup-import
 description: >
-  Run the end-to-end test for importing AWS account mappings and linking those
-  accounts to workgroups by display name. Seeds a plain viewer user, a non-admin
-  user and an asset carrying a cloud account id; imports accounts with display
-  names through the CLI (Cloud Custodian JSON and CSV), REST (`/api/user-mappings/bulk`,
-  the CSV upload and the XLSX upload) and MCP `import_user_mappings`; and asserts
-  that an account named `DevOps-x` lands in the workgroup `aws-DevOps-x`, that the
-  workgroup is created when missing, that the correction path links from stored
-  names with no file and is idempotent, that all surfaces report the same summary,
-  that a member of the workgroup can then see the account's assets and loses that
-  access again when the account is unlinked, that the XLSX path deliberately links
-  nothing, that every workgroup MCP tool is both listed and callable, that a
-  renamed account keeps its old link, and that non-admins are refused on every
-  surface. Cleans up before and after, including leftovers from earlier runs. Use
-  this skill when the user says "aws account import test", "test aws account
-  import", "workgroup linking test", "link workgroups e2e", "test adding aws
-  accounts to workgroups", "does the import link workgroups", "display name
-  workgroup", "aws-account-workgroup-import", or similar.
+  Run the end-to-end test for importing AWS account mappings and linking
+  accounts to workgroups by display name (`DevOps-x` lands in `aws-DevOps-x`,
+  created when missing). Imports through the CLI (Cloud Custodian JSON, CSV),
+  REST (bulk, CSV and XLSX upload) and MCP; asserts identical summaries,
+  idempotent correction linking, member asset visibility gained on link and
+  lost on unlink, XLSX linking nothing, every workgroup MCP tool listed and
+  callable, renamed accounts keeping their link, and non-admins refused
+  everywhere. Cleans up before and after. Use when the user says "aws account
+  import test", "workgroup linking test", "link workgroups e2e", "does the
+  import link workgroups", "display name workgroup",
+  "aws-account-workgroup-import", or similar.
 context: fork
 ---
 

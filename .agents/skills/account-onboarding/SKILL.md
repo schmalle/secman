@@ -1,21 +1,16 @@
 ---
 name: account-onboarding
 description: >
-  Run the end-to-end test for the welcome-mail and guided-questionnaire
-  onboarding of newly discovered AWS accounts. Seeds a SECCHAMPION, an owner, two
-  use cases, tagged requirements, an ACTIVE requirements release, three
-  onboarding questions and four rules; imports brand-new 12-digit accounts in
-  WELCOME_ONLY, DIRECT and GUIDED mode via the CLI and again via MCP; walks the
-  owner's tokenized questionnaire link; and asserts that several matching rules
-  union into one assessment, that a replayed, unknown or malformed token is
-  refused with a byte-identical body, that a burst of lookups is rate limited,
-  that answers matching nothing are recorded without consuming the link, that a
-  dry run mints no token and sends no mail, and that a bare
-  --start-risk-assessment still behaves exactly as it did before onboarding modes
-  existed. Cleans up before and after, including leftovers from earlier runs. Use
-  this skill when the user says "account onboarding", "run the onboarding e2e",
-  "welcome email test", "guided assessment", "onboarding rules", "options to use
-  cases", or similar.
+  Run the end-to-end test for welcome-mail and guided-questionnaire onboarding
+  of newly discovered AWS accounts. Seeds users, use cases, tagged
+  requirements, an ACTIVE release, onboarding questions and rules; imports new
+  accounts in WELCOME_ONLY, DIRECT and GUIDED mode via CLI and MCP; walks the
+  tokenized questionnaire link; asserts rule union, byte-identical token
+  refusals, rate limiting, non-consuming no-match answers, side-effect-free
+  dry runs, and unchanged bare --start-risk-assessment behaviour. Cleans up
+  before and after. Use when the user says "account onboarding", "run the
+  onboarding e2e", "welcome email test", "guided assessment", "onboarding
+  rules", "options to use cases", or similar.
 context: fork
 ---
 
