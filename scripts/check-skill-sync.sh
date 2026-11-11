@@ -153,9 +153,59 @@ while IFS= read -r rel; do
     fi
 done < <(comm -12 "$TMP/claude.files" "$TMP/agents.files")
 
+# --- Tier 3: description length ----------------------------------------------
+#
+# The Agent Skills format caps `description` at 1024 characters. Codex refuses to
+# load a skill over the cap and Claude Code truncates it, so an over-long
+# description silently drops the skill on one harness. Counts the folded text
+# the way YAML does (lines joined with single spaces).
+
+for f in "$CLAUDE_ROOT"/*/SKILL.md "$AGENTS_ROOT"/*/SKILL.md; do
+    len=$(awk '
+        /^---$/ { fm++; next }
+        fm != 1 { next }
+        /^description:/ { in_desc = 1; sub(/^description:[[:space:]]*[>|]?[-+]?[[:space:]]*/, ""); text = $0; next }
+        in_desc && /^[[:space:]]/ { sub(/^[[:space:]]+/, ""); text = (text == "" ? $0 : text " " $0); next }
+        in_desc { in_desc = 0 }
+        END { print length(text) }' "$f")
+    [ "$len" -gt 1024 ] && note "$(basename "$(dirname "$f")"): DESCRIPTION-TOO-LONG: $f description is $len chars (max 1024)"
+done
+
+# --- Tier 4: subagents --------------------------------------------------------
+#
+# .claude/agents/<name>.md (frontmatter + body) and .codex/agents/<name>.toml
+# (name, description, developer_instructions = '''body''') must pair up with the
+# same description and the same instructions.
+
+CLAUDE_AGENTS=".claude/agents"
+CODEX_AGENTS=".codex/agents"
+
+md_desc()   { awk '/^---$/{fm++; next} fm!=1{next} /^description:/{d=1; next} d&&/^[[:space:]]/{sub(/^[[:space:]]+/,""); t=(t==""?$0:t" "$0); next} d{d=0} END{print t}' "$1"; }
+md_body()   { awk 'fm>=2{print; next} /^---$/{fm++}' "$1" | sed -E 's/[[:space:]]+$//' | grep -v '^$'; }
+toml_desc() { sed -nE 's/^description = "(.*)"$/\1/p' "$1"; }
+toml_body() { awk "/^developer_instructions = '''\$/{b=1; next} b&&/^'''\$/{b=0} b" "$1" | sed -E 's/[[:space:]]+$//' | grep -v '^$'; }
+
+AGENT_COUNT=0
+for c in "$CLAUDE_AGENTS"/*.md; do
+    [ -e "$c" ] || continue
+    n="$(basename "$c" .md)"; x="$CODEX_AGENTS/$n.toml"
+    AGENT_COUNT=$((AGENT_COUNT + 1))
+    [ -f "$x" ] || { note "agent $n: MISSING-IN-CODEX: $c has no $x"; continue; }
+    [ "$(md_desc "$c")" = "$(toml_desc "$x")" ] || note "agent $n: DESCRIPTION-DRIFT between $c and $x"
+    if ! diff -q <(md_body "$c") <(toml_body "$x") >/dev/null; then
+        note "agent $n: CONTENT-DRIFT: instructions in $c and $x differ"
+        [ "$VERBOSE" -eq 1 ] && diff <(md_body "$c") <(toml_body "$x") | sed 's/^/      /'
+    fi
+done
+for x in "$CODEX_AGENTS"/*.toml; do
+    [ -e "$x" ] || continue
+    n="$(basename "$x" .toml)"
+    [ -f "$CLAUDE_AGENTS/$n.md" ] || note "agent $n: MISSING-IN-CLAUDE: $x has no $CLAUDE_AGENTS/$n.md"
+done
+
 # --- Report ------------------------------------------------------------------
 
-echo "skill-sync: compared $(wc -l < "$TMP/claude.files" | tr -d ' ') file(s) under $CLAUDE_ROOT against $AGENTS_ROOT"
+echo "skill-sync: compared $(wc -l < "$TMP/claude.files" | tr -d ' ') file(s) under $CLAUDE_ROOT against $AGENTS_ROOT, and $AGENT_COUNT agent(s) under $CLAUDE_AGENTS against $CODEX_AGENTS"
 
 # A rule that matched nothing anywhere is no longer protecting anything. Say so:
 # silent regex rot turns this check into noise the reader learns to ignore.

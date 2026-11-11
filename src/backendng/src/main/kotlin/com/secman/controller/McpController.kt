@@ -1,5 +1,6 @@
 package com.secman.controller
 
+import com.secman.service.UserActivityService
 import com.secman.service.*
 import com.secman.service.mcp.McpAccessControlService
 import com.secman.mcp.McpToolRegistry
@@ -37,6 +38,7 @@ open class McpController(
     @Inject private val toolPermissionService: McpToolPermissionService,
     @Inject private val toolRegistry: McpToolRegistry,
     @Inject private val delegationService: McpDelegationService,
+    @Inject private val userActivityService: UserActivityService,
     @Inject private val accessControlService: McpAccessControlService
 ) {
     private val logger = LoggerFactory.getLogger(McpController::class.java)
@@ -106,6 +108,9 @@ open class McpController(
                 validation.errorMessage ?: "Delegation validation failed"
             ))
         }
+
+        // Delegated MCP work is activity for the inactive-user cleanup (throttled to daily).
+        userActivityService.recordDelegatedActivity(validation.user!!.id!!)
 
         return Checked.Ok(DelegationContext(
             delegatedUserEmail = delegatedUserEmail,

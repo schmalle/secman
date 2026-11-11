@@ -493,6 +493,16 @@ secman:
     sections: ${SECMAN_RELAY_SECTIONS:totals,kpis,exceptions,imports,top-products,top-servers,integrations}
     # Development only. A production relay URL is https.
     allow-plaintext-url: ${SECMAN_RELAY_ALLOW_PLAINTEXT_URL:false}
+  user-cleanup:
+    # Nightly (03:15) deletion of users inactive for inactive-days, after a warning mail
+    # sent warning-days earlier. Opt-in and dry-run by default; see docs/USER_CLEANUP.md.
+    enabled: ${USER_CLEANUP_ENABLED:false}
+    dry-run: ${USER_CLEANUP_DRY_RUN:true}
+    inactive-days: ${USER_CLEANUP_INACTIVE_DAYS:365}
+    warning-days: ${USER_CLEANUP_WARNING_DAYS:30}
+    # Safety brake: abort deletions when more than this percent of all users would go.
+    max-delete-percent: ${USER_CLEANUP_MAX_DELETE_PERCENT:10}
+    max-users-per-run: ${USER_CLEANUP_MAX_USERS_PER_RUN:500}
   crowdstrike:
     # Scheduled cleanup of assets that have not been re-imported by CrowdStrike
     # for `stale-days` days. Opt-in: disabled by default so existing deployments

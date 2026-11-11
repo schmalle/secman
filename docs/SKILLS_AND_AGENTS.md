@@ -4,12 +4,13 @@ Project-local agent automation. Skills live twice — `.claude/skills/` for Clau
 Code and `.agents/skills/` for Codex — and the two are kept in sync **both
 ways**: an edit to either tree must be ported to the other in the same commit
 (`CLAUDE.md` §"Tooling Conventions", `AGENTS.md` §Skills, gate
-`./scripts/check-skill-sync.sh`). Commands (`.claude/commands/`) and agents
-(`.claude/agents/`) are Claude Code only.
+`./scripts/check-skill-sync.sh`). Agents follow the same rule: `.claude/agents/<name>.md`
+↔ `.codex/agents/<name>.toml`, checked by the same gate. Commands
+(`.claude/commands/`) are Claude Code only.
 
 ## Skills — which one to use
 
-**See `docs/SKILLS.md`** for the authoritative routing guide to all nineteen
+**See `docs/SKILLS.md`** for the authoritative routing guide to all twenty-two
 skills — what each one does, which write data, and the pairs that get confused.
 This file does not duplicate that content.
 
@@ -59,7 +60,7 @@ Artifacts:
 
 ## Agents
 
-`e2e-backend-fixer` and `e2e-frontend-fixer` (`.claude/agents/`) are
+`e2e-backend-fixer` and `e2e-frontend-fixer` (`.claude/agents/`, Codex: `.codex/agents/`) are
 Kotlin/Micronaut and Astro/React specialists for triaging E2E-surfaced
 errors in isolation. **No current skill spawns them automatically** — every
 skill listed in `docs/SKILLS.md` fixes backend/frontend issues inline
@@ -69,7 +70,7 @@ a full E2E skill.
 
 | Agent | Handles | Common patterns |
 |---|---|---|
-| `e2e-backend-fixer` | HTTP 5xx/403/404, Kotlin/Java stack traces | `ClassCastException` (Hibernate native query mismatch), `NullPointerException` (nullable field/relation), `LazyInitializationException` (lazy collection outside transaction), `HttpStatusException(403)` (over-restrictive `@Secured`), `HttpStatusException(404)` (endpoint not registered), `DataAccessException` (entity mapping), `JsonProcessingException` (circular ref) |
+| `e2e-backend-fixer` | HTTP 5xx/403/404, Kotlin/Java stack traces | `ClassCastException` (Hibernate native query mismatch), `NullPointerException` (nullable field/relation), `LazyInitializationException` (lazy collection outside transaction), `HttpStatusException(403)` (usually correct RBAC — widened only when `CLAUDE.md` entitles the role), `HttpStatusException(404)` (endpoint not registered, or documented), `DataAccessException` (entity mapping), `JsonProcessingException` (circular ref) |
 | `e2e-frontend-fixer` | JS/render/selector failures | Component crash, API response shape mismatch, renamed selector/`data-testid`, missing route |
 
 Both work from `.e2e-logs/{backend,frontend}.log` (gitignored), make a

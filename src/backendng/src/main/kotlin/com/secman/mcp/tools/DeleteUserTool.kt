@@ -4,8 +4,10 @@ import com.secman.domain.McpOperation
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.UserRepository
 import com.secman.service.UserDeletionValidator
+import com.secman.service.UserService
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
+import org.slf4j.LoggerFactory
 
 /**
  * MCP tool for deleting a user.
@@ -19,8 +21,10 @@ import jakarta.inject.Singleton
 @Singleton
 class DeleteUserTool(
     @Inject private val userRepository: UserRepository,
-    @Inject private val userDeletionValidator: UserDeletionValidator
+    @Inject private val userDeletionValidator: UserDeletionValidator,
+    @Inject private val userService: UserService
 ) : McpTool {
+    private val logger = LoggerFactory.getLogger(DeleteUserTool::class.java)
 
     override val name = "delete_user"
     override val description = "Delete a user by ID (ADMIN only, requires User Delegation)"
@@ -101,8 +105,8 @@ class DeleteUserTool(
                 "roles" to user.roles.map { it.name }
             )
 
-            // Delete the user
-            userRepository.deleteById(userId)
+            // Same complete deletion as REST and the nightly cleanup: side rows, API keys included.
+            userService.deleteUser(userId)
 
             val result = mapOf(
                 "deletedUser" to deletedUserInfo,
@@ -112,7 +116,9 @@ class DeleteUserTool(
             return McpToolResult.success(result)
 
         } catch (e: Exception) {
-            return McpToolResult.error("EXECUTION_ERROR", "Failed to delete user: ${e.message}")
+            // Detail to the log, generic message to the client (A05): e.message carries SQL.
+            logger.error("delete_user failed: actor={} target userId={}", context.delegatedUserId, userId, e)
+            return McpToolResult.error("EXECUTION_ERROR", "Failed to delete user")
         }
     }
 }

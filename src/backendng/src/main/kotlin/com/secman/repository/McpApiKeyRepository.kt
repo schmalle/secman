@@ -152,4 +152,8 @@ interface McpApiKeyRepository : JpaRepository<McpApiKey, Long> {
      * Used for audit and compliance reporting.
      */
     fun findByCreatedAtBetween(startDate: LocalDateTime, endDate: LocalDateTime): List<McpApiKey>
+
+    /** Removes every key a deleted user owned, active or not, so none can outlive its owner. */
+    @Query("DELETE FROM McpApiKey k WHERE k.userId = :userId")
+    fun deleteByUserId(userId: Long): Int
 }

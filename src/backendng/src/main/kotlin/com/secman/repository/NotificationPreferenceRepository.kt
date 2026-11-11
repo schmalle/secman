@@ -1,5 +1,6 @@
 package com.secman.repository
 
+import io.micronaut.data.annotation.Query
 import com.secman.domain.NotificationPreference
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
@@ -15,4 +16,7 @@ interface NotificationPreferenceRepository : JpaRepository<NotificationPreferenc
      * Find notification preference by user ID
      */
     fun findByUserId(userId: Long): Optional<NotificationPreference>
+
+    @Query("DELETE FROM NotificationPreference p WHERE p.userId = :userId")
+    fun deleteByUserId(userId: Long): Int
 }

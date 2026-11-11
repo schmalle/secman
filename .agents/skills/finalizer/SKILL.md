@@ -1,23 +1,19 @@
 ---
 name: finalizer
 description: >
-  End-of-work finalization pass for the secman repo. Verifies that CLAUDE.md
-  states the runtime versions the build files actually declare (Kotlin, Java,
-  Micronaut, Gradle, Astro, React, MariaDB), re-verifies that every backend
-  call made by the independent client repos under extensions/ still matches the
-  live Kotlin controller contract (path, method, request fields, auth scheme,
-  RBAC) and fixes plus commits drift inside those repos, runs a security review
-  of the branch diff reporting only HIGH and CRITICAL findings, audits frontend JSON consumers against backend serialization (including
-  nested and omitted empty fields), re-checks the
-  relay contract the iOS client depends on, and compresses CLAUDE.md by archiving
-  its changelog to docs/CHANGELOG.md while keeping the operational contracts
-  verbatim. Owns full build/startup and E2E validation of the combined change
-  before merge; explicit static review skips runtime gates and cannot establish merge readiness. Use this skill whenever the user says "finalizer", "run
-  the finalizer", "finalize", "wrap up this change", "pre-merge check",
-  "ready to merge?", "check CLAUDE.md is current", "are the extensions still in
-  sync", "tidy up CLAUDE.md", or asks for a final consistency, documentation,
-  or contract-drift pass before committing or merging — even if they only
-  mention one of these jobs.
+  End-of-work finalization pass for the secman repo: checks CLAUDE.md runtime
+  versions against the build files, re-verifies every extensions/ client call
+  against the live controller contract (path, method, fields, auth, RBAC) and
+  commits fixes inside those repos, reviews the branch diff for HIGH/CRITICAL
+  security findings, audits frontend JSON consumers against backend
+  serialization, re-checks the iOS relay contract, and archives the CLAUDE.md
+  changelog to docs/CHANGELOG.md. Owns full build/startup and E2E validation
+  of the combined change before merge; a static-only review cannot establish
+  merge readiness. Use whenever the user says "finalizer", "finalize", "wrap
+  up this change", "pre-merge check", "ready to merge?", "check CLAUDE.md is
+  current", "are the extensions still in sync", "tidy up CLAUDE.md", or asks
+  for a final consistency or contract-drift pass, even for only one of these
+  jobs.
 context: fork
 ---
 

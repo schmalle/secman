@@ -36,7 +36,9 @@ checkin-test-results.json
 .idea/
 .vscode/
 .specify/
-.codex/
+# .codex/config.toml holds a local MCP API key; only the agent definitions are shared
+.codex/*
+!.codex/agents/
 src/backendng/bin/
 src/cli/bin/
 src/shared/bin/

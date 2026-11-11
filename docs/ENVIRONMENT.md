@@ -131,6 +131,18 @@ Notifications: ADMIN users receive an email whenever a run deletes ≥1 asset, h
 
 Rule A is **agent-seen aware**: an asset whose `crowdStrikeAgentSeenAt` is within the window is never a candidate, even when `crowdStrikeLastImportedAt` is stale — that column is only stamped for hosts with findings, so a fully-patched host with a live Falcon sensor would otherwise age into the delete window. The brake also **fails closed**: an unverifiable tracked-asset count (0 while candidates exist) aborts the run as `ABORTED_SAFETY_BRAKE` instead of silently running unbraked.
 
+### Inactive user cleanup
+Nightly job (03:15) that warns, then deletes, accounts inactive for `USER_CLEANUP_INACTIVE_DAYS`. Opt-in and dry-run by default. Behaviour, reason codes and rollout: `docs/USER_CLEANUP.md`.
+
+| Var | Default | Effect |
+|---|---|---|
+| `USER_CLEANUP_ENABLED` | `false` | master switch for the nightly job and `POST /api/user-cleanup/run-now` |
+| `USER_CLEANUP_DRY_RUN` | `true` | report only: no mail, no deletion, only the run record |
+| `USER_CLEANUP_INACTIVE_DAYS` | `365` | days without login (or since creation) before deletion |
+| `USER_CLEANUP_WARNING_DAYS` | `30` | warning lead time; deletion needs a warning at least this old. Must be `> 0` and `< INACTIVE_DAYS` |
+| `USER_CLEANUP_MAX_DELETE_PERCENT` | `10` | safety brake: no deletions at all when more than this % of all users would go |
+| `USER_CLEANUP_MAX_USERS_PER_RUN` | `500` | cap on warnings and on deletions per run |
+
 ### CrowdStrike reconcile sweep (post-import stale-row cleanup)
 
 The CLI's `query servers --save` ends with `POST /api/crowdstrike/servers/reconcile-stale`, which deletes CrowdStrike-sourced vulnerability **rows** (never assets) that this run's queried hosts did not refresh. Every sweep is recorded in `crowdstrike_reconcile_job` with its scope statistics (`queried_host_count`, `resolved_asset_count`, `excluded_failed_host_count`, `stale_candidates`, `refreshed`, `dry_run`).

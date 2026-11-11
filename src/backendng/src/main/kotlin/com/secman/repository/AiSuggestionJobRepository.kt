@@ -32,4 +32,10 @@ interface AiSuggestionJobRepository : JpaRepository<AiSuggestionJob, Long> {
         statuses: List<AiSuggestionJobStatus>,
         threshold: java.time.LocalDateTime
     ): List<AiSuggestionJob>
+
+    @Query("UPDATE AiSuggestionJob j SET j.triggeredByUserId = NULL WHERE j.triggeredByUserId = :userId")
+    fun nullifyTriggeredByForUser(userId: Long): Int
+
+    @Query("UPDATE AiSuggestionJob j SET j.initiatingUserId = NULL WHERE j.initiatingUserId = :userId")
+    fun nullifyInitiatingUserForUser(userId: Long): Int
 }
