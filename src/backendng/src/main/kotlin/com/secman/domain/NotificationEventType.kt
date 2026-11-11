@@ -44,6 +44,12 @@ enum class NotificationEventType(
         "A post-import stale-row reconcile sweep was refused by a safety brake " +
             "(suspected empty/partial import or an untranslatable clock skew). No rows " +
             "were deleted — the import run should be investigated."
+    ),
+
+    INACTIVE_USER_CLEANUP_COMPLETED(
+        "Inactive user cleanup finished",
+        "The nightly inactive-user cleanup ran. Reports how many accounts were deleted, " +
+            "warned or skipped, and whether the safety brake stopped the deletions."
     );
 
     companion object {

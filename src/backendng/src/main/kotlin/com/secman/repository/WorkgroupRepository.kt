@@ -140,4 +140,8 @@ interface WorkgroupRepository : JpaRepository<Workgroup, Long> {
         WHERE w.id IN (SELECT id FROM descendants)
     """, nativeQuery = true)
     fun findAllDescendants(workgroupId: Long): List<Workgroup>
+
+    /** Workgroups whose canonical business owner is this address (case-insensitive). */
+    @io.micronaut.data.annotation.Query("SELECT w.id FROM Workgroup w WHERE LOWER(w.ownerEmail) = LOWER(:email)")
+    fun findIdsByOwnerEmail(email: String): List<Long>
 }

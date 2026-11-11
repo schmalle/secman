@@ -178,6 +178,11 @@ interface UserRepository : JpaRepository<User, Long> {
     @Query("SELECT COUNT(u) FROM User u WHERE u.lastLogin IS NULL AND u.createdAt IS NULL")
     fun countNoActivityBaseline(): Long
 
+    fun findByIdIn(ids: Collection<Long>): List<User>
+
+    @Query("UPDATE User u SET u.inactivityWarningSentAt = :sentAt WHERE u.id = :id")
+    fun markInactivityWarningSent(id: Long, sentAt: Instant): Int
+
     /** Integration scanners that run as this user; `service_user_id` is a NOT NULL FK. */
     @Query("SELECT COUNT(s) FROM IntegrationScanner s WHERE s.serviceUserId = :userId")
     fun countIntegrationScannersByServiceUser(userId: Long): Long

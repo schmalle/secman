@@ -1,0 +1,15 @@
+Your SecMan account will be deleted on or after {deletionDate}
+================================================================
+Hello {username},
+
+Nobody has signed in to your SecMan account for almost a year. Accounts that stay
+unused for {inactiveDays} days are deleted automatically, together with their
+workgroup memberships, personal AWS-account and AD-domain mappings and API keys.
+
+If you still need the account, sign in once before {deletionDate}: {loginUrl}
+
+If you no longer need it, there is nothing to do.
+
+---
+You are receiving this because this email address belongs to a SecMan account.
+If you think this is a mistake, contact your SecMan administrator.
