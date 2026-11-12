@@ -41,8 +41,8 @@ dependencies {
 	runtimeOnly("org.flywaydb:flyway-mysql:13.12.1")
 
     // Security
-    implementation("io.micronaut.security:micronaut-security-jwt:5.5.1")
-    implementation("io.micronaut.security:micronaut-security-oauth2:5.5.1")
+    implementation("io.micronaut.security:micronaut-security-jwt:5.5.2")
+    implementation("io.micronaut.security:micronaut-security-oauth2:5.5.2")
 
     // WebAuthn/Passkey support
     implementation("com.webauthn4j:webauthn4j-core:0.32.0.RELEASE")
@@ -53,7 +53,7 @@ dependencies {
     implementation("jakarta.validation:jakarta.validation-api")
 
     // XSS Prevention - Feature 047
-    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20261107.1")
+    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20261110.1")
 
     // Email
     implementation("io.micronaut.email:micronaut-email-javamail:3.2.0")
@@ -61,7 +61,7 @@ dependencies {
 
     // Email templates (Thymeleaf) - Feature 035
     implementation("io.micronaut.views:micronaut-views-thymeleaf")
-    implementation("org.thymeleaf:thymeleaf:3.1.6.RELEASE")
+    implementation("org.thymeleaf:thymeleaf:3.1.7.RELEASE")
 
     constraints {
         implementation("ognl:ognl:3.4.17") {
@@ -88,7 +88,7 @@ dependencies {
     // time module with it, so every plain ObjectMapper lost Instant support. Without it
     // findAndRegisterModules() finds nothing and Instant fields fail to serialize.
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.23.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.13.0")
     implementation("io.micronaut.reactor:micronaut-reactor")
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")
     
