@@ -19,6 +19,7 @@ Security requirement, vulnerability and risk-assessment platform.
 - AuthZ: 10-role RBAC (including the additive BETA eligibility role) with asset access through workgroup, AWS account, AD domain, and sharing grants.
 - AI integration: 90+ tool MCP server (Streamable HTTP) for Claude Desktop/Code, Paperclip, and other MCP clients, with mandatory user delegation.
 - Email: SMTP/SES with retry + audit, Thymeleaf HTML templates, escalation tiers.
+- Inactive-user cleanup: an opt-in nightly job warns users before deletion, records each run, and applies a safety brake; dry-run is the default.
 
 ## Stack
 
@@ -91,7 +92,8 @@ Most endpoints under `/api/*` require authentication unless noted. Browser reque
 | Endpoint | Method | Roles |
 |---|---|---|
 | `/api/auth/login` | POST | public |
-| `/api/requirements`, `.../export/xlsx` | GET | auth |
+| `/api/requirements` | GET | ADMIN, REQ, SECCHAMPION |
+| `/api/requirements/export/{xlsx,docx}` | GET | public (powers the requirement download page) |
 | `/api/releases`, `.../compare`, `.../{id}` | GET/POST/DELETE | auth (write: ADMIN/REQADMIN; status: ADMIN/RELEASE_MANAGER) |
 | `/api/assets`, `.../bulk`, `.../export` | GET/POST/DELETE | auth (bulk: ADMIN) |
 | `/api/vulnerabilities/current`, `.../cli-add` | GET/POST | ADMIN, VULN |
@@ -108,6 +110,7 @@ Most endpoints under `/api/*` require authentication unless noted. Browser reque
 | `/api/identity-providers[/{id}[/test]]` | GET/POST/PUT/DELETE | ADMIN |
 | `/api/maintenance-banners[/active|/{id}]` | GET/POST/PUT/DELETE | ADMIN (active: public) |
 | `/api/users/profile[/change-password,mfa-{status,toggle}]` | GET/PUT | auth |
+| `/api/user-cleanup/{config,preview,runs[/{id}]}`, `.../run-now` | GET/POST | ADMIN (run-now requires cleanup enabled) |
 | `/api/user-dashboard` | GET | auth |
 | `/api/github-config[/{id}[/test]]`, `/api/github/import`, `.../repositories/{id}/alerts` | GET/POST/PUT/DELETE | ADMIN (import: ADMIN/VULN) |
 | `/api/risk-assessments/{id}/ai-suggestions/...` | GET/POST/DELETE | ADMIN/SECCHAMPION |
@@ -179,6 +182,7 @@ Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings):
 | [docs/RACE_CONDITIONS.md](docs/RACE_CONDITIONS.md) | Known races and the guards that close them |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Full change history (archived from CLAUDE.md) |
 | [docs/TESTING.md](docs/TESTING.md) | JUnit/Mockk, external MariaDB, CLI and frontend test patterns |
+| [docs/USER_CLEANUP.md](docs/USER_CLEANUP.md) | Inactive-user warning, deletion, safety brake, rollout, and run history |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Symptom → diagnosis → fix |
 | [docs/S3_USER_MAPPING_IMPORT.md](docs/S3_USER_MAPPING_IMPORT.md) | `import-s3` / `download-s3` / `print-s3` / `list-bucket` |
 | [docs/E2E_EXCEPTION_WORKFLOW_TEST.md](docs/E2E_EXCEPTION_WORKFLOW_TEST.md) | Vuln-exception MCP E2E |
