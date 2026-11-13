@@ -329,14 +329,14 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-11-11*
+*Last updated: 2026-11-13*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **Vulnerability replace scoping (2026-11-13)** — the Excel vulnerability import's transactional replace deleted every row on each asset named in the spreadsheet, including live CrowdStrike, CLI-manual and integration findings, until the next nightly run restored them; it now deletes only `XLSX` and pre-V213 `UNKNOWN` rows (`VulnerabilityPersistenceHelper.REPLACEABLE_SOURCES`, new `VulnerabilityRepository.deleteByAssetIdAndSourceIn`). The CrowdStrike reconcile sweep's failed-host exclusion matched by short label, so one failed `web01.a.example` kept `web01.b.example`'s patched findings out of the sweep; `reconcileScopeHosts` now excludes by failed AID or by a hostname naming the same machine (equal, or a bare short name on either side). The CLI no longer logs a zero-finding, unverified batch as "all 0 vulnerabilities were invalid". Investigation of a "patched vulnerabilities persist" report: the sampled host held only freshly re-imported rows that Falcon itself reported open. See `docs/CROWDSTRIKE_IMPORT.md` §Stale vulnerability cleanup.
+
 - **Inactive user cleanup (2026-11-11)** — opt-in nightly job (03:15, `USER_CLEANUP_ENABLED`, dry-run by default) warns users 30 days before and then deletes accounts inactive for 365 days, through `UserDeletionValidator` + `UserService.deleteUser`; ADMINs, service accounts, recent MCP-key owners and blocked users are skipped, a 10 % safety brake stops all deletions, every run is recorded per user. Passkey logins and delegated MCP calls (daily throttle) now set `last_login`. `deleteUser` now also removes MCP API keys, chat settings, preferences and relay identities, and the validator blocks only on NOT NULL references, so the manual delete no longer refuses e.g. assessment respondents or release creators. MCP `delete_user` now uses the same complete deletion, and V298 deactivates API keys left behind by earlier deletions. ADMIN endpoints `/api/user-cleanup/*`. See `docs/USER_CLEANUP.md`.
 
 - **AWS workgroup linking robustness (2026-11-08)** — link summaries split `truncated` into `reportTruncated` (500-row `links[]` cap) and `inputTruncated` (20,000-pair cap, rest NOT linked); `links[]` sorts failures/attention rows first, every rejection is logged, plus `statusReasonCounts` and report-only `staleAccounts`/`staleLinks`. CLI exits **4** when nothing failed but workgroups need attention. `UserMappingController` runs on the blocking executor. See `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`.
-
-- **Async user-mapping bulk import (2026-11-08)** — the CLI's `manage-user-mappings import`/`import-s3` now starts `POST /api/user-mappings/bulk/jobs` and polls `.../{jobId}/status` instead of holding one request open: on ~2200 accounts the synchronous `POST /bulk` took ~80 s, past production's 60 s load-balancer idle timeout, so the CLI got a 504 while the backend committed fine. Job state is in memory (single backend, owner emails not persisted), one import at a time (409), falls back to the synchronous endpoint on older backends. See `docs/CLI.md` and `docs/CHANGELOG.md`.

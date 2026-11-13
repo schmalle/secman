@@ -973,6 +973,15 @@ safety-brake-aborted sweep is `COMPLETED` with `result.aborted = true`, not
 `FAILED`. Jobs stuck >30 min (backend restart mid-sweep) are auto-failed at
 the next start.
 
+Hosts whose fetch or persist failed are excluded from the sweep (`reconcileScopeHosts`
+in the CLI): by failed AID, or by a failed hostname naming the same machine — equal
+ignoring case, or either side a bare short name. Before 2026-11-13 the match was by short
+label alone, so one failed `web01.a.example` also kept `web01.b.example`'s patched findings.
+
+The sweep only deletes legacy rows (`crowdstrike_snapshot_id IS NULL`). Rows written with a
+verified snapshot are removed only by that host's own per-host replace, so a host whose
+import keeps getting rejected keeps its last findings until the import succeeds again.
+
 Three layers of safety prevent over-deletion:
 
 1. **`vulnerability.source` (V213)** — every row carries the importer that
