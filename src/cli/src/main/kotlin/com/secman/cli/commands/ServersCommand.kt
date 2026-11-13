@@ -342,18 +342,8 @@ class ServersCommand {
                         // Exclude every host whose fetch OR persist failed this run from the
                         // sweep's scope: their rows were never re-stamped, so sweeping them
                         // would delete their entire population with nothing reinserted.
-                        // Matching is by short name (case-insensitive), consistent with the
-                        // backend's findPotentialDuplicates resolution.
-                        val failedShortNames = allFailedHostnames
-                            .map { it.substringBefore(".").lowercase() }
-                            .toSet()
-                        val effectiveHosts = streamResult.queriedHosts
-                            .minus(streamResult.failedHosts)
-                            .filterNot { host ->
-                                val short = host.hostname?.substringBefore(".")?.lowercase()
-                                host.crowdStrikeAid in allFailedAids || (short != null && short in failedShortNames)
-                            }
-                            .toSet()
+                        val effectiveHosts = com.secman.cli.service.reconcileScopeHosts(
+                            streamResult.queriedHosts, streamResult.failedHosts, allFailedHostnames, allFailedAids)
                         val excludedCount = streamResult.queriedHosts.size - effectiveHosts.size
                         if (excludedCount > 0) {
                             System.out.println("Excluding $excludedCount host(s) with failed fetch/persist or policy skips from reconcile scope " +
