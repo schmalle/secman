@@ -45,7 +45,7 @@
     "eslint-plugin-react": {
       "eslint": "$eslint"
     },
-    "glob": "14.0.5",
+    "glob": "14.0.6",
     "rimraf": "6.1.4",
     "lodash.isequal": "4.5.0",
     "unzipper": "0.12.5",
