@@ -171,6 +171,7 @@ stored matches and supports `--include-already-eol`, `--only-email`, and
 | `--severity` | `HIGH,CRITICAL` | `CRITICAL,HIGH,MEDIUM,LOW` |
 | `--device-type` | `SERVER` | `SERVER`, `DOMAIN_CONTROLLER`, `SERVER_FAMILY`, `WORKSTATION`, `ALL`; `SERVER_FAMILY` queries servers and domain controllers separately, while `ALL` also includes workstations. **Ignored with `--hostnames`.** |
 | `--min-days-open` | 30 | |
+| `--overdue-threshold` | 30 | days for the printed "Vulnerability Age Summary"; a finding counts once `max(first detection, patch date)` is older than this, the same rule as the backend (`docs/CROWDSTRIKE_IMPORT.md` §SLA anchor) |
 | `--last-seen-days` | 3 (0 = all) | recent-checkin window; **ignored with `--hostnames`** |
 | `--limit` | 800 | Spotlight page size |
 | `--save` | false | POST to backend |
@@ -178,6 +179,9 @@ stored matches and supports `--include-already-eol`, `--only-email`, and
 | `--backend-url` | `http://localhost:8080` | |
 | `--output-file` / `--format` | — / `json` | `json|csv` |
 | `--verbose` / `--insecure` | false | `--insecure` allows self-signed TLS |
+
+`--min-days-open` filters on Falcon's detection age only. It decides which findings are
+fetched, not which are overdue.
 
 `--device-type` values are case-insensitive but use the underscore-separated
 names shown above. For production server imports, prefer `SERVER_FAMILY`; the

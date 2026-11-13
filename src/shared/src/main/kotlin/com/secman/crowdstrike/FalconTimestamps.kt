@@ -83,8 +83,8 @@ object FalconTimestamps {
      * Best available "a fix existed from" date for one Falcon vulnerability record.
      *
      * Genuine remediation dates first. The previous order asked `cve.published_date`
-     * FIRST, so the field named "patch publication date" — used as the SLA anchor when
-     * `secman.vulnerability.use-patch-publication-date` is on — almost always held the
+     * FIRST, so the field named "patch publication date" — one of the two SLA anchor
+     * inputs ([SlaAnchor]) — almost always held the
      * CVE *disclosure* date, silently answering "how long since a fix existed?" with
      * "how long since the CVE was published".
      *

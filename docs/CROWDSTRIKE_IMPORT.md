@@ -634,52 +634,59 @@ vulnerabilityRepository.deleteByAssetId(assetId)
 assetRepository.delete(asset)
 ```
 
-## Timestamp fix (overdue calculation)
+## SLA anchor (overdue calculation)
 
-Fixed 2025-11-17. Earlier code used `scanTimestamp = LocalDateTime.now()`, so `daysOpen = now − scanTimestamp` was always 0–1, masking real age.
+**Rule (since 2026-11-13):** a finding is overdue once `max(first detection, patch date) + reminderOneDays`
+(default 30) has passed and no exception covers it.
 
-Now:
-```kotlin
-val (scanTimestamp, daysOpenText) = if (usePatchPublicationDate && patchPublicationDate != null) {
-    Pair(patchPublicationDate, daysText)                                   // Feature 041
-} else {
-    Pair(currentImportTime.minusDays(vulnDto.daysOpen.toLong()), daysText) // discovery time
-}
+| | Example | Anchor | Overdue on |
+|---|---|---|---|
+| Fix known on day x, CrowdStrike first detects it on the host on day z = x + y | x = 1 Mar, z = 20 Apr | z | 20 May |
+| Detected before any fix existed (z < x) | z = 1 Mar, x = 20 Apr | x | 20 May |
+| No patch date published | z = 1 Mar | z | 31 Mar |
+
+The rule exists once in Kotlin (`com.secman.crowdstrike.SlaAnchor`, in `src/shared`, used by the
+backend and the CLI) and once in SQL, as the generated column
+`vulnerability.sla_anchor_at` (`Vulnerability.SLA_ANCHOR_SQL`, V299):
+
+```sql
+GREATEST(COALESCE(first_seen_at, scan_timestamp),
+         COALESCE(patch_publication_date, first_seen_at, scan_timestamp))
 ```
 
-Example: now = 2025-11-17, CrowdStrike `daysOpen=901` → `scanTimestamp = 2023-04-16` → overdue = 901 days → red badge ✅.
+Every overdue reader (list filter, per-row badge, outdated-assets view, notifications, KPIs,
+compliance, account-age report) reads that column or `Vulnerability.slaAnchor()`. Keep both
+definitions identical.
 
-Toggles via env (`docs/ENVIRONMENT.md`):
-- `VULN_USE_PATCH_PUBLICATION_DATE=true` (**default since 2026-08-24**): the SLA
-  anchor is when a **fix became available**, per row, falling back to detection age
-  when no patch date is published.
-- `VULN_USE_PATCH_PUBLICATION_DATE=false`: anchor is CrowdStrike detection time.
+What the columns mean:
+- `first_seen_at` is the **earliest detection** of this (asset, CVE, product). The import keeps
+  `min(prior, new)`, so a Falcon `created_timestamp` reset does not restart the clock. It never
+  holds a patch date.
+- `scan_timestamp` is Falcon's `created_timestamp` from the latest import (detection fallback).
+- `patch_publication_date` is read at query time only. Because it is not folded into
+  `first_seen_at`, a fix published after the first import still moves the clock forward.
+- `days_open` is the import-time age from the same anchor, display only.
 
-### Why remediation age, and what enabling it costs
+Consequences:
+- A host that is rebuilt or newly onboarded (new Falcon AID, so a new snapshot) starts a new
+  clock. That is intended: the 30 days run from when CrowdStrike first saw the finding there.
+- The CLI's "Vulnerability Age Summary" (`query servers`) uses `SlaAnchor` too, so its counts
+  match the backend's.
 
-Detection age answers "how long have we known", which resets whenever a host is
-rebuilt or newly onboarded — a 2023 CVE on a host added last month reads as a month
-old. Remediation age answers "how long could we have fixed this and did not", which
-is the number an auditor means and the only one that does not reward re-imaging.
+### History
 
-Two consequences to plan for:
-
-1. **Ages jump, so overdue counts jump.** A patch date is normally much earlier than
-   the detection date, so rows get older the moment they are re-imported, and more of
-   them cross the reminder threshold at once. Expect a larger-than-usual notification
-   run after the first import following the change.
-2. **It is a one-way door.** `first_seen_at` is preserved as `min(prior, new)` across
-   re-imports (that is what stops a re-import resetting the SLA clock), so once an
-   import writes the older patch date, setting the flag back to `false` does **not**
-   restore the previous anchors — the earlier date keeps winning. A genuine revert is:
-
-   ```sql
-   UPDATE vulnerability SET first_seen_at = NULL WHERE source = 'CROWDSTRIKE';
-   ```
-   then set `VULN_USE_PATCH_PUBLICATION_DATE=false` and run a full re-import, which
-   re-anchors from detection time. Take a backup first.
-
-Nothing changes until the next import: existing rows keep their current anchors.
+- 2025-11-17: `scanTimestamp` was `LocalDateTime.now()`, so every finding was 0–1 days old and
+  nothing was ever overdue. Fixed by dating rows from Falcon's detection time.
+- 2026-08-24 to 2026-11-13: `VULN_USE_PATCH_PUBLICATION_DATE=true` (default) wrote the patch date
+  into `first_seen_at`, so the clock started when a fix became available, even when CrowdStrike
+  detected the finding on the host much later. The flag and the env variable were removed; a
+  leftover `VULN_USE_PATCH_PUBLICATION_DATE` is ignored.
+- V299 (2026-11-13) re-anchored those rows: CrowdStrike rows whose `first_seen_at` equals their
+  `patch_publication_date` got `first_seen_at = scan_timestamp` (their latest detection). Rows
+  whose patch anchor came from a since-revised patch date do not match and keep the older date,
+  which errs toward overdue. Overdue counts **drop** after V299, because detection is normally
+  later than the patch date. Refresh the outdated-assets view afterwards
+  (`POST /api/materialized-view-refresh/trigger`) or wait for the next scheduled refresh.
 
 ### The three dates, and why they differ (2026-08-24)
 
@@ -725,8 +732,7 @@ Four defects were fixed alongside (see `docs/CHANGELOG.md` 2026-08-24):
    value, so a later import supplying a real date corrects it one-way.
 3. The high-volume CLI batch payload (`/api/crowdstrike/servers/import`) sent
    only `cveId`/`severity`/`affectedProduct`/`daysOpen`. Both publication dates
-   were dropped in transit, which is why `VULN_USE_PATCH_PUBLICATION_DATE` could
-   never take effect on the main import path. It now sends `detectedAt` and both
+   were dropped in transit, so the patch date never reached the main import path. It now sends `detectedAt` and both
    dates, and the backend prefers `detectedAt` over re-deriving a timestamp from
    `daysOpen` against its own clock.
 4. Saving from the ad-hoc lookup dropped `patch_publication_date` entirely.
@@ -734,7 +740,7 @@ Four defects were fixed alongside (see `docs/CHANGELOG.md` 2026-08-24):
 `daysOpen` remains a display-only string. Never compute from it: it is a
 whole-day integer measured against whichever clock produced it, and every
 `parseDaysOpenToInt` call site defaults a parse failure to `0` — i.e. "not
-overdue". `first_seen_at` is the SLA anchor.
+overdue". The SLA anchor is `sla_anchor_at`; see §SLA anchor.
 
 ### One-shot migration for legacy rows
 
