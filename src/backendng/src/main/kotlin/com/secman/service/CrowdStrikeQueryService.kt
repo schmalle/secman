@@ -441,7 +441,7 @@ open class CrowdStrikeQueryService(
                 // Recompute days from the SLA anchor instead of returning v.daysOpen,
                 // which is the frozen string captured at last import. Without this the
                 // "live" lookup view drifts away from /api/vulnerabilities/current.
-                val anchor = v.firstSeenAt ?: v.scanTimestamp
+                val anchor = v.slaAnchor()
                 val days = ChronoUnit.DAYS.between(anchor, now)
                 val daysOpenText = if (days == 1L) "1 day" else "$days days"
                 CrowdStrikeVulnerabilityDto(
@@ -512,7 +512,7 @@ open class CrowdStrikeQueryService(
             vulnerabilities = vulns.content.map { v ->
                 // See queryFromDatabaseByHostname — same recompute to keep the
                 // hostname and instance-id paths consistent.
-                val anchor = v.firstSeenAt ?: v.scanTimestamp
+                val anchor = v.slaAnchor()
                 val days = ChronoUnit.DAYS.between(anchor, now)
                 val daysOpenText = if (days == 1L) "1 day" else "$days days"
                 CrowdStrikeVulnerabilityDto(
