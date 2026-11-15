@@ -11,12 +11,9 @@ import { downloadCsv } from '../utils/csv';
 import { canNotifyProductUsers } from './productNotifyAccess';
 import HtmlEditor from './admin/HtmlEditor';
 import { describeDeadline, statusBadge, subjectLabel } from './eolFormat';
+import { loadEolExportFindings } from './eolExport';
 
 const PAGE_SIZE = 100;
-/** Backend caps `pageSize` at 500 (EolQueryService.MAX_PAGE_SIZE) — ask for exactly that. */
-const EXPORT_PAGE_SIZE = 500;
-/** Backstop so a server that stops advancing cannot spin the export loop forever. */
-const MAX_EXPORT_PAGES = 200;
 const ACTIVE_STATUSES = new Set<EmailBroadcastJob['status']>(['PENDING', 'PROCESSING']);
 const CC_EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -90,12 +87,9 @@ const EolProductAssetsPage: React.FC<Props> = ({ product }) => {
     setExportError(null);
 
     try {
-      const all: EolFinding[] = [];
-      for (let pageIndex = 0; pageIndex < MAX_EXPORT_PAGES; pageIndex++) {
-        const response = await getEolFindingsForProduct(product, pageIndex, EXPORT_PAGE_SIZE);
-        all.push(...response.findings);
-        if (response.findings.length === 0 || all.length >= response.total) break;
-      }
+      const all = await loadEolExportFindings((pageIndex, pageSize) =>
+        getEolFindingsForProduct(product, pageIndex, pageSize),
+      );
 
       downloadCsv(
         `eol-${slugifyProduct(product)}-${new Date().toISOString().slice(0, 10)}.csv`,

@@ -87,8 +87,7 @@ transport endpoints and timing.
 ### Vulnerability dating
 | Var | Default | Effect |
 |---|---|---|
-| `VULN_USE_PATCH_PUBLICATION_DATE` | `true` | SLA anchor. `true` (default since 2026-08-24): age measured from when a **fix became available**, falling back to detection age per row when no patch date is published. `false`: age measured from CrowdStrike detection. **One-way door** — `first_seen_at` keeps `min(prior, new)`, so reverting the flag alone does not restore the old anchors; see docs/CROWDSTRIKE_IMPORT.md §Timestamp fix. |
-| `VULN_REQUIRE_PATCH_PUBLICATION_DATE` | `false` | only import vulns with patch-publication date |
+| `VULN_REQUIRE_PATCH_PUBLICATION_DATE` | `false` | only import vulns with patch-publication date. A filter, not the SLA anchor: the anchor is always max(first detection, patch date), see docs/CROWDSTRIKE_IMPORT.md §SLA anchor. `VULN_USE_PATCH_PUBLICATION_DATE` was removed on 2026-11-13 and is ignored. |
 
 ### End-of-life catalogue (see `docs/EOL.md`)
 Source of the EOL lifecycle data. Operator configuration only — no request value ever reaches this URL.
@@ -149,7 +148,7 @@ The CLI's `query servers --save` ends with `POST /api/crowdstrike/servers/reconc
 
 Safety measures (2026-08-21 incident: a timezone-skewed cutoff's fallback deleted 727,637 rows the run had just imported):
 - **Cutoff translation**: new CLIs send `clientNow`; the backend measures the clock offset and translates the cutoff into its own clock. Without `clientNow`, a future cutoff **aborts** the sweep (delete nothing) instead of guessing a fallback.
-- **Failure-aware scope**: hosts whose Falcon fetch failed/truncated or whose backend persist failed are excluded from the sweep's scope — their un-refreshed rows are not "stale", they were simply never fetched.
+- **Failure-aware scope**: hosts whose Falcon fetch failed/truncated or whose backend persist failed are excluded from the sweep's scope — their un-refreshed rows are not "stale", they were simply never fetched. A failed name excludes a host only when it names the same machine: equal ignoring case, or one side is a bare short name. Two different FQDNs sharing a short label (`web01.a.example`, `web01.b.example`) no longer shield each other (2026-11-13).
 - **Percentage brake** (below) plus the existing zero-refresh and empty-scope brakes; the percentage brake fails closed on count errors.
 - **Dry run**: `secman query servers --save --reconcile-dry-run` reports what the sweep would delete without deleting.
 
@@ -335,7 +334,6 @@ SECMAN_BACKEND_URL=https://api.example.com
 FRONTEND_URL=https://secman.example.com
 SECMAN_AUTH_COOKIE_SECURE=true
 # optional
-# VULN_USE_PATCH_PUBLICATION_DATE=true
 # VULN_REQUIRE_PATCH_PUBLICATION_DATE=false
 # SECMAN_DEBUG=false
 # SECMAN_LOGGING=

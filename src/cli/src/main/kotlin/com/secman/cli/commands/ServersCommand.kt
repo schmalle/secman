@@ -6,8 +6,10 @@ import com.secman.cli.config.ConfigLoader
 import com.secman.cli.service.CliHttpClient
 import com.secman.cli.service.VulnerabilityStorageService
 import com.secman.cli.service.buildCrowdStrikeServerBatches
+import com.secman.crowdstrike.SlaAnchor
 import com.secman.crowdstrike.client.StreamingVulnerabilityBatch
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
+import com.secman.crowdstrike.dto.CrowdStrikeVulnerabilityDto
 import com.secman.crowdstrike.dto.DeviceType
 import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.crowdstrike.exception.AuthenticationException
@@ -16,6 +18,7 @@ import com.secman.crowdstrike.exception.NotFoundException
 import com.secman.crowdstrike.exception.RateLimitException
 import io.micronaut.context.ApplicationContext
 import org.slf4j.LoggerFactory
+import java.time.LocalDateTime
 
 /**
  * Servers command for querying CrowdStrike server vulnerabilities with auto-import
@@ -223,7 +226,7 @@ class ServersCommand {
                                 System.out.println("  Stream batch $streamBatchNum: ${batchVulns.devices.size} devices, ${batchVulns.vulnerabilities.size} raw findings across ${serverBatches.size} resolved host groups")
 
                                 totalSystemsWithOverdueVulns += serverBatches.count { (_, batch) ->
-                                    batch.vulnerabilities.any { parseDaysOpenToInt(it.daysOpen) > overdueThreshold }
+                                    batch.vulnerabilities.any { isOverdue(it) }
                                 }
 
                                 val storeStarted = System.nanoTime()
@@ -317,7 +320,7 @@ class ServersCommand {
                     if (totalServersProcessed > 0) {
                         val totalWithoutOverdue = totalServersProcessed - totalSystemsWithOverdueVulns
                         val percent = totalSystemsWithOverdueVulns * 100.0 / totalServersProcessed
-                        System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days) ---")
+                        System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days since max(detection, patch date)) ---")
                         System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $totalSystemsWithOverdueVulns of $totalServersProcessed (${String.format("%.1f", percent)}%)")
                         System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of $totalServersProcessed")
 
@@ -342,18 +345,8 @@ class ServersCommand {
                         // Exclude every host whose fetch OR persist failed this run from the
                         // sweep's scope: their rows were never re-stamped, so sweeping them
                         // would delete their entire population with nothing reinserted.
-                        // Matching is by short name (case-insensitive), consistent with the
-                        // backend's findPotentialDuplicates resolution.
-                        val failedShortNames = allFailedHostnames
-                            .map { it.substringBefore(".").lowercase() }
-                            .toSet()
-                        val effectiveHosts = streamResult.queriedHosts
-                            .minus(streamResult.failedHosts)
-                            .filterNot { host ->
-                                val short = host.hostname?.substringBefore(".")?.lowercase()
-                                host.crowdStrikeAid in allFailedAids || (short != null && short in failedShortNames)
-                            }
-                            .toSet()
+                        val effectiveHosts = com.secman.cli.service.reconcileScopeHosts(
+                            streamResult.queriedHosts, streamResult.failedHosts, allFailedHostnames, allFailedAids)
                         val excludedCount = streamResult.queriedHosts.size - effectiveHosts.size
                         if (excludedCount > 0) {
                             System.out.println("Excluding $excludedCount host(s) with failed fetch/persist or policy skips from reconcile scope " +
@@ -449,7 +442,7 @@ class ServersCommand {
                     val hostsWithOverdue = summary.hostsWithOverdueVulns
                     val hostsWithoutOverdue = totalHosts - hostsWithOverdue
                     val overduePercent = hostsWithOverdue * 100.0 / totalHosts
-                    System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days) ---")
+                    System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days since max(detection, patch date)) ---")
                     System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $hostsWithOverdue of $totalHosts (${String.format("%.1f", overduePercent)}%)")
                     System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $hostsWithoutOverdue of $totalHosts")
                 }
@@ -539,12 +532,12 @@ class ServersCommand {
             }
 
             val hostsWithOverdue = vulnerabilitiesByDevice.count { (_, vulns) ->
-                vulns.any { parseDaysOpenToInt(it.daysOpen) > overdueThreshold }
+                vulns.any { isOverdue(it) }
             }
             val totalHosts = vulnerabilitiesByDevice.size
             val hostsWithoutOverdue = totalHosts - hostsWithOverdue
             val overduePercent = hostsWithOverdue * 100.0 / totalHosts
-            System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days) ---")
+            System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days since max(detection, patch date)) ---")
             System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $hostsWithOverdue of $totalHosts (${String.format("%.1f", overduePercent)}%)")
             System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $hostsWithoutOverdue of $totalHosts")
 
@@ -564,7 +557,7 @@ class ServersCommand {
             val serverBatches = buildCrowdStrikeServerBatches(response.vulnerabilities, response.devices, response.failedAids)
 
             val systemsWithOverdueVulns = serverBatches.count { (_, batch) ->
-                batch.vulnerabilities.any { parseDaysOpenToInt(it.daysOpen) > overdueThreshold }
+                batch.vulnerabilities.any { isOverdue(it) }
             }
 
             val result = storageService.storeServerVulnerabilities(serverBatches, backendUrl = resolvedBackendUrl, authToken = authToken,
@@ -590,7 +583,7 @@ class ServersCommand {
             if (result.serversProcessed > 0) {
                 val totalWithoutOverdue = result.serversProcessed - systemsWithOverdueVulns
                 val percent = systemsWithOverdueVulns * 100.0 / result.serversProcessed
-                System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days) ---")
+                System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days since max(detection, patch date)) ---")
                 System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $systemsWithOverdueVulns of ${result.serversProcessed} (${String.format("%.1f", percent)}%)")
                 System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of ${result.serversProcessed}")
 
@@ -721,6 +714,10 @@ class ServersCommand {
         val maxMB = runtime.maxMemory() / (1024 * 1024)
         System.out.println("  [Memory $label] ${usedMB}MB / ${maxMB}MB (${usedMB * 100 / maxMB}%)")
     }
+
+    /** Same rule as the backend overdue filter: max(detection, patch date) + threshold has passed. */
+    private fun isOverdue(vuln: CrowdStrikeVulnerabilityDto): Boolean =
+        SlaAnchor.isOverdue(vuln.detectedAt, vuln.patchPublicationDate, overdueThreshold, LocalDateTime.now())
 
     private fun parseDaysOpenToInt(daysOpen: String?): Int {
         if (daysOpen.isNullOrBlank()) return 0
