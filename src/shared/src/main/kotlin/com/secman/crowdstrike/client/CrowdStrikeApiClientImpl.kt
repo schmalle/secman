@@ -30,6 +30,7 @@ import java.io.IOException
 import java.net.SocketTimeoutException
 import java.time.Instant
 import com.secman.crowdstrike.FalconTimestamps
+import com.secman.crowdstrike.SlaAnchor
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -741,6 +742,7 @@ open class CrowdStrikeApiClientImpl(
         val overdueHosts = mutableSetOf<String>()
         var totalVulns = 0
         val deviceChunks = serverDeviceIds.chunked(deviceBatchSize)
+        val summaryNow = LocalDateTime.now()
 
         deviceChunks.forEachIndexed { index, chunk ->
             log.info("Summary batch {}/{}: querying vulnerabilities for {} devices",
@@ -756,7 +758,7 @@ open class CrowdStrikeApiClientImpl(
 
             batchVulns.groupBy { row -> row.crowdStrikeAid?.let { "${row.hostname} [AID: $it]" } ?: row.hostname }.forEach { (host, vulns) ->
                 hostCounts.merge(host, vulns.size) { a, b -> a + b }
-                if (vulns.any { parseDaysOpen(it.daysOpen) > overdueThreshold }) {
+                if (vulns.any { SlaAnchor.isOverdue(it.detectedAt, it.patchPublicationDate, overdueThreshold, summaryNow) }) {
                     overdueHosts.add(host)
                 }
             }
@@ -772,14 +774,6 @@ open class CrowdStrikeApiClientImpl(
             hostCounts = hostCounts,
             hostsWithOverdueVulns = overdueHosts.size
         )
-    }
-
-    /**
-     * Parse daysOpen string to integer value (e.g., "526 days" -> 526)
-     */
-    private fun parseDaysOpen(daysOpen: String?): Int {
-        if (daysOpen.isNullOrBlank()) return 0
-        return daysOpen.split(" ").firstOrNull()?.toIntOrNull() ?: 0
     }
 
     /**

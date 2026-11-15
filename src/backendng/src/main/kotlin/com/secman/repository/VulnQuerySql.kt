@@ -62,7 +62,7 @@ object VulnQuerySql {
 
     /**
      * SLA status against a bound `:thresholdDate`. `sla_anchor_at` is the generated
-     * `COALESCE(first_seen_at, scan_timestamp)` (V295) — the same anchor as
+     * max(first detection, patch date) (V299, `Vulnerability.SLA_ANCHOR_SQL`), the same anchor as
      * `VulnerabilityService.calculateOverdueStatus`, so the list filter and the per-row badge agree.
      * Overdue excludes excepted rows; within-SLA historically does not check exceptions.
      */

@@ -14,8 +14,8 @@ import java.time.LocalDateTime
  *  - `remediation.vendor_release_date` — when a fix became available
  *
  * `extractPatchPublicationDate` asked `cve.published_date` FIRST, so the column
- * named `patch_publication_date` — and used as the SLA anchor when
- * `secman.vulnerability.use-patch-publication-date` is on — almost always held the
+ * named `patch_publication_date` — one of the two SLA anchor inputs
+ * (`SlaAnchor`) — almost always held the
  * CVE disclosure date. "How long since a fix existed?" was silently answered with
  * "how long since the CVE was published".
  *
