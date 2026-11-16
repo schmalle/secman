@@ -10,7 +10,7 @@ Security requirement, vulnerability and risk-assessment platform.
 ## What it does
 
 - Security requirement lifecycle (versioned releases: PREPARATION → ALIGNMENT → ACTIVE → ARCHIVED), Excel/Word/CSV export, automated translation (OpenRouter, 10 languages).
-- Vulnerability management: CrowdStrike Falcon import, GitHub App Dependabot alert tracking with 30-day non-decrease owner alerts, exception-request workflow, statistics, heatmap, materialized view for fast outdated-asset queries (<2s @ 10k assets).
+- Vulnerability management: CrowdStrike Falcon import, GitHub App Dependabot alert tracking with 30-day non-decrease owner alerts, exception-request workflow, statistics, heatmap, materialized view for fast outdated-asset queries (<2s @ 10k assets). Overdue findings use the later of first detection and patch publication as their SLA start.
 - Asset inventory: Nmap/Masscan import, AD/cloud metadata, criticality, workgroup-scoped access.
 - Risk register, demand classification, compliance-framework mapping (SOC2, ISO 27001, NIST), optional AI-assisted pre-fill of compliance answers (OpenRouter LLM, confidence scoring + citations, human review required).
 - AWS account onboarding: imports requesting notifications use a saved welcome-email (default) or risk-assessment policy. The welcome subject and body are editable in the web UI; advanced guided questionnaires remain supported.
@@ -169,6 +169,7 @@ Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings):
 | [docs/PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md](docs/PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md) | Paperclip company, agent, heartbeat, reminder, respondent, and assessor blueprint |
 | [docs/INTEGRATION_RESULTS.md](docs/INTEGRATION_RESULTS.md) | Shared Visual/Web/GitHub checker contract and lifecycle |
 | [docs/CROWDSTRIKE_IMPORT.md](docs/CROWDSTRIKE_IMPORT.md) | Transactional-replace pattern, JPA cascade trap |
+| [docs/OVERDUE_NOTIFICATIONS.md](docs/OVERDUE_NOTIFICATIONS.md) | Overdue finding calculation and owner notification schedule |
 | [docs/GITHUB_REPOS.md](docs/GITHUB_REPOS.md) | GitHub App vulnerability import, Dependabot alerts, owner alerting |
 | [docs/AI_RISK_ASSESSMENT.md](docs/AI_RISK_ASSESSMENT.md) | AI-assisted risk-assessment answer pre-fill |
 | [docs/AWS_ACCOUNT_RISK_ASSESSMENT.md](docs/AWS_ACCOUNT_RISK_ASSESSMENT.md) | Auto risk assessment for newly discovered AWS accounts |
