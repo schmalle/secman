@@ -16,7 +16,7 @@ Security requirement, vulnerability and risk assessment management tool.
    /*      ───►  Frontend :4321 (Astro/React SSR)
 ```
 
-Stack: Kotlin 2.4.21 / Java 25 · Micronaut 5.2.5 · Hibernate JPA · Astro 7.4.11 / React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.9.0 · Picocli 4.7.7.
+Stack: Kotlin 2.4.21 / Java 25 · Micronaut 5.2.5 · Hibernate JPA · Astro 7.4.12 / React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.9.1 · Picocli 4.7.7.
 
 ## Index
 
@@ -37,6 +37,8 @@ Stack: Kotlin 2.4.21 / Java 25 · Micronaut 5.2.5 · Hibernate JPA · Astro 7.4.
 | [PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md](./PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md) | Automated risk-assessment company, agents, heartbeats, and respondent reminders |
 | [INTEGRATION_RESULTS.md](./INTEGRATION_RESULTS.md) | Shared checker contract, lifecycle, evidence and rollout |
 | [CROWDSTRIKE_IMPORT.md](./CROWDSTRIKE_IMPORT.md) | Vulnerability and installed-product imports, transactional-replace pattern, JPA cascade trap |
+| [OVERDUE_NOTIFICATIONS.md](./OVERDUE_NOTIFICATIONS.md) | Overdue finding calculation and owner notification schedule |
+| [USER_CLEANUP.md](./USER_CLEANUP.md) | Inactive-user warning, deletion, safety brake, rollout, and run history |
 | [TESTING.md](./TESTING.md) | JUnit/Mockk, external MariaDB, CLI and frontend test patterns |
 | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | Symptom → fix |
 | [DB_CONNECTION_LOST_RUNBOOK.md](./DB_CONNECTION_LOST_RUNBOOK.md) | Step-by-step recovery when `/health` reports the database connection lost |
