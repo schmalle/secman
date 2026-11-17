@@ -179,6 +179,7 @@ Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings):
 | [docs/RELAY.md](docs/RELAY.md) | Zero-trust mobile relay (Go, DMZ) and the iOS app |
 | [docs/AWS.md](docs/AWS.md) | AWS account mapping, sharing and access rules |
 | [docs/AWS_ACCOUNT_WORKGROUP_LINKING.md](docs/AWS_ACCOUNT_WORKGROUP_LINKING.md) | Display-name workgroup linking during AWS account imports |
+| [docs/USER_ACCESS_OVERVIEW.md](docs/USER_ACCESS_OVERVIEW.md) | Asset access through roles, workgroups, AWS accounts, AD domains, and sharing |
 | [docs/SKILLS.md](docs/SKILLS.md) | Which agent skill to use when, and what each one writes |
 | [docs/RACE_CONDITIONS.md](docs/RACE_CONDITIONS.md) | Known races and the guards that close them |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Full change history (archived from CLAUDE.md) |
