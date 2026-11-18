@@ -329,7 +329,7 @@ Rules:
     /** Fetch in bounded batches, then retain the caller's order and duplicate IDs. */
     internal fun loadRequestedUnmappedRequirements(ids: List<Long>): List<Requirement> {
         val byId = ids.distinct().chunked(500)
-            .flatMap { requirementRepository.findAllById(it) }
+            .flatMap { requirementRepository.findByIdIn(it) }
             .associateBy { it.id }
         return ids.mapNotNull { byId[it] }.filter { it.norms.isEmpty() }
     }

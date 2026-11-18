@@ -11,6 +11,9 @@ import java.util.*
 @Repository
 interface RequirementRepository : JpaRepository<Requirement, Long> {
 
+    @Query("SELECT r FROM Requirement r WHERE r.id IN :ids")
+    fun findByIdIn(ids: Collection<Long>): List<Requirement>
+
     @Query("SELECT r FROM Requirement r WHERE r.isCurrent = true")
     fun findCurrentRequirements(): List<Requirement>
     
