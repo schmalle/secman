@@ -91,8 +91,8 @@ source "$HOME/.sdkman/bin/sdkman-init.sh"
 # Java 25 (Amazon Corretto build via SDKMAN)
 sdk install java 25-amzn
 
-# Gradle 9.8.2 (project version)
-sdk install gradle 9.8.2
+# Gradle 9.9.1 (project wrapper version)
+sdk install gradle 9.9.1
 ```
 
 The scripts source `${SDKMAN_DIR}/bin/sdkman-init.sh` themselves, so a fresh
@@ -112,9 +112,9 @@ sudo dnf install -y java-25-amazon-corretto-devel   # AL2023, if available
 # from your Java vendor if the OS repositories do not provide one.
 
 # System Gradle (optional — ./gradlew works as a fallback)
-curl -fsSL https://services.gradle.org/distributions/gradle-9.7.0-bin.zip -o /tmp/gradle.zip
+curl -fsSL https://services.gradle.org/distributions/gradle-9.9.1-bin.zip -o /tmp/gradle.zip
 sudo mkdir -p /opt/gradle && sudo unzip -d /opt/gradle /tmp/gradle.zip
-echo 'export PATH=$PATH:/opt/gradle/gradle-9.7.0/bin' | sudo tee /etc/profile.d/gradle.sh
+echo 'export PATH=$PATH:/opt/gradle/gradle-9.9.1/bin' | sudo tee /etc/profile.d/gradle.sh
 ```
 
 The project ships a Gradle wrapper (`./gradlew`). `startbackenddevaws.sh` calls

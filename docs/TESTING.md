@@ -7,8 +7,8 @@ Integration tests run **unconditionally** — they *fail*, not skip, when no tes
 Stack:
 ```
 junit-jupiter 6.1.3, junit-platform-launcher 6.1.3,
-micronaut-test-junit5 5.1.1,
-mockk 1.14.11,
+micronaut-test-junit5 5.2.0,
+mockk 1.14.12,
 assertj 3.27.7
 ```
 
