@@ -27,7 +27,7 @@ Kotlin 2.4.21 / Java 25 · Micronaut 5.2.5 · Hibernate JPA · Astro 7.4.12 + Re
 
 ## Quick Start (development)
 
-Prereqs: Java 25, Node 22.23.4+, MariaDB 11.4+, Git.
+Prereqs: Java 25, Node 22.23.4+, MariaDB 11.4+, Git, and an authenticated [Proton Pass CLI](docs/PASS_CLI.md) (`pass-cli`) for the dev start scripts.
 
 ```bash
 git clone https://github.com/schmalle/secman.git && cd secman
@@ -179,6 +179,7 @@ Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings):
 | [docs/RELAY.md](docs/RELAY.md) | Zero-trust mobile relay (Go, DMZ) and the iOS app |
 | [docs/AWS.md](docs/AWS.md) | AWS account mapping, sharing and access rules |
 | [docs/AWS_ACCOUNT_WORKGROUP_LINKING.md](docs/AWS_ACCOUNT_WORKGROUP_LINKING.md) | Display-name workgroup linking during AWS account imports |
+| [docs/USER_ACCESS_OVERVIEW.md](docs/USER_ACCESS_OVERVIEW.md) | Asset access through roles, workgroups, AWS accounts, AD domains, and sharing |
 | [docs/SKILLS.md](docs/SKILLS.md) | Which agent skill to use when, and what each one writes |
 | [docs/RACE_CONDITIONS.md](docs/RACE_CONDITIONS.md) | Known races and the guards that close them |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Full change history (archived from CLAUDE.md) |
