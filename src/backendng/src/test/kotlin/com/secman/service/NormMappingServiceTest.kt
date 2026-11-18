@@ -30,12 +30,28 @@ class NormMappingServiceTest {
         val first = Requirement(id = 1L, shortreq = "First")
         val second = Requirement(id = 2L, shortreq = "Second")
         val mapped = Requirement(id = 3L, shortreq = "Mapped", norms = mutableSetOf(mockk<Norm>()))
-        every { requirements.findAllById(any<Iterable<Long>>()) } returns listOf(first, second, mapped)
+        every { requirements.findByIdIn(any()) } returns listOf(first, second, mapped)
 
         val result = service.loadRequestedUnmappedRequirements(listOf(2L, 1L, 3L, 99L, 2L))
 
         assertThat(result).containsExactly(second, first, second)
-        verify(exactly = 1) { requirements.findAllById(match { it.toList() == listOf(2L, 1L, 3L, 99L) }) }
+        verify(exactly = 1) { requirements.findByIdIn(match { it.toList() == listOf(2L, 1L, 3L, 99L) }) }
         verify(exactly = 0) { requirements.findById(any()) }
+    }
+
+    @Test
+    fun `requested requirements bound each repository batch to 500 ids`() {
+        val requestedIds = (1L..501L).toList() + listOf(2L, 501L)
+        val batches = mutableListOf<List<Long>>()
+        every { requirements.findByIdIn(any()) } answers {
+            firstArg<Collection<Long>>().toList().also(batches::add).reversed().map {
+                Requirement(id = it, shortreq = "Requirement $it")
+            }
+        }
+
+        val result = service.loadRequestedUnmappedRequirements(requestedIds)
+
+        assertThat(batches).containsExactly((1L..500L).toList(), listOf(501L))
+        assertThat(result.map { it.id }).containsExactlyElementsOf(requestedIds)
     }
 }
