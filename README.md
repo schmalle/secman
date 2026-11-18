@@ -27,7 +27,7 @@ Kotlin 2.4.21 / Java 25 · Micronaut 5.2.5 · Hibernate JPA · Astro 7.4.12 + Re
 
 ## Quick Start (development)
 
-Prereqs: Java 25, Node 22.23.4+, MariaDB 11.4+, Git.
+Prereqs: Java 25, Node 22.23.4+, MariaDB 11.4+, Git, and an authenticated [Proton Pass CLI](docs/PASS_CLI.md) (`pass-cli`) for the dev start scripts.
 
 ```bash
 git clone https://github.com/schmalle/secman.git && cd secman
