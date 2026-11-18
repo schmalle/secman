@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost } from '../utils/auth';
 import { clearLowConfidence, listAppliedSuggestions, type AppliedSuggestion, type ConfidenceBand } from '../services/aiSuggestions';
 import AiSuggestionPanel from './AiSuggestionPanel';
+import { loadAssessmentSections } from './assessmentSections';
 
 interface Asset {
   id: number;
@@ -134,20 +135,21 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
       setLoading(true);
       setError(null);
 
-      // Fetch assessment data
-      const assessmentResponse = await authenticatedGet(`/api/responses/assessment/${assessmentId}/authenticated`);
-      if (!assessmentResponse.ok) {
-        throw new Error('Failed to load assessment data');
-      }
-      const data: AssessmentData = await assessmentResponse.json();
+      const { assessment: data, requirements: reqWithResp, suggestions } = await loadAssessmentSections(
+        async (): Promise<AssessmentData> => {
+          const response = await authenticatedGet(`/api/responses/assessment/${assessmentId}/authenticated`);
+          if (!response.ok) throw new Error('Failed to load assessment data');
+          return response.json();
+        },
+        async (): Promise<RequirementWithResponse[]> => {
+          const response = await authenticatedGet(`/api/responses/assessment/${assessmentId}/requirements-with-responses`);
+          if (!response.ok) throw new Error('Failed to load requirements');
+          return response.json();
+        },
+        () => listAppliedSuggestions(assessmentId),
+        error => console.debug('listAppliedSuggestions failed (likely 403 or feature off):', error),
+      );
       setAssessmentData(data);
-
-      // Fetch requirements with responses
-      const requirementsResponse = await authenticatedGet(`/api/responses/assessment/${assessmentId}/requirements-with-responses`);
-      if (!requirementsResponse.ok) {
-        throw new Error('Failed to load requirements');
-      }
-      const reqWithResp: RequirementWithResponse[] = await requirementsResponse.json();
       setRequirementsWithResponses(reqWithResp);
 
       // Initialize form data with existing responses
@@ -164,17 +166,11 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
       });
       setResponses(initialResponses);
 
-      // Feature 088: fetch any AI suggestions for this assessment. The endpoint
-      // returns [] for callers who don't have AI access, so no extra gating
-      // here is needed — degrade silently.
-      try {
-        const sugg = await listAppliedSuggestions(assessmentId);
+      // Suggestions are optional; callers without AI access can still answer.
+      if (suggestions) {
         const map: Record<number, AppliedSuggestion> = {};
-        sugg.forEach(s => { map[s.requirementId] = s; });
+        suggestions.forEach(s => { map[s.requirementId] = s; });
         setAiSuggestions(map);
-      } catch (e) {
-        // Don't surface — the feature may be off or the user is RISK-only.
-        console.debug('listAppliedSuggestions failed (likely 403 or feature off):', e);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
