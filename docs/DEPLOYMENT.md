@@ -25,7 +25,7 @@ curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash -s -- -
 sudo useradd -r -m -d /opt/secman -s /bin/bash secman
 ```
 
-Verify: `java -version` → 21, `node -v` → 20, `nginx -v` → ≥ 1.18.
+Verify: `java -version` → 25, `node -v` → 22.23.4 or newer, `nginx -v` → ≥ 1.18.
 
 ## Database
 
