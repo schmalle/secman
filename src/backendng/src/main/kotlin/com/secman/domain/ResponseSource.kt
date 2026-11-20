@@ -10,10 +10,12 @@ import io.micronaut.serde.annotation.Serdeable
  *                 AiAnswerSuggestion, never touched by a human.
  * AI_EDITED     — was AI_GENERATED, then a human modified answerType or
  *                 comment. Re-runs skip these unless force=true.
+ * SUPPLIER_PORTAL — self-reported answer retrieved by the internal supplier importer.
  */
 @Serdeable
 enum class ResponseSource {
     MANUAL,
     AI_GENERATED,
-    AI_EDITED
+    AI_EDITED,
+    SUPPLIER_PORTAL
 }

@@ -9,6 +9,7 @@ import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Singleton
 import jakarta.persistence.EntityManager
 import jakarta.persistence.LockModeType
+import java.time.Instant
 
 /** Serializes authorization, answer revisions, submission and human acceptance on the assessment row. */
 @Singleton
@@ -23,7 +24,8 @@ open class AssessmentWorkflowService(
     private val apiKeys: McpApiKeyRepository,
     private val requirements: RequirementRepository,
     private val releases: ReleaseRequirementScopeService,
-    private val access: RiskAssessmentAccessService
+    private val access: RiskAssessmentAccessService,
+    private val supplierInvitations: SupplierAssessmentInvitationRepository
 ) {
     /** Input is validated as a complete batch before persistence. */
     data class Answer(val requirementId: Long, val answerType: AnswerType, val comment: String?)
@@ -47,10 +49,12 @@ open class AssessmentWorkflowService(
         entityManager.refresh(assessment, LockModeType.PESSIMISTIC_READ)
     }
 
-    private fun locked(id: Long): RiskAssessment =
+    internal fun findLocked(id: Long): RiskAssessment? =
         entityManager.find(RiskAssessment::class.java, id, LockModeType.PESSIMISTIC_WRITE)
             ?.also { entityManager.refresh(it, LockModeType.PESSIMISTIC_WRITE) }
-            ?: throw HttpStatusException(HttpStatus.NOT_FOUND, "Assessment not found")
+
+    internal fun locked(id: Long): RiskAssessment =
+        findLocked(id) ?: throw HttpStatusException(HttpStatus.NOT_FOUND, "Assessment not found")
 
     private fun current(authentication: Authentication): Authentication {
         val id = access.actorId(authentication) ?: denied()
@@ -59,6 +63,58 @@ open class AssessmentWorkflowService(
     }
 
     private fun denied(): Nothing = throw HttpStatusException(HttpStatus.FORBIDDEN, "Assessment action not permitted")
+
+    internal fun requireAssessmentManager(authentication: Authentication): Authentication =
+        current(authentication).also { if (!access.isGlobal(it)) denied() }
+
+    internal fun requireSupplierIncidentAdmin(authentication: Authentication): Long {
+        val actor = current(authentication)
+        val id = access.actorId(actor) ?: denied()
+        if ("ADMIN" !in actor.roles || users.findById(id).orElseThrow().serviceAccount) denied()
+        return id
+    }
+
+    internal fun invalidateSupplierAcceptance(assessmentId: Long, revision: Long) {
+        acceptances.findByAssessmentId(assessmentId).filter { it.answerRevision == revision && !it.invalidated }
+            .forEach {
+                it.invalidated = true
+                acceptances.update(it)
+            }
+    }
+
+    internal fun canReviewSupplierCollection(id: Long, authentication: Authentication): Boolean {
+        val actor = current(authentication)
+        val assessment = assessments.findById(id).orElse(null) ?: return false
+        return access.canReview(assessment, actor)
+    }
+
+    internal fun managesSupplierCollection(authentication: Authentication): Boolean = access.isGlobal(current(authentication))
+
+    internal fun hasLiveSupplierDelivery(assessmentId: Long): Boolean =
+        supplierInvitations.findFirstByAssessmentIdOrderByGenerationDesc(assessmentId)?.let {
+            it.deliveryState != "REVOKED" && it.deliveryExpiresAt?.isAfter(Instant.now()) == true
+        } ?: false
+
+    internal fun requireUnusedSupplierAssessment(assessment: RiskAssessment) {
+        val id = assessment.id!!
+        if (assessment.status != "STARTED" || !assessment.authorshipComplete || assessment.answerRevision != 0L ||
+            responses.countByRiskAssessmentId(id) != 0L ||
+            assignments.findByAssessmentId(id).any { it.role == "RESPONDENT" && !it.revoked }
+        ) throw HttpStatusException(HttpStatus.CONFLICT, "Supplier collection requires an unused assessment without a respondent")
+    }
+
+    /** Called by supplier intake while holding the assessment lock and its import transaction. */
+    internal fun recordSupplierSubmission(
+        assessment: RiskAssessment, email: String, recipientUserId: Long?, answers: List<Answer>
+    ) {
+        val assignment = assignments.save(AssessmentAssignment(
+            assessmentId = assessment.id!!, email = email, role = "SUPPLIER_RESPONDENT"
+        ))
+        val contributor = recipientUserId ?: users.findByEmailIgnoreCase(email).orElse(null)?.id
+        write(assessment, answers, listOf(assignment), contributor, email, null, "SUPPLIER_PORTAL")
+        submitAssignments(assessment, listOf(assignment))
+        check(assessment.status == "COMPLETED") { "Supplier submission did not complete the assessment" }
+    }
 
     /** Seed explicit assignments when an assessment is created, without granting resource access. */
     @Transactional
@@ -93,6 +149,7 @@ open class AssessmentWorkflowService(
         val assessment = locked(id)
         if (!access.isGlobal(current(authentication))) denied()
         require(role in setOf("ASSESSOR", "RESPONDENT")) { "Invalid assignment role" }
+        if (role == "RESPONDENT" && supplierInvitations.existsByAssessmentId(id)) denied()
         require(requirementIds.size <= 1000 && requirementsFor(assessment).mapNotNull { it.id }.containsAll(requirementIds)) {
             "Requirements must belong to the pinned assessment"
         }
@@ -213,9 +270,11 @@ open class AssessmentWorkflowService(
             val existing = responses.findByRiskAssessmentIdAndRequirementId(assessment.id!!, input.requirementId)
             val response = existing ?: Response(answerType = input.answerType, riskAssessment = assessment,
                 requirement = requirements.findById(input.requirementId).orElseThrow())
-            if (response.source == ResponseSource.AI_GENERATED) response.source = ResponseSource.AI_EDITED
+            if (source == "SUPPLIER_PORTAL") response.source = ResponseSource.SUPPLIER_PORTAL
+            else if (response.source == ResponseSource.AI_GENERATED) response.source = ResponseSource.AI_EDITED
             response.answerType = input.answerType
-            response.comment = input.comment?.trim()?.takeIf(String::isNotBlank)
+            response.comment = if (source == "SUPPLIER_PORTAL") input.comment
+                else input.comment?.trim()?.takeIf(String::isNotBlank)
             response.respondentEmail = email
             contributions.save(AssessmentContribution(assessmentId = assessment.id!!, requirementId = input.requirementId,
                 actorUserId = actorId, actorEmail = email, initiatingUserId = initiator,
@@ -262,6 +321,7 @@ open class AssessmentWorkflowService(
     open fun reopen(id: Long, authentication: Authentication): RiskAssessment {
         val assessment = locked(id)
         if (!access.isGlobal(current(authentication))) denied()
+        if (supplierInvitations.existsByAssessmentId(id)) denied()
         assessment.status = "STARTED"
         assessment.assignmentVersion++
         assignments.findByAssessmentId(id).forEach {
@@ -277,7 +337,8 @@ open class AssessmentWorkflowService(
         val assessment = locked(job.riskAssessmentId)
         val actor = job.triggeredByUserId?.let { users.findById(it).orElse(null) }?.takeIf { it.enabled } ?: denied()
         if (actor.roles.none { it == User.Role.ADMIN || it == User.Role.SECCHAMPION } ||
-            assessment.status != "STARTED" || assessment.assignmentVersion != job.assignmentVersion) denied()
+            assessment.status != "STARTED" || assessment.assignmentVersion != job.assignmentVersion ||
+            supplierInvitations.existsByAssessmentId(job.riskAssessmentId)) denied()
         job.apiKeyId?.let { keyId ->
             val key = apiKeys.findById(keyId).orElse(null) ?: denied()
             if (!key.isValid() || !key.permitsDelegate(actor.id!!) || !key.hasPermission(McpPermission.ASSESSMENTS_WRITE) ||
@@ -400,6 +461,10 @@ open class AssessmentWorkflowService(
         if (users.findById(actorId).orElseThrow().serviceAccount || !access.canReview(assessment, actor)) denied()
         check(assessment.status == "COMPLETED" && assessment.authorshipComplete && assessment.answerRevision == expectedRevision) {
             "Acceptance requires submitted answers, complete authorship and the current revision"
+        }
+        val supplierInvitation = supplierInvitations.findFirstByAssessmentIdOrderByGenerationDesc(id)
+        if (supplierInvitation?.pollIntegrityConflict == true || supplierInvitation?.incidentHeldAt != null) {
+            throw HttpStatusException(HttpStatus.CONFLICT, "Supplier submission integrity requires review")
         }
         require(rationale.isNotBlank() && rationale.length <= 4000)
         if (contributions.findByAssessmentId(id).any {

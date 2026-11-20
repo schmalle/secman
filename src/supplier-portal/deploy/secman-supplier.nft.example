@@ -1,0 +1,20 @@
+# Include this file from the host's nftables configuration.
+# Replace the documentation address with main SecMan's observed egress IPv4.
+table inet secman_supplier {
+    set main_sources {
+        type ipv4_addr
+        elements = { 192.0.2.10 }
+    }
+
+    chain integration_ingress {
+        type filter hook input priority -10; policy accept;
+        tcp dport 9443 ip saddr @main_sources return
+        tcp dport 9443 counter drop
+    }
+
+    chain portal_egress {
+        type filter hook output priority 0; policy accept;
+        meta skuid "secman-supplier" meta l4proto tcp ct state established ct direction reply return
+        meta skuid "secman-supplier" counter drop
+    }
+}

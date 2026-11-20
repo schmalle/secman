@@ -28,7 +28,7 @@ class AssessmentWorkflowServiceTest {
     private val releases = mockk<ReleaseRequirementScopeService>(relaxed = true)
     private val access = RiskAssessmentAccessService(assignments, mockk(relaxed = true))
     private val service = AssessmentWorkflowService(entityManager, assessments, assignments, contributions, acceptances,
-        responses, users, keys, requirements, releases, access)
+        responses, users, keys, requirements, releases, access, mockk(relaxed = true))
     private val user = User(id = 1, username = "person", email = "person@example.test", passwordHash = "x")
     private val assessment = RiskAssessment(id = 10, startDate = LocalDate.now(), endDate = LocalDate.now(),
         assessmentBasisType = AssessmentBasisType.ASSET, assessmentBasisId = 20, assessor = user, requestor = user,

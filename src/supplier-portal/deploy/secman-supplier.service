@@ -1,0 +1,37 @@
+[Unit]
+Description=SecMan Supplier Portal
+Requires=nftables.service
+After=network.target nftables.service
+
+[Service]
+Type=exec
+User=secman-supplier
+Group=secman-supplier
+EnvironmentFile=/etc/secman-supplier/portal.env
+ExecStart=/usr/local/bin/secman-supplier-portal
+StateDirectory=secman-supplier
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=5s
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectKernelLogs=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+SystemCallFilter=~@mount connect io_uring_setup io_uring_enter io_uring_register
+
+[Install]
+WantedBy=multi-user.target

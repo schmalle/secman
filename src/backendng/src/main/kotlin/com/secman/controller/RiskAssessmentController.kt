@@ -635,7 +635,7 @@ open class RiskAssessmentController(
         return try {
             log.debug("Updating risk assessment with id: {}", id)
 
-            val assessment = riskAssessmentRepository.findById(id).orElse(null)
+            val assessment = workflow.findLocked(id)
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
 
             // SECURITY (A01): see canAccessAssessment().
@@ -682,7 +682,7 @@ open class RiskAssessmentController(
         return try {
             log.debug("Deleting risk assessment with id: {}", id)
 
-            val assessment = riskAssessmentRepository.findById(id).orElse(null)
+            val assessment = workflow.findLocked(id)
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
 
             // SECURITY (A01): see canAccessAssessment().
@@ -690,6 +690,11 @@ open class RiskAssessmentController(
                 log.warn("User {} denied delete of risk assessment {} (linked asset {} not accessible)",
                     authentication.name, id, linkedAssetId(assessment))
                 return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Risk assessment not found"))
+            }
+
+            if (workflow.hasLiveSupplierDelivery(id)) {
+                return HttpResponse.status<ErrorResponse>(HttpStatus.CONFLICT)
+                    .body(ErrorResponse("SUPPLIER_INVITATION_ACTIVE", "Revoke the supplier invitation or wait for it to expire"))
             }
 
             // Delete related responses and tokens first

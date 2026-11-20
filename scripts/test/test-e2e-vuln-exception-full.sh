@@ -1486,6 +1486,7 @@ res=$(mcp_call "create_asset" "$(jq -nc \
     "$ADMIN_USER_EMAIL")
 AWS_ASSET_A_ID=$(echo "$res" | jq -r '.id')
 [[ -z "$AWS_ASSET_A_ID" || "$AWS_ASSET_A_ID" == "null" ]] && fail "Failed to create $AWS_ASSET_A_NAME: $res"
+secman_test_mark_asset_observed "$AWS_ASSET_A_ID" || fail "Failed to mark $AWS_ASSET_A_NAME observed"
 ok "Created asset $AWS_ASSET_A_NAME (id=$AWS_ASSET_A_ID, cloudAccountId=$AWS_ACCOUNT_A)"
 
 res=$(mcp_call "create_asset" "$(jq -nc \
@@ -1495,6 +1496,7 @@ res=$(mcp_call "create_asset" "$(jq -nc \
     "$ADMIN_USER_EMAIL")
 AWS_ASSET_B_ID=$(echo "$res" | jq -r '.id')
 [[ -z "$AWS_ASSET_B_ID" || "$AWS_ASSET_B_ID" == "null" ]] && fail "Failed to create $AWS_ASSET_B_NAME: $res"
+secman_test_mark_asset_observed "$AWS_ASSET_B_ID" || fail "Failed to mark $AWS_ASSET_B_NAME observed"
 ok "Created asset $AWS_ASSET_B_NAME (id=$AWS_ASSET_B_ID, cloudAccountId=$AWS_ACCOUNT_B)"
 
 # 8.3 Baseline visibility — no sharing rule yet ------------------------------
@@ -1559,6 +1561,7 @@ res=$(mcp_call "create_asset" "$(jq -nc \
     "$ADMIN_USER_EMAIL")
 AWS_ASSET_C_ID=$(echo "$res" | jq -r '.id')
 [[ -z "$AWS_ASSET_C_ID" || "$AWS_ASSET_C_ID" == "null" ]] && fail "Failed to create $AWS_ASSET_C_NAME: $res"
+secman_test_mark_asset_observed "$AWS_ASSET_C_ID" || fail "Failed to mark $AWS_ASSET_C_NAME observed"
 ok "Created asset $AWS_ASSET_C_NAME (id=$AWS_ASSET_C_ID, cloudAccountId=$AWS_ACCOUNT_C)"
 
 # 8.7 Re-verify scoped sharing -----------------------------------------------
@@ -1697,6 +1700,7 @@ else
         '{name:$n,type:"SERVER",owner:$o,workgroupIds:[$wg],description:"E2E NO_EDR test asset"}')" "$ADMIN_USER_EMAIL")
     NOEDR_ASSET_ID=$(echo "$res" | jq -r '.id')
     [[ -z "$NOEDR_ASSET_ID" || "$NOEDR_ASSET_ID" == "null" ]] && fail "Failed to create $noedr_asset_name: $res"
+    secman_test_mark_asset_observed "$NOEDR_ASSET_ID" || fail "Failed to mark $noedr_asset_name observed"
     ok "Created NO_EDR test asset $noedr_asset_name (id=$NOEDR_ASSET_ID)"
 
     res=$(mcp_call "add_vulnerability" "$(jq -nc \

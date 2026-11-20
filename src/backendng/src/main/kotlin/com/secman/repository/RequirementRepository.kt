@@ -26,8 +26,6 @@ interface RequirementRepository : JpaRepository<Requirement, Long> {
     @Query("SELECT r FROM Requirement r JOIN r.norms n WHERE n.id = :normId")
     fun findByNormId(normId: Long): List<Requirement>
 
-    fun findByIdIn(ids: Collection<Long>): List<Requirement>
-
     @Query("""SELECT r FROM Requirement r WHERE r.isCurrent = true AND (
         LOWER(r.shortreq) LIKE LOWER(CONCAT('%', :query, '%'))
         OR LOWER(COALESCE(r.details, '')) LIKE LOWER(CONCAT('%', :query, '%'))
