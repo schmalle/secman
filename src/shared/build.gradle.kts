@@ -31,7 +31,7 @@ dependencies {
     implementation("jakarta.validation:jakarta.validation-api")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.6.7")
+    runtimeOnly("ch.qos.logback:logback-classic:1.6.8")
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")
