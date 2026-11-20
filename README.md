@@ -129,6 +129,8 @@ Setup instructions for Cursor, Codex, Claude Code, Claude web, and Claude
 Desktop are in [`docs/MCP_CLIENT_SETUP.md`](docs/MCP_CLIENT_SETUP.md). The
 guide covers the required API-key and delegated-user headers, Proton Pass,
 least-privilege configuration, verification, and client-specific limitations.
+To create an MCP API key through the admin API, keep the HttpOnly
+`secman_auth` cookie returned by login; the login JSON does not contain a token.
 
 `X-MCP-User-Email` is **required** for all `tools/list` and `tools/call`.
 Effective permissions = intersection of API-key permissions ∩ delegated user's
