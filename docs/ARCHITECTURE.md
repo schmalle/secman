@@ -25,9 +25,9 @@ Stack: Kotlin 2.4.21 / Java 25 · Micronaut 5.2.5 · Hibernate JPA · Astro 7.4.
 Layered:
 
 ```
-Controller (80)        @Controller, @Secured, validation
+Controller             @Controller, @Secured, validation
    │
-Service (146)          @Singleton, @Transactional, business rules
+Service                @Singleton, @Transactional, business rules
    │
 Repository             CrudRepository / custom JPQL
    │
@@ -54,7 +54,7 @@ Auth flow: the JWT lives in the HttpOnly `secman_auth` cookie (`AuthCookieServic
 
 ## CLI (`src/cli/`)
 
-Picocli. ~40 command classes under `commands/`, ~37 distinct command names. **`docs/CLI.md` is the reference** — do not maintain a command list here, it drifts.
+Picocli command classes live under `commands/`. **`docs/CLI.md` is the reference** — do not maintain a command list here, it drifts.
 
 Dispatch is a mix, which surprises people: most commands are registered as Picocli `subcommands` on `SecmanCli`, but a few (notably `query servers`, the CrowdStrike ingestion path) are matched by hand in `SecmanCli.kt`'s arg-parsing block. Grep `SecmanCli.kt` for a command name before concluding it does not exist.
 
@@ -221,7 +221,7 @@ src/
   frontend/src/{pages,components,services,layouts}/
   cli/src/main/kotlin/com/secman/cli/{commands,service}/
 docs/
-scripts/             all scripts (./scripts deprecated)
+scripts/             canonical scripts; invoke as ./scripts/<name>.sh
 specs/                historical implementation plans
 ```
 
