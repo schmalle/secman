@@ -71,14 +71,18 @@ Implied per role:
 ## Quick start
 
 ```bash
-# 1. Get JWT
-TOKEN=$(curl -s -XPOST http://localhost:8080/api/auth/login \
+# 1. Log in and retain the HttpOnly secman_auth cookie.
+# Use an admin account without MFA for this shell example.
+COOKIE_JAR=$(mktemp)
+chmod 600 "$COOKIE_JAR"
+trap 'rm -f "$COOKIE_JAR"' EXIT
+curl --fail-with-body -sS -c "$COOKIE_JAR" -X POST http://localhost:8080/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"adminuser","password":"…"}' | jq -r '.token')
+  -d '{"username":"adminuser","password":"…"}'
 
 # 2. Create API key
-curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+curl --fail-with-body -sS -b "$COOKIE_JAR" -X POST http://localhost:8080/api/mcp/admin/api-keys \
+  -H 'Content-Type: application/json' \
   -d '{
     "name":"claude",
     "permissions":["REQUIREMENTS_READ","ASSETS_READ","VULNERABILITIES_READ"],
