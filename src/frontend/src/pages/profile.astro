@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import UserProfile from '../components/UserProfile';
+import PersonalMcpKeys from '../components/PersonalMcpKeys';
 
 /**
  * User Profile Page
@@ -15,4 +16,5 @@ import UserProfile from '../components/UserProfile';
 
 <Layout title="User Profile">
   <UserProfile client:load />
+  <PersonalMcpKeys client:load />
 </Layout>

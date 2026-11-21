@@ -1,5 +1,18 @@
 # MCP Integration
 
+## Personal inventory keys
+
+Open **Profile → Personal MCP keys → Create personal key**. Copy the secret when it appears.
+You can hold five active personal keys. Each expires after 90 days. Use **Revoke** beside its public ID to disable it earlier.
+
+Configure the MCP client for the SecMan `/mcp` endpoint. Send the secret in `X-MCP-API-Key`
+and your SecMan email in `X-MCP-User-Email`. The key is bound to your user ID.
+Use `get_assets` to page through your visible inventory and `list_visible_accounts` to list
+your accessible AWS account IDs. SecMan resolves access at request time, including workgroup
+and account-sharing changes. A personal key can invoke only these two read operations.
+
+
+
 Streamable HTTP / JSON-RPC 2.0 endpoint at `POST /mcp`. Tools span requirements, releases, alignment, assets, the application register, vulnerabilities, integration results, exception requests, scans, workgroups, user mappings, AWS account sharing, users, statistics, the vulnerability heatmap, GitHub repositories, notifications, and maintenance jobs.
 
 For an operator-ready command that creates a user, one-requirement use case, AWS

@@ -645,7 +645,6 @@ open class ExportJobService(
         // Every filter comes from the caller so the workbook matches what the UI is showing.
         // These previously were hardcoded nulls, which is why an exported file ignored the
         // selected AD domain (and every other filter) and contained the whole accessible set.
-        // No sort/sortDir on purpose - see VulnerabilityExportFilters.
         return vulnerabilityService.getCurrentVulnerabilitiesOptimized(
             accessibleAssetIds = accessibleAssetIds,
             isAdmin = isAdmin,
@@ -658,6 +657,7 @@ open class ExportJobService(
             cloudAccountId = filters.cloudAccountId,
             page = page,
             size = size,
+            sort = filters.sort, sortDir = filters.sortDir,
             includeInstallerFindings = filters.includeInstallerFindings,
             seenToday = filters.seenToday,
             countMode = countMode
@@ -1040,7 +1040,7 @@ open class ExportJobService(
         }
 
         row.createCell(5).apply {
-            setCellValue(ExcelSanitizer.sanitize(dto.daysOpen))
+            dto.daysOpen?.let { setCellValue(it.toDouble()) }
             cellStyle = styles.text
         }
 

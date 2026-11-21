@@ -262,7 +262,7 @@ class McpDelegationService {
         val apiKeyPermissions = apiKey.getPermissionSet()
 
         // Compute intersection
-        val effectivePermissions = userImpliedPermissions.intersect(apiKeyPermissions)
+        val effectivePermissions = (userImpliedPermissions + McpPermission.PERSONAL_INVENTORY_READ).intersect(apiKeyPermissions)
 
         logger.debug(
             "Computed effective permissions: user={}, userPermissions={}, apiKeyPermissions={}, effective={}",

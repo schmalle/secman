@@ -566,7 +566,7 @@ class SecmanCli {
                   --limit <num>            Page size for pagination (default: 4000)
                   --client-id <id>         CrowdStrike API client ID (overrides config file)
                   --client-secret <secret> CrowdStrike API client secret (overrides config file)
-                  --overdue-threshold <num> Days after max(first detection, patch date) before a
+                  --overdue-threshold <num> Days after first host detection before a
                                             finding counts as overdue in the summary (default: 30)
                   --backend-url <url>      Backend API URL (default: SECMAN_BACKEND_URL env var, or http://localhost:8080)
                   --save                   Save to database via backend API

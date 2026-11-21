@@ -171,7 +171,7 @@ stored matches and supports `--include-already-eol`, `--only-email`, and
 | `--severity` | `HIGH,CRITICAL` | `CRITICAL,HIGH,MEDIUM,LOW` |
 | `--device-type` | `SERVER` | `SERVER`, `DOMAIN_CONTROLLER`, `SERVER_FAMILY`, `WORKSTATION`, `ALL`; `SERVER_FAMILY` queries servers and domain controllers separately, while `ALL` also includes workstations. **Ignored with `--hostnames`.** |
 | `--min-days-open` | 30 | |
-| `--overdue-threshold` | 30 | days for the printed "Vulnerability Age Summary"; a finding counts once `max(first detection, patch date)` is older than this, the same rule as the backend (`docs/CROWDSTRIKE_IMPORT.md` §SLA anchor) |
+| `--overdue-threshold` | 30 | days for the printed "Vulnerability Age Summary"; a finding counts once first detection on the host is older than this, the same rule as the backend (`docs/CROWDSTRIKE_IMPORT.md` §SLA anchor) |
 | `--last-seen-days` | 3 (0 = all) | recent-checkin window; **ignored with `--hostnames`** |
 | `--limit` | 800 | Spotlight page size |
 | `--save` | false | POST to backend |

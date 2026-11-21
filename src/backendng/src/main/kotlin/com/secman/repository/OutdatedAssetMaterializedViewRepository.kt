@@ -33,7 +33,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
      * argmin, so `rn = 1` yields exactly one output row per asset carrying both.
      *
      * Semantics preserved from the Kotlin it replaces (`createMaterializedRecordFromVulns`):
-     *  - SLA anchor is the generated `sla_anchor_at`, max(first detection, patch date), NOT
+     *  - SLA anchor is the generated `sla_anchor_at`, host detection for CrowdStrike, NOT
      *    scan_timestamp alone, which is refreshed on every re-import and would understate true age.
      *  - Severity comparison is case-insensitive: severity is stored title-case ("Critical") and
      *    utf8mb4_general_ci (V205) makes `=` case-insensitive, matching the previous explicit

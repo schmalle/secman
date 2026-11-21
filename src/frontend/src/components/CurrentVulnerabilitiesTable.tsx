@@ -216,24 +216,6 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
   const fetchVulnerabilities = async () => {
     try {
       setLoading(true);
-      // Map frontend field names to backend sort field names.
-      // Note: the Overdue Status column is intentionally not sortable — the previous
-      // scanTimestamp proxy was misleading because it did not reflect the badge value.
-      const sortFieldMap: Record<string, string> = {
-        assetName: "assetName",
-        assetIp: "assetIp",
-        vulnerabilityId: "vulnerabilityId",
-        cvssSeverity: "cvssSeverity",
-        vulnerableProductVersions: "vulnerableProductVersions",
-        daysOpen: "scanTimestamp",
-        scanTimestamp: "scanTimestamp",
-      };
-      const backendSortField = sortFieldMap[sortField] || undefined;
-      // Invert sort direction for daysOpen: ascending days = descending scanTimestamp
-      const effectiveSortOrder = sortField === "daysOpen"
-        ? (sortOrder === "asc" ? "desc" : "asc")
-        : sortOrder;
-
       // PERFORMANCE: When only page/sort changes (filters unchanged), pass the known total
       // to skip the expensive COUNT query with NOT EXISTS on 358k+ rows
       const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(new Date());
@@ -243,7 +225,7 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
         ? paginatedResponse.totalElements
         : undefined;
       const countMode = knownTotal !== undefined ? "exact" : "deferred";
-      const requestKey = `${currentFilterKey}|${pageSize}|${backendSortField || ""}|${effectiveSortOrder}`;
+      const requestKey = `${currentFilterKey}|${pageSize}|${sortField || ""}|${sortOrder}`;
       prevFiltersRef.current = currentFilterKey;
 
       const data = await getCurrentVulnerabilities(
@@ -256,8 +238,8 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
         cloudAccountIdFilter || undefined,
         currentPage,
         pageSize,
-        backendSortField,
-        effectiveSortOrder,
+        sortField,
+        sortOrder,
         knownTotal,
         countMode,
         includeInstallerFindings,
@@ -265,7 +247,7 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
       setPaginatedResponse(data);
       setError(null);
       if (data.totalExact === false) {
-        fetchExactVulnerabilityCount(requestKey, backendSortField, effectiveSortOrder);
+        fetchExactVulnerabilityCount(requestKey, sortField, sortOrder);
       }
     } catch (err) {
       setError(
@@ -278,8 +260,8 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
 
   const fetchExactVulnerabilityCount = async (
     requestKey: string,
-    backendSortField: string | undefined,
-    effectiveSortOrder: "asc" | "desc",
+    sortField: string | undefined,
+    sortOrder: "asc" | "desc",
   ) => {
     countRequestKeyRef.current = requestKey;
     try {
@@ -292,8 +274,8 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
         adDomainFilter || undefined,
         cloudAccountIdFilter || undefined,
         pageSize,
-        backendSortField,
-        effectiveSortOrder,
+        sortField,
+        sortOrder,
         includeInstallerFindings,
       );
       if (countRequestKeyRef.current !== requestKey) return;
@@ -398,7 +380,7 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
       setError(null);
 
       await exportVulnerabilitiesServerSide({
-        filters: exportFilters,
+        filters: { ...exportFilters, sort: sortField, sortDir: sortOrder },
         onProgress: (update) => {
           setExportProgress(update.job);
           setExportJobId(update.job.jobId);
@@ -1153,15 +1135,19 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
                             >
                               {vuln.vulnerableProductVersions || "-"}
                             </td>
-                            <td>{vuln.ageInDays != null ? `${vuln.ageInDays} days` : "-"}</td>
                             <td>
-                              <OverdueStatusBadge
+                              {vuln.ageInDays != null ? `${vuln.ageInDays} days` : "Unknown"}
+                              <small className="d-block text-muted">First seen {vuln.firstSeenAt ? formatServerDate(vuln.firstSeenAt) : "unknown"}</small>
+                              <small className="d-block text-muted">Disclosed {vuln.cvePublishedDate ? `${formatServerDate(vuln.cvePublishedDate)} (${vuln.publicAgeInDays} days ago)` : "unknown"}</small>
+                            </td>
+                            <td>
+                              {vuln.ageInDays == null && !vuln.hasException ? "Unknown" : <OverdueStatusBadge
                                 status={vuln.overdueStatus || "OK"}
                                 daysOverdue={vuln.daysOverdue}
                                 ageInDays={vuln.ageInDays}
                                 exceptionReason={vuln.exceptionReason}
                                 exceptionEndDate={vuln.exceptionEndDate}
-                              />
+                              />}
                             </td>
                             <td>
                               {vuln.hasException ? (

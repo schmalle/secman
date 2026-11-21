@@ -210,7 +210,8 @@ export interface Vulnerability {
   cvssscore: number | null;
   cvePublishedDate: string | null;
   vulnerableProductVersions: string | null;
-  daysOpen: number;
+  daysOpen: number | string | null;
+  slaAnchorAt?: string | null;
   scanTimestamp: string;
   assetId: number;
 }

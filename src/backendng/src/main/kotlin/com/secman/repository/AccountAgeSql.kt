@@ -3,7 +3,7 @@ package com.secman.repository
 /**
  * Native SQL for the "accounts with the longest-open findings" report.
  *
- * Age anchor is the generated `sla_anchor_at`, max(first detection, patch date)
+ * Age anchor is the generated `sla_anchor_at`, host detection for CrowdStrike
  * (Vulnerability.SLA_ANCHOR_SQL). It falls back to scan_timestamp on rows whose
  * first_seen_at predates the V208 backfill, so the oldest accounts are never dropped.
  *
@@ -22,7 +22,7 @@ object AccountAgeSql {
                COUNT(DISTINCT a.id)                             AS affectedAssetCount
         FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
         JOIN ${AssetCurrentnessSql.ASSETS} a ON v.asset_id = a.id
-        WHERE v.excepted = 0
+        WHERE v.excepted = 0 AND v.sla_anchor_at IS NOT NULL
           AND a.cloud_account_id IS NOT NULL
           AND a.cloud_account_id <> ''
         GROUP BY a.cloud_account_id
@@ -54,7 +54,7 @@ object AccountAgeSql {
                    ) AS rn
             FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
             JOIN ${AssetCurrentnessSql.ASSETS} a ON v.asset_id = a.id
-            WHERE v.excepted = 0
+            WHERE v.excepted = 0 AND v.sla_anchor_at IS NOT NULL
               AND a.cloud_account_id IN (:accountIds)
         ) ranked
         WHERE rn = 1

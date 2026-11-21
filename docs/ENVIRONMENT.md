@@ -87,7 +87,7 @@ transport endpoints and timing.
 ### Vulnerability dating
 | Var | Default | Effect |
 |---|---|---|
-| `VULN_REQUIRE_PATCH_PUBLICATION_DATE` | `false` | only import vulns with patch-publication date. A filter, not the SLA anchor: the anchor is always max(first detection, patch date), see docs/CROWDSTRIKE_IMPORT.md §SLA anchor. `VULN_USE_PATCH_PUBLICATION_DATE` was removed on 2026-11-13 and is ignored. |
+| `VULN_REQUIRE_PATCH_PUBLICATION_DATE` | `false` | only import vulns with patch-publication date. A filter, not the SLA anchor: the CrowdStrike anchor is first detection on the host, see docs/CROWDSTRIKE_IMPORT.md §SLA anchor. `VULN_USE_PATCH_PUBLICATION_DATE` was removed on 2026-11-13 and is ignored. |
 
 ### End-of-life catalogue (see `docs/EOL.md`)
 Source of the EOL lifecycle data. Operator configuration only — no request value ever reaches this URL.

@@ -1,5 +1,10 @@
 # Workgroup overdue notifications
 
+CrowdStrike deadlines use the earliest detection on the affected system. Public disclosure and
+patch release dates do not postpone notifications. An automatically requested no-fix exception
+takes effect after an administrator or security champion approves it. See [CrowdStrike import](CROWDSTRIKE_IMPORT.md#sla-anchor-overdue-calculation).
+
+
 `secman notify-users-overdue` emails workgroup members about overdue vulnerabilities
 on the assets their workgroups cover. `secman show-notified-users --email X` shows,
 for one user, exactly what that run would send and why. Command reference, options,

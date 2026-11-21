@@ -191,6 +191,10 @@ interface UserRepository : JpaRepository<User, Long> {
     @Query(value = "SELECT id FROM users WHERE id = :id FOR UPDATE", nativeQuery = true)
     fun lockForUpdate(id: Long): List<Long>
 
+    @Query(value = "SELECT * FROM users WHERE username = :username FOR UPDATE", nativeQuery = true)
+    fun findByUsernameForUpdate(username: String): Optional<User>
+
+
     /** Integration scanners that run as this user; `service_user_id` is a NOT NULL FK. */
     @Query("SELECT COUNT(s) FROM IntegrationScanner s WHERE s.serviceUserId = :userId")
     fun countIntegrationScannersByServiceUser(userId: Long): Long

@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.time.Instant
+import com.secman.crowdstrike.FalconRemediation
 import com.secman.crowdstrike.FalconTimestamps
 import com.secman.crowdstrike.SlaAnchor
 import java.time.LocalDateTime
@@ -758,7 +759,7 @@ open class CrowdStrikeApiClientImpl(
 
             batchVulns.groupBy { row -> row.crowdStrikeAid?.let { "${row.hostname} [AID: $it]" } ?: row.hostname }.forEach { (host, vulns) ->
                 hostCounts.merge(host, vulns.size) { a, b -> a + b }
-                if (vulns.any { SlaAnchor.isOverdue(it.detectedAt, it.patchPublicationDate, overdueThreshold, summaryNow) }) {
+                if (vulns.any { SlaAnchor.isOverdue(it.detectedAt, overdueThreshold, summaryNow) }) {
                     overdueHosts.add(host)
                 }
             }
@@ -1281,7 +1282,7 @@ open class CrowdStrikeApiClientImpl(
                 .queryParam("limit", effectiveLimit)
                 // host_info carries local_ip and the cloud/domain metadata; without the facet
                 // Spotlight omits the object entirely (see queryAllVulnerabilitiesBulk).
-                .queryParam("facet", "cve", "host_info")
+                .queryParam("facet", "cve", "host_info", "remediation")
                 .apply {
                     if (afterToken != null) {
                         queryParam("after", afterToken)
@@ -1305,7 +1306,7 @@ open class CrowdStrikeApiClientImpl(
 
                         if (!(responseBody["errors"] as? List<*>).isNullOrEmpty()) throw CrowdStrikeException("Incomplete Falcon findings page")
                         val resources = responseBody["resources"] as? List<*> ?: throw CrowdStrikeException("Missing Falcon findings")
-                        val vulns = mapResponseToDtos(resources, metadataByDeviceId)
+                        val vulns = mapResponseToDtos(resources, metadataByDeviceId, resolveRemediations(resources, token))
                         if (vulns.size != resources.size || vulns.any { it.crowdStrikeAid !in deviceIds }) {
                             throw CrowdStrikeException("Falcon findings do not match the selected devices")
                         }
@@ -1624,7 +1625,7 @@ open class CrowdStrikeApiClientImpl(
                         // host_info carries local_ip and the cloud/domain metadata; this path maps
                         // straight off the vulnerability record, so without the facet the asset is
                         // stored with no IP at all (see queryAllVulnerabilitiesBulk).
-                        .queryParam("facet", "cve", "host_info")
+                        .queryParam("facet", "cve", "host_info", "remediation")
                         .apply {
                             if (afterToken != null) {
                                 queryParam("after", afterToken)
@@ -1671,7 +1672,7 @@ open class CrowdStrikeApiClientImpl(
                                 val aid = record["aid"]?.toString() ?: record["device_id"]?.toString()
                                 aid != null && aid != deviceId
                             }) throw CrowdStrikeException("Falcon findings belong to a different device")
-                            val vulns = mapResponseToDtos(resources, hostname, deviceId)
+                            val vulns = mapResponseToDtos(resources, hostname, deviceId, resolveRemediations(resources, token))
                             if (vulns.size != resources.size) throw CrowdStrikeException("Incomplete Falcon findings mapping")
                             allVulnerabilities.addAll(vulns.filterIndexed { index, _ ->
                                 seenResourceIds.add(resourceIds[index])
@@ -1806,7 +1807,8 @@ open class CrowdStrikeApiClientImpl(
     private fun mapResponseToDtos(
         resources: List<*>,
         hostname: String,
-        crowdStrikeAid: String?
+        crowdStrikeAid: String?,
+        resolved: Map<String, Boolean> = emptyMap()
     ): List<CrowdStrikeVulnerabilityDto> {
         return resources.mapNotNull { resource ->
             val vuln = resource as? Map<*, *> ?: return@mapNotNull null
@@ -1867,19 +1869,7 @@ open class CrowdStrikeApiClientImpl(
                     (app as? Map<*, *>)?.get("product_name_version")?.toString()
                 }?.joinToString(", ")
 
-                val createdTimestamp = vuln["created_timestamp"]?.toString()
-                    ?: vuln["created_on"]?.toString()
-                // Shared with the ad-hoc lookup path so the two cannot drift (see FalconTimestamps).
-                // Deliberately NOT coerced to now(): an unknown detection date stays
-                // unknown, so the row reads "unknown age" rather than "zero days old"
-                // (which would silently never be overdue). See FalconTimestamps.
-                val detectedAt = FalconTimestamps.parse(createdTimestamp)
-                if (detectedAt == null && !createdTimestamp.isNullOrBlank()) {
-                    log.warn(
-                        "Unparseable created_timestamp '{}' — reporting unknown detection date",
-                        FalconTimestamps.sanitizeForLog(createdTimestamp)
-                    )
-                }
+                val detectedAt = detectionTime(vuln)
 
                 // Extract patch publication date
                 val patchPublicationDate = extractPatchPublicationDate(vuln)
@@ -1898,6 +1888,7 @@ open class CrowdStrikeApiClientImpl(
                     detectedAt = detectedAt,
                     patchPublicationDate = patchPublicationDate,
                     cvePublishedDate = extractCvePublishedDate(vuln),
+                    noVendorFix = FalconRemediation.noVendorFix(vuln, resolved),
                     status = vuln["status"]?.toString() ?: "open",
                     hasException = false,
                     exceptionReason = null,
@@ -1982,6 +1973,40 @@ open class CrowdStrikeApiClientImpl(
      */
     private fun extractPatchPublicationDate(vuln: Map<*, *>): LocalDateTime? =
         FalconTimestamps.patchPublicationDate(vuln)
+
+    private fun resolveRemediations(resources: List<*>, token: AuthToken): Map<String, Boolean> {
+        val ids = resources.filterIsInstance<Map<*, *>>()
+            .filter { FalconRemediation.noVendorFix(it) == null }
+            .flatMap { FalconRemediation.referencedIds(it).orEmpty() }.distinct()
+        val resolved = mutableMapOf<String, Boolean>()
+        for (batch in ids.chunked(100)) {
+            val uri = UriBuilder.of("/spotlight/entities/remediations/v2")
+                .queryParam("ids", *batch.toTypedArray()).build()
+            val request = HttpRequest.GET<Any>(uri.toString()).bearerAuth(token.accessToken)
+            try {
+                val body = httpClient.toBlocking().retrieve(request, Map::class.java)
+                if (!(body["errors"] as? List<*>).isNullOrEmpty()) continue
+                val entities = (body["resources"] as? List<*>)?.filterIsInstance<Map<*, *>>().orEmpty()
+                val returned = entities.map { it["id"] }
+                if (returned.size != batch.size || returned.toSet() != batch.toSet()) continue
+                entities.forEach { entity ->
+                    FalconRemediation.advice(entity)?.let { resolved[entity["id"] as String] = it }
+                }
+            } catch (e: HttpClientException) {
+                log.warn("Falcon remediation lookup incomplete for {} IDs", batch.size)
+            }
+        }
+        return resolved
+    }
+
+    private fun detectionTime(vuln: Map<*, *>): LocalDateTime? {
+        val raw = (vuln["created_timestamp"] ?: vuln["created_on"])?.toString()
+        return FalconTimestamps.parse(raw).also {
+            if (it == null && !raw.isNullOrBlank()) {
+                log.warn("Unparseable Falcon detection date: {}", FalconTimestamps.sanitizeForLog(raw))
+            }
+        }
+    }
 
     private fun extractCvePublishedDate(vuln: Map<*, *>): LocalDateTime? =
         FalconTimestamps.cvePublishedDate(vuln)
@@ -2263,7 +2288,8 @@ open class CrowdStrikeApiClientImpl(
      */
     private fun mapResponseToDtos(
         resources: List<*>,
-        metadataByDeviceId: Map<String, DeviceMetadata> = emptyMap()
+        metadataByDeviceId: Map<String, DeviceMetadata> = emptyMap(),
+        resolved: Map<String, Boolean> = emptyMap()
     ): List<CrowdStrikeVulnerabilityDto> {
         return resources.mapNotNull { resource ->
             val vuln = resource as? Map<*, *> ?: return@mapNotNull null
@@ -2357,19 +2383,7 @@ open class CrowdStrikeApiClientImpl(
                     (app as? Map<*, *>)?.get("product_name_version")?.toString()
                 }?.joinToString(", ")
 
-                val createdTimestamp = vuln["created_timestamp"]?.toString()
-                    ?: vuln["created_on"]?.toString()
-                // Shared with the ad-hoc lookup path so the two cannot drift (see FalconTimestamps).
-                // Deliberately NOT coerced to now(): an unknown detection date stays
-                // unknown, so the row reads "unknown age" rather than "zero days old"
-                // (which would silently never be overdue). See FalconTimestamps.
-                val detectedAt = FalconTimestamps.parse(createdTimestamp)
-                if (detectedAt == null && !createdTimestamp.isNullOrBlank()) {
-                    log.warn(
-                        "Unparseable created_timestamp '{}' — reporting unknown detection date",
-                        FalconTimestamps.sanitizeForLog(createdTimestamp)
-                    )
-                }
+                val detectedAt = detectionTime(vuln)
 
                 // Extract patch publication date
                 val patchPublicationDate = extractPatchPublicationDate(vuln)
@@ -2389,6 +2403,7 @@ open class CrowdStrikeApiClientImpl(
                     detectedAt = detectedAt,
                     patchPublicationDate = patchPublicationDate,
                     cvePublishedDate = extractCvePublishedDate(vuln),
+                    noVendorFix = FalconRemediation.noVendorFix(vuln, resolved),
                     status = vuln["status"]?.toString() ?: "open",
                     hasException = false,
                     exceptionReason = null,

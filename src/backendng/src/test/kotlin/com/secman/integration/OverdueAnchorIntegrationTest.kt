@@ -122,8 +122,8 @@ class OverdueAnchorIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
-    @DisplayName("a fix published after detection moves the anchor forward to the patch date")
-    fun `later patch date moves the anchor forward`() {
+    @DisplayName("a CrowdStrike finding stays overdue when a fix arrives after detection")
+    fun `later patch date preserves the CrowdStrike deadline`() {
         val asset = assetRepository.save(TestDataFactory.createAsset(name = "anchor-asset-5"))
         val vuln = TestDataFactory.createVulnerabilityWithTimestamp(
             asset = asset,
@@ -132,13 +132,14 @@ class OverdueAnchorIntegrationTest : BaseIntegrationTest() {
             scanTimestamp = LocalDateTime.now().minusDays(60)
         )
         vuln.firstSeenAt = LocalDateTime.now().minusDays(60)
+        vuln.source = "CROWDSTRIKE"
         vuln.patchPublicationDate = LocalDateTime.now().minusDays(5)
         vulnerabilityRepository.save(vuln)
 
-        assertThat(rebuiltVulnIds()).doesNotContain("CVE-2026-5555")
+        assertThat(rebuiltVulnIds()).contains("CVE-2026-5555")
         val stored = vulnerabilityRepository.findById(vuln.id!!).orElseThrow()
-        // Read the generated column back: MariaDB's GREATEST must agree with SlaAnchor.
-        assertThat(stored.slaAnchorAt).isAfter(LocalDateTime.now().minusDays(6))
+        // Verify the generated column uses the same host detection as the badge.
+        assertThat(stored.slaAnchorAt).isBefore(LocalDateTime.now().minusDays(59))
     }
 
     @Test

@@ -10,7 +10,7 @@ Security requirement, vulnerability and risk-assessment platform.
 ## What it does
 
 - Security requirement lifecycle (versioned releases: PREPARATION → ALIGNMENT → ACTIVE → ARCHIVED), Excel/Word/CSV export, automated translation (OpenRouter, 10 languages).
-- Vulnerability management: CrowdStrike Falcon import, GitHub App Dependabot alert tracking with 30-day non-decrease owner alerts, exception-request workflow, statistics, heatmap, materialized view for fast outdated-asset queries (<2s @ 10k assets). Overdue findings use the later of first detection and patch publication as their SLA start.
+- Vulnerability management: CrowdStrike Falcon import, GitHub App Dependabot alert tracking with 30-day non-decrease owner alerts, exception-request workflow, statistics, heatmap, materialized view for fast outdated-asset queries (<2s @ 10k assets). CrowdStrike findings use first detection on the affected system as their SLA start.
 - Asset inventory: Nmap/Masscan import, AD/cloud metadata, criticality, workgroup-scoped access.
 - Risk register, demand classification, compliance-framework mapping (SOC2, ISO 27001, NIST), optional AI-assisted pre-fill of compliance answers (OpenRouter LLM, confidence scoring + citations, human review required).
 - AWS account onboarding: imports requesting notifications use a saved welcome-email (default) or risk-assessment policy. The welcome subject and body are editable in the web UI; advanced guided questionnaires remain supported.

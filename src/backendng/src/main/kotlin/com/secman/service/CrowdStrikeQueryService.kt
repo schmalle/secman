@@ -442,8 +442,8 @@ open class CrowdStrikeQueryService(
                 // which is the frozen string captured at last import. Without this the
                 // "live" lookup view drifts away from /api/vulnerabilities/current.
                 val anchor = v.slaAnchor()
-                val days = ChronoUnit.DAYS.between(anchor, now)
-                val daysOpenText = if (days == 1L) "1 day" else "$days days"
+                val daysOpenText = anchor?.let { ChronoUnit.DAYS.between(it, now) }
+                    ?.let { if (it == 1L) "1 day" else "$it days" }
                 CrowdStrikeVulnerabilityDto(
                     id = "db-${v.id}",
                     hostname = asset.name,
@@ -455,6 +455,8 @@ open class CrowdStrikeQueryService(
                     daysOpen = daysOpenText,
                     detectedAt = anchor,
                     patchPublicationDate = v.patchPublicationDate,
+                    cvePublishedDate = v.cvePublishedDate,
+                    noVendorFix = v.noVendorFix,
                     status = "open",
                     hasException = false,
                     exceptionReason = null
@@ -513,8 +515,8 @@ open class CrowdStrikeQueryService(
                 // See queryFromDatabaseByHostname — same recompute to keep the
                 // hostname and instance-id paths consistent.
                 val anchor = v.slaAnchor()
-                val days = ChronoUnit.DAYS.between(anchor, now)
-                val daysOpenText = if (days == 1L) "1 day" else "$days days"
+                val daysOpenText = anchor?.let { ChronoUnit.DAYS.between(it, now) }
+                    ?.let { if (it == 1L) "1 day" else "$it days" }
                 CrowdStrikeVulnerabilityDto(
                     id = "db-${v.id}",
                     hostname = asset.name,
@@ -526,6 +528,8 @@ open class CrowdStrikeQueryService(
                     daysOpen = daysOpenText,
                     detectedAt = anchor,
                     patchPublicationDate = v.patchPublicationDate,
+                    cvePublishedDate = v.cvePublishedDate,
+                    noVendorFix = v.noVendorFix,
                     status = "open",
                     hasException = false,
                     exceptionReason = null
@@ -674,6 +678,9 @@ private fun com.secman.crowdstrike.dto.CrowdStrikeQueryResponse.toBackendRespons
                 affectedProduct = shared.affectedProduct,
                 daysOpen = shared.daysOpen,
                 detectedAt = shared.detectedAt,
+                cvePublishedDate = shared.cvePublishedDate,
+                patchPublicationDate = shared.patchPublicationDate,
+                noVendorFix = shared.noVendorFix,
                 status = shared.status,
                 hasException = shared.hasException,
                 exceptionReason = shared.exceptionReason,
