@@ -131,6 +131,7 @@ object McpToolPermissions {
             "notify_risk_assessment_respondent",
         ),
         setOf(SYSTEM_INFO) to listOf("get_secman_statistics"),
+        setOf(ASSETS_READ, PERSONAL_INVENTORY_READ) to listOf("get_assets", "list_visible_accounts"),
     )
 
     /**
@@ -266,6 +267,8 @@ object McpToolPermissions {
         ToolCategories.CATEGORY_PERMISSIONS.reversed().forEach { (tools, unlocking) ->
             tools.forEach { put(it, unlocking) }
         }
+        put("get_assets", setOf(ASSETS_READ, PERSONAL_INVENTORY_READ))
+        put("list_visible_accounts", setOf(ASSETS_READ, PERSONAL_INVENTORY_READ))
     }
 
     /** True when [permissions] satisfies the "any of" requirement recorded in [table]. */

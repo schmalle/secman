@@ -320,7 +320,7 @@ class ServersCommand {
                     if (totalServersProcessed > 0) {
                         val totalWithoutOverdue = totalServersProcessed - totalSystemsWithOverdueVulns
                         val percent = totalSystemsWithOverdueVulns * 100.0 / totalServersProcessed
-                        System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days since max(detection, patch date)) ---")
+                        System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days since first host detection) ---")
                         System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $totalSystemsWithOverdueVulns of $totalServersProcessed (${String.format("%.1f", percent)}%)")
                         System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of $totalServersProcessed")
 
@@ -442,7 +442,7 @@ class ServersCommand {
                     val hostsWithOverdue = summary.hostsWithOverdueVulns
                     val hostsWithoutOverdue = totalHosts - hostsWithOverdue
                     val overduePercent = hostsWithOverdue * 100.0 / totalHosts
-                    System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days since max(detection, patch date)) ---")
+                    System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days since first host detection) ---")
                     System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $hostsWithOverdue of $totalHosts (${String.format("%.1f", overduePercent)}%)")
                     System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $hostsWithoutOverdue of $totalHosts")
                 }
@@ -537,7 +537,7 @@ class ServersCommand {
             val totalHosts = vulnerabilitiesByDevice.size
             val hostsWithoutOverdue = totalHosts - hostsWithOverdue
             val overduePercent = hostsWithOverdue * 100.0 / totalHosts
-            System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days since max(detection, patch date)) ---")
+            System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days since first host detection) ---")
             System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $hostsWithOverdue of $totalHosts (${String.format("%.1f", overduePercent)}%)")
             System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $hostsWithoutOverdue of $totalHosts")
 
@@ -583,7 +583,7 @@ class ServersCommand {
             if (result.serversProcessed > 0) {
                 val totalWithoutOverdue = result.serversProcessed - systemsWithOverdueVulns
                 val percent = systemsWithOverdueVulns * 100.0 / result.serversProcessed
-                System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days since max(detection, patch date)) ---")
+                System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days since first host detection) ---")
                 System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $systemsWithOverdueVulns of ${result.serversProcessed} (${String.format("%.1f", percent)}%)")
                 System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of ${result.serversProcessed}")
 
@@ -715,9 +715,9 @@ class ServersCommand {
         System.out.println("  [Memory $label] ${usedMB}MB / ${maxMB}MB (${usedMB * 100 / maxMB}%)")
     }
 
-    /** Same rule as the backend overdue filter: max(detection, patch date) + threshold has passed. */
+    /** Same rule as the backend overdue filter: first host detection + threshold has passed. */
     private fun isOverdue(vuln: CrowdStrikeVulnerabilityDto): Boolean =
-        SlaAnchor.isOverdue(vuln.detectedAt, vuln.patchPublicationDate, overdueThreshold, LocalDateTime.now())
+        SlaAnchor.isOverdue(vuln.detectedAt, overdueThreshold, LocalDateTime.now())
 
     private fun parseDaysOpenToInt(daysOpen: String?): Int {
         if (daysOpen.isNullOrBlank()) return 0

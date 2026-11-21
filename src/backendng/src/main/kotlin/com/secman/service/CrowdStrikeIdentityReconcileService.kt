@@ -93,7 +93,7 @@ class CrowdStrikeIdentityReconcileService(
                 vulnerabilities = supported.map { row ->
                     VulnerabilityDto(requireNotNull(row.cveId), row.severity, row.affectedProduct?.take(512),
                         row.detectedAt?.let { ChronoUnit.DAYS.between(it, now).toInt().coerceAtLeast(0) } ?: 0,
-                        row.detectedAt, row.patchPublicationDate, row.cvePublishedDate)
+                        row.detectedAt, row.patchPublicationDate, row.cvePublishedDate, row.noVendorFix, row.detectedAt == null)
                 }, deviceSelection = selection,
                 findingCoverage = CrowdStrikeFindingCoverage(response.vulnerabilities.size, supported.size,
                     missingCve = response.vulnerabilities.size - supported.size))

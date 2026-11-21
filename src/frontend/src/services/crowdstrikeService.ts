@@ -18,7 +18,7 @@ export interface CrowdStrikeVulnerabilityDto {
     cvssScore: number | null;
     affectedProduct: string | null;
     /** Days since Falcon created this finding for this host. Not the CVE's age. */
-    daysOpen: string | null;
+    daysOpen: number | string | null;
     /** Null when Falcon published no readable detection date. */
     detectedAt: string | null;
     /** When a fix became available (prefers a vendor/remediation date). */

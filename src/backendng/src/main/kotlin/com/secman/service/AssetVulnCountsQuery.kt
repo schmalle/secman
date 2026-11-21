@@ -105,7 +105,7 @@ class AssetVulnCountsQuery(
 
         // Conditional aggregation: one pass over the asset's vulnerabilities yields every column.
         // COALESCE maps NULL severity to '' so it lands in unknown_count rather than vanishing.
-        // The SLA anchor is the generated sla_anchor_at, max(first detection, patch date).
+        // The SLA anchor is the generated sla_anchor_at, first host detection.
         // scan_timestamp alone is refreshed on every re-import and would understate true age. Exception coverage reads the
         // materialized `excepted` flag (see VulnQuerySql.NOT_EXCEPTED) instead of evaluating the
         // non-sargable EXCEPTION_MATCH three times per row.

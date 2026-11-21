@@ -636,42 +636,35 @@ assetRepository.delete(asset)
 
 ## SLA anchor (overdue calculation)
 
-**Rule (since 2026-11-13):** a finding is overdue once `max(first detection, patch date) + reminderOneDays`
-(default 30) has passed and no exception covers it.
+SecMan keeps the earliest reliable detection for each system, CVE and product in
+`first_seen_at`. A CrowdStrike finding becomes overdue once that date plus the configured
+reminder threshold has passed, unless an approved exception covers it. For example, a finding
+detected 40 days ago is overdue under a 30-day threshold even if its patch was released yesterday.
+A new enrollment starts a new clock. Unknown detection dates have no overdue deadline.
 
-| | Example | Anchor | Overdue on |
-|---|---|---|---|
-| Fix known on day x, CrowdStrike first detects it on the host on day z = x + y | x = 1 Mar, z = 20 Apr | z | 20 May |
-| Detected before any fix existed (z < x) | z = 1 Mar, x = 20 Apr | x | 20 May |
-| No patch date published | z = 1 Mar | z | 31 Mar |
-
-The rule exists once in Kotlin (`com.secman.crowdstrike.SlaAnchor`, in `src/shared`, used by the
-backend and the CLI) and once in SQL, as the generated column
-`vulnerability.sla_anchor_at` (`Vulnerability.SLA_ANCHOR_SQL`, V299):
+`cve_published_date` records Falcon’s CVE disclosure date. Public age counts days since disclosure.
+A repeat import preserves a previously known disclosure date when Falcon omits it. V304 fills
+missing disclosure dates from other CrowdStrike rows when they agree on the date for the same CVE.
+The next scheduled outdated-assets refresh updates the dashboard. Review remaining gaps after migration or fresh import with this read-only query:
 
 ```sql
-GREATEST(COALESCE(first_seen_at, scan_timestamp),
-         COALESCE(patch_publication_date, first_seen_at, scan_timestamp))
+SELECT COUNT(*) AS findings, COUNT(*) - COUNT(first_seen_at) AS unknown_detection,
+       COUNT(*) - COUNT(cve_published_date) AS unknown_disclosure
+FROM vulnerability WHERE source = 'CROWDSTRIKE';
 ```
 
-Every overdue reader (list filter, per-row badge, outdated-assets view, notifications, KPIs,
-compliance, account-age report) reads that column or `Vulnerability.slaAnchor()`. Keep both
-definitions identical.
+The current vulnerabilities table sorts Days Open by detection age across all result pages.
+Excel applies the selected filters, sort column and direction, with numeric Days Open cells.
+The CrowdStrike lookup export includes every filtered row in the selected order.
 
-What the columns mean:
-- `first_seen_at` is the **earliest detection** of this (asset, CVE, product). The import keeps
-  `min(prior, new)`, so a Falcon `created_timestamp` reset does not restart the clock. It never
-  holds a patch date.
-- `scan_timestamp` is Falcon's `created_timestamp` from the latest import (detection fallback).
-- `patch_publication_date` is read at query time only. Because it is not folded into
-  `first_seen_at`, a fix published after the first import still moves the clock forward.
-- `days_open` is the import-time age from the same anchor, display only.
+### Findings with no vendor recommendation
 
-Consequences:
-- A host that is rebuilt or newly onboarded (new Falcon AID, so a new snapshot) starts a new
-  clock. That is intended: the 30 days run from when CrowdStrike first saw the finding there.
-- The CLI's "Vulnerability Age Summary" (`query servers`) uses `SlaAnchor` too, so its counts
-  match the backend's.
+On a verified import, an explicit “No fix or vendor recommendation” or a complete empty
+remediation facet creates a pending CVE exception request for that asset. Administrators and
+security champions approve or reject it under **Exception Approvals**. Approval covers that CVE on the asset, including findings for other products with the same CVE. The proposed exception
+expires 30 days after request creation. Reimports preserve earlier requests and decisions.
+Legacy rows acquire remediation evidence on their next Falcon import. For ID-only responses the importer resolves remediation IDs in batches of up to 100. Incomplete lookups leave
+the finding visible and do not trigger a request.
 
 ### History
 
@@ -725,11 +718,9 @@ Four defects were fixed alongside (see `docs/CHANGELOG.md` 2026-08-24):
 2b. An unreadable date silently became `LocalDateTime.now()` — which reads as a
    zero-day-old finding and therefore **never trips an overdue threshold**.
    `FalconTimestamps.parse` returns null, and `CrowdStrikeVulnerabilityDto.detectedAt`
-   is nullable so the unknown actually propagates instead of being coerced back at
-   the call site. `scan_timestamp` is `NOT NULL`, so persistence still falls back to
-   the import time — but logs a WARN naming the CVE and asset, because that row's age
-   is then a floor rather than a measurement. `first_seen_at` keeps the earliest
-   value, so a later import supplying a real date corrects it one-way.
+   is nullable. Current importers mark an unknown detection explicitly. The required
+   scan timestamp can record the import instant while the host detection and SLA deadline remain unknown.
+   Older CLI payloads with a known whole-day age still reconstruct detection from that age.
 3. The high-volume CLI batch payload (`/api/crowdstrike/servers/import`) sent
    only `cveId`/`severity`/`affectedProduct`/`daysOpen`. Both publication dates
    were dropped in transit, so the patch date never reached the main import path. It now sends `detectedAt` and both

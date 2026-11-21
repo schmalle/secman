@@ -63,6 +63,9 @@ class ExternalHeatmapController(
         }
 
         val apiKey = authResult.apiKey
+        if (apiKey.permissions == com.secman.domain.McpPermission.PERSONAL_INVENTORY_READ.name) {
+            return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
+        }
         val delegationResult = delegationService.validateDelegation(apiKey, userEmail)
         if (!delegationResult.success || delegationResult.user == null) {
             logger.warn("External heatmap: Delegation validation failed for {}: {}", userEmail, delegationResult.errorMessage)
