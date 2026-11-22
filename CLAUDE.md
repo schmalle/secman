@@ -329,13 +329,13 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-11-21*
+*Last updated: 2026-11-22*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
-- **CrowdStrike overdue age** starts with the earliest detection on the affected system. V304 preserves the host detection independently of patch and CVE publication dates. See `docs/CROWDSTRIKE_IMPORT.md` for migration and exception-review behavior.
+- **CrowdStrike overdue age (2026-11-21)** — starts with the earliest detection on the affected system. V304 preserves the host detection independently of patch and CVE publication dates. See `docs/CROWDSTRIKE_IMPORT.md` for migration and exception-review behavior.
 
 - **Vulnerability replace scoping (2026-11-13)** — the Excel vulnerability import's transactional replace deleted every row on each asset named in the spreadsheet, including live CrowdStrike, CLI-manual and integration findings, until the next nightly run restored them; it now deletes only `XLSX` and pre-V213 `UNKNOWN` rows (`VulnerabilityPersistenceHelper.REPLACEABLE_SOURCES`, new `VulnerabilityRepository.deleteByAssetIdAndSourceIn`). The CrowdStrike reconcile sweep's failed-host exclusion matched by short label, so one failed `web01.a.example` kept `web01.b.example`'s patched findings out of the sweep; `reconcileScopeHosts` now excludes by failed AID or by a hostname naming the same machine (equal, or a bare short name on either side). The CLI no longer logs a zero-finding, unverified batch as "all 0 vulnerabilities were invalid". Investigation of a "patched vulnerabilities persist" report: the sampled host held only freshly re-imported rows that Falcon itself reported open. See `docs/CROWDSTRIKE_IMPORT.md` §Stale vulnerability cleanup.
 

@@ -1,5 +1,9 @@
 # Changelog (archived from CLAUDE.md)
 
+## 2026-11-21 — CrowdStrike overdue age
+
+- **CrowdStrike overdue age (2026-11-21)** — starts with the earliest detection on the affected system. V304 preserves the host detection independently of patch and CVE publication dates. See `docs/CROWDSTRIKE_IMPORT.md` for migration and exception-review behavior.
+
 ## 2026-11-13 — SLA anchor: max(first detection, patch date)
 
 - **SLA anchor = max(first detection, patch date) (2026-11-13)** — a finding is now overdue once `max(first CrowdStrike detection, patch date) + reminderOneDays` has passed. Before, the default `VULN_USE_PATCH_PUBLICATION_DATE=true` wrote the patch date into `first_seen_at`, so a fix known since day x made a finding first detected on day z = x + y overdue on x + 30 instead of z + 30. The flag and env variable are removed. `first_seen_at` now holds the earliest detection only, and the patch date enters through the generated `sla_anchor_at` (V299, `Vulnerability.SLA_ANCHOR_SQL`), so a fix published after detection still moves the clock forward. The single Kotlin rule is `com.secman.crowdstrike.SlaAnchor` (shared), used by the overdue badge, the DB lookup view, the import and the CLI `query servers` age summary (which counted from detection alone before, so it disagreed with the backend). V299 re-anchors CrowdStrike rows whose `first_seen_at` equals their patch date to `scan_timestamp`. Overdue counts drop after deploy; refresh the outdated-assets view. See `docs/CROWDSTRIKE_IMPORT.md` §SLA anchor.
