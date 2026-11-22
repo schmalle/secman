@@ -1,6 +1,7 @@
 #!/bin/bash
 # secman - CLI wrapper for secman security management tool
 
+export CROWDSTRIKE_CLEANUP_AFTER_IMPORT=true
 export MICRONAUT_ENVIRONMENTS=dev
 export SECMAN_BACKEND_URL="${SECMAN_E2E_BACKEND_URL:-pass://Test/SECMAN//SECMAN_BACKEND_BASE_URL}"
 # pass-cli is the source of truth for the database, unless the environment

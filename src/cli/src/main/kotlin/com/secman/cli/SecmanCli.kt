@@ -560,7 +560,7 @@ class SecmanCli {
                   --aid <id>               Query one exact Falcon AID
                   --device-type <type>     Device scope: SERVER, DOMAIN_CONTROLLER, SERVER_FAMILY,
                                            WORKSTATION, or ALL (default: SERVER)
-                  --severity <levels>      Severity filter (default: HIGH,CRITICAL)
+                  --severity <levels>      Severity filter, or ALL for unfiltered findings (default: HIGH,CRITICAL)
                   --min-days-open <num>    Minimum days open filter (default: 30)
                   --last-seen-days <num>   Only include devices seen within N days (default: 3; 0 = all)
                   --limit <num>            Page size for pagination (default: 4000)

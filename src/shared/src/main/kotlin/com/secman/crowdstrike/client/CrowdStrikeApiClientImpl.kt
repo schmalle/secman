@@ -30,6 +30,7 @@ import java.io.IOException
 import java.net.SocketTimeoutException
 import java.time.Instant
 import com.secman.crowdstrike.FalconRemediation
+import com.secman.crowdstrike.dto.CrowdStrikeRemediationDto
 import com.secman.crowdstrike.FalconTimestamps
 import com.secman.crowdstrike.SlaAnchor
 import java.time.LocalDateTime
@@ -246,7 +247,7 @@ open class CrowdStrikeApiClientImpl(
                     matchingDevices.addAll(response.matchingDevices)
                     // Filter by severity and days open
                     val filtered = response.vulnerabilities.filter { vuln ->
-                        val severityMatches = severity.split(",").any {
+                        val severityMatches = severity.equals("ALL", ignoreCase = true) || severity.split(",").any {
                             it.trim().equals(vuln.severity, ignoreCase = true)
                         }
                         // Parse daysOpen from string (e.g., "15 days" -> 15)
@@ -381,7 +382,17 @@ open class CrowdStrikeApiClientImpl(
             log.warn("Excluded {} nameless Falcon devices with confirmed zero open findings from import and reconciliation",
                 namelessDevices.size)
         }
-        metadataByDeviceId = selectImportDevices(serverDeviceIds, metadataByDeviceId, lastSeenDays)
+        metadataByDeviceId = selectImportDevices(serverDeviceIds, metadataByDeviceId)
+        val inventoryContacts = if (namelessDevices.isEmpty()) metadataByDeviceId.mapNotNull { (aid, md) ->
+            md.lastSeen?.takeIf { seen -> md.firstSeen?.let { !seen.isBefore(it) } == true }?.let { aid to it }
+        }.toMap() else null
+        if (lastSeenDays > 0) {
+            val now = Instant.now()
+            val cutoff = now.minusSeconds(lastSeenDays.toLong() * 86400)
+            metadataByDeviceId = metadataByDeviceId.filterValues { md ->
+                md.lastSeen?.let { !it.isBefore(cutoff) && !it.isAfter(now) } == true
+            }
+        }
         serverDeviceIds = metadataByDeviceId.keys.toList()
         log.info("Import metadata completed: devices={}, resolved={}, durationMs={}",
             serverDeviceIds.size, metadataByDeviceId.size, (System.nanoTime() - metadataStarted) / 1_000_000)
@@ -446,7 +457,8 @@ open class CrowdStrikeApiClientImpl(
             totalVulnerabilities = totalVulnerabilities,
             queriedHosts = queriedHosts,
             failedHosts = failedHosts,
-            failedDeviceCount = failedDeviceIds.size
+            failedDeviceCount = failedDeviceIds.size,
+            inventoryContacts = inventoryContacts
         )
     }
 
@@ -942,7 +954,7 @@ open class CrowdStrikeApiClientImpl(
                 throw CrowdStrikeException("Falcon enumeration failed: ${e.status}", e)
             }
             if (response.status.code != 200) throw CrowdStrikeException("Falcon enumeration failed")
-            val body = response.body() as? Map<*, *> ?: throw CrowdStrikeException("Missing Falcon enumeration response")
+            val body = response.body() ?: throw CrowdStrikeException("Missing Falcon enumeration response")
             if (!(body["errors"] as? List<*>).isNullOrEmpty()) throw CrowdStrikeException("Incomplete Falcon device enumeration")
             val resources = body["resources"] as? List<*> ?: throw CrowdStrikeException("Missing Falcon devices")
             val pagination = (body["meta"] as? Map<*, *>)?.get("pagination") as? Map<*, *>
@@ -955,7 +967,7 @@ open class CrowdStrikeApiClientImpl(
                 if (!ids.add(id)) throw CrowdStrikeException("Repeated Falcon device enumeration page")
             }
             cursor = (pagination["next"] as? String)?.takeIf(String::isNotBlank)
-            if (cursor != null && (!cursors.add(cursor!!) || resources.isEmpty())) {
+            if (cursor != null && (!cursors.add(cursor) || resources.isEmpty())) {
                 throw CrowdStrikeException("Repeated or empty Falcon enumeration cursor")
             }
             // A moving live population can change total during traversal. Refuse incomplete
@@ -1218,9 +1230,10 @@ open class CrowdStrikeApiClientImpl(
                 log.info(">>> Batch {}/{}: hostname '{}' maps to {} aids: {}",
                     batchIndex + 1, totalBatches, hostname, aids.size, aids)
             }
-        val severityFilter = buildSeverityFilter(severity)
         val deviceIdFilter = buildDeviceIdFilter(deviceIds)
-        val fqlFilter = "$deviceIdFilter+status:'open'+$severityFilter"
+        // A missing provider severity can only be assessed by an unfiltered fetch.
+        val fqlFilter = "$deviceIdFilter+status:'open'" +
+            if (severity.equals("ALL", ignoreCase = true)) "" else "+${buildSeverityFilter(severity)}"
         val batchVulnerabilities = mutableListOf<CrowdStrikeVulnerabilityDto>()
         val effectiveLimit = limit.coerceAtMost(5000)
         val maxPagesPerBatch = 50
@@ -1325,9 +1338,9 @@ open class CrowdStrikeApiClientImpl(
                         if (expectedTotal == null) {
                             expectedTotal = (pagination?.get("total") as? Number)?.toInt()
                         }
-                        if (expectedTotal == null || expectedTotal!! < 0) throw CrowdStrikeException("Missing or invalid Falcon findings total")
+                        if (expectedTotal == null || expectedTotal < 0) throw CrowdStrikeException("Missing or invalid Falcon findings total")
                         rawFetched = seenResourceIds.size
-                        if (rawFetched > expectedTotal!!) throw CrowdStrikeException("Falcon findings exceed the reported total")
+                        if (rawFetched > expectedTotal) throw CrowdStrikeException("Falcon findings exceed the reported total")
 
                         log.info(">>> Batch {}/{} page {}: Retrieved {} vulns, {} after filter (batch total: {})",
                             batchIndex + 1, totalBatches, pageCount, vulns.size, filtered.size,
@@ -1359,9 +1372,9 @@ open class CrowdStrikeApiClientImpl(
                             val total = expectedTotal
                             hasMore = liveToken != null && vulns.isNotEmpty() &&
                                 vulns.size >= effectiveLimit &&
-                                (total == null || rawFetched < total)
+                                rawFetched < total
 
-                            if (!hasMore && liveToken != null && total != null &&
+                            if (!hasMore && liveToken != null &&
                                 rawFetched < total && vulns.size < effectiveLimit
                             ) {
                                 // Short page although Falcon still reports more rows: the
@@ -1557,7 +1570,7 @@ open class CrowdStrikeApiClientImpl(
                 throw CrowdStrikeException("Falcon device lookup failed", e)
             }
             if (response.status.code != 200) throw CrowdStrikeException("Falcon device lookup failed")
-            val body = response.body() as? Map<*, *> ?: throw CrowdStrikeException("Empty Falcon device lookup")
+            val body = response.body() ?: throw CrowdStrikeException("Empty Falcon device lookup")
             if (!(body["errors"] as? List<*>).isNullOrEmpty()) throw CrowdStrikeException("Incomplete Falcon device lookup")
             val resources = body["resources"] as? List<*> ?: throw CrowdStrikeException("Missing Falcon device IDs")
             val page = resources.map { it?.toString() ?: throw CrowdStrikeException("Invalid Falcon device ID") }
@@ -1654,7 +1667,7 @@ open class CrowdStrikeApiClientImpl(
                             val pagination = meta?.get("pagination") as? Map<*, *>
                             if (expectedTotal == null) {
                                 expectedTotal = (pagination?.get("total") as? Number)?.toLong()
-                                if (expectedTotal != null && expectedTotal!! < 0) {
+                                if (expectedTotal != null && expectedTotal < 0) {
                                     throw CrowdStrikeException("Invalid Spotlight pagination total")
                                 }
                             }
@@ -1686,11 +1699,11 @@ open class CrowdStrikeApiClientImpl(
                             // Falcon can leave a live cursor after the final page. Only proven
                             // completeness overrides the cursor guard; short pages can still continue.
                             val failure = when {
-                                total != null && seenResourceIds.size > total -> "rows exceed reported total"
-                                total != null && seenResourceIds.size.toLong() == total -> null
-                                newAfterToken == null && total != null -> "cursor ended before reported total"
-                                newAfterToken != null && resources.isEmpty() -> "empty page before completion"
-                                newAfterToken != null && !seenAfterTokens.add(newAfterToken) -> "repeated cursor before completion"
+                                seenResourceIds.size > total -> "rows exceed reported total"
+                                seenResourceIds.size.toLong() == total -> null
+                                newAfterToken == null -> "cursor ended before reported total"
+                                resources.isEmpty() -> "empty page before completion"
+                                !seenAfterTokens.add(newAfterToken) -> "repeated cursor before completion"
                                 else -> null
                             }
                             if (failure != null) {
@@ -1699,7 +1712,7 @@ open class CrowdStrikeApiClientImpl(
                                 throw CrowdStrikeException("Incomplete Spotlight pagination: $failure")
                             }
                             hasMore = newAfterToken != null &&
-                                (total == null || seenResourceIds.size.toLong() < total)
+                                seenResourceIds.size.toLong() < total
                             afterToken = newAfterToken
                             pageSuccess = true
                         }
@@ -1808,7 +1821,7 @@ open class CrowdStrikeApiClientImpl(
         resources: List<*>,
         hostname: String,
         crowdStrikeAid: String?,
-        resolved: Map<String, Boolean> = emptyMap()
+        resolved: Map<String, CrowdStrikeRemediationDto> = emptyMap()
     ): List<CrowdStrikeVulnerabilityDto> {
         return resources.mapNotNull { resource ->
             val vuln = resource as? Map<*, *> ?: return@mapNotNull null
@@ -1869,7 +1882,8 @@ open class CrowdStrikeApiClientImpl(
                     (app as? Map<*, *>)?.get("product_name_version")?.toString()
                 }?.joinToString(", ")
 
-                val detectedAt = detectionTime(vuln)
+                val detectedAtInstant = detectionTime(vuln)
+                val detectedAt = detectedAtInstant?.let { LocalDateTime.ofInstant(it, java.time.ZoneId.systemDefault()) }
 
                 // Extract patch publication date
                 val patchPublicationDate = extractPatchPublicationDate(vuln)
@@ -1884,11 +1898,13 @@ open class CrowdStrikeApiClientImpl(
                     severity = severity,
                     cvssScore = cvssScore,
                     affectedProduct = affectedProduct,
-                    daysOpen = calculateDaysOpen(detectedAt),
+                    daysOpen = calculateDaysOpen(detectedAtInstant),
                     detectedAt = detectedAt,
+                    detectedAtInstant = detectedAtInstant,
                     patchPublicationDate = patchPublicationDate,
                     cvePublishedDate = extractCvePublishedDate(vuln),
                     noVendorFix = FalconRemediation.noVendorFix(vuln, resolved),
+                    remediation = FalconRemediation.recommendations(vuln, resolved),
                     status = vuln["status"]?.toString() ?: "open",
                     hasException = false,
                     exceptionReason = null,
@@ -1927,7 +1943,7 @@ open class CrowdStrikeApiClientImpl(
             "MEDIUM" -> "Medium"
             "LOW" -> "Low"
             "INFORMATIONAL" -> "Informational"
-            else -> apiSeverity.lowercase().replaceFirstChar { it.uppercase() }
+            else -> "Unknown"
         }
     }
 
@@ -1954,9 +1970,9 @@ open class CrowdStrikeApiClientImpl(
      * Returning null rather than "0 days" is the point: a fabricated zero reads as a
      * brand-new finding and never trips an overdue threshold.
      */
-    private fun calculateDaysOpen(detectedAt: LocalDateTime?): String? {
+    private fun calculateDaysOpen(detectedAt: java.time.Instant?): String? {
         if (detectedAt == null) return null
-        val days = java.time.temporal.ChronoUnit.DAYS.between(detectedAt, LocalDateTime.now())
+        val days = java.time.temporal.ChronoUnit.DAYS.between(detectedAt, java.time.Instant.now())
         return if (days == 1L) "1 day" else "$days days"
     }
 
@@ -1974,11 +1990,10 @@ open class CrowdStrikeApiClientImpl(
     private fun extractPatchPublicationDate(vuln: Map<*, *>): LocalDateTime? =
         FalconTimestamps.patchPublicationDate(vuln)
 
-    private fun resolveRemediations(resources: List<*>, token: AuthToken): Map<String, Boolean> {
+    private fun resolveRemediations(resources: List<*>, token: AuthToken): Map<String, CrowdStrikeRemediationDto> {
         val ids = resources.filterIsInstance<Map<*, *>>()
-            .filter { FalconRemediation.noVendorFix(it) == null }
-            .flatMap { FalconRemediation.referencedIds(it).orEmpty() }.distinct()
-        val resolved = mutableMapOf<String, Boolean>()
+            .flatMap(FalconRemediation::unresolvedIds).distinct()
+        val resolved = mutableMapOf<String, CrowdStrikeRemediationDto>()
         for (batch in ids.chunked(100)) {
             val uri = UriBuilder.of("/spotlight/entities/remediations/v2")
                 .queryParam("ids", *batch.toTypedArray()).build()
@@ -1990,7 +2005,7 @@ open class CrowdStrikeApiClientImpl(
                 val returned = entities.map { it["id"] }
                 if (returned.size != batch.size || returned.toSet() != batch.toSet()) continue
                 entities.forEach { entity ->
-                    FalconRemediation.advice(entity)?.let { resolved[entity["id"] as String] = it }
+                    FalconRemediation.recommendation(entity)?.let { resolved[entity["id"] as String] = it }
                 }
             } catch (e: HttpClientException) {
                 log.warn("Falcon remediation lookup incomplete for {} IDs", batch.size)
@@ -1999,9 +2014,9 @@ open class CrowdStrikeApiClientImpl(
         return resolved
     }
 
-    private fun detectionTime(vuln: Map<*, *>): LocalDateTime? {
+    private fun detectionTime(vuln: Map<*, *>): java.time.Instant? {
         val raw = (vuln["created_timestamp"] ?: vuln["created_on"])?.toString()
-        return FalconTimestamps.parse(raw).also {
+        return FalconTimestamps.parse(raw, java.time.ZoneOffset.UTC)?.toInstant(java.time.ZoneOffset.UTC).also {
             if (it == null && !raw.isNullOrBlank()) {
                 log.warn("Unparseable Falcon detection date: {}", FalconTimestamps.sanitizeForLog(raw))
             }
@@ -2085,7 +2100,7 @@ open class CrowdStrikeApiClientImpl(
             .header("Accept", "application/json")
         val response = httpClient.toBlocking().exchange(request, Map::class.java)
         if (response.status.code != 200) return false
-        val body = response.body() as? Map<*, *> ?: return false
+        val body = response.body() ?: return false
         val resources = body["resources"] as? List<*> ?: return false
         val pagination = (body["meta"] as? Map<*, *>)?.get("pagination") as? Map<*, *>
         val total = pagination?.get("total") as? Number ?: return false
@@ -2289,7 +2304,7 @@ open class CrowdStrikeApiClientImpl(
     private fun mapResponseToDtos(
         resources: List<*>,
         metadataByDeviceId: Map<String, DeviceMetadata> = emptyMap(),
-        resolved: Map<String, Boolean> = emptyMap()
+        resolved: Map<String, CrowdStrikeRemediationDto> = emptyMap()
     ): List<CrowdStrikeVulnerabilityDto> {
         return resources.mapNotNull { resource ->
             val vuln = resource as? Map<*, *> ?: return@mapNotNull null
@@ -2325,7 +2340,7 @@ open class CrowdStrikeApiClientImpl(
                 val ipAddresses = buildSet {
                     // Current device metadata takes precedence over older Spotlight host snapshots.
                     if (!metadata?.ipAddresses.isNullOrEmpty()) {
-                        addAll(metadata!!.ipAddresses)
+                        addAll(metadata.ipAddresses)
                     } else {
                         listOf(vuln, hostInfo, deviceInfo).filterNotNull().forEach { source ->
                             addAll(collectIpAddresses(source))
@@ -2383,7 +2398,8 @@ open class CrowdStrikeApiClientImpl(
                     (app as? Map<*, *>)?.get("product_name_version")?.toString()
                 }?.joinToString(", ")
 
-                val detectedAt = detectionTime(vuln)
+                val detectedAtInstant = detectionTime(vuln)
+                val detectedAt = detectedAtInstant?.let { LocalDateTime.ofInstant(it, java.time.ZoneId.systemDefault()) }
 
                 // Extract patch publication date
                 val patchPublicationDate = extractPatchPublicationDate(vuln)
@@ -2399,11 +2415,13 @@ open class CrowdStrikeApiClientImpl(
                     severity = severity,
                     cvssScore = cvssScore,
                     affectedProduct = affectedProduct,
-                    daysOpen = calculateDaysOpen(detectedAt),
+                    daysOpen = calculateDaysOpen(detectedAtInstant),
                     detectedAt = detectedAt,
+                    detectedAtInstant = detectedAtInstant,
                     patchPublicationDate = patchPublicationDate,
                     cvePublishedDate = extractCvePublishedDate(vuln),
                     noVendorFix = FalconRemediation.noVendorFix(vuln, resolved),
+                    remediation = FalconRemediation.recommendations(vuln, resolved),
                     status = vuln["status"]?.toString() ?: "open",
                     hasException = false,
                     exceptionReason = null,

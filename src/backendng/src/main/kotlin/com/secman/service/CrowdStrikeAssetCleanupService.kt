@@ -29,10 +29,11 @@ open class CrowdStrikeAssetCleanupService(
     fun cleanup(days: Int, dryRun: Boolean, username: String, includeLegacy: Boolean,
                 cutoffOverride: LocalDateTime? = null,
                 basis: CrowdStrikeCleanupBasis = CrowdStrikeCleanupBasis.IMPORT_INACTIVITY,
-                selection: CrowdStrikeAssetCleanupResponse? = null): CrowdStrikeAssetCleanupResponse {
+                selection: CrowdStrikeAssetCleanupResponse? = null,
+                scope: ImportContactScope? = null): CrowdStrikeAssetCleanupResponse {
         require(days in 1..36500) { "Days must be between 1 and 36500" }
         val cutoff = cutoffOverride ?: LocalDateTime.now(clock).minusDays(days.toLong())
-        val cutoffUtc = cutoff.atZone(clock.zone).toInstant()
+        val cutoffUtc = scope?.cutoff ?: cutoff.atZone(clock.zone).toInstant()
         val agentCutoff = LocalDateTime.ofInstant(cutoffUtc, ZoneOffset.UTC)
         val candidates = mutableListOf<CrowdStrikeAssetCleanupCandidateDto>()
         val exclusions = mutableMapOf<String, Long>()
@@ -44,8 +45,9 @@ open class CrowdStrikeAssetCleanupService(
             do {
                 val population = assetRepository.findCleanupPopulation(AssetOwners.CROWDSTRIKE_IMPORT,
                     Pageable.from(page++, 200))
+                val scopedContacts = scope?.contactsFor(population.content.mapNotNull { it.id })
                 population.content.forEach { asset ->
-                    val excluded = retentionPolicy.exclusion(asset, basis, includeLegacy, cutoff, agentCutoff)
+                    val excluded = scope?.exclusion(asset, scopedContacts.orEmpty()) ?: retentionPolicy.exclusion(asset, basis, includeLegacy, cutoff, agentCutoff)
                     if (excluded != null) exclusions[excluded] = (exclusions[excluded] ?: 0L) + 1
                     else candidates.add(CrowdStrikeAssetCleanupCandidateDto(
                         assetId = requireNotNull(asset.id), name = asset.name,
@@ -71,7 +73,10 @@ open class CrowdStrikeAssetCleanupService(
             try {
                 assetCascadeDeleteService.deleteAsset(candidate.assetId, username, forceTimeout = true,
                     bulkOperationId = operationId,
-                    cleanupEligibility = { retentionPolicy.exclusion(it, basis, includeLegacy, cutoff, agentCutoff) == null })
+                    cleanupEligibility = { asset ->
+                        retentionPolicy.exclusion(asset, basis, includeLegacy, cutoff, agentCutoff) == null &&
+                            (scope == null || scope.exclusion(asset, scope.contactsFor(listOf(candidate.assetId))) == null)
+                    })
                 deleted++
                 if (candidate.reason == CleanupCandidateReason.LEGACY_NULL_TIMESTAMP) legacyDeleted++
             } catch (e: CleanupEligibilityChangedException) {

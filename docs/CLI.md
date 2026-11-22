@@ -62,9 +62,9 @@ CrowdStrike API:
 ```bash
 export FALCON_CLIENT_ID=…       # alias of CROWDSTRIKE_CLIENT_ID
 export FALCON_CLIENT_SECRET=…
-export FALCON_BASE_URL=https://api.crowdstrike.com   # or api.us-2/eu-1/laggar.gcw...
-export FALCON_CLOUD_REGION=us-1
 ```
+
+The shared Kotlin Falcon client connects to `https://api.crowdstrike.com`. Changing the stored base URL currently has no effect on that client’s routing.
 
 Backend (for `--save` operations):
 ```bash
@@ -160,44 +160,40 @@ stored matches and supports `--include-already-eol`, `--only-email`, and
 ### `query servers` — CrowdStrike vulnerability query
 
 ```bash
-./scripts/secman query servers --hostnames web-01,web-02 --severity HIGH,CRITICAL --min-days-open 30 --save
+./scripts/secman query servers --hostnames web-01,web-02 --severity HIGH,CRITICAL --min-days-open 30 --dry-run
 ./scripts/secmanng query servers --severity CRITICAL,HIGH --save --device-type SERVER_FAMILY \
-  --last-seen-days 30 --min-days-open 1 --insecure --verbose
+  --last-seen-days 1 --verbose
 ```
 
 | Option | Default | Notes |
 |---|---|---|
-| `--hostnames` | — (all devices) | comma-separated; switches to per-host mode, see below |
+| `--hostnames` | — | Comma-separated hostnames. |
+| `--all-matches` | false | Query each independent device matching the named host. |
+| `--aid` | — | Select one exact Falcon agent ID. |
 | `--severity` | `HIGH,CRITICAL` | `CRITICAL,HIGH,MEDIUM,LOW` |
 | `--device-type` | `SERVER` | `SERVER`, `DOMAIN_CONTROLLER`, `SERVER_FAMILY`, `WORKSTATION`, `ALL`; `SERVER_FAMILY` queries servers and domain controllers separately, while `ALL` also includes workstations. **Ignored with `--hostnames`.** |
-| `--min-days-open` | 30 | |
+| `--min-days-open` | 30 | Detection-age filter for read-only queries. |
 | `--overdue-threshold` | 30 | days for the printed "Vulnerability Age Summary"; a finding counts once first detection on the host is older than this, the same rule as the backend (`docs/CROWDSTRIKE_IMPORT.md` §SLA anchor) |
 | `--last-seen-days` | 3 (0 = all) | recent-checkin window; **ignored with `--hostnames`** |
-| `--limit` | 800 | Spotlight page size |
-| `--save` | false | POST to backend |
-| `--username` / `--password` | — | required with `--save` |
+| `--limit` | 4000 | Requested pagination size. The API client applies endpoint-specific limits. |
+| `--save` | false | Persist through the backend. |
+| `--dry-run` | false | Query without persisting. |
+| `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` | — | Backend credentials for a saved query. |
 | `--backend-url` | `http://localhost:8080` | |
-| `--output-file` / `--format` | — / `json` | `json|csv` |
-| `--verbose` / `--insecure` | false | `--insecure` allows self-signed TLS |
+| `--verbose` | false | Print more detail. |
+| `--reconcile-dry-run` | false | Preview only the reconciliation sweep. With `--save`, finding batches are still written. Use `--dry-run` for a read-only query. |
 
-`--min-days-open` filters on Falcon's detection age only. It decides which findings are
-fetched, not which are overdue.
+`--min-days-open` filters read-only results by detection age. Saved queries fetch every age in the requested severity scope so an age filter cannot remove younger findings from a replacement snapshot. `--overdue-threshold` controls the CLI age summary.
 
 `--device-type` values are case-insensitive but use the underscore-separated
 names shown above. For production server imports, prefer `SERVER_FAMILY`; the
 bare CLI default remains `SERVER` for backward compatibility. Domain controllers
 are persisted as SecMan `SERVER` assets, not as a new asset type.
 
-**Per-host mode (`--hostnames`)**: each hostname is resolved to **all** matching
-CrowdStrike device ids (5-strategy FQL cascade; the first strategy that matches
-returns its complete result list) and vulnerabilities are merged across those aids —
-a re-imaged/re-enrolled host keeps its hostname but gets a new aid, so a single-aid
-lookup under-reports. The CLI prints one status line per requested host
-(`not found in CrowdStrike` / `resolved, 0 matching vulnerabilities` /
-`N vulnerabilities`) and warns that `--device-type` and `--last-seen-days` are
-ignored (hosts named explicitly are resolved directly, without device filters).
-Exit code is `1` only when **none** of the requested hostnames exist in CrowdStrike;
-partial resolution exits `0` with the per-host report.
+**Per-host mode.** A hostname selects the device with the latest valid contact.
+Use `--all-matches` for every independent match or `--aid` for a specific
+device. Hostname queries ignore `--device-type` and `--last-seen-days`.
+For a read-only query, review each hostname status even if the command succeeds. Saved queries also fail on fetch, persistence, or reconciliation errors.
 
 After a `--save` run the CLI triggers the backend's stale-vulnerability
 reconcile as an async job (POST returns `202` + jobId, then status polling —
@@ -337,7 +333,7 @@ Existing assets start with `crowdstrike_last_imported_at = NULL` after the schem
 ### `send-notifications` — outdated-asset & new-vuln emails
 
 Overdue reminders include only assets with actual Falcon sensor contact within the
-last 72 hours (inclusive), evaluated at notification time. Missing or future contact
+last 24 hours (inclusive), evaluated at notification time. Missing or future contact
 timestamps are excluded; SecMan import time does not establish eligibility.
 The MCP `send_outdated_notifications` tool applies the same recency rule.
 
@@ -371,7 +367,7 @@ with no recipients in any category is skipped (logged with `--verbose`).
 ### `send-notification-users` — per-AWS-account vulnerability emails
 
 All modes, including dry runs and verbose details, include only assets with actual
-Falcon sensor contact within the last 72 hours (inclusive). Missing or future contact
+Falcon sensor contact within the last 24 hours (inclusive). Missing or future contact
 timestamps are excluded; `last_seen` and import time are not used as fallbacks.
 Counts and affected accounts reflect only eligible assets. The same rule applies
 to the MCP vulnerability and patch notification tools.
@@ -1304,7 +1300,7 @@ older than 90 days lose recipient metadata and are no longer retryable.
 
 ## Current asset visibility
 
-Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.
+See [Current asset inventory](CURRENT_ASSETS.md) for observation sources, cache expiry, and the boundary between current and stored records.
 
 
 ## Welcome every owner of a newly discovered AWS account

@@ -49,7 +49,7 @@ Security requirement, vulnerability and risk management platform.
 
 Creator, uploader, and owner remain metadata. They grant no access. Workgroup hierarchy does not propagate membership.
 
-Current operational inventory additionally requires verified observation within the inclusive UTC 72-hour window. Falcon-managed assets use actual sensor contact; other assets use `verified_observed_at`. Stored-record authorization and scanner ingestion remain independent. See `docs/CURRENT_ASSETS.md`.
+Current operational inventory additionally requires verified observation within the inclusive UTC 24-hour window. Falcon-managed assets use actual sensor contact; other assets use `verified_observed_at`. Stored-record authorization and scanner ingestion remain independent. See `docs/CURRENT_ASSETS.md`.
 
 Authoritative filter: `AssetFilterService`. MCP and heatmap reuse it; SQL entity and ID queries share `AssetAccessSql`. `getScopedAccessibleAssetIds()` retains its ADMIN-only global shortcut for scoped notifications.
 
@@ -252,9 +252,9 @@ not input hygiene. All credentials use `EncryptedStringConverter`, are never ret
 `ImportCompletionNotifier` (no last batch exists), AWS account imports publish inline post-commit.
 
 ### Transactional replace (CrowdStrike vuln import)
-Per server: `findOrCreateAsset` → `vulnerabilityRepository.deleteByAssetId()` → `saveAll`, all in one `@Transactional`. Idempotent; missing CVEs in the next import = remediation.
+Per device, a complete changed snapshot replaces CrowdStrike findings in the affected scope in one transaction. Identical verified snapshots can retain their rows. Incomplete evidence preserves stored findings.
 
-**CRITICAL**: `Asset.vulnerabilities` MUST NOT use `cascade=ALL` or `orphanRemoval=true`. JPA cascade fights the manual delete-insert and silently drops 99% of rows (real incident: 166,812 → 1,819). Use explicit `vulnerabilityRepository.deleteByAssetId()` in the service. See `docs/CROWDSTRIKE_IMPORT.md`.
+**CRITICAL**: `Asset.vulnerabilities` MUST NOT use `cascade=ALL` or `orphanRemoval=true`. JPA cascade fights the manual delete-insert and silently drops 99% of rows (real incident: 166,812 → 1,819). Use explicit source- and severity-scoped writes in the importer. See `docs/CROWDSTRIKE_IMPORT.md`.
 
 ## Test Infrastructure
 

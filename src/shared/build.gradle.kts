@@ -8,7 +8,7 @@ plugins {
 version = "0.1.0"
 group = "com.secman.crowdstrike"
 
-val kotlinVersion = project.properties.get("kotlinVersion")
+val kotlinVersion = property("kotlinVersion")
 
 dependencies {
     // Micronaut Core (HTTP client, no web server)
@@ -57,6 +57,10 @@ kotlin {
 tasks {
     test {
         useJUnitPlatform()
+        // MockK appends to the bootstrap classpath. Disable test JVM class sharing
+        // and have Byte Buddy use its supported class-injection path.
+        jvmArgs("-Xshare:off")
+        systemProperty("net.bytebuddy.safe", "true")
     }
 }
 

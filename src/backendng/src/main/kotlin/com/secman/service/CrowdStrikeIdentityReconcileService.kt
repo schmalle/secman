@@ -79,7 +79,7 @@ class CrowdStrikeIdentityReconcileService(
             checkEvidence(selection != null && selection.superseded.isEmpty(), "DEVICE_METADATA_INCOMPLETE",
                 "Findings did not resolve to one verified Falcon enrollment", before.aid)
             val selected = requireNotNull(selection).selected
-            checkEvidence(selected.aid == before.aid && device?.crowdStrikeAid == before.aid &&
+            checkEvidence(selected.aid == before.aid && device.crowdStrikeAid == before.aid &&
                 selected.instanceId == before.instanceId && selected.cloudAccountId == before.cloudAccountId &&
                 selected.adDomain == before.adDomain && selected.hostname == before.hostname && selected.firstSeen == before.firstSeen,
                 "IDENTITY_CHANGED_DURING_FETCH", "Falcon identity changed after metadata classification; preview again", before.aid)
@@ -89,11 +89,11 @@ class CrowdStrikeIdentityReconcileService(
                 "FINDING_IDENTITY_MISMATCH", "Finding coverage is too large or belongs to another AID", before.aid)
             val supported = response.vulnerabilities.filter { !it.cveId.isNullOrBlank() }
             val now = LocalDateTime.now()
-            metadata.copy(osVersion = device?.osVersion, ip = device?.ip, ipAddresses = device?.ipAddresses.orEmpty(),
+            metadata.copy(osVersion = device.osVersion, ip = device.ip, ipAddresses = device.ipAddresses.orEmpty(),
                 vulnerabilities = supported.map { row ->
                     VulnerabilityDto(requireNotNull(row.cveId), row.severity, row.affectedProduct?.take(512),
                         row.detectedAt?.let { ChronoUnit.DAYS.between(it, now).toInt().coerceAtLeast(0) } ?: 0,
-                        row.detectedAt, row.patchPublicationDate, row.cvePublishedDate, row.noVendorFix, row.detectedAt == null)
+                        row.detectedAt, row.patchPublicationDate, row.cvePublishedDate, row.noVendorFix, row.detectedAt == null, row.remediation)
                 }, deviceSelection = selection,
                 findingCoverage = CrowdStrikeFindingCoverage(response.vulnerabilities.size, supported.size,
                     missingCve = response.vulnerabilities.size - supported.size))

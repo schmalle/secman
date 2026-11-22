@@ -187,7 +187,7 @@ class CrowdStrikeDeviceReplacementService(
                 records.any { it.instanceId.equals(asset.cloudInstanceId, ignoreCase = true) &&
                     it.cloudAccountId.equals(asset.cloudAccountId, ignoreCase = true) }
             return (compatibleValue(asset.cloudInstanceId, selected.instanceId) ||
-                (changingInstance && knownWinner?.asset?.id == asset.id)) &&
+                (changingInstance && knownWinner.asset.id == asset.id)) &&
                 compatibleValue(asset.cloudAccountId, selected.cloudAccountId) &&
                 (compatibleValue(asset.adDomain, selected.adDomain) || provenIdentity || provenInstance)
         }

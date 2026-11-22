@@ -13,6 +13,23 @@ class CrowdStrikeImportRunLeaseTest {
     private fun advance(seconds: Long) { lease.clock = Clock.fixed(start.plusSeconds(seconds), ZoneOffset.UTC) }
 
     @Test
+    fun `complete coverage reserves exclusive cleanup once and incomplete coverage releases the run`() {
+        val partial = lease.start("admin")
+        lease.stageContacts(partial, "admin", mapOf("aid" to start))
+        assertThat(lease.finishWithCoverage(partial, "admin", 2)).isNull()
+
+        val run = lease.start("admin")
+        lease.stageContacts(run, "admin", mapOf("aid" to start))
+        lease.stageContacts(run, "admin", mapOf("aid" to start))
+        assertThat(lease.finishWithCoverage(run, "admin", 1)).isEqualTo(mapOf("aid" to start))
+        assertThat(lease.tryBeginCleanup()).isFalse()
+        assertThatThrownBy { lease.start("other") }.isInstanceOf(IllegalStateException::class.java)
+        assertThat(lease.finishedStatus(run, "admin")).isEqualTo("COMPLETED")
+        lease.finishCleanup()
+        assertThat(lease.tryBeginCleanup()).isTrue()
+    }
+
+    @Test
     fun `repeated finish preserves result ownership and a newer active run`() {
         advance(0)
         val old = lease.start("owner")

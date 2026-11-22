@@ -495,6 +495,7 @@ secman:
     # keep current behavior until ops flips the flag.
     sensor-retention-days: ${CROWDSTRIKE_SENSOR_RETENTION_DAYS:0}
     cleanup:
+      after-import: ${CROWDSTRIKE_CLEANUP_AFTER_IMPORT:false}
       basis: ${CROWDSTRIKE_CLEANUP_BASIS:import-inactivity}
       enabled: ${CROWDSTRIKE_CLEANUP_ENABLED:false}
       stale-days: ${CROWDSTRIKE_CLEANUP_STALE_DAYS:30}

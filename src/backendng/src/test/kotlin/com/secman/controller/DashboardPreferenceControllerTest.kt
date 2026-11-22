@@ -78,6 +78,17 @@ class DashboardPreferenceControllerTest : BaseIntegrationTest() {
         )
 
     @Test
+    fun `regular users cannot read aggregate AWS vulnerability coverage`() {
+        val token = TestAuthHelper.getAuthToken(client, username)
+        val error = org.junit.jupiter.api.assertThrows<io.micronaut.http.client.exceptions.HttpClientResponseException> {
+            client.toBlocking().exchange<Any, Any>(
+                HttpRequest.GET<Any>("/api/dashboard/aws-clean-server-kpi").bearerAuth(token)
+            )
+        }
+        assertThat(error.status).isEqualTo(HttpStatus.FORBIDDEN)
+    }
+
+    @Test
     fun `get returns every card visible when no preference row exists`() {
         val token = TestAuthHelper.getAuthToken(client, username)
 

@@ -18,6 +18,7 @@ set -euo pipefail
 # --- Cron-safe environment bootstrap -----------------------------------------
 : "${HOME:=$(getent passwd "$(id -u)" 2>/dev/null | cut -d: -f6)}"
 export HOME
+export CROWDSTRIKE_CLEANUP_AFTER_IMPORT=true
 
 export PATH="${HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
 

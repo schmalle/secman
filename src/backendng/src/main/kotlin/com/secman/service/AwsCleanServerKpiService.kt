@@ -3,151 +3,80 @@ package com.secman.service
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.secman.dto.AwsCleanServerKpiCacheData
 import com.secman.dto.AwsCleanServerKpiResponse
-import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
 import com.secman.repository.VulnerabilityStatisticsCacheRepository
+import io.micronaut.scheduling.annotation.Scheduled
 import jakarta.inject.Singleton
-import jakarta.transaction.Transactional
 import org.slf4j.LoggerFactory
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 
-/**
- * Computes and caches the "AWS servers with no vulnerability older than 30 days"
- * security KPI: (AWS servers with zero vulnerabilities detected >30 days ago) /
- * (AWS servers seen today in Europe/Berlin), as a percentage. Both counts use that contact day.
- *
- * Deliberately uses a fixed 30-day window rather than the admin-tunable
- * `VulnerabilityConfig.reminderOneDays` threshold, so the KPI's meaning never
- * silently drifts if that unrelated setting is changed.
- *
- * Recalculated as part of MaterializedViewRefreshService.refreshDerivedData()
- * (i.e. after every CrowdStrike import and every manual admin refresh), so a
- * login only ever reads a pre-computed cache row — never a live query.
- * Piggybacks on the existing `vulnerability_statistics_cache` table so no new
- * schema is needed.
- */
+/** Cached fleet-wide detection age. Provider contact only affects the separate EDR metric. */
 @Singleton
-open class AwsCleanServerKpiService(
-    private val assetRepository: AssetRepository,
+class AwsCleanServerKpiService(
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val cacheRepository: VulnerabilityStatisticsCacheRepository,
     private val objectMapper: ObjectMapper
 ) {
-    private val log = LoggerFactory.getLogger(AwsCleanServerKpiService::class.java)
+    private val log = LoggerFactory.getLogger(javaClass)
 
     companion object {
-        const val CACHE_KEY = "aws_clean_server_kpi"
+        const val CACHE_KEY = "aws_clean_server_kpi_current_v4"
         const val VULN_AGE_THRESHOLD_DAYS = 30L
-
-        /**
-         * "AWS server" = an asset with an EC2 instance ID, matching the
-         * established codebase definition (AssetRepository.countAllAwsAssetsWithInstanceId,
-         * used by asset-match-clear). This naturally excludes the synthetic
-         * "AWS Account <id>" placeholder assets (AwsAccountRiskAssessmentService),
-         * which are given a cloudAccountId but never a cloudInstanceId.
-         */
     }
 
-    /**
-     * Recalculate the KPI and upsert it into the cache. Never throws — failures
-     * are logged and the previous cached value (if any) is left in place.
-     *
-     * Both inputs are scalar COUNTs, so this is constant-heap regardless of fleet size. It
-     * used to accept the overdue-vulnerability list that MaterializedViewRefreshService had
-     * already loaded, to avoid a second full-table read — but that made the entire ~166k-entity
-     * list stay reachable for the whole refresh cycle, which is what left no headroom during the
-     * 2026-07-30 import. Two cheap aggregates beat one reused giant list.
-     */
+    @Scheduled(fixedDelay = "15m", initialDelay = "30s")
+    fun refresh() = recalculate()
+
+    @Scheduled(fixedDelay = "1m", initialDelay = "1m")
+    fun refreshExpiredInventory() {
+        if (cacheRepository.findByCacheKey(CACHE_KEY).isEmpty) recalculate()
+    }
+
     fun recalculate(requireSuccess: Boolean = false) {
-        val start = System.currentTimeMillis()
-        val calculatedAt = LocalDateTime.now(java.time.ZoneOffset.UTC)
+        val start = System.nanoTime()
+        val now = Instant.now().truncatedTo(ChronoUnit.MICROS)
+        // Existing finding timestamps are persisted as local DATETIME.
+        val storageZone = ZoneId.systemDefault()
         try {
-            val window = FalconSeenTodayWindow.today()
-            val totalAwsServers = assetRepository.countAwsAssetsSeenToday(window.startUtc, window.endUtc)
-
-            val awsServersWithOldDetections = if (totalAwsServers == 0L) {
-                0L
-            } else {
-                vulnerabilityRepository.countDirtyVerifiedAwsServers(
-                    LocalDateTime.now().minusDays(VULN_AGE_THRESHOLD_DAYS),
-                    window.startUtc, window.endUtc
-                )
-            }
-
-            val unknownServers = if (totalAwsServers == 0L) 0L else
-                vulnerabilityRepository.countUnknownAwsServers(window.startUtc, window.endUtc)
-            val cleanAwsServers = (totalAwsServers - awsServersWithOldDetections - unknownServers).coerceAtLeast(0)
-            val percentage = computePercentage(cleanAwsServers, totalAwsServers)
-
-            val json = objectMapper.writeValueAsString(
-                AwsCleanServerKpiCacheData(
-                    totalAwsServers = totalAwsServers,
-                    cleanAwsServers = cleanAwsServers,
-                    percentage = percentage,
-                    seenTodayStartUtc = window.startUtc.toString(),
-                    unknownAwsServers = unknownServers
-                )
+            val counts = vulnerabilityRepository.countAwsServerDetectionAge(
+                LocalDateTime.ofInstant(now.minus(Duration.ofDays(VULN_AGE_THRESHOLD_DAYS)), storageZone),
+                LocalDateTime.ofInstant(now, storageZone)
             )
-            upsertCache(json, System.currentTimeMillis() - start, calculatedAt)
-
-            log.info(
-                "AWS clean-server KPI recalculated: totalAwsServers={}, cleanAwsServers={}, percentage={}",
-                totalAwsServers, cleanAwsServers, percentage
+            val percentage = if (counts.total == 0L || counts.total == counts.unknownCount) null else
+                BigDecimal.valueOf(counts.clean).movePointRight(2)
+                    .divide(BigDecimal.valueOf(counts.total), 1, RoundingMode.HALF_UP).toDouble()
+            val json = objectMapper.writeValueAsString(
+                AwsCleanServerKpiCacheData(counts.total, counts.clean, percentage, counts.unknownCount, counts.overdue)
+            )
+            cacheRepository.upsertStoredSnapshot(
+                CACHE_KEY, json, LocalDateTime.ofInstant(now, ZoneOffset.UTC),
+                Duration.ofNanos(System.nanoTime() - start).toMillis()
             )
         } catch (e: Exception) {
-            log.error("AWS clean-server KPI recalculation failed: {}", e.message, e)
+            log.error("AWS clean-server KPI refresh failed", e)
             if (requireSuccess) throw e
         }
     }
 
-    @io.micronaut.scheduling.annotation.Scheduled(fixedDelay = "1m", initialDelay = "30s")
-    open fun refreshExpiredInventory() {
-        if (cacheRepository.findByCacheKey(CACHE_KEY).isEmpty) recalculate()
-    }
-
-    /**
-     * Read the last-computed KPI value. `available = false` when no
-     * calculation has ever completed (fresh install, or before the first
-     * CrowdStrike import that triggers a refresh).
-     */
     fun getKpi(): AwsCleanServerKpiResponse {
         val entry = cacheRepository.findByCacheKey(CACHE_KEY).orElse(null)
             ?: return AwsCleanServerKpiResponse(available = false)
-
         val data = objectMapper.readValue(entry.cachedJson, AwsCleanServerKpiCacheData::class.java)
-        if (data.seenTodayStartUtc != FalconSeenTodayWindow.today().startUtc.toString()) {
-            return AwsCleanServerKpiResponse(available = false)
-        }
         return AwsCleanServerKpiResponse(
             available = true,
             percentage = data.percentage,
             totalAwsServers = data.totalAwsServers,
             cleanAwsServers = data.cleanAwsServers,
             lastCalculatedAt = entry.lastRefreshedAt,
-            unknownAwsServers = data.unknownAwsServers
+            unknownAwsServers = data.unknownAwsServers,
+            overdueAwsServers = data.overdueAwsServers
         )
-    }
-
-    /** Refresh old-scope caches after deployment and at the Berlin day boundary, off the request thread. */
-    @io.micronaut.scheduling.annotation.Scheduled(fixedDelay = "1m", initialDelay = "1m")
-    fun refreshForNewDay() {
-        if (!getKpi().available) recalculate()
-    }
-
-    private fun computePercentage(clean: Long, total: Long): Double {
-        if (total <= 0) return 0.0
-        return BigDecimal(clean)
-            .multiply(BigDecimal(100))
-            .divide(BigDecimal(total), 1, RoundingMode.HALF_UP)
-            .toDouble()
-    }
-
-    @Transactional
-    open fun upsertCache(json: String, durationMs: Long, calculatedAt: LocalDateTime = LocalDateTime.now(java.time.ZoneOffset.UTC)) {
-        // Atomic native upsert on the cache_key unique index - see
-        // VulnerabilityStatisticsCacheRepository.upsertByCacheKey for the race this closes.
-        cacheRepository.upsertByCacheKey(CACHE_KEY, json, LocalDateTime.now(), durationMs, calculatedAt)
     }
 }

@@ -105,6 +105,11 @@ Source of the EOL lifecycle data. Operator configuration only — no request val
 | `SECMAN_EOL_SCAN_PAGE_SIZE` | `500` | page size for the inventory sweep (coerced to 50..5000) |
 
 ### CrowdStrike stale-asset cleanup
+
+Set `CROWDSTRIKE_CLEANUP_AFTER_IMPORT=true` on the backend to enable cleanup after an ADMIN runs a complete streaming `query servers --save` import (including `scripts/import.sh`). Deploy the matching CLI and backend. The switch defaults to false and operates independently of the 02:30 job. Look in the cleanup history on `/admin/falcon-config` for `import:<run ID>:<device type>`, candidate and deletion counts, and any abort reason.
+
+Post-import cleanup uses a fixed 30-day UTC sensor-contact cutoff and the existing `CROWDSTRIKE_CLEANUP_MAX_DELETE_PERCENT` brake. It checks the complete Falcon device-type inventory before the recent-contact filter used for fetching findings. An asset must have a unique matching Falcon enrollment and both its stored and freshly queried contact must be strictly older than the cutoff. Missing devices, unknown contact, manual or scan-owned assets, and ambiguous bindings are retained. Single-host queries, individual batch uploads, failed runs, reconcile previews and imports without complete inventory evidence cannot trigger deletion. The cleanup shares the import and scheduler lease. Its results are recorded asynchronously.
+
 Daily scheduled job (02:30 server TZ) that deletes assets whose `crowdStrikeLastImportedAt` is older than `STALE_DAYS`. Every trigger below is recorded in `crowdstrike_cleanup_run`, distinguished by `triggered_by`.
 
 **Triggering it by hand.** Two different things are on offer — pick by whether you want the *nightly policy* or an *ad-hoc threshold*:
@@ -240,20 +245,13 @@ DEBUG c.s.filter.McpDebugHeaderFilter - JWT claims [GET /api/assets]:
 
 ## CLI
 
-CrowdStrike credentials:
+CrowdStrike credentials for the Kotlin CLI. The shared Kotlin OAuth and device clients are bound to `https://api.crowdstrike.com`. The config loader accepts `CROWDSTRIKE_BASE_URL`, but those clients do not use it to select a region.
 | Var | Notes |
 |---|---|
 | `FALCON_CLIENT_ID` | alias for `CROWDSTRIKE_CLIENT_ID` |
 | `FALCON_CLIENT_SECRET` | alias for `CROWDSTRIKE_CLIENT_SECRET` |
-| `FALCON_BASE_URL` | per region (see below) |
-| `FALCON_CLOUD_REGION` | `us-1`, `us-2`, `eu-1`, `us-gov-1`, `us-gov-2` |
 
-| Region | Base URL |
-|---|---|
-| US-1 (default) | `https://api.crowdstrike.com` |
-| US-2 | `https://api.us-2.crowdstrike.com` |
-| EU-1 | `https://api.eu-1.crowdstrike.com` |
-| US-GOV-1 / US-GOV-2 | `https://api.laggar.gcw.crowdstrike.com` |
+
 
 Backend auth (for `--save`):
 | Var | Notes |
@@ -364,7 +362,6 @@ PORT=4321
 ```bash
 FALCON_CLIENT_ID=...
 FALCON_CLIENT_SECRET=...
-FALCON_BASE_URL=https://api.crowdstrike.com
 SECMAN_ADMIN_NAME=...
 SECMAN_ADMIN_PASS=...
 SECMAN_BACKEND_URL=https://api.example.com
@@ -486,7 +483,7 @@ failure would look like an app bug.
 | `JWT signature verification failed` | `JWT_SECRET` < 32 bytes or differs across instances |
 | `Failed to decrypt sensitive data` | `SECMAN_ENCRYPTION_PASSWORD`/`SALT` changed since data was written — revert |
 | `SMTP authentication failed` | wrong `SMTP_HOST`/`SMTP_PORT`; for Gmail use App Password |
-| CrowdStrike `401 Unauthorized` | wrong `FALCON_CLIENT_*` or wrong region in `FALCON_BASE_URL`; missing scopes |
+| CrowdStrike `401 Unauthorized` | check `FALCON_CLIENT_*`, API scopes and the tenant’s Falcon cloud |
 | OAuth `Your login session was not found` | state expired/lost — increase `OAUTH_STATE_RETRY_MAX_ATTEMPTS`/`MAX_DELAY`; check `oauth_states` cleanup job |
 | OAuth `Could not complete authentication` | token exchange failed (network/IdP) — bump `OAUTH_TOKEN_EXCHANGE_MAX_RETRIES`; check provider logs |
 | OAuth `Your login session expired` | user took >10 min at IdP login — UX issue, not a config bug |
@@ -504,4 +501,4 @@ Default off. Configure AI buddy in the existing **Admin → LLM Configuration** 
 
 ## Current asset visibility
 
-Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.
+See [Current asset inventory](CURRENT_ASSETS.md) for observation sources, cache expiry, and the boundary between current and stored records.

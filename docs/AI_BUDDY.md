@@ -16,7 +16,7 @@ The configuration list and edit form show AI buddy readiness separately from the
 
 Provider metadata uses OpenRouter's [model endpoint catalogue](https://openrouter.ai/docs/api/api-reference/endpoints/list-all-endpoints-for-a-model) and [zero-retention endpoint preview](https://openrouter.ai/docs/api/api-reference/endpoints/preview-the-impact-of-zdr-on-the-available-endpoints). If the setup endpoint is absent on an older running backend, the UI explains that the backend must be rebuilt and restarted before this check becomes available.
 
-The selector lists concrete `openai/gpt-6.1-sol`, `openai/gpt-6.1-sol-pro` and `anthropic/claude-sonnet-5.5` first. New UI configurations default to GPT-6.1 Sol; editing retains the stored model, including a custom ID. IDs were verified on 2026-10-10 against the [OpenRouter models catalogue](https://openrouter.ai/api/v1/models), [GPT-6.1 Sol](https://openrouter.ai/openai/gpt-6.1-sol) and [Sonnet 5.5](https://openrouter.ai/anthropic/claude-sonnet-5.5). Runtime endpoint, structured-output, pricing and privacy checks still apply separately.
+The frontend presets include `openai/gpt-6.1-sol`, `openai/gpt-6.1-sol-pro` and `anthropic/claude-sonnet-5.5` first. New UI configurations default to GPT-6.1 Sol; editing retains the stored model, including a custom ID. Runtime endpoint, structured-output, pricing and privacy checks still apply separately.
 
 The existing form is extended with:
 
@@ -59,7 +59,7 @@ Microsoft CVRF documents are fetched from a fixed HTTPS API. Product-tree IDs, a
 
 SecMan does not currently have reliable Windows build/edition/architecture and installed-update inventory. Therefore Microsoft recommendations remain **requires applicability check** until those conditions and servicing prerequisites have evidence. Numeric patch/build identifiers come from typed vendor records, never model knowledge. A vendor-listed cumulative update is not automatically applicable to the system. Review vendor servicing-stack prerequisites, product branch, reboot and installation order. A recommendation is not installation evidence; a recorded finding is not conclusive evidence of current presence. No report changes vulnerability status.
 
-CrowdStrike enrichment validates AID identity, pagination totals/cursors and product/CVE matching before accepting a device's evidence. Imported provider text cannot establish exact patch applicability. Current enrichment retrieves typed Spotlight remediation IDs from matched applications and reads the v2 remediation entities. It displays their bounded advice as untrusted plain text with an investigation check, rather than extracting exact KBs, versions or commands from free text. Advice is never sent to the model. Missing/unsupported structured vendor data remains an explicit gap. Application/configuration/firmware/driver/unsupported-product/no-patch cases without verified relationships require vendor investigation, an upgrade/migration or a documented mitigation; the assistant cannot invent one.
+CrowdStrike enrichment validates AID identity, pagination totals/cursors and product/CVE matching before accepting a device's evidence. The patch guide currently reads CrowdStrike advice through its optional live enrichment. The saved recommendation text in the CrowdStrike lookup is outside the patch-guide snapshot, and automatic Ubuntu kernel version consolidation is future work. Current enrichment retrieves typed Spotlight remediation IDs from matched applications and reads the v2 remediation entities. It displays their bounded advice as untrusted plain text with an investigation check, rather than extracting exact KBs, versions or commands from free text. Advice is never sent to the model. Missing/unsupported structured vendor data remains an explicit gap. Application/configuration/firmware/driver/unsupported-product/no-patch cases without verified relationships require vendor investigation, an upgrade/migration or a documented mitigation; the assistant cannot invent one.
 
 The MSRC search and public parsed-document cache are bounded (24 documents, at most 24 hours). A report may be partial when a relevant older document is outside the search, evidence is unavailable, or budgets are exhausted. Candidate graphs are bounded to 1,000 unique action IDs; overflow is explicitly partial and unanalysed findings remain in the ledger with no verified remediation. Supersedence traversal is memoized and bounded in depth. Every finding in this HIGH/CRITICAL snapshot still appears in the coverage ledger. Unknown products and findings without CVEs are not silently dropped.
 
@@ -89,53 +89,8 @@ Safe error codes include AUTH_REQUIRED (401), BETA_REQUIRED (403), ASSET_OR_JOB_
 
 ## UI and verification
 
-The inline panel is available on `/vulnerabilities/system` (recorded assetId branch or accessible legacy hostname), `/outdated-assets/{id}` and embedded `VulnerabilityHistory`. Asset redirects retain assetId. Plain users and champions use the recorded-data branch; ADMIN/VULN legacy query behavior is preserved when no assetId is provided. The existing CrowdStrike controller is not widened. An accessible recorded asset is required even when legacy live results are visible. Scope/privacy text appears before generation. Keyboard users can activate controls, move into the report and close with Escape; progress/errors use live/status regions. Findings are displayed 50 per page, independent of backend scope.
+The panel is available on `/vulnerabilities/system`, outdated-asset details, vulnerability history, and the CrowdStrike lookup after an accessible asset resolves by hostname. Asset redirects retain assetId. Plain users and champions use the recorded-data branch; ADMIN/VULN legacy query behavior is preserved when no assetId is provided. The existing CrowdStrike controller is not widened. An accessible recorded asset is required even when legacy live results are visible. Scope/privacy text appears before generation. Keyboard users can activate controls, move into the report and close with Escape; progress/errors use live/status regions. Findings are displayed 50 per page, independent of backend scope.
 
 Controlled unit/integration fixtures cover role additions/revocation, scope and fingerprints, public MSRC relationships, 150-to-one consolidation, thousands of unresolved findings, product branch/cycle safeguards, closed output, privacy/routing, provider failure states and owner/cancellation/repeated-click behavior. Provider parsing follows the [official Spotlight operations](https://developer.crowdstrike.com/api-reference/collections/spotlight-vulnerabilities/) and the [provider-owned detailed-event example](https://library.humio.com/examples/examples-crowdstrike-spotlight-793e2249-352a-4204-9250-1dfecc460968.html) for top-level AID and application remediation IDs. The reduced MSRC fixture records facts from `https://api.msrc.microsoft.com/cvrf/v3.0/cvrf/2025-Jul` (retrieved 2026-10-09); it is evidence about that response, not a current patch recommendation for arbitrary systems. Default tests do not call paid models.
 
 Run backend tests only through `./scripts/runbackendtests.sh` or the disposable runner. Full verification commands and plan remain in `docs/plans/ai-buddy-beta-implementation-plan.md`. Rollback: disable AI buddy in the active admin OpenRouter configuration and remove the UI/backend change through normal deployment. The additive role can remain stored and grants no administrative or object access by itself. Existing users retain their roles unchanged; VARCHAR role persistence accepts BETA without a new schema migration. Do not deploy an old binary to users with BETA assignments unless those assignments are removed first: old enum readers cannot deserialize an unknown role.
-
-
-## Previous implementation verification — 2026-10-09
-
-Final-tree checks completed on `dev`:
-
-- `./scripts/test/run-isolated-e2e.sh --database-only -- ./gradlew build`: 1,739 backend tests (including 30 AI buddy tests), 164 CLI tests and 75 shared tests; zero failures, errors or skips.
-- Frontend `npm test`, `npm run build`, `npm run lint`: 318 tests passed, production build passed, zero lint errors; 348 existing repository warnings remain.
-- AI buddy Playwright fixture: both tests passed, including live BETA assignment with an old session, USER+BETA page access, object isolation, owner isolation, revocation, empty scope and keyboard/close behavior. The final run also asserted explicit report completeness wording.
-- `e2ejs`: all 74 discovered pages clean as admin and all 74 clean as normal user; zero JavaScript errors.
-- `e2evulnexception`: two consecutive full runs passed (phases 0–10, MCP, browser and cleanup).
-- `./scripts/owasp-check.sh`: zero blocking findings; nine REVIEW items; feature-related items assessed in the security review and pre-existing branch items identified as outside this patch. `./scripts/check-skill-sync.sh` and `git diff --check` passed.
-
-Database and browser verification used marked disposable schemas through the isolated runner. The normal stack was not restarted and its database was not used for fixture mutations. All provider tests used controlled transport fixtures. The original AI browser fixture used environment flags; the revised fixture stores `fixture/model`, `fixture` routing and both disabled evidence adapters in the common admin record; no paid model call or production provider canary was performed. Actual enablement remains subject to the deployment conditions above.
-
-The HTTP contract explicitly preserves empty arrays, zero counts, false booleans and null inventory values through Micronaut Serde. The central identity rule retains its enabled-user/name/email checks and stale-role rejection on other paths; only `/api/ai-buddy/` defers role equality to the feature's mandatory current-user and asset guard.
-
-
-## Shared configuration verification — 2026-10-10
-
-AI buddy uses the active admin-managed OpenRouter record exclusively; no `AI_BUDDY_*` environment entries or `secman.ai.buddy` bindings remain in the application configuration. Current gates passed on `dev`:
-
-- `./scripts/test/run-isolated-e2e.sh --database-only -- ./gradlew build`: 1,743 backend tests (34 AI buddy tests), 164 CLI and 75 shared tests; zero failures, errors or skips. CLI/shared tasks were up-to-date from their successful prior build.
-- Frontend `npm test`, `npm run build`, `npm run lint`: 318 tests passed, production build passed, zero lint errors; 348 existing warnings remain.
-- Three AI buddy browser tests passed: live role/object/owner authorization, honest empty report and keyboard interaction, and admin editing the common controls without replacing the stored key. A direct configuration mutation by USER+BETA was forbidden. The test waits for login-form hydration before filling fields to avoid a cold-page timing race.
-- Dual-role JavaScript scans passed all 74 routes for ADMIN and all 74 for the normal user, with zero errors.
-- Two consecutive full vulnerability-exception lifecycle runs passed through phase 10 and cleanup.
-- `owasp-check.sh`: zero blocking findings, nine review items assessed in the security review; skill sync and whitespace checks passed.
-
-All database writes and service lifecycle operations for these checks used disposable isolated schemas/stacks. No normal-stack restart, production database mutation or paid provider call was performed. The isolated stack applied migration V285 successfully; the encryption persistence test also ran against a disposable MariaDB schema. Existing legacy keys remain readable until saved. Provider metadata, approved route availability and real credential behavior still require the deliberate rollout canary described above.
-
-
-## Save regression and model preset verification — 2026-10-10
-
-The admin save validator no longer conflates persisted shared settings with beta generation readiness. A regression test failed before the fix and passed afterward. The existing request-time gates still reject incomplete beta configuration. The model selector and `/api/translation-config/models` now include the current concrete GPT-6.1 Sol, GPT-6.1 Sol Pro and Sonnet 5.5 IDs; only new UI records default to GPT-6.1 Sol.
-
-Verification passed: full build with 1,744 backend, 164 CLI and 75 shared tests (zero failures/errors/skips); 318 frontend tests, build and lint (zero errors, 348 existing warnings); all three AI buddy browser tests including enabled-but-incomplete save and unavailable capabilities; 74-page scans as each role; two consecutive vulnerability-exception lifecycle runs. The capability assertion uses browser fetch to retain secure cookie semantics on the isolated loopback target. All test mutations used disposable schemas. No paid model request was made. OWASP remained zero blocking/nine reviewed findings; no new HIGH/CRITICAL issue was identified in the save correction.
-
-After verification, the normal backend and frontend were restarted through the canonical scripts and left running at the user’s request. Both ports bound; authenticated API login and the updated model-list endpoint passed through the configured SecMan HTTPS host with system TLS verification. No saved LLM configuration was changed by the smoke check.
-
-The capability response distinguishes `enabled` from `available`. An enabled
-configuration with missing prerequisites keeps the AI buddy panel accessible,
-explains the specific missing setting, and withholds report generation until
-setup is complete. A blank approved provider list reports
-`APPROVED_PROVIDER_REQUIRED`; it never silently chooses another provider.

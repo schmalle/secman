@@ -147,6 +147,21 @@ class CrowdStrikeCleanupAuditServiceTest {
     }
 
     @Test
+    fun `post import brake counts only assets inside the verified inventory scope`() {
+        val actor = "import:test:SERVER"
+        val scope = ImportContactScope(now.minusSeconds(30L * 86400), emptyMap(), mockk())
+        val preview = selection(2, 0).copy(exclusions = mapOf(
+            "RECENT_OR_FUTURE_SENSOR_CONTACT" to 8L, "OUTSIDE_IMPORT_SCOPE" to 990L))
+        every { cleanupService.cleanup(30, true, actor, false, any(), CrowdStrikeCleanupBasis.SENSOR_CONTACT,
+            scope = scope) } returns preview
+        every { runRepository.save(any()) } answers { firstArg<CrowdStrikeCleanupRun>() }
+        val result = service.run(30, false, actor, 10, false, CrowdStrikeCleanupBasis.SENSOR_CONTACT, scope)
+        assertThat(result.status).isEqualTo("ABORTED_SAFETY_BRAKE")
+        assertThat(result.deletedCount).isZero()
+        verify(exactly = 0) { cleanupService.cleanup(any(), false, any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `safety brake passes through when ratio is within limit`() {
         // 1 candidate / 100 tracked = 1% <= 10% limit
         stubSelection("scheduler", selection(candidates = 1, otherTracked = 99))

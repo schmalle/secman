@@ -1,146 +1,94 @@
-# Documentation Index
+# SecMan documentation
 
-Security requirement, vulnerability and risk assessment management tool.
+Start with [installation](../INSTALL.md) for a new checkout or [deployment](DEPLOYMENT.md) for a production instance. For development, use the repository start scripts and the [isolated test runner](TESTING.md).
 
-```
-                Internet
-                   │
-            [nginx :80/:443]
-                   │
-   /api/*  ───►  Backend :8080  ◄───  /oauth/*
-                   │
-                   ▼
-            MariaDB :3306
-                   ▲
-                   │
-   /*      ───►  Frontend :4321 (Astro/React SSR)
-```
+## Install and operate
 
-Stack: Kotlin 2.4.21 / Java 25 · Micronaut 5.2.5 · Hibernate JPA · Astro 7.4.12 / React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.9.1 · Picocli 4.7.7.
+- [Deployment](DEPLOYMENT.md)
+- [Environment and configuration](ENVIRONMENT.md)
+- [Proton Pass CLI](PASS_CLI.md)
+- [AWS secrets setup](AWS_SECRETS_SETUP.md)
+- [Troubleshooting](TROUBLESHOOTING.md)
+- [DB connection lost runbook](DB_CONNECTION_LOST_RUNBOOK.md)
+- [Compile dist setup](COMPILE_DIST_SETUP.md)
+- [Apple container dev](APPLE_CONTAINER_DEV.md)
+- [Docker on AWS ECS](DOCKER_AWS.md)
+- [Docker AWS deploy runbook](DOCKER_AWS_DEPLOY_RUNBOOK.md)
+- [Docker on AWS EKS](DOCKER_EKS.md)
+- [Installation quick start](../INSTALL.md)
+- [Docker deployment](../docker/README.md)
+- [Local database setup](../scripts/install/db/README.md)
+- [Service units](../scripts/systemd/README.md)
 
-## Index
+## Assets, vulnerabilities and reporting
 
-| Doc | What's inside |
-|---|---|
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | Layered architecture, data model, design patterns |
-| [ASSET_OVERVIEW_PERFORMANCE_PLAN.md](./ASSET_OVERVIEW_PERFORMANCE_PLAN.md) | Server-paged asset overview UX, cloud-identifier quality rules, rollout and performance budgets |
-| [DEPLOYMENT.md](./DEPLOYMENT.md) | Linux production: nginx, systemd, SSL, hardening, monitoring |
-| [ENVIRONMENT.md](./ENVIRONMENT.md) | All env vars (backend / frontend / CLI) |
-| [CLI.md](./CLI.md) | CLI commands, cron, S3, AWS Secrets Manager |
-| [ADREAD.md](./ADREAD.md) | Python AD group/member import and AWS asset synchronization |
-| [WORKGROUP_ASSET_SYNC.md](./WORKGROUP_ASSET_SYNC.md) | Replace workgroup assets through canonical owner emails; preview, counters, and destructive semantics |
-| [MCP.md](./MCP.md) | MCP tools, API keys, delegation, troubleshooting |
-| [MCP_REQUIREMENT_MANAGEMENT.md](./MCP_REQUIREMENT_MANAGEMENT.md) | Complete MCP requirement/use-case CRUD, assignment workflow, and Paperclip contract |
-| [MCP_STATISTICS.md](./MCP_STATISTICS.md) | Aggregate estate, scoped vulnerability, and risk-assessment MCP statistics for Paperclip |
-| [RISK_ASSESSMENT_COMPLETION_PLAN.md](./RISK_ASSESSMENT_COMPLETION_PLAN.md) | Gap analysis and implementation plan for open-assessment discovery, answer recommendations, and new-AWS-account owner mail |
-| [PAPERCLIP.md](./PAPERCLIP.md) | Paperclip security-work setup and SecMan MCP boundary |
-| [PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md](./PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md) | Automated risk-assessment company, agents, heartbeats, and respondent reminders |
-| [INTEGRATION_RESULTS.md](./INTEGRATION_RESULTS.md) | Shared checker contract, lifecycle, evidence and rollout |
-| [CROWDSTRIKE_IMPORT.md](./CROWDSTRIKE_IMPORT.md) | Vulnerability and installed-product imports, transactional-replace pattern, JPA cascade trap |
-| [OVERDUE_NOTIFICATIONS.md](./OVERDUE_NOTIFICATIONS.md) | Overdue finding calculation and owner notification schedule |
-| [USER_CLEANUP.md](./USER_CLEANUP.md) | Inactive-user warning, deletion, safety brake, rollout, and run history |
-| [TESTING.md](./TESTING.md) | JUnit/Mockk, external MariaDB, CLI and frontend test patterns |
-| [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | Symptom → fix |
-| [DB_CONNECTION_LOST_RUNBOOK.md](./DB_CONNECTION_LOST_RUNBOOK.md) | Step-by-step recovery when `/health` reports the database connection lost |
-| [E2E_EXCEPTION_WORKFLOW_TEST.md](./E2E_EXCEPTION_WORKFLOW_TEST.md) | Vuln-exception MCP E2E |
-| [S3_USER_MAPPING_IMPORT.md](./S3_USER_MAPPING_IMPORT.md) | `import-s3` / `download-s3` / `print-s3` / `list-bucket` |
-| [SKILLS.md](./SKILLS.md) | Which agent skill to use when, and what each one writes |
-| [SKILLS_AND_AGENTS.md](./SKILLS_AND_AGENTS.md) | Claude Code skills + sub-agents |
-| [AWS_ACCOUNT_RISK_ASSESSMENT.md](./AWS_ACCOUNT_RISK_ASSESSMENT.md) | Auto risk assessment for newly discovered AWS accounts |
-| [ACCOUNT_ONBOARDING.md](./ACCOUNT_ONBOARDING.md) | Welcome mail, direct and guided assessments, the owner questionnaire and its rules |
-| [EOL.md](./EOL.md) | End-of-life catalogue, matching, owner mail, repository ranking |
-| [RELAY.md](./RELAY.md) | Zero-trust mobile relay (Go, DMZ) and the iOS app |
-| [AWS.md](./AWS.md) | AWS account mapping, sharing and access rules |
-| [AWS_ACCOUNT_WORKGROUP_LINKING.md](./AWS_ACCOUNT_WORKGROUP_LINKING.md) | Display-name workgroup linking and import result handling |
-| [RACE_CONDITIONS.md](./RACE_CONDITIONS.md) | Known races and the guards that close them |
-| [CHANGELOG.md](./CHANGELOG.md) | Full change history (archived from CLAUDE.md) |
-| [PASS_CLI.md](./PASS_CLI.md) | `pass-cli` (Proton Pass) secret resolution |
-| [../src/clinotify/README.md](../src/clinotify/README.md) | CrowdStrike checkin Telegram monitor |
-| [../docker/README.md](../docker/README.md) | Docker container deployment |
-| [../scripts/install/db/README.md](../scripts/install/db/README.md) | DB setup scripts and defaults |
-| [../scripts/mcp/README.md](../scripts/mcp/README.md) | Standalone Go MCP client |
-| [../pictures/README.md](../pictures/README.md) | UI screenshots |
+- [Current asset inventory and dashboard metrics](CURRENT_ASSETS.md)
+- [User access overview](USER_ACCESS_OVERVIEW.md)
+- [AWS account ownership and access](AWS.md)
+- [Active Directory importer](ADREAD.md)
+- [AWS account workgroup linking](AWS_ACCOUNT_WORKGROUP_LINKING.md)
+- [Workgroup asset sync](WORKGROUP_ASSET_SYNC.md)
+- [Workgroup feature documentation](workgroup-feature-documentation.md)
+- [CrowdStrike import and synchronization](CROWDSTRIKE_IMPORT.md)
+- [Crowdstrike vulnerability match](CROWDSTRIKE_VULNERABILITY_MATCH.md)
+- [AWS asset match and clear](CLI_ASSET_MATCH_CLEAR.md)
+- [GitHub repos](GITHUB_REPOS.md)
+- [End-of-life tracking](EOL.md)
+- [Overdue notifications](OVERDUE_NOTIFICATIONS.md)
+- [User cleanup](USER_CLEANUP.md)
+- [AI Buddy patch guide](AI_BUDDY.md)
+- [CrowdStrike inventory repair runbook](operations/CROWDSTRIKE_INVENTORY_REPAIR.md)
+- [CrowdStrike freshness monitor](../src/clinotify/README.md)
 
-## By role
+## Requirements and risk assessments
 
-- **Admins** — `DEPLOYMENT.md` → `ENVIRONMENT.md` → `CLI.md` (cron) → `TROUBLESHOOTING.md`.
-- **Developers** — `ARCHITECTURE.md` → `TESTING.md` → `ENVIRONMENT.md` → `CROWDSTRIKE_IMPORT.md` → `CLAUDE.md` (root).
-- **Security teams** — `MCP.md` → `CROWDSTRIKE_IMPORT.md` → `CLI.md` → `ACCOUNT_ONBOARDING.md`.
+- [Requirement comments](REQUIREMENT_COMMENTS.md)
+- [Requirement export templates](REQUIREMENT_EXPORT_TEMPLATES.md)
+- [Public standard download](PUBLIC_STANDARD_DOWNLOAD.md)
+- [Risk assessment setup](RISK_ASSESSMENT_SETUP.md)
+- [AI risk assessment](AI_RISK_ASSESSMENT.md)
+- [Account onboarding](ACCOUNT_ONBOARDING.md)
+- [AWS account risk assessment](AWS_ACCOUNT_RISK_ASSESSMENT.md)
+- [Supplier risk assessment](SUPPLIER_RISK_ASSESSMENT.md)
+- [Supplier portal operations](SUPPLIER_PORTAL_OPERATIONS.md)
 
-## Local dev (TL;DR)
+## Clients and integrations
 
-```bash
-# DB
-cd scripts/install/db && ./installdb.sh && cd -
+- [CLI reference](CLI.md)
+- [S3 user mapping import](S3_USER_MAPPING_IMPORT.md)
+- [MCP client setup](MCP_CLIENT_SETUP.md)
+- [MCP tools and permissions](MCP.md)
+- [MCP requirement management](MCP_REQUIREMENT_MANAGEMENT.md)
+- [MCP risk assessment lifecycle](MCP_RISK_ASSESSMENT_LIFECYCLE.md)
+- [MCP statistics](MCP_STATISTICS.md)
+- [Paperclip](PAPERCLIP.md)
+- [Paperclip risk assessment automation](PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md)
+- [Integration results](INTEGRATION_RESULTS.md)
+- [Extension integration overview](EXTENSIONS.md)
+- [Mobile relay](RELAY.md)
+- [Standalone MCP client](../scripts/mcp/README.md)
+- [Independent extension checkouts](../extensions/README.MD)
 
-# Backend (port 8080)
-./scripts/startbackenddev.sh
+## Development and tests
 
-# Frontend (port 4321)
-cd src/frontend && npm install && cd - && ./scripts/startfrontenddev.sh
+- [Architecture](ARCHITECTURE.md)
+- [Authorization rework](AUTHORIZATION_REWORK.md)
+- [Race conditions](RACE_CONDITIONS.md)
+- [Testing](TESTING.md)
+- [Test data safety](TEST_DATA_SAFETY.md)
+- [E2E exception workflow test](E2E_EXCEPTION_WORKFLOW_TEST.md)
+- [Skills](SKILLS.md)
+- [Skills and agents](SKILLS_AND_AGENTS.md)
 
-# CLI (build once, then wrapper)
-./gradlew :cli:shadowJar
-./scripts/secman help
-```
+## History, design and analysis
 
-First-run admin password is logged to backend stdout — copy it from the `DEFAULT ADMIN USER CREATED` block.
+These records describe changes, proposals, or investigations at the time they were written. Use the guides above for operational instructions.
 
-## Production minimum
-
-```bash
-DB_CONNECT=jdbc:mariadb://localhost:3306/secman
-DB_PASSWORD=...
-JWT_SECRET=$(openssl rand -base64 32)
-SECMAN_ENCRYPTION_PASSWORD=$(openssl rand -hex 32)
-SECMAN_ENCRYPTION_SALT=$(openssl rand -hex 8)
-SECMAN_BACKEND_URL=https://api.example.com
-FRONTEND_URL=https://secman.example.com
-```
-
-Full reference: [`ENVIRONMENT.md`](./ENVIRONMENT.md). Step-by-step deploy: [`DEPLOYMENT.md`](./DEPLOYMENT.md).
-
-## MCP
-
-Use [Connect SecMan MCP clients](./MCP_CLIENT_SETUP.md) for Cursor, Codex,
-Claude Code, Claude web, and Claude Desktop setup, including Proton Pass,
-required headers, verification, and troubleshooting. The exhaustive tool and
-permission reference is in [`MCP.md`](./MCP.md).
-
-## Cron-friendly automation
-
-```cron
-# vuln sync: nightly
-0 2 * * *      /opt/secman/bin/secman query servers
-# notification email: weekly Mon 08:00
-0 8 * * 1      /opt/secman/bin/secman send-notifications
-# admin summary: weekly Mon 09:00
-0 9 * * 1      /opt/secman/bin/secman send-admin-summary
-# CrowdStrike freshness: every 10 min
-*/10 * * * *   TELEGRAM_BOT_TOKEN=… TELEGRAM_CHAT_ID=… \
-               /opt/secman/src/clinotify/check_crowdstrike_checkin.py \
-               --url https://secman.example.com --max-age-minutes 120
-```
-
-## Health & quick triage
-
-```bash
-curl http://localhost:8080/health    # {"status":"UP",...}
-curl http://localhost:4321/
-curl https://secman.example.com/
-```
-
-| Symptom | Check first |
-|---|---|
-| Backend won't start | `journalctl -u secman-backend -n 50` |
-| Blank frontend | browser console; `PUBLIC_API_URL` |
-| DB | `mysql -u secman -p secman` |
-| 502 | `systemctl status secman-backend secman-frontend` |
-| MCP auth fails | API key valid? `X-MCP-User-Email` set? |
-| OAuth callback fails | identity-provider config |
-
-Deeper: [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md).
-
-## Support
-
-[GitHub issues](https://github.com/schmalle/secman/issues).
+- [Changelog](CHANGELOG.md)
+- [Asset overview performance plan](ASSET_OVERVIEW_PERFORMANCE_PLAN.md)
+- [Risk assessment completion plan](RISK_ASSESSMENT_COMPLETION_PLAN.md)
+- [Overdue notification analysis](OVERDUE_NOTIFICATION_ANALYSIS.md)
+- [Extension compatibility review](EXTENSION_COMPATIBILITY_REVIEW.md)
+- [Source review complexity speed](SOURCE_REVIEW_COMPLEXITY_SPEED.md)
+- [Implementation plans](plans/)
+- [Design records](superpowers/)

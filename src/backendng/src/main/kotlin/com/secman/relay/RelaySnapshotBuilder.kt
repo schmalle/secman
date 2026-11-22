@@ -221,6 +221,8 @@ open class RelaySnapshotBuilder(
         aws.percentage?.let { awsKpi["percentage"] = it }
         aws.totalAwsServers?.let { awsKpi["totalServers"] = it }
         aws.cleanAwsServers?.let { awsKpi["cleanServers"] = it }
+        aws.overdueAwsServers?.let { awsKpi["overdueServers"] = it }
+        aws.unknownAwsServers?.let { awsKpi["unknownServers"] = it }
         isoLocal(aws.lastCalculatedAt)?.let { awsKpi["lastCalculatedAt"] = it }
 
         val edrKpi = LinkedHashMap<String, Any>()

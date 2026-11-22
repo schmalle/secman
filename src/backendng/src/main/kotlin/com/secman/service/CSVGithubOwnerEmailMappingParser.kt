@@ -3,7 +3,6 @@ package com.secman.service
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Singleton
 import org.apache.commons.csv.CSVFormat
-import org.apache.commons.csv.CSVParser
 import org.slf4j.LoggerFactory
 import java.io.BufferedReader
 import java.io.File
@@ -59,9 +58,9 @@ open class CSVGithubOwnerEmailMappingParser(
             .setSkipHeaderRecord(true)
             .setIgnoreEmptyLines(true)
             .setTrim(true)
-            .build()
+            .get()
 
-        val parser = CSVParser(detectEncodingAndRead(file), csvFormat)
+        val parser = csvFormat.parse(detectEncodingAndRead(file))
         val headerMap = parser.headerMap
         val lowerHeaders = headerMap.keys.map { it.lowercase() }
         val missing = REQUIRED_HEADERS.filter { !lowerHeaders.contains(it) }

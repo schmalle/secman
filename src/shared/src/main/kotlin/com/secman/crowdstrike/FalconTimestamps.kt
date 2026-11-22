@@ -40,22 +40,22 @@ object FalconTimestamps {
      *
      * @return the parsed value, or null when absent or unrecognised.
      */
-    fun parse(value: Any?): LocalDateTime? {
+    fun parse(value: Any?, zone: ZoneId = ZoneId.systemDefault()): LocalDateTime? {
         if (value == null) return null
 
-        if (value is Number) return fromEpoch(value.toLong())
+        if (value is Number) return fromEpoch(value.toLong(), zone)
 
         val text = value.toString().trim()
         if (text.isEmpty()) return null
 
         // A bare epoch may also arrive as a string.
-        text.toLongOrNull()?.let { return fromEpoch(it) }
+        text.toLongOrNull()?.let { return fromEpoch(it, zone) }
 
         return try {
             when {
                 // Carries 'Z' or an offset: a real instant, so convert rather than relabel.
                 OFFSET_SUFFIX.containsMatchIn(text) ->
-                    LocalDateTime.ofInstant(OffsetDateTime.parse(text).toInstant(), ZoneId.systemDefault())
+                    LocalDateTime.ofInstant(OffsetDateTime.parse(text).toInstant(), zone)
                 text.contains("T") -> LocalDateTime.parse(text)
                 text.contains(" ") -> LocalDateTime.parse(text.replace(" ", "T"))
                 DATE_ONLY.matches(text) -> LocalDateTime.parse("${text}T00:00:00")
@@ -71,9 +71,9 @@ object FalconTimestamps {
      * 10^11: as seconds that is year 5138, and as milliseconds it is 1973 — so no
      * timestamp secman will ever see is ambiguous.
      */
-    private fun fromEpoch(raw: Long): LocalDateTime? = try {
+    private fun fromEpoch(raw: Long, zone: ZoneId): LocalDateTime? = try {
         val instant = if (raw > EPOCH_MILLIS_THRESHOLD) Instant.ofEpochMilli(raw) else Instant.ofEpochSecond(raw)
-        LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
+        LocalDateTime.ofInstant(instant, zone)
     } catch (_: Exception) {
         null
     }

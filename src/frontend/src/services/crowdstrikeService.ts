@@ -8,6 +8,12 @@
  * CrowdStrike Vulnerability DTO
  * Matches backend CrowdStrikeVulnerabilityDto
  */
+export interface CrowdStrikeRemediationDto {
+    action: string;
+    title?: string | null;
+    vendorUrl?: string | null;
+}
+
 export interface CrowdStrikeVulnerabilityDto {
     crowdStrikeAid?: string | null;
     id: string;
@@ -25,6 +31,7 @@ export interface CrowdStrikeVulnerabilityDto {
     patchPublicationDate?: string | null;
     /** When the CVE itself was disclosed — the date a reader of "CVE-2023-…" expects. */
     cvePublishedDate?: string | null;
+    remediation?: CrowdStrikeRemediationDto[] | null;
     status: string;
     hasException: boolean;
     exceptionReason: string | null;

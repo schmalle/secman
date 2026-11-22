@@ -63,7 +63,8 @@ class CrowdStrikeQueryServiceTest {
             vulnerabilityRepository,
             vulnerabilityExceptionRepository,
             mockk(relaxed = true),
-            mockk(relaxed = true)
+            mockk(relaxed = true),
+            mockk()
         )
     }
 
@@ -379,7 +380,7 @@ class CrowdStrikeQueryServiceTest {
             com.secman.domain.CrowdStrikeAssetIdentity(asset = one, crowdStrikeAid = "aid-one", sourceHostname = "ARCGIS"),
             com.secman.domain.CrowdStrikeAssetIdentity(asset = two, crowdStrikeAid = "aid-two", sourceHostname = "ARCGIS"))
         val scoped = CrowdStrikeQueryService(apiClient, falconConfigRepository, assetRepository,
-            vulnerabilityRepository, vulnerabilityExceptionRepository, mockk(relaxed = true), identities)
+            vulnerabilityRepository, vulnerabilityExceptionRepository, mockk(relaxed = true), identities, mockk())
         every { falconConfigRepository.findActiveConfig() } returns Optional.of(FalconConfig(clientId = "cid", clientSecret = "secret"))
         every { apiClient.queryDeviceVulnerabilities("ARCGIS", null, true, any()) } returns sharedResponse(
             sharedVuln("CVE-2026-10001", "product").copy(id = "one", hostname = "ARCGIS", crowdStrikeAid = "aid-one"),

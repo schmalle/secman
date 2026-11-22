@@ -49,7 +49,7 @@ Each entry has a stable `value`, optional account `displayName`,
 `visibleAssetCount`, `wholeScopeAccess`, and grant `reasons`. An entry with
 `wholeScopeAccess: false` represents metadata on visible assets and does not
 authorize the entire account/domain. A grant with count zero remains listed. Counts and asset-derived scope entries
-use the same inclusive UTC 72-hour observation policy as the asset pages; older
+use the same inclusive UTC 24-hour observation policy as the asset pages; older
 stored assets do not increase counts or introduce account/domain entries.
 Global roles have whole-scope authority for represented scopes. Multiple grant
 reasons are retained; assets and scopes are deduplicated and sorted.

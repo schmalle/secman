@@ -11,7 +11,7 @@ plugins {
 version = "0.1"
 group = "com.secman"
 
-val kotlinVersion = project.properties.get("kotlinVersion")
+val kotlinVersion = property("kotlinVersion")
 repositories {
     mavenCentral()
 	google()

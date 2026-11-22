@@ -12,7 +12,7 @@ internal data class NotificationAssetSeenWindow(val startUtc: LocalDateTime, val
     companion object {
         fun current(clock: Clock = Clock.systemUTC()): NotificationAssetSeenWindow {
             val now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC)
-            return NotificationAssetSeenWindow(now.minusHours(72), now)
+            return NotificationAssetSeenWindow(now.minusHours(AssetCurrentnessPolicy.WINDOW_HOURS), now)
         }
     }
 }

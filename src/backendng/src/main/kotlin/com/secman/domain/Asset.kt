@@ -28,7 +28,7 @@ import java.time.LocalDateTime
         Index(name = "idx_asset_scan_uploader", columnList = "scan_uploader_id"),   // Access control by uploader
         Index(name = "idx_asset_network_zone", columnList = "network_zone"),        // Network zone filtering (port-scan addon)
         Index(name = "idx_asset_crowdstrike_agent_seen_at", columnList = "crowdstrike_agent_seen_at"), // EDR-coverage KPI
-        Index(name = "idx_asset_observed_at", columnList = "observed_at,id"),            // 72-hour current inventory (V295)
+        Index(name = "idx_asset_observed_at", columnList = "observed_at,id"),            // 24-hour current inventory (V295)
         Index(name = "idx_asset_crowdstrike_match_name", columnList = "crowdstrike_match_name") // CrowdStrike hostname match (V296)
     ]
 )

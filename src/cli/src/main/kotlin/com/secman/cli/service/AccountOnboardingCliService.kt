@@ -69,8 +69,8 @@ class AccountOnboardingCliService(
                 return null
             }
             response.headers.getAll("Set-Cookie")
-                ?.flatMap { it.split(";") }
-                ?.firstOrNull { it.trim().startsWith("secman_auth=") }
+                .flatMap { it.split(";") }
+                .firstOrNull { it.trim().startsWith("secman_auth=") }
                 ?.substringAfter("=")
                 ?.trim()
                 ?.takeIf { it.isNotBlank() }

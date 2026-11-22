@@ -15,17 +15,17 @@ Causes: wrong Java (`java -version` must be 25); DB unreachable (`mysql -u secma
 **Health check fails**
 ```bash
 curl -v http://localhost:8080/health
-# expected: {"status":"UP","service":"secman-backend-ng","version":"0.1"}
+# expected: {"status":"UP","service":"secman-backend-ng","version":"0.1","checks":{"database":"UP"}}
 ```
 
-**500 on API**: check stack trace in journal. Verify DB up. Check required request fields. Bump verbosity: `SECMAN_LOGGING=ALL` then restart.
+**500 on API**: check stack trace in journal. Verify DB up. Check required request fields. For more backend detail, set `LOG_LEVEL_SECMAN=DEBUG` and restart.
 
 ## Frontend
 
 **Won't start**
 ```bash
 sudo journalctl -u secman-frontend -n 100
-node -v                                                # must be 20.x
+node -v                                                # 22.23.4 or newer
 ls /opt/secman/app/src/frontend/dist/server/
 ```
 Causes: backend down (`curl http://localhost:8080/health`); missing build (`npm ci && npm run build`); wrong Node.
@@ -42,7 +42,7 @@ mysql -u secman -p secman
 sudo systemctl start mariadb                           # if down
 ```
 
-**Migration errors**: check journal for SQL error. Backup. Inspect schema. Repair Flyway: `./gradlew flywayInfo && ./gradlew flywayRepair`.
+**Migration errors**: check journal for SQL error. Back up the database, inspect the schema and Flyway history, and resolve the reported migration error. Flyway runs at backend startup.
 
 **Slow**:
 ```sql
@@ -58,7 +58,7 @@ SELECT table_name, ROUND(data_length/1024/1024,2) AS mb
 |---|---|
 | `Command not found` in cron | add `PATH` and `JAVA_HOME` to crontab (point at `/usr/lib/jvm/java-25-amazon-corretto/bin`) |
 | `Credentials not found` | check format — no spaces around `=` (`FALCON_CLIENT_ID=abc` not `FALCON_CLIENT_ID = abc`); `chmod 600` |
-| CrowdStrike `401 Unauthorized` | verify client/secret + region in `FALCON_BASE_URL` (US-1/US-2/EU-1/GOV); required scopes |
+| CrowdStrike `401 Unauthorized` | verify credentials and scopes. Check tenant compatibility with the shared Kotlin client’s fixed US-1 endpoint |
 | Out of memory | `java -Xmx1g -jar secman-cli.jar …` (or in cron wrapper) |
 | Want to test safely | `--dry-run` available on `query servers`, `send-notifications`, `manage-user-mappings list --send-email`, `manage-user-mappings import`, `import-s3` |
 

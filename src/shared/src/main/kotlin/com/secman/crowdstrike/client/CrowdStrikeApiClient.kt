@@ -64,7 +64,9 @@ data class StreamingImportResult(
      */
     val failedHosts: Set<QueriedHost> = emptySet(),
     /** Includes devices whose metadata could not be resolved to a host. */
-    val failedDeviceCount: Int = failedHosts.size
+    val failedDeviceCount: Int = failedHosts.size,
+    /** Selected Falcon enrollments before the finding query's recent-contact filter. */
+    val inventoryContacts: Map<String, Instant>? = null
 )
 
 /**

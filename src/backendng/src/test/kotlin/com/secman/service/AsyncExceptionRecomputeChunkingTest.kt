@@ -151,10 +151,10 @@ class AsyncExceptionRecomputeChunkingTest {
             queried = true
             emptyList()
         }
-        PropagatedContext.empty().plus(callerContext).propagate().use {
+        PropagatedContext.empty().plus(callerContext).propagate(Runnable {
             service.recomputeAll()
             assertThat(PropagatedContext.getOrEmpty().allElements).containsExactly(callerContext)
-        }
+        })
         assertThat(queried).isTrue()
     }
 

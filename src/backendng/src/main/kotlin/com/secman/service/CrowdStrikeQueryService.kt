@@ -1,6 +1,7 @@
 package com.secman.service
 
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
+import com.secman.crowdstrike.dto.CrowdStrikeRemediationDto
 import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.crowdstrike.exception.CrowdStrikeException
 import com.secman.crowdstrike.exception.NotFoundException
@@ -16,7 +17,9 @@ import com.secman.repository.VulnerabilityExceptionRepository
 import com.secman.repository.VulnerabilityRepository
 import io.micronaut.cache.annotation.CacheInvalidate
 import io.micronaut.cache.annotation.Cacheable
+import io.micronaut.core.type.Argument
 import io.micronaut.data.model.Pageable
+import io.micronaut.json.JsonMapper
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
@@ -50,9 +53,12 @@ open class CrowdStrikeQueryService(
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val vulnerabilityExceptionRepository: VulnerabilityExceptionRepository,
     private val snapshotRepository: com.secman.repository.CrowdStrikeSnapshotRepository,
-    private val identityRepository: com.secman.repository.CrowdStrikeAssetIdentityRepository
+    private val identityRepository: com.secman.repository.CrowdStrikeAssetIdentityRepository,
+    private val jsonMapper: JsonMapper
 ) {
     private val log = LoggerFactory.getLogger(CrowdStrikeQueryService::class.java)
+
+    private val remediationList = Argument.listOf(CrowdStrikeRemediationDto::class.java)
 
     /** Caller must authorize the asset before using this exact-identity path. */
     open fun queryAsset(asset: Asset, aid: String?, force: Boolean, severity: String?, product: String?,
@@ -457,6 +463,7 @@ open class CrowdStrikeQueryService(
                     patchPublicationDate = v.patchPublicationDate,
                     cvePublishedDate = v.cvePublishedDate,
                     noVendorFix = v.noVendorFix,
+                    remediation = v.crowdStrikeRemediationJson?.let { jsonMapper.readValue(it, remediationList) },
                     status = "open",
                     hasException = false,
                     exceptionReason = null
@@ -530,6 +537,7 @@ open class CrowdStrikeQueryService(
                     patchPublicationDate = v.patchPublicationDate,
                     cvePublishedDate = v.cvePublishedDate,
                     noVendorFix = v.noVendorFix,
+                    remediation = v.crowdStrikeRemediationJson?.let { jsonMapper.readValue(it, remediationList) },
                     status = "open",
                     hasException = false,
                     exceptionReason = null
@@ -681,6 +689,7 @@ private fun com.secman.crowdstrike.dto.CrowdStrikeQueryResponse.toBackendRespons
                 cvePublishedDate = shared.cvePublishedDate,
                 patchPublicationDate = shared.patchPublicationDate,
                 noVendorFix = shared.noVendorFix,
+                remediation = shared.remediation,
                 status = shared.status,
                 hasException = shared.hasException,
                 exceptionReason = shared.exceptionReason,

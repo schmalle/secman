@@ -2,6 +2,8 @@
 
 `CLAUDE.md` is authoritative. This file is a short summary of the rules other AI agents (Codex, Gemini, etc.) need to know when contributing here.
 
+Current operational inventory requires a verified observation within the last 24 hours (inclusive, UTC). See `docs/CURRENT_ASSETS.md`. CrowdStrike snapshot writes are scoped by source and severity. Keep JPA cascade and orphan removal disabled for `Asset.vulnerabilities`. See `docs/CROWDSTRIKE_IMPORT.md`.
+
 ## Layout
 - `src/backendng/` — Micronaut/Kotlin (`src/main/kotlin`, `src/main/resources`).
 - `src/frontend/` — Astro + React; pages in `src/pages/`, components in `src/components/`, Playwright in `tests/`.

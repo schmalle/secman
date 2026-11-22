@@ -63,7 +63,9 @@ class PromptBuilder {
         }
         if (requirement.norms.isNotEmpty()) {
             val names = requirement.norms.joinToString(", ") { n -> buildString {
-                append(n.name); n.version?.let { append(" v"); append(it) }
+                append(n.name)
+                val version: String? = n.version
+                version?.let { append(" v").append(it) }
             }}
             sb.append("Linked norms: ").append(names).append('\n')
         }

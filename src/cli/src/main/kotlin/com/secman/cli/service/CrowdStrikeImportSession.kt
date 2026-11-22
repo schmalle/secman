@@ -19,6 +19,8 @@ class CrowdStrikeImportSession(
     private val failure = AtomicReference<Throwable?>(null)
     private var refreshedAt = nanoTime()
     private val log = LoggerFactory.getLogger(CrowdStrikeImportSession::class.java)
+    private var cleanupEnabled = false
+    private var cleanupQuery = ""
     private val runId = startRun()
     private val executor = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "crowdstrike-import-heartbeat").apply { isDaemon = true }
@@ -49,6 +51,7 @@ class CrowdStrikeImportSession(
                 ". Wait for it to finish or for its lease to expire before retrying.")
         }
         check(status == 200) { "Could not start CrowdStrike import run (HTTP $status)" }
+        cleanupEnabled = body?.get("postImportCleanup") == true
         return body?.get("runId")?.toString() ?: error("Could not start CrowdStrike import run: missing run ID")
     }
 
@@ -66,6 +69,17 @@ class CrowdStrikeImportSession(
     fun authToken(): String {
         failure.get()?.let { throw IllegalStateException("CrowdStrike import lease lost", it) }
         return token.get()
+    }
+
+    fun stageCleanup(scope: com.secman.crowdstrike.dto.DeviceType, contacts: Map<String, java.time.Instant>?) {
+        if (!cleanupEnabled || contacts == null) return
+        for (chunk in contacts.entries.chunked(500)) {
+            val evidence = chunk.associate { it.key to it.value.toString() }
+            check(client.postMap("$endpoint/$runId/contacts", evidence, authToken()) != null) {
+                "Could not record complete sensor coverage for post-import cleanup"
+            }
+        }
+        cleanupQuery = "&scope=${scope.name}&contactCount=${contacts.size}"
     }
 
     fun complete(successful: Boolean) {
@@ -96,7 +110,7 @@ class CrowdStrikeImportSession(
     private fun finishOnce(successful: Boolean) {
         executor.shutdownNow()
         val task = FutureTask {
-            client.postMap("$endpoint/$runId/finish?successful=$successful",
+            client.postMap("$endpoint/$runId/finish?successful=$successful${if (successful) cleanupQuery else ""}",
                 emptyMap<String, String>(), token.get()) != null
         }
         if (finalization.compareAndSet(null, task)) {

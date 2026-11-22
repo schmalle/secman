@@ -41,9 +41,12 @@ open class RiskAssessmentAccessService(
                     assets.canAccessAwsAccount(it, authentication)
                 } == true
                 AssessmentBasisType.ASSET -> assets.canAccessAsset(assessment.assessmentBasisId, authentication)
-                AssessmentBasisType.DEMAND -> assessment.demand?.existingAsset?.id?.let {
-                    assets.canAccessAsset(it, authentication)
-                } == true
+                AssessmentBasisType.DEMAND -> {
+                    // Older assessments can lack the demand association. Deny asset-based access in that case.
+                    @Suppress("DEPRECATION")
+                    val assetId = assessment.demand?.existingAsset?.id
+                    assetId?.let { assets.canAccessAsset(it, authentication) } == true
+                }
             }
 
     fun canAnswer(assessment: RiskAssessment, authentication: Authentication): Boolean =

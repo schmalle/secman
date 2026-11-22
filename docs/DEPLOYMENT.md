@@ -1,6 +1,6 @@
 # Deployment
 
-Linux production. Backend (`:8080`) + Frontend (`:4321`) behind nginx with SSL termination, MariaDB on `:3306`. Stack: Kotlin 2.4.21/Java 25/Micronaut 5.2.5 + Astro 7.4.12/React 19/Node 22.23.4+ + MariaDB 11.4. Tested on Amazon Linux 2023, Ubuntu 20.04+, RHEL 8+.
+Linux production. Backend (`:8080`) + Frontend (`:4321`) behind nginx with SSL termination, MariaDB on `:3306`. Stack: Kotlin 2.4.21/Java 25/Micronaut 5.2.5 + Astro 7.4.13/React 19/Node 22.23.4+ + MariaDB 11.4. Tested on Amazon Linux 2023, Ubuntu 20.04+, RHEL 8+.
 
 System: 2c/4G/20G minimum, 4c+/8G+/50G+ SSD recommended. Outbound 443 needed for SMTP/CrowdStrike. Inbound 80/443.
 
@@ -51,7 +51,7 @@ sudo su - secman
 git clone https://github.com/schmalle/secman.git /opt/secman/app && cd /opt/secman/app
 
 ./gradlew :backendng:shadowJar -x test           # → src/backendng/build/libs/backendng-0.1-all.jar
-cd src/frontend && npm ci --production && npm run build  # → dist/server/entry.mjs
+cd src/frontend && npm ci --include=dev && npm run build  # → dist/server/entry.mjs
 ```
 
 ## Configure
@@ -320,7 +320,7 @@ Public endpoint: `GET /api/crowdstrike/last-checkin` (text/plain, ISO-8601 or `n
 sudo systemctl stop secman-frontend secman-backend
 sudo -u secman bash -lc 'cd /opt/secman/app && git pull origin main \
   && ./gradlew :backendng:shadowJar -x test \
-  && cd src/frontend && npm ci --production && npm run build'
+  && cd src/frontend && npm ci --include=dev && npm run build'
 sudo systemctl start secman-backend secman-frontend
 
 # backup (daily)

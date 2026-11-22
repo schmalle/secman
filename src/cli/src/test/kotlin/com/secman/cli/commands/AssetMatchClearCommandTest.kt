@@ -57,7 +57,6 @@ class AssetMatchClearCommandTest {
         } returns downloadedSnapshot
         every { s3DownloadService.cleanupTempFile(downloadedSnapshot) } answers {
             Files.deleteIfExists(downloadedSnapshot)
-            Unit
         }
         every {
             cliHttpClient.authenticate("admin", "secret", "https://secman.example.test")

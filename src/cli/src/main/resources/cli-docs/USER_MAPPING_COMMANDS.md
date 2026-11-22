@@ -1229,7 +1229,7 @@ import. One message lists all that owner's newly discovered accounts; a later
 import with additional new accounts may send another welcome. Dry runs print
 one `MAIL` line per recipient and the complete account list. Retries use the same
 grouped notification. Assessment and questionnaire messages stay account-specific.
-See [the complete welcome-mail contract](ACCOUNT_ONBOARDING.md#one-welcome-email-per-owner-per-import)
+See [the complete welcome-mail contract](../../../../../../docs/ACCOUNT_ONBOARDING.md#one-welcome-email-per-owner-per-import)
 for template placeholders, delivery status, and retry rules.
 
 ### Send one test welcome email

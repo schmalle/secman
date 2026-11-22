@@ -35,6 +35,23 @@ class RiskAssessmentAccessServiceTest {
         assertFalse(service.canAnswer(assessment, auth()))
         assertFalse(service.canManageAwsAccountAssessment(assessment, auth()))
     }
+
+    @Test fun `legacy demand assessments require access to the associated asset`() {
+        val legacy = assessment.copy(
+            assessmentBasisType = AssessmentBasisType.DEMAND,
+            assessmentBasisId = 30,
+            awsAccount = null,
+            demand = Demand(id = 30, title = "Change an asset", demandType = DemandType.CHANGE,
+                existingAsset = Asset(id = 40, name = "Example asset", type = "SERVER", owner = user.email),
+                requestor = user)
+        )
+        assertFalse(service.canView(legacy, auth()))
+        every { assets.canAccessAsset(40L, any()) } returns true
+
+        assertTrue(service.canView(legacy, auth()))
+        assertFalse(service.canView(legacy.copy(demand = null), auth()))
+        verify(exactly = 2) { assets.canAccessAsset(40L, any()) }
+    }
     @Test fun `assigned user survives rename but not revocation`() {
         val assignment = AssessmentAssignment(assessmentId = 10, userId = 1, email = user.email, role = "RESPONDENT")
         every { assignments.findByAssessmentId(10) } returns listOf(assignment)

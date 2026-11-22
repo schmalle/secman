@@ -150,7 +150,7 @@ class WorkgroupOverdueNotificationIntegrationTest : BaseIntegrationTest() {
         val member = user("member").also { join(it, enabledGroup) }
 
         val current = asset("current", account).also { overdue(it, "CVE-current") }
-        asset("stale", account, observedAt = LocalDateTime.now(ZoneOffset.UTC).minusHours(73)).also { overdue(it, "CVE-stale") }
+        asset("stale", account, observedAt = LocalDateTime.now(ZoneOffset.UTC).minusHours(25)).also { overdue(it, "CVE-stale") }
         asset("excepted", account).also { overdue(it, "CVE-excepted", excepted = true) }
         asset("blank-account", "").also { overdue(it, "CVE-blank") }
         asset("metadata", null).apply { manualCreator = metadataOwner; this.owner = metadataOwner.username }

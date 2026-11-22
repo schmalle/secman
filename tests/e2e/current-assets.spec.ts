@@ -25,7 +25,7 @@ test('current inventory hides stale and unobserved assets and accepts re-observa
   };
   try {
     const current = await importAsset(`${prefix}-current`, new Date(Date.now() - 3600000).toISOString());
-    const stale = await importAsset(`${prefix}-stale`, new Date(Date.now() - 73 * 3600000).toISOString());
+    const stale = await importAsset(`${prefix}-stale`, new Date(Date.now() - 25 * 3600000).toISOString());
     const unknown = await importAsset(`${prefix}-unknown`);
     const search = async () => {
       const response = await page.request.get(`/api/assets/search?name=${prefix}`, { headers });
@@ -51,7 +51,7 @@ test('current inventory hides stale and unobserved assets and accepts re-observa
     expect(ids).toHaveLength(3);
     await page.goto(`/assets?name=${prefix}`);
     await expect(page.locator('tbody tr').filter({ hasText: prefix })).toHaveCount(2);
-    await expect(page.getByLabel('Falcon sensor contact', { exact: true }).locator('option').first()).toHaveText('All current assets (seen within 72 hours)');
+    await expect(page.getByLabel('Falcon sensor contact', { exact: true }).locator('option').first()).toHaveText('All current assets (seen within 24 hours)');
   } finally {
     for (const id of ids) {
       expect((await page.request.delete(`/api/assets/${id}`, { headers })).ok()).toBeTruthy();

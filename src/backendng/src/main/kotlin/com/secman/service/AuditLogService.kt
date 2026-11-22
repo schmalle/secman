@@ -21,7 +21,7 @@ class AuditLogService {
     ) {
         val timestamp = Instant.now()
         val username = sanitizeLogInput(authentication.name)
-        val roles = authentication.roles?.joinToString(",") ?: ""
+        val roles = authentication.roles.joinToString(",")
 
         val logMessage = buildString {
             append("AUDIT: ")

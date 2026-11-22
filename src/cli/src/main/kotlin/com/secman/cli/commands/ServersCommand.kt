@@ -6,6 +6,7 @@ import com.secman.cli.config.ConfigLoader
 import com.secman.cli.service.CliHttpClient
 import com.secman.cli.service.VulnerabilityStorageService
 import com.secman.cli.service.buildCrowdStrikeServerBatches
+import com.secman.crowdstrike.CrowdStrikeSeverityScope
 import com.secman.crowdstrike.SlaAnchor
 import com.secman.crowdstrike.client.StreamingVulnerabilityBatch
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
@@ -203,7 +204,7 @@ class ServersCommand {
                     var totalErrorCount = 0
                     var streamBatchNum = 0
                     var totalSystemsWithOverdueVulns = 0
-                    val runSeveritiesList = severity.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                    val runSeveritiesList = CrowdStrikeSeverityScope.fromQuery(severity)
 
                     // Producer/consumer pipeline: Falcon fetch (producer) hands batches to a single
                     // consumer thread that does the backend POST. Bounded queue (capacity=2) caps
@@ -403,6 +404,11 @@ class ServersCommand {
                         totalErrorCount > 0 -> 1
                         else -> 0
                     }
+                    if (exitCode == 0 && !reconcileDryRun && totalRetentionSkipped == 0 &&
+                        totalServersProcessed == streamResult.queriedHosts.size &&
+                        totalServersCreated + totalServersUpdated + totalSupersededSkipped + totalShortLivedSkipped == totalServersProcessed) {
+                        importSession.stageCleanup(parsedDeviceType, streamResult.inventoryContacts)
+                    }
                     importSession.complete(exitCode == 0 && !reconcileDryRun)
                     exitCode
                 }
@@ -466,7 +472,8 @@ class ServersCommand {
                 }
                 responses.first().copy(
                     vulnerabilities = responses.flatMap { it.vulnerabilities }.filter { row ->
-                        severity.split(",").any { it.trim().equals(row.severity, true) } &&
+                        (severity.equals("ALL", ignoreCase = true) ||
+                            CrowdStrikeSeverityScope.fromQuery(severity).any { it.equals(row.severity, true) }) &&
                             (save || parseDaysOpenToInt(row.daysOpen) >= minDaysOpen)
                     },
                     devices = responses.flatMap { it.devices }.toSet(),
@@ -561,7 +568,7 @@ class ServersCommand {
             }
 
             val result = storageService.storeServerVulnerabilities(serverBatches, backendUrl = resolvedBackendUrl, authToken = authToken,
-                runSeverities = severity.split(",").map(String::trim).filter(String::isNotBlank), deleteOnFail = deleteOnFail)
+                runSeverities = CrowdStrikeSeverityScope.fromQuery(severity), deleteOnFail = deleteOnFail)
 
             val deviceLabel = parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }
             System.out.println("\n--- Import Statistics ---")

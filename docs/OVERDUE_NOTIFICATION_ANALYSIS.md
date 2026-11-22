@@ -5,7 +5,7 @@
 ## 1. Summary
 
 There are **two independent pipelines** that email users about overdue vulnerabilities. They share
-only the recipient resolver and the 72 h Falcon window; thresholds, data sources, deduplication and
+only the recipient resolver and the 24 h Falcon window; thresholds, data sources, deduplication and
 audit behaviour all differ.
 
 | | **Pipeline A — Outdated-asset reminders** | **Pipeline B — AWS-account vulnerability alerts** |
@@ -38,7 +38,7 @@ A user receives an email only if **every** condition in the relevant column hold
 | A2 | Asset is in the MV: has ≥1 vuln with `excepted = 0`, `product_class <> 'INSTALLER_ARTIFACT'`, `sla_anchor_at < now − reminderOneDays`, asset is "current" (`AssetCurrentnessSql`) | `OutdatedAssetMaterializedViewRepository.rebuildFromOverdueVulnerabilities` |
 | A3 | Vulnerability is visible: CrowdStrike rows **only HIGH/CRITICAL**; other sources all severities; snapshot must be active | `CrowdStrikeSnapshotSql.VISIBLE` |
 | A4 | MV has been refreshed since the vuln became overdue (refresh only after CrowdStrike import or manual trigger) | `MaterializedViewRefreshService` |
-| A5 | `asset.crowdStrikeAgentSeenAt` within the last 72 h (UTC, inclusive) | `CliController.kt:128` |
+| A5 | `asset.crowdStrikeAgentSeenAt` within the last 24 h (UTC, inclusive) | `CliController.kt:128` |
 | A6 | Asset has ≥1 recipient (see §3) | `CliController.kt:131-147` |
 | A7 | Asset not already sent today (UTC day of `asset_reminder_state.last_sent_at`) | `ReminderStateService.shouldSendToday` |
 | A8 | SMTP send succeeds | `EmailSender` |
@@ -55,7 +55,7 @@ its assets.
 |---|---|---|
 | B1 | Operator runs the command (ADMIN) | `CliController` |
 | B2 | Asset has non-blank `cloud_account_id` (**AWS assets only**) | native SQL |
-| B3 | `asset.crowdstrike_agent_seen_at` within the last 72 h | native SQL |
+| B3 | `asset.crowdstrike_agent_seen_at` within the last 24 h | native SQL |
 | B4 | ≥1 visible vuln (A3) with `excepted = 0` and `sla_anchor_at < now − --days` | native SQL |
 | B5 | Recipient resolves for the account (global mode, §3) **or** is the `--notification-user` | `resolveAccountRecipients` |
 | B6 | `send-patch-notifications`: email starts with `<prefix>` (case-insensitive) | Step 2c |
@@ -104,7 +104,7 @@ inconsistent / noisy / misleading · **L** = cosmetic / hygiene.
 
 | ID | Sev | Gap | Evidence |
 |---|---|---|---|
-| G-C1 | **H** | **Non-Falcon assets are never notified.** Both pipelines require `crowdstrike_agent_seen_at` within 72 h. `docs/CURRENT_ASSETS.md` says non-Falcon assets use `verified_observed_at`; the MV already honours that, but the notification layer re-filters on the Falcon timestamp only. Nmap/XLSX/manual/integration findings never trigger mail. | `CliController.kt:128`, `SendOutdatedNotificationsTool.kt:90`, Pipeline B SQL |
+| G-C1 | **H** | **Non-Falcon assets are never notified.** Both pipelines require `crowdstrike_agent_seen_at` within 24 h. `docs/CURRENT_ASSETS.md` says non-Falcon assets use `verified_observed_at`; the MV already honours that, but the notification layer re-filters on the Falcon timestamp only. Nmap/XLSX/manual/integration findings never trigger mail. | `CliController.kt:128`, `SendOutdatedNotificationsTool.kt:90`, Pipeline B SQL |
 | G-C2 | **H** | **Non-AWS assets have no recipients.** On-prem / AD-domain assets have no `cloudAccountId`; the only fallback is `UserMapping.awsAccountId == asset.owner`, which only matches if someone stored an account id in `owner`. AD-domain grants and personal AD mappings are never consulted. | `AwsAccountRecipientResolver`, `CliController.kt:138` |
 | G-C3 | **H** | **Explicit workgroup asset membership is not a recipient path.** Users who see an asset via direct workgroup assignment get nothing. The KDoc at `UserVulnerabilityNotificationService.kt:375` claims they do. | resolver queries `WorkgroupAwsAccount` only |
 | G-C4 | **H** | **No automatic trigger.** There is no scheduler; if the operator cron stops, nobody is informed and nothing alerts. | no `@Scheduled` references either service |
@@ -129,7 +129,7 @@ inconsistent / noisy / misleading · **L** = cosmetic / hygiene.
 | G-K6 | M | **Partial delivery marks the asset sent for everyone.** If recipient X succeeds and Y fails, the asset is marked sent; Y gets no retry until the next day. | `NotificationService.kt` `sentAssetIds` |
 | G-K7 | M | **REPORT mails duplicate assets.** `sendToReportUsers` receives the per-(recipient, asset) list, so an asset with N recipients appears N times; `totalCount` and the subject line are inflated. Also not subject to daily dedup. | `NotificationService.kt:128` |
 | G-K8 | L | **`assetsProcessed` counts rows, not assets** (same N× inflation). | `NotificationService.kt:133` |
-| G-K9 | L | **Time-zone mixing in B.** `thresholdDate` is converted to `ZoneId.systemDefault()` while the 72 h window uses UTC; `DATEDIFF(CURDATE(), …)` uses the DB session zone. On a non-UTC host the cut-off moves by the UTC offset. | `UserVulnerabilityNotificationService.kt:113` |
+| G-K9 | L | **Time-zone mixing in B.** `thresholdDate` is converted to `ZoneId.systemDefault()` while the 24 h window uses UTC; `DATEDIFF(CURDATE(), …)` uses the DB session zone. On a non-UTC host the cut-off moves by the UTC offset. | `UserVulnerabilityNotificationService.kt:113` |
 | G-K10 | L | **Exception visibility.** Both rely on the write-time `excepted` column; between an exception expiring and the hourly sweep / MV refresh, an expired exception still suppresses mail. | `ExceptionMaterializationService` |
 
 ### 4.3 Operability / audit gaps
@@ -157,7 +157,7 @@ Operator runs CLI / MCP (ADMIN)                       ← G-C4: nothing runs aut
 ├─ Pipeline A: send-notifications
 │   MV row exists? (reminderOneDays, current asset, not excepted, not installer)
 │   └─ no ─► silent                                   ← G-C12 stale MV
-│   Falcon contact ≤ 72h? ── no ─► silent             ← G-C1
+│   Falcon contact ≤ 24h? ── no ─► silent             ← G-C1
 │   recipients = account owners ∪ account-WG members ∪ share targets ∪ owner-mapping
 │   └─ empty ─► silent                                ← G-C2, G-C3, G-C7
 │   first time seen? ── yes ─► state created, lastSentAt=now ─► SKIPPED today   ← G-C5/G-C6
@@ -167,7 +167,7 @@ Operator runs CLI / MCP (ADMIN)                       ← G-C4: nothing runs aut
 │
 └─ Pipeline B: send-notification-users / send-patch-notifications
     AWS asset? ── no ─► silent                         ← G-C2
-    Falcon contact ≤ 72h? ── no ─► silent              ← G-C1
+    Falcon contact ≤ 24h? ── no ─► silent              ← G-C1
     visible, non-excepted vuln older than --days?      ← G-K1, G-K3
     recipients (scope-dependent, §2.3)                 ← G-C9, G-C10, G-C11
     prefix filter (patch variant)
