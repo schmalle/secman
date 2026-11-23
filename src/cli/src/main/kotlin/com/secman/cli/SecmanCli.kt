@@ -58,6 +58,7 @@ class SecmanCli {
             args.isEmpty() || args[0] == "--help" || args[0] == "-h" -> showHelp()
             args[0] == "help" -> {
                 when {
+                    args.getOrNull(1) == "exception" -> runPicocli(com.secman.cli.commands.ProductExceptionBatchCommand::class.java, arrayOf("batch", "--help"))
                     args.getOrNull(1) == "reconcile-crowdstrike-identities" -> runPicocli(ReconcileCrowdStrikeIdentitiesCommand::class.java, arrayOf("reconcile-crowdstrike-identities", "--help"))
                     args.getOrNull(1) == "user-access-overview" -> runPicocli(UserAccessOverviewCommand::class.java, arrayOf("user-access-overview", "--help"))
                     args.getOrNull(1) == "show-notified-users" -> runPicocli(ShowNotifiedUsersCommand::class.java, arrayOf("show-notified-users", "--help"))
@@ -323,6 +324,13 @@ class SecmanCli {
             args[0] == "port-scan" -> {
                 runPicocli(PortScanCommand::class.java, args)
             }
+            args[0] == "exception" && args.getOrNull(1) == "batch" -> {
+                val host = System.getenv("SECMAN_HOST") ?: System.getenv("SECMAN_BACKEND_URL") ?: "http://localhost:8080"
+                val url = if (host.contains("://")) host.trimEnd('/') else "https://${host.trimEnd('/')}"
+                ApplicationContext.builder().environments("cli").properties(mapOf("secman.backend.base-url" to url)).start().use { context ->
+                    PicocliRunner.execute(com.secman.cli.commands.ProductExceptionBatchCommand::class.java, context, *args.drop(2).toTypedArray())
+                }
+            }
             args[0] == "crowdstrike-last-import" -> {
                 runPicocli(CrowdStrikeLastImportCommand::class.java, args)
             }
@@ -386,6 +394,7 @@ class SecmanCli {
                    secman help <command>       Show detailed help for a command
 
             Commands:
+              exception batch        Preview, submit or show account-scoped product exceptions
               CrowdStrike:
                 query                  Query CrowdStrike vulnerabilities for a single host
                 query servers          Batch query and import server vulnerabilities

@@ -158,6 +158,16 @@ class CliHttpClient(
     /**
      * Send a GET request returning a Map
      */
+    fun getMapWithStatus(url: String, authToken: String): Pair<Int, Map<*, *>?> {
+        val request = HttpRequest.GET<Any>(url).bearerAuth(authToken).accept(MediaType.APPLICATION_JSON)
+        return try {
+            val response = httpClient.toBlocking().exchange(request, Map::class.java)
+            response.status.code to response.body()
+        } catch (error: io.micronaut.http.client.exceptions.HttpClientResponseException) {
+            error.status.code to error.response.getBody(Map::class.java).orElse(null)
+        }
+    }
+
     fun getMap(url: String, authToken: String): Map<*, *>? {
         return get(url, authToken, Map::class.java)
     }

@@ -458,6 +458,7 @@ open class CrowdStrikeQueryService(
                     severity = v.cvssSeverity ?: "UNKNOWN",
                     cvssScore = null,
                     affectedProduct = v.vulnerableProductVersions,
+                    productLabels = v.productLabelsJson?.let { jsonMapper.readValue(it, io.micronaut.core.type.Argument.listOf(String::class.java)) },
                     daysOpen = daysOpenText,
                     detectedAt = anchor,
                     patchPublicationDate = v.patchPublicationDate,
@@ -532,6 +533,7 @@ open class CrowdStrikeQueryService(
                     severity = v.cvssSeverity ?: "UNKNOWN",
                     cvssScore = null,
                     affectedProduct = v.vulnerableProductVersions,
+                    productLabels = v.productLabelsJson?.let { jsonMapper.readValue(it, io.micronaut.core.type.Argument.listOf(String::class.java)) },
                     daysOpen = daysOpenText,
                     detectedAt = anchor,
                     patchPublicationDate = v.patchPublicationDate,
@@ -646,6 +648,7 @@ open class CrowdStrikeQueryService(
                 asset = asset,
                 vulnerabilityId = dto.cveId,
                 vulnerableProductVersions = dto.affectedProduct,
+                productLabelsJson = dto.productLabels?.let { jsonMapper.writeValueAsString(it) },
                 scanTimestamp = now
             )
             val match = activeExceptions.find { it.matches(transient, asset) }
@@ -684,6 +687,7 @@ private fun com.secman.crowdstrike.dto.CrowdStrikeQueryResponse.toBackendRespons
                 severity = shared.severity,
                 cvssScore = shared.cvssScore,
                 affectedProduct = shared.affectedProduct,
+                productLabels = shared.productLabels,
                 daysOpen = shared.daysOpen,
                 detectedAt = shared.detectedAt,
                 cvePublishedDate = shared.cvePublishedDate,

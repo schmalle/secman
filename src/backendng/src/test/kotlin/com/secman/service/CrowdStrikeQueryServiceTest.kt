@@ -89,6 +89,22 @@ class CrowdStrikeQueryServiceTest {
     }
 
     @Test
+    fun `cached system lookup applies net wildcard to older product names without separate labels`() {
+        val asset = asset("cached-host")
+        every { assetRepository.findByNameIgnoreCase(asset.name) } returns asset
+        every { vulnerabilityRepository.findByAssetId(1L, any()) } returns page(
+            vuln(asset, "CVE-2024-21386", ".NET Core 6.0"),
+            vuln(asset, "CVE-2024-43483", ".net desktop runtime 6.0"),
+            vuln(asset, "CVE-2024-10000", "PostgreSQL")
+        )
+        every { vulnerabilityExceptionRepository.findByExpirationDateIsNullOrExpirationDateGreaterThan(any()) } returns
+            listOf(productException("*net*", "Global product rule").apply { productPatternsJson = """["*net*"]""" })
+
+        val findings = service.queryVulnerabilities(asset.name).vulnerabilities
+        assertThat(findings.map { it.hasException }).containsExactly(true, true, false)
+    }
+
+    @Test
     fun `db path leaves a non-matching vulnerability unexcepted`() {
         val asset = asset("EC2AMAZ-3CSRJ2O")
         val vuln = vuln(asset, cve = "CVE-2026-11682", product = "Chrome Enterprise")

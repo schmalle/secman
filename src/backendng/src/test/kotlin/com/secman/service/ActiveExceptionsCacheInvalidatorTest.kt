@@ -17,7 +17,11 @@ class ActiveExceptionsCacheInvalidatorTest {
         every { cacheManager.getCache("active_exceptions") } returns activeExceptionsCache
         every { cacheManager.getCache("vulnerability_not_excepted_count") } returns notExceptedCountCache
 
+        val systemLookup = mockk<SyncCache<Any>>(relaxed = true)
+        every { cacheManager.getCache("vulnerability_queries") } returns systemLookup
+
         ActiveExceptionsCacheInvalidator(cacheManager).invalidate()
+        verify(exactly = 1) { systemLookup.invalidateAll() }
 
         verify(exactly = 1) { activeExceptionsCache.invalidateAll() }
         verify(exactly = 1) { notExceptedCountCache.invalidateAll() }

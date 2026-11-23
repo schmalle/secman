@@ -282,7 +282,7 @@ open class ExceptionExpirationScheduler(
             val candidates = exceptionRepository.findBySubjectAndScope(request.subject, request.scope)
 
             for (exception in candidates) {
-                if (exception.subjectValue == effectiveSubjectValue &&
+                if (exception.productMode == null && exception.kind == request.kind && exception.subjectValue == effectiveSubjectValue &&
                     exception.scopeValue == request.scopeValue &&
                     exception.assetId == effectiveAssetId &&
                     exception.expirationDate == request.expirationDate &&

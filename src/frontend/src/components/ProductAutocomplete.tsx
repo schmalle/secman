@@ -12,8 +12,9 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
-import { getProductSuggestions } from './productSuggestions';
+import { getDistinctProducts } from '../services/vulnerabilityManagementService';
+
+import { productFields, quoteProduct } from './productPatternInput';
 
 interface ProductAutocompleteProps {
     value: string;
@@ -22,7 +23,91 @@ interface ProductAutocompleteProps {
     disabled?: boolean;
 }
 
-export { getProductSuggestions };
+const PAGE_SIZE = 100;
+
+function ProductSuggestions({ search, onSelect }: { search: string; onSelect: (product: string) => void }) {
+    const [products, setProducts] = useState<string[]>([]);
+    const [offset, setOffset] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [failed, setFailed] = useState(false);
+    const [retry, setRetry] = useState(0);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        const timeout = window.setTimeout(async () => {
+            try {
+                const next = await getDistinctProducts(search, PAGE_SIZE, offset, controller.signal);
+                if (controller.signal.aborted) return;
+                setProducts(previous => offset === 0 ? next : [...previous, ...next]);
+                setHasMore(next.length === PAGE_SIZE);
+            } catch {
+                if (!controller.signal.aborted) setFailed(true);
+            } finally {
+                if (!controller.signal.aborted) setLoading(false);
+            }
+        }, search && offset === 0 ? 250 : 0);
+
+        return () => {
+            window.clearTimeout(timeout);
+            controller.abort();
+        };
+    }, [search, offset, retry]);
+
+    const loadMore = () => {
+        setLoading(true);
+        setOffset(products.length);
+    };
+
+    const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+        const { scrollHeight, scrollTop, clientHeight } = event.currentTarget;
+        if (hasMore && !loading && !failed && scrollHeight - scrollTop - clientHeight <= 48) {
+            loadMore();
+        }
+    };
+
+    // Product names can contain punctuation that has special meaning in regular expressions.
+    const highlight = search ? new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi') : null;
+
+    return (
+        <div
+            className="dropdown-menu show w-100 shadow-sm"
+            style={{ maxHeight: '300px', overflowY: 'auto', top: '100%', left: 0, zIndex: 1000 }}
+            onScroll={handleScroll}
+            aria-busy={loading}
+        >
+            {products.map((product, index) => (
+                <button key={index} type="button" className="dropdown-item" onClick={() => onSelect(product)}>
+                    <i className="bi bi-box-seam me-2 text-muted"></i>
+                    {highlight ? product.split(highlight).map((part, partIndex) =>
+                        partIndex % 2 === 1
+                            ? <strong key={partIndex} className="text-primary">{part}</strong>
+                            : part
+                    ) : product}
+                </button>
+            ))}
+            {loading && <div className="dropdown-item-text text-muted" role="status">Loading products…</div>}
+            {failed && (
+                <>
+                    <div className="dropdown-item-text text-muted" role="status">Could not load products.</div>
+                    <button type="button" className="dropdown-item" onClick={() => {
+                        setFailed(false);
+                        setLoading(true);
+                        setRetry(attempt => attempt + 1);
+                    }}>Retry</button>
+                </>
+            )}
+            {!loading && !failed && hasMore && (
+                <button type="button" className="dropdown-item" onClick={loadMore}>Load more products</button>
+            )}
+            {!loading && !failed && products.length === 0 && (
+                <div className="dropdown-item-text text-muted" role="status">
+                    No matching products. You can still enter a custom value.
+                </div>
+            )}
+        </div>
+    );
+}
 
 const ProductAutocomplete: React.FC<ProductAutocompleteProps> = ({
     value,
@@ -31,32 +116,11 @@ const ProductAutocomplete: React.FC<ProductAutocompleteProps> = ({
     disabled = false
 }) => {
     const [showSuggestions, setShowSuggestions] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [allProducts, setAllProducts] = useState<string[]>([]);
     const wrapperRef = useRef<HTMLDivElement>(null);
-    const suggestions = getProductSuggestions(value, allProducts);
-
-    // Fetch all products on mount
-    useEffect(() => {
-        const fetchProducts = async () => {
-            try {
-                setLoading(true);
-                const response = await axios.get('/api/vulnerability-products', {
-                    params: {
-                        limit: 1000
-                    }
-                });
-                setAllProducts(response.data || []);
-            } catch (error) {
-                console.error('Failed to fetch products:', error);
-                setAllProducts([]);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchProducts();
-    }, []);
+    const [caret, setCaret] = useState(value.length);
+    const fields = productFields(value);
+    const active = fields.find(field => field.end >= caret) ?? fields[fields.length - 1];
+    const search = active.value.replace(/^\*+|\*+$/g, '');
 
     // Click outside to close suggestions
     useEffect(() => {
@@ -77,25 +141,12 @@ const ProductAutocomplete: React.FC<ProductAutocompleteProps> = ({
     };
 
     const handleSuggestionClick = (product: string) => {
-        onChange(product);
+        onChange(value.slice(0, active.start) + quoteProduct(product) + value.slice(active.end));
         setShowSuggestions(false);
     };
 
     const handleFocus = () => {
         setShowSuggestions(true);
-    };
-
-    const highlightMatch = (text: string, query: string): React.ReactNode => {
-        if (!query.trim()) return text;
-
-        const parts = text.split(new RegExp(`(${query})`, 'gi'));
-        return parts.map((part, index) =>
-            part.toLowerCase() === query.toLowerCase() ? (
-                <strong key={index} className="text-primary">{part}</strong>
-            ) : (
-                part
-            )
-        );
     };
 
     return (
@@ -106,62 +157,21 @@ const ProductAutocomplete: React.FC<ProductAutocompleteProps> = ({
                 value={value}
                 onChange={handleInputChange}
                 onFocus={handleFocus}
+                onSelect={event => setCaret(event.currentTarget.selectionStart ?? value.length)}
+                aria-label="Product names or wildcard patterns"
                 placeholder={placeholder}
                 disabled={disabled}
                 autoComplete="off"
             />
 
-            {showSuggestions && suggestions.length > 0 && !disabled && (
-                <div
-                    className="dropdown-menu show w-100 shadow-sm"
-                    style={{
-                        maxHeight: '300px',
-                        overflowY: 'auto',
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        zIndex: 1000
-                    }}
-                >
-                    {loading && (
-                        <div className="dropdown-item text-center">
-                            <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                            Loading products...
-                        </div>
-                    )}
-                    {!loading && suggestions.map((product, index) => (
-                        <button
-                            key={index}
-                            type="button"
-                            className="dropdown-item"
-                            onClick={() => handleSuggestionClick(product)}
-                            style={{ cursor: 'pointer' }}
-                        >
-                            <i className="bi bi-box-seam me-2 text-muted"></i>
-                            {highlightMatch(product, value)}
-                        </button>
-                    ))}
-                    {!loading && allProducts.length === 0 && (
-                        <div className="dropdown-item text-muted">
-                            <i className="bi bi-info-circle me-2"></i>
-                            No products found in current vulnerabilities
-                        </div>
-                    )}
-                    {!loading && suggestions.length === 0 && allProducts.length > 0 && (
-                        <div className="dropdown-item text-muted">
-                            <i className="bi bi-search me-2"></i>
-                            No matches found. You can still enter manually.
-                        </div>
-                    )}
-                </div>
+            {showSuggestions && !disabled && (
+                <ProductSuggestions key={search} search={search} onSelect={handleSuggestionClick} />
             )}
 
-            {allProducts.length > 0 && (
-                <small className="form-text text-muted">
-                    <i className="bi bi-lightbulb me-1"></i>
-                    Start typing to filter from {allProducts.length} known products, or enter custom value
-                </small>
-            )}
+            <small className="form-text text-muted">
+                <i className="bi bi-lightbulb me-1"></i>
+                Separate products with commas. Use * for a wildcard, or quote a name containing a comma.
+            </small>
         </div>
     );
 };

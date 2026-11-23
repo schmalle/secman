@@ -92,3 +92,5 @@ These records describe changes, proposals, or investigations at the time they we
 - [Source review complexity speed](SOURCE_REVIEW_COMPLEXITY_SPEED.md)
 - [Implementation plans](plans/)
 - [Design records](superpowers/)
+
+- [Product exception batches across AWS accounts](PRODUCT_EXCEPTION_BATCHES.md)

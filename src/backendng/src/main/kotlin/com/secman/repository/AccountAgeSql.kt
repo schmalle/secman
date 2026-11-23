@@ -22,7 +22,7 @@ object AccountAgeSql {
                COUNT(DISTINCT a.id)                             AS affectedAssetCount
         FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
         JOIN ${AssetCurrentnessSql.ASSETS} a ON v.asset_id = a.id
-        WHERE v.excepted = 0 AND v.sla_anchor_at IS NOT NULL
+        WHERE ${com.secman.repository.VulnQuerySql.NOT_EXCEPTED} AND v.sla_anchor_at IS NOT NULL
           AND a.cloud_account_id IS NOT NULL
           AND a.cloud_account_id <> ''
         GROUP BY a.cloud_account_id
@@ -54,7 +54,7 @@ object AccountAgeSql {
                    ) AS rn
             FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
             JOIN ${AssetCurrentnessSql.ASSETS} a ON v.asset_id = a.id
-            WHERE v.excepted = 0 AND v.sla_anchor_at IS NOT NULL
+            WHERE ${com.secman.repository.VulnQuerySql.NOT_EXCEPTED} AND v.sla_anchor_at IS NOT NULL
               AND a.cloud_account_id IN (:accountIds)
         ) ranked
         WHERE rn = 1

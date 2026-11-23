@@ -105,7 +105,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
                              v.vulnerability_id ASC
                 ) AS rn
             FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
-            WHERE v.excepted = 0
+            WHERE ${com.secman.repository.VulnQuerySql.NOT_EXCEPTED}
               AND v.product_class <> 'INSTALLER_ARTIFACT'
               AND v.sla_anchor_at < :thresholdDate
         ) r
@@ -128,7 +128,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
         value = """
         SELECT COUNT(DISTINCT v.asset_id)
         FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
-        WHERE v.excepted = 0
+        WHERE ${com.secman.repository.VulnQuerySql.NOT_EXCEPTED}
           AND v.product_class <> 'INSTALLER_ARTIFACT'
           AND v.sla_anchor_at < :thresholdDate
         """,

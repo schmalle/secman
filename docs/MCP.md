@@ -747,3 +747,7 @@ a domain alone does not authorize everyone in that domain.
 ## Current asset visibility
 
 See [Current asset inventory](CURRENT_ASSETS.md) for observation sources, cache expiry, and the boundary between current and stored records.
+
+### Product exception batches
+
+With user delegation and the exception workflow permission, call `preview_product_exception_batch` with a `manifest` object. Show the operator the accounts, products, sample labels, unresolved findings, zero matches, expected approval status and inclusive expiry. After their submit instruction, call `submit_product_exception_batch` with `previewId` and a stable UUID `requestKey`. Retry an uncertain submission with the same pair. Call `get_product_exception_batch` with `batchId` to read its status and decision history. [Example manifest and matching rules](PRODUCT_EXCEPTION_BATCHES.md)

@@ -103,5 +103,8 @@ data class CreateExceptionRequestDto(
      */
     @field:NotNull(message = "Expiration date is required")
     @field:Future(message = "Expiration date must be in the future")
-    val expirationDate: LocalDateTime
+    val expirationDate: LocalDateTime,
+
+    @field:Size(min = 1, max = 100)
+    val productPatterns: List<String>? = null
 )

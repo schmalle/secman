@@ -83,7 +83,7 @@ open class WorkgroupOverdueRecipientQuery(private val entityManager: EntityManag
                        MIN(v.sla_anchor_at) AS oldest_at
                 FROM ${CrowdStrikeSnapshotSql.STORED_FINDINGS} v
                 WHERE v.sla_anchor_at < :threshold
-                  AND v.excepted = 0
+                  AND ${com.secman.repository.VulnQuerySql.NOT_EXCEPTED}
                   AND v.asset_id IN (
                       SELECT id FROM asset
                       WHERE ${AssetCurrentnessSql.OBSERVED_AT} BETWEEN :seenStart AND :seenEnd

@@ -1878,9 +1878,10 @@ open class CrowdStrikeApiClientImpl(
                 }
 
                 val apps = vuln["apps"] as? List<*>
-                val affectedProduct = apps?.mapNotNull { app ->
+                val productLabels = apps?.mapNotNull { app ->
                     (app as? Map<*, *>)?.get("product_name_version")?.toString()
-                }?.joinToString(", ")
+                }
+                val affectedProduct = productLabels?.joinToString(", ")
 
                 val detectedAtInstant = detectionTime(vuln)
                 val detectedAt = detectedAtInstant?.let { LocalDateTime.ofInstant(it, java.time.ZoneId.systemDefault()) }
@@ -1898,6 +1899,7 @@ open class CrowdStrikeApiClientImpl(
                     severity = severity,
                     cvssScore = cvssScore,
                     affectedProduct = affectedProduct,
+                    productLabels = productLabels,
                     daysOpen = calculateDaysOpen(detectedAtInstant),
                     detectedAt = detectedAt,
                     detectedAtInstant = detectedAtInstant,
@@ -2394,9 +2396,10 @@ open class CrowdStrikeApiClientImpl(
                 }
 
                 val apps = vuln["apps"] as? List<*>
-                val affectedProduct = apps?.mapNotNull { app ->
+                val productLabels = apps?.mapNotNull { app ->
                     (app as? Map<*, *>)?.get("product_name_version")?.toString()
-                }?.joinToString(", ")
+                }
+                val affectedProduct = productLabels?.joinToString(", ")
 
                 val detectedAtInstant = detectionTime(vuln)
                 val detectedAt = detectedAtInstant?.let { LocalDateTime.ofInstant(it, java.time.ZoneId.systemDefault()) }
@@ -2415,6 +2418,7 @@ open class CrowdStrikeApiClientImpl(
                     severity = severity,
                     cvssScore = cvssScore,
                     affectedProduct = affectedProduct,
+                    productLabels = productLabels,
                     daysOpen = calculateDaysOpen(detectedAtInstant),
                     detectedAt = detectedAt,
                     detectedAtInstant = detectedAtInstant,
