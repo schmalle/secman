@@ -143,3 +143,4 @@ extensions/secman_source/
 .context/
 review.cloudfile.txt
 review.cov.txt
+/docs/plans

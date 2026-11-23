@@ -1413,3 +1413,15 @@ before retrying an unconfirmed request. A committed repair has an atomic
 other outcomes exit 1.
 See [CrowdStrike identity recovery](CROWDSTRIKE_IMPORT.md#repair-independent-ec2-devices-bound-to-one-legacy-asset)
 for prerequisites, preservation rules, audit evidence and failure handling.
+
+### Product exceptions across AWS accounts
+
+Build the CLI with `./gradlew :cli:shadowJar`. The batch command uses the backend identity supplied by the credential wrapper. Preview impact before submitting, and keep the same request key if the network drops during submission.
+
+```sh
+./scripts/secman exception batch preview --file exception.json --output json
+./scripts/secman exception batch submit --preview-id "$preview_id" --request-key "$request_key"
+./scripts/secman exception batch show --id "$preview_id" --output json
+```
+
+Use a UUID for the request key (for example, save the output of `uuidgen`). Alternatively, use repeated `--account`, `--exact` and `--glob` arguments together with `--through` and `--reason`. Quote wildcard arguments such as `--glob 'SQL Server 202*'`. See the [manifest, matching rules and review walkthrough](PRODUCT_EXCEPTION_BATCHES.md).

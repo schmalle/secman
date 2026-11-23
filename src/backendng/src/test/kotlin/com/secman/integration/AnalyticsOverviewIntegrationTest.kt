@@ -67,6 +67,15 @@ class AnalyticsOverviewIntegrationTest : BaseIntegrationTest() {
         assertThat(options.products).containsExactly("Overview Excepted", "Overview Falcon", "Overview Installer", "Overview Scanner")
         assertThat(options.adDomains).containsExactly("falcon.example.test", "scan.example.test")
         assertThat(options.cloudAccountIds).containsExactly("123456789012")
+
+        val products = "/api/vulnerability-products?search=Overview&limit=2"
+        assertThat(get(products, token, Array<String>::class.java))
+            .containsExactly("Overview Excepted", "Overview Falcon")
+        assertThat(get("$products&offset=2", token, Array<String>::class.java))
+            .containsExactly("Overview Installer", "Overview Scanner")
+        assertThat(get("$products&offset=4", token, Array<String>::class.java)).isEmpty()
+        assertThat(get("/api/vulnerability-products?search=overview%20scanner", token, Array<String>::class.java))
+            .containsExactly("Overview Scanner")
     }
 
     private fun assertOverview(

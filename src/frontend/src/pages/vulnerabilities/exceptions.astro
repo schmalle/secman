@@ -1,7 +1,9 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import VulnerabilityExceptionsTable from '../../components/VulnerabilityExceptionsTable';
+import ProductExceptionBatchForm from "../../components/ProductExceptionBatchForm";
 ---
 <Layout title="Vulnerability Exceptions">
+    <ProductExceptionBatchForm client:load />
     <VulnerabilityExceptionsTable client:load />
 </Layout>

@@ -55,13 +55,37 @@ package com.secman.repository
  * Spec: docs/superpowers/specs/2026-04-28-vulnerability-exceptions-holistic-design.md (§3, §5)
  */
 object ExceptionMatchSql {
+    // REPLACE is case-sensitive. Fold only ASCII letters, as ProductSelector does.
+    private const val FOLDED_LABEL = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(j.label), 'A', 'a'), 'B', 'b'), 'C', 'c'), 'D', 'd'), 'E', 'e'), 'F', 'f'), 'G', 'g'), 'H', 'h'), 'I', 'i'), 'J', 'j'), 'K', 'k'), 'L', 'l'), 'M', 'm'), 'N', 'n'), 'O', 'o'), 'P', 'p'), 'Q', 'q'), 'R', 'r'), 'S', 's'), 'T', 't'), 'U', 'u'), 'V', 'v'), 'W', 'w'), 'X', 'x'), 'Y', 'y'), 'Z', 'z')"
+
     const val EXCEPTION_MATCH: String = """
         (e.kind IS NULL OR e.kind = 'VULNERABILITY')
-        AND (e.expiration_date IS NULL OR e.expiration_date > NOW())
+        AND (e.expiration_date IS NULL OR (e.product_mode IS NULL AND e.expiration_date > NOW())
+             OR (e.product_mode IS NOT NULL AND e.expiration_date > UTC_TIMESTAMP()))
         AND (
             (
                 (e.subject = 'ALL_VULNS')
-                OR (e.subject = 'PRODUCT' AND (e.subject_value = v.vulnerability_id OR LOCATE(e.subject_value, v.vulnerable_product_versions) > 0))
+                OR (e.subject = 'PRODUCT' AND e.product_mode IS NULL AND e.product_patterns_json IS NULL AND (e.subject_value = v.vulnerability_id OR LOCATE(e.subject_value, v.vulnerable_product_versions) > 0))
+                OR (e.subject = 'PRODUCT' AND e.product_mode IN ('EXACT', 'GLOB') AND EXISTS (
+                    SELECT 1 FROM JSON_TABLE(COALESCE(v.product_labels_json, '[]'), '$[*]'
+                        COLUMNS (label LONGTEXT PATH '$')) AS j
+                    WHERE (e.product_mode = 'EXACT' AND BINARY $FOLDED_LABEL = BINARY e.subject_value)
+                       OR (e.product_mode = 'GLOB' AND BINARY $FOLDED_LABEL LIKE BINARY
+                           REPLACE(REPLACE(REPLACE(REPLACE(e.subject_value, '!', '!!'), '%', '!%'), '_', '!_'), '*', '%') ESCAPE '!')
+                ))
+                OR (e.subject = 'PRODUCT' AND e.product_patterns_json IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM JSON_TABLE(COALESCE(e.product_patterns_json, '[]'), '$[*]'
+                        COLUMNS (pattern VARCHAR(512) PATH '$')) AS p
+                    WHERE (LOCATE('*', p.pattern) = 0 AND (p.pattern = v.vulnerability_id OR LOCATE(p.pattern, v.vulnerable_product_versions) > 0))
+                       OR (LOCATE('*', p.pattern) > 0 AND EXISTS (
+                           SELECT 1 FROM JSON_TABLE(COALESCE(v.product_labels_json,
+                               CASE WHEN LOCATE(',', v.vulnerable_product_versions) = 0
+                                    THEN JSON_ARRAY(v.vulnerable_product_versions) ELSE '[]' END), '$[*]'
+                               COLUMNS (label LONGTEXT PATH '$')) AS j
+                           WHERE BINARY $FOLDED_LABEL LIKE BINARY
+                               REPLACE(REPLACE(REPLACE(REPLACE(p.pattern, '!', '!!'), '%', '!%'), '_', '!_'), '*', '%') ESCAPE '!'
+                       ))
+                ))
                 OR (e.subject = 'CVE' AND FIND_IN_SET(v.vulnerability_id, REPLACE(e.subject_value, ' ', '')) > 0)
             )
             AND (
@@ -73,4 +97,15 @@ object ExceptionMatchSql {
             )
         )
     """
+    // The latest end date is the union of overlapping rules. A permanent match keeps the flag active.
+    private const val UTC_END = """CASE WHEN e.product_mode IS NOT NULL THEN e.expiration_date
+        ELSE TIMESTAMPADD(SECOND, UNIX_TIMESTAMP(e.expiration_date), CAST('1970-01-01' AS DATETIME)) END"""
+    const val MATERIALIZE = """v.excepted = EXISTS (SELECT 1 FROM vulnerability_exception e WHERE $EXCEPTION_MATCH),
+        v.excepted_until = (SELECT CASE WHEN COUNT(*) = COUNT($UTC_END) THEN MAX($UTC_END) END
+            FROM vulnerability_exception e WHERE $EXCEPTION_MATCH)"""
+
+    const val COUNT_RULE_MATCHES = """SELECT COUNT(*) FROM vulnerability_exception e
+        CROSS JOIN vulnerability v JOIN asset a ON a.id = v.asset_id
+        WHERE e.id = :exceptionId AND """ + EXCEPTION_MATCH
+    const val COUNT_VISIBLE_RULE_MATCHES = "$COUNT_RULE_MATCHES AND a.id IN (:assetIds)"
 }

@@ -55,10 +55,22 @@ object VulnQuerySql {
      * If you change `ExceptionMatchSql.EXCEPTION_MATCH`, the agreement is re-checked by
      * `ExceptedFlagSqlAgreementIntegrationTest`.
      */
-    const val NOT_EXCEPTED = "v.excepted = 0"
+    const val NOT_EXCEPTED = "(v.excepted = 0 OR v.excepted_until <= UTC_TIMESTAMP())"
 
     /** Materialized counterpart of `EXISTS(EXCEPTION_MATCH)`; see [NOT_EXCEPTED]. */
-    const val EXCEPTED = "v.excepted = 1"
+    const val EXCEPTED = "(v.excepted = 1 AND (v.excepted_until IS NULL OR v.excepted_until > UTC_TIMESTAMP()))"
+
+    const val BATCH_LABEL_SUGGESTIONS = """
+        SELECT DISTINCT j.label COLLATE utf8mb4_bin FROM ${CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
+        JOIN asset a ON a.id = v.asset_id
+        JOIN JSON_TABLE(COALESCE(v.product_labels_json, '[]'), '$[*]' COLUMNS (label LONGTEXT PATH '$')) j
+        WHERE a.id IN :ids AND a.cloud_account_id IN :accounts AND LOCATE(LOWER(:search), LOWER(j.label)) > 0
+        ORDER BY j.label COLLATE utf8mb4_bin LIMIT 25"""
+
+    const val BATCH_PREVIEW = """
+        SELECT v.id, a.id, a.cloud_account_id, v.product_labels_json, $EXCEPTED
+        FROM ${CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v JOIN asset a ON a.id = v.asset_id
+        WHERE a.id IN :ids AND a.cloud_account_id IN :accounts AND v.id > :after ORDER BY v.id"""
 
     /**
      * SLA status against a bound `:thresholdDate`. `sla_anchor_at` is the generated

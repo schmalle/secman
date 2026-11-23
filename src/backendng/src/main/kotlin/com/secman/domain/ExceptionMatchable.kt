@@ -18,6 +18,7 @@ interface ExceptionMatchable {
     val assetIp: String?
     val cloudAccountId: String?
     val osVersion: String?
+    val productLabelsJson: String? get() = null
     val vulnerabilityId: String?
     val vulnerableProductVersions: String?
 }

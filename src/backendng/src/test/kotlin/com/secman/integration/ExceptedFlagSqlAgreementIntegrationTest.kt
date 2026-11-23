@@ -79,6 +79,79 @@ class ExceptedFlagSqlAgreementIntegrationTest : BaseIntegrationTest() {
         return vulnerabilityRepository.findAll()
     }
 
+    @Test
+    fun productListMatchesEitherLabelOnceAndRespectsScopeAndExpiry() {
+        val (asset, _) = seedFixture()
+        val findings = vulnerabilityRepository.findAll().sortedBy { it.id }
+        val products = listOf(".NET Core 6.0", ".net desktop runtime 6.0", "Oracle Client", ".NET Core, Other Product")
+        val labels = listOf(null, null, """["Oracle Client", ".NET Runtime"]""", null)
+        findings.forEachIndexed { index, finding ->
+            finding.vulnerableProductVersions = products[index]
+            finding.productLabelsJson = labels[index]
+            entityManager.merge(finding)
+        }
+        val rule = exceptionRepository.save(VulnerabilityException(
+            subject = VulnerabilityException.Subject.PRODUCT, scope = VulnerabilityException.Scope.GLOBAL,
+            subjectValue = "*net*, *oracle*", productPatternsJson = """["*net*","*oracle*"]""",
+            createdBy = "reviewer", reason = "Review product list"
+        ))
+        fun check(expected: List<Vulnerability>) {
+            val rows = recomputeAndReload()
+            val index = com.secman.service.ExceptionMatchIndex(listOf(rule).filter { it.isActive() })
+            assertThat(rows.filter { it.excepted }.map { it.id }).containsExactlyInAnyOrderElementsOf(expected.map { it.id })
+            assertThat(vulnerabilityRepository.countMatchingBatchRule(rule.id!!)).isEqualTo(expected.size.toLong())
+            rows.forEach {
+                assertThat(rule.matches(it, it.asset)).isEqualTo(it.excepted)
+                assertThat(index.firstMatch(it, it.asset) != null).isEqualTo(it.excepted)
+            }
+        }
+        check(findings.take(3))
+        rule.scope = VulnerabilityException.Scope.ASSET
+        rule.assetId = asset.id
+        entityManager.merge(rule)
+        check(findings.take(3).filter { it.asset.id == asset.id })
+        rule.expirationDate = LocalDateTime.now().minusDays(1)
+        entityManager.merge(rule)
+        check(emptyList())
+    }
+
+    @Test
+    fun batchGlobUsesIndividualVerifiedLabels() {
+        val (matching, _) = seedFixture()
+        val finding = vulnerabilityRepository.findAll().first { it.asset.id == matching.id }
+        finding.productLabelsJson = """["MS SQL_2022", "Other, Product"]"""
+        entityManager.merge(finding)
+        val rule = exceptionRepository.save(VulnerabilityException(
+            subject = VulnerabilityException.Subject.PRODUCT, scope = VulnerabilityException.Scope.AWS_ACCOUNT,
+            subjectValue = "ms sql_202*", productMode = "GLOB", scopeValue = matching.cloudAccountId,
+            createdBy = "reviewer", reason = "test glob"
+        ))
+        val rows = recomputeAndReload()
+        assertThat(rows.filter { it.excepted }.map { it.id }).containsExactly(finding.id)
+        rows.forEach { assertThat(rule.matches(it, it.asset)).isEqualTo(it.excepted) }
+    }
+
+    @Test
+    fun batchDeadlineUsesUtcEvenWhenDatabaseSessionIsAhead() {
+        val (asset, _) = seedFixture()
+        val vuln = vulnerabilityRepository.findAll().first { it.asset.id == asset.id }
+        vuln.productLabelsJson = """["Tomcat"]"""
+        entityManager.merge(vuln)
+        exceptionRepository.save(VulnerabilityException(
+            subject = VulnerabilityException.Subject.PRODUCT, scope = VulnerabilityException.Scope.AWS_ACCOUNT,
+            subjectValue = "tomcat", productMode = "EXACT", scopeValue = asset.cloudAccountId,
+            expirationDate = LocalDateTime.now(java.time.ZoneOffset.UTC).plusMinutes(5), createdBy = "reviewer", reason = "UTC deadline"
+        ))
+        entityManager.createNativeQuery("SET time_zone = '+05:30'").executeUpdate()
+        try {
+            assertThat(recomputeAndReload().single { it.id == vuln.id }.excepted).isTrue()
+            val sql = "SELECT COUNT(*) FROM vulnerability v WHERE v.id = :id AND " + com.secman.repository.VulnQuerySql.EXCEPTED
+            assertThat((entityManager.createNativeQuery(sql).setParameter("id", vuln.id).singleResult as Number).toLong()).isEqualTo(1)
+        } finally {
+            entityManager.createNativeQuery("SET time_zone = DEFAULT").executeUpdate()
+        }
+    }
+
     @AfterEach
     fun cleanup() {
         exceptionRepository.deleteAll()
