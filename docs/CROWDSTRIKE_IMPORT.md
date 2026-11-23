@@ -580,12 +580,9 @@ regression here is silent.
 - Rule changes need `POST /api/product-classification/reclassify` ("Reclassify now") to be applied
   to stored rows; it returns 202 and runs in the background, chunked by primary-key range.
 
-**Deliberately unfiltered:** `GET /api/vulnerabilities/current?exceptionStatus=all` falls through to
-`findLatestVulnerabilitiesPerAssetWithFilters` / `findLatestVulnerabilitiesWithAccessControl`, which
-carry neither the `excepted` nor the `product_class` predicate. That is not an oversight — it is the
-"show me everything" path, and `extensions/secman_visual_check` depends on it: it lists existing
-findings to deduplicate before uploading, so hiding a row from it would make it re-upload that row.
-The UI never sends `all` (the controller defaults a blank value to `not_excepted`).
+`GET /api/vulnerabilities/current?exceptionStatus=all` includes excepted findings. The installer
+filter is independent. Clients that deduplicate against existing findings, including the Visual
+Checker, explicitly send `includeInstallerFindings=true` alongside `exceptionStatus=all`.
 
 ## How the importer writes findings
 

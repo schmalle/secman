@@ -168,15 +168,18 @@ open class ExportJobService(
         val accessibleAssetIds = if (isAdmin) {
             emptySet()
         } else {
-            assetFilterService.getAccessibleAssets(authentication)
-                .mapNotNull { it.id }
-                .toSet()
+            assetFilterService.getAccessibleAssetIds(authentication)
         }
 
         // The filters ride this closure into the background thread. They are deliberately not
         // persisted on the job row: nothing ever re-runs a job from the DB (autoResetStaleJobs
         // and resetStuckJobs only mark stale jobs FAILED), so the in-memory hand-off is complete.
-        selfProvider.get().bindScope(jobId, authentication, if (isAdmin) "GLOBAL" else accessibleAssetIds.sorted().joinToString(","))
+        try {
+            selfProvider.get().bindScope(jobId, authentication, if (isAdmin) "GLOBAL" else accessibleAssetIds.sorted().joinToString(","))
+        } catch (exception: IllegalStateException) {
+            selfProvider.get().markJobAsFailed(jobId, "Export access changed before start")
+            throw exception
+        }
         executorService.submit {
             processExportInBackground(jobId, username, isAdmin, accessibleAssetIds, filters)
         }

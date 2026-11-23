@@ -2,18 +2,18 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-test('current vulnerabilities table requests deferred counts before exact totals', () => {
+test('current vulnerabilities table loads the first page before requesting the exact total', () => {
   const source = readFileSync(new URL('./CurrentVulnerabilitiesTable.tsx', import.meta.url), 'utf8');
 
-  assert.match(source, /const countMode = knownTotal !== undefined \? ["']exact["'] : ["']deferred["']/);
-  assert.match(source, /fetchExactVulnerabilityCount/);
+  assert.match(source, /currentPage === 0 \? "deferred" : "exact"/);
+  assert.match(source, /data\.totalExact === false\) \{\s+void getCurrentVulnerabilityCount/);
 });
 
-test('current vulnerabilities table ignores stale exact count responses', () => {
+test('current vulnerabilities table ignores stale list and count responses', () => {
   const source = readFileSync(new URL('./CurrentVulnerabilitiesTable.tsx', import.meta.url), 'utf8');
 
-  assert.match(source, /countRequestKeyRef/);
-  assert.match(source, /if\s*\(\s*countRequestKeyRef\.current\s*!==\s*requestKey\s*\)\s*return/);
+  assert.match(source, /const requestId = \+\+requestIdRef\.current/);
+  assert.equal(source.match(/if \(requestIdRef\.current !== requestId\) return/g)?.length, 2);
 });
 
 test('current vulnerabilities table labels identifiers as CVE or findings', () => {

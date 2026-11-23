@@ -49,6 +49,7 @@ export interface CrowdStrikeQueryResponse {
     vulnerabilities: CrowdStrikeVulnerabilityDto[];
     totalCount: number;
     queriedAt: string;
+    observedAt?: string | null;
     /**
      * "DATABASE" — served from the persisted vulnerability table (matches the
      * Current/Account Vulnerabilities views).

@@ -14,6 +14,8 @@ The legacy `last_seen` field remains for compatibility with ingestion. It is not
 
 Native current vulnerability queries require both existing snapshot/severity eligibility and current asset eligibility. Materialized heatmap and outdated-asset readers check current asset IDs at read time, so waiting for an import cannot keep stale assets visible.
 
+Analytics Overview uses the same rolling observation window as the Asset Register for rows, counts, filter options and Excel exports. Its default view excludes excepted and installer findings. Select **All (incl. Excepted)** to include exceptions, and use the installer toggle independently. The per-system lookup shows the last verified observation alongside the finding snapshot and labels results fetched directly from Falcon.
+
 `canAccessAsset` and `getAuthorizedAssetIds` refer to stored-record grants. `canReadCurrentAsset` and operational accessible-asset methods additionally apply currentness. Ingestion, scanner target discovery, relationship management, cleanup and historical risk-assessment access retain authorized stored lookup. This allows an existing hidden asset to receive new evidence and reappear under the same ID. The ADMIN internet-facing target endpoint and scanner subject discovery intentionally include authorized configured targets that are not current; this is an ingestion surface, not the operational asset inventory.
 
 Hiding does not delete assets, findings, assignments, audit records or assessments. Existing retention and deletion policies remain independent. Historical records are evidence of the time they describe, not a list of current inventory. Repository-only integration and EOL records retain their separate lifecycle.

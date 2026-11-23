@@ -38,10 +38,11 @@ test('every filter maps to its request field', () => {
     adDomainFilter: 'ad.glpoly.net',
     cloudAccountIdFilter: '123456789012',
     includeInstallerFindings: true,
-  });
+  }, 'scanTimestamp', 'desc');
 
   assert.deepEqual(filters, {
-    seenToday: true,
+    sort: 'scanTimestamp',
+    sortDir: 'desc',
     severity: 'Critical',
     system: 'THMTPPI1',
     exceptionStatus: 'overdue',
@@ -93,6 +94,13 @@ test('the default exceptionStatus is still sent so the export matches the defaul
   assert.equal(buildVulnerabilityExportFilters(empty).exceptionStatus, 'not_excepted');
 });
 
+test('all includes exceptions and keeps installer inclusion independent', () => {
+  const filters = buildVulnerabilityExportFilters({ ...empty, exceptionFilter: 'all' });
+  assert.equal(filters.exceptionStatus, 'all');
+  assert.equal(filters.includeInstallerFindings, false);
+  assert.equal(filters.seenToday, undefined);
+});
+
 test('active filter count ignores the always-present exceptionStatus', () => {
   assert.equal(countActiveExportFilters(buildVulnerabilityExportFilters(empty)), 0);
   assert.equal(
@@ -117,7 +125,7 @@ test('active filter count ignores the always-present exceptionStatus', () => {
 test('the export button no longer claims to export everything when a filter is set', () => {
   assert.equal(
     describeExportScope(buildVulnerabilityExportFilters(empty)),
-    'Export vulnerabilities of systems seen today (Europe/Berlin) to Excel',
+    'Export vulnerabilities of current systems to Excel',
   );
   assert.equal(
     describeExportScope(

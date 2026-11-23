@@ -52,6 +52,33 @@ test('current inventory hides stale and unobserved assets and accepts re-observa
     await page.goto(`/assets?name=${prefix}`);
     await expect(page.locator('tbody tr').filter({ hasText: prefix })).toHaveCount(2);
     await expect(page.getByLabel('Falcon sensor contact', { exact: true }).locator('option').first()).toHaveText('All current assets (seen within 24 hours)');
+
+    for (const asset of [current, unknown]) {
+      const finding = await page.request.post('/api/vulnerabilities/cli-add', {
+        headers, data: { hostname: asset.name, cve: 'CVE-2099-8321', criticality: 'HIGH', daysOpen: 5 },
+      });
+      expect(finding.ok()).toBeTruthy();
+    }
+    await page.goto('/analytics');
+    const filteredRows = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === '/api/vulnerabilities/current' && url.searchParams.get('system') === prefix;
+    });
+    await page.getByLabel('System', { exact: true }).fill(prefix);
+    expect((await filteredRows).ok()).toBeTruthy();
+    await expect(page.getByRole('heading', { name: 'Vulnerabilities (1 not excepted)', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: current.name, exact: true })).toHaveAttribute('href', new RegExp(`assetId=${current.id}(?:&|$)`));
+    await expect(page.getByRole('link', { name: unknown.name, exact: true })).toHaveCount(0);
+    await page.getByLabel('Overdue Status', { exact: true }).selectOption('all');
+    await expect(page.getByRole('heading', { name: 'Vulnerabilities (1 incl. excepted)', exact: true })).toBeVisible();
+    const workbook = page.waitForEvent('download', { timeout: 20_000 });
+    const exportRequest = page.waitForRequest(request =>
+      new URL(request.url()).pathname === '/api/vulnerabilities/export' && request.method() === 'POST');
+    await page.getByRole('button', { name: /\bExport$/ }).click();
+    expect((await exportRequest).postDataJSON()).toMatchObject({ system: prefix, exceptionStatus: 'all' });
+    const download = await workbook;
+    expect(download.suggestedFilename()).toMatch(/^vulnerabilities_export_.*\.xlsx$/);
+    expect(await download.failure()).toBeNull();
   } finally {
     for (const id of ids) {
       expect((await page.request.delete(`/api/assets/${id}`, { headers })).ok()).toBeTruthy();
