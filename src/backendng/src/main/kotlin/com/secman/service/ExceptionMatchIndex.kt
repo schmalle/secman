@@ -2,6 +2,8 @@ package com.secman.service
 
 import com.secman.domain.Asset
 import com.secman.domain.ExceptionKind
+import com.secman.domain.ProductPatternList
+import com.secman.domain.ProductSelector
 import com.secman.domain.ExceptionMatchable
 import com.secman.domain.Vulnerability
 import com.secman.domain.VulnerabilityException
@@ -39,12 +41,14 @@ class ExceptionMatchIndex(activeExceptions: List<VulnerabilityException>) {
     private data class CveBucket(val ex: VulnerabilityException, val cves: Set<String>)
 
     private val allVulns: List<VulnerabilityException>
-    private val productExceptions: List<VulnerabilityException>
+    private data class ProductRule(val exception: VulnerabilityException, val selector: ProductSelector?,
+        val patterns: ProductPatternList? = exception.productPatternsJson?.let(::ProductPatternList))
+    private val productExceptions: List<ProductRule>
     private val cveBuckets: List<CveBucket>
 
     init {
         val a = mutableListOf<VulnerabilityException>()
-        val p = mutableListOf<VulnerabilityException>()
+        val p = mutableListOf<ProductRule>()
         val c = mutableListOf<CveBucket>()
         for (ex in activeExceptions) {
             // Only VULNERABILITY exceptions suppress findings. Dropping NO_EDR rows here
@@ -55,7 +59,9 @@ class ExceptionMatchIndex(activeExceptions: List<VulnerabilityException>) {
             if (ex.kind != ExceptionKind.VULNERABILITY) continue
             when (ex.subject) {
                 VulnerabilityException.Subject.ALL_VULNS -> a += ex
-                VulnerabilityException.Subject.PRODUCT -> p += ex
+                VulnerabilityException.Subject.PRODUCT -> p += ProductRule(ex, ex.productMode?.let { mode ->
+                    ProductSelector(requireNotNull(ex.subjectValue), ProductSelector.Mode.valueOf(mode))
+                })
                 VulnerabilityException.Subject.CVE -> {
                     val sv = ex.subjectValue
                     if (!sv.isNullOrBlank()) {
@@ -72,7 +78,18 @@ class ExceptionMatchIndex(activeExceptions: List<VulnerabilityException>) {
     /** Return the first active exception matching this row, or null. */
     fun firstMatch(row: ExceptionMatchable): VulnerabilityException? {
         allVulns.firstOrNull { scopeMatches(it, row) }?.let { return it }
-        productExceptions.firstOrNull { productSubjectMatches(it, row) && scopeMatches(it, row) }?.let { return it }
+        var labels: List<String>? = null
+        for ((exception, selector, patterns) in productExceptions) {
+            if (!scopeMatches(exception, row)) continue
+            if (patterns != null) {
+                if (patterns.matches(row.vulnerabilityId, row.vulnerableProductVersions, row.productLabelsJson)) return exception
+            } else if (selector == null) {
+                if (productSubjectMatches(exception, row)) return exception
+            } else if (exception.isActive()) {
+                if (labels == null) labels = ProductSelector.labels(row.productLabelsJson)
+                if (labels.any(selector::matches)) return exception
+            }
+        }
         cveBuckets.firstOrNull { row.vulnerabilityId in it.cves && scopeMatches(it.ex, row) }?.let { return it.ex }
         return null
     }
@@ -92,6 +109,7 @@ class ExceptionMatchIndex(activeExceptions: List<VulnerabilityException>) {
         override val assetIp: String? = a.ip
         override val cloudAccountId: String? = a.cloudAccountId
         override val osVersion: String? = a.osVersion
+        override val productLabelsJson = v.productLabelsJson
         override val vulnerabilityId: String? = v.vulnerabilityId
         override val vulnerableProductVersions: String? = v.vulnerableProductVersions
     }

@@ -14,6 +14,7 @@
  * Reference: spec.md FR-018 to FR-023
  */
 
+import { PendingProductBatches } from "./PendingProductBatches";
 import React, { useState, useEffect } from 'react';
 import {
   getPendingRequests,
@@ -212,6 +213,7 @@ const ExceptionApprovalDashboard: React.FC = () => {
 
   return (
     <div className="container-fluid p-4">
+      <PendingProductBatches />
       {/* Page Header */}
       <div className="row">
         <div className="col-12">

@@ -591,6 +591,13 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     """)
     fun findDistinctAdDomains(): List<String>
 
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT a.adDomain FROM Asset a
+        WHERE ${AssetCurrentnessSql.JPQL} AND a.id IN (:assetIds) AND a.adDomain <> ''
+        ORDER BY a.adDomain
+    """)
+    fun findDistinctAdDomainsForAssets(assetIds: Collection<Long>): List<String>
+
     /**
      * Find distinct AWS cloud account IDs from all assets
      * Used for filter dropdown population in Current Vulnerabilities view
@@ -605,6 +612,13 @@ interface AssetRepository : JpaRepository<Asset, Long> {
         ORDER BY a.cloudAccountId
     """)
     fun findDistinctCloudAccountIds(): List<String>
+
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT a.cloudAccountId FROM Asset a
+        WHERE ${AssetCurrentnessSql.JPQL} AND a.id IN (:assetIds) AND a.cloudAccountId <> ''
+        ORDER BY a.cloudAccountId
+    """)
+    fun findDistinctCloudAccountIdsForAssets(assetIds: Collection<Long>): List<String>
 
     /**
      * Find distinct OS versions from all assets

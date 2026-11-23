@@ -35,7 +35,7 @@ dependencies {
     implementation("org.apache.commons:commons-csv:1.14.1")
 
     // AWS SDK for S3 (Feature 065 - S3 User Mapping Import)
-    implementation(platform("software.amazon.awssdk:bom:2.59.4"))
+    implementation(platform("software.amazon.awssdk:bom:2.59.7"))
     implementation("software.amazon.awssdk:s3")
     
     // Kotlin
@@ -43,7 +43,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.4.21")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.6.7")
+    runtimeOnly("ch.qos.logback:logback-classic:1.6.8")
     runtimeOnly("org.yaml:snakeyaml:2.7")
     
     // KSP

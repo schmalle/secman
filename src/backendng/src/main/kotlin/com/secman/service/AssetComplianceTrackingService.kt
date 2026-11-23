@@ -59,7 +59,7 @@ open class AssetComplianceTrackingService(
                 SELECT COUNT(v), MIN(v.slaAnchorAt)
                 FROM Vulnerability v
                 WHERE v.asset.id = :assetId
-                  AND v.excepted = false
+                  AND (v.excepted = false OR v.exceptedUntil <= ${com.secman.repository.AssetCurrentnessSql.UTC_NOW_JPQL})
                   AND v.slaAnchorAt < :thresholdDate
                 """.trimIndent()
             )

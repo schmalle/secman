@@ -31,6 +31,6 @@ class ActiveExceptionsCacheInvalidator(
     companion object {
         const val CACHE_NAME = "active_exceptions"
         const val NOT_EXCEPTED_COUNT_CACHE_NAME = "vulnerability_not_excepted_count"
-        private val CACHE_NAMES = listOf(CACHE_NAME, NOT_EXCEPTED_COUNT_CACHE_NAME)
+        private val CACHE_NAMES = listOf(CACHE_NAME, NOT_EXCEPTED_COUNT_CACHE_NAME, "vulnerability_queries")
     }
 }

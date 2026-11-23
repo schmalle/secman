@@ -770,6 +770,17 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
     }
 
     @Test
+    fun `product label boundaries survive punctuation in individual Falcon apps`() {
+        val labels = listOf("Example, Runtime 1.0", "SQL Server 2022")
+        val finding = vulnResource("one") + ("apps" to labels.map { mapOf("product_name_version" to it) })
+        every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } returns
+            HttpResponse.ok(spotlightPage(listOf(finding), null, 1))
+        val result = client.querySpotlightApi("device-1", "server01", token).single()
+        assertThat(result.affectedProduct).isEqualTo(labels.joinToString(", "))
+        assertThat(result.productLabels).isEqualTo(labels)
+    }
+
+    @Test
     fun `live lookup resolves shared remediation IDs and keeps findings if the lookup fails`() {
         val app = mapOf("product_name_version" to "Example package 1.0",
             "remediation" to mapOf("ids" to listOf("update-one")))

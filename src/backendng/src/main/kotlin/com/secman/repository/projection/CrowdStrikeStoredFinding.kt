@@ -15,5 +15,6 @@ data class CrowdStrikeStoredFinding(
     val noVendorFix: Boolean?,
     val crowdStrikeSnapshotId: Long?,
     val remediationJson: String? = null,
-    val assetId: Long? = null
+    val assetId: Long? = null,
+    val productLabelsJson: String? = null
 )

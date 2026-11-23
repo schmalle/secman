@@ -37,8 +37,8 @@ dependencies {
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:4.0.0")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:8.1.1")
-	runtimeOnly("org.flywaydb:flyway-core:13.12.2")
-	runtimeOnly("org.flywaydb:flyway-mysql:13.12.2")
+	runtimeOnly("org.flywaydb:flyway-core:13.13.0")
+	runtimeOnly("org.flywaydb:flyway-mysql:13.13.0")
 
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt:5.5.2")
@@ -93,7 +93,7 @@ dependencies {
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.6.7")
+    runtimeOnly("ch.qos.logback:logback-classic:1.6.8")
     // Bridge Log4j to Logback (required for Apache POI)
     runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.26.1")
     // Logstash encoder for JSON logging (Feature 046)
@@ -105,8 +105,8 @@ dependencies {
     runtimeOnly("org.yaml:snakeyaml:2.7")
     
     // Password encoding
-    implementation("org.springframework.security:spring-security-crypto:7.1.2")
-    implementation("org.springframework:spring-core:7.0.10")
+    implementation("org.springframework.security:spring-security-crypto:7.2.0")
+    implementation("org.springframework:spring-core:7.1.0")
     implementation("commons-logging:commons-logging:1.4.0")
     
     // Document generation (Apache POI)
@@ -137,7 +137,7 @@ dependencies {
     testImplementation("io.mockk:mockk:1.14.12")
     // Tests assert on log output via Logback's ListAppender; main code stays
     // slf4j-only (logback-classic is runtimeOnly above).
-    testImplementation("ch.qos.logback:logback-classic:1.6.7")
+    testImplementation("ch.qos.logback:logback-classic:1.6.8")
     testImplementation("org.assertj:assertj-core:3.27.7")
 }
 
@@ -180,7 +180,7 @@ allOpen {
 
 graalvmNative.toolchainDetection.set(false)
 micronaut {
-    version("5.2.5")
+    version("5.2.7")
     runtime("netty")
     processing {
         incremental(true)

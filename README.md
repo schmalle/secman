@@ -27,18 +27,31 @@ Kotlin 2.4.21 / Java 25 · Micronaut 5.2.5 · Hibernate JPA · Astro 7.4.13 + Re
 
 ## Quick Start (development)
 
-Prereqs: Java 25, Node 22.23.4+, MariaDB 11.4+, Git, and an authenticated [Proton Pass CLI](docs/PASS_CLI.md) (`pass-cli`) for the dev start scripts.
+Install a Java 25 JDK, Node.js 22.23.4+ with npm, MariaDB 11.4+ with the `mysql` client command, Git, OpenSSL, and Proton Pass CLI (`pass-cli`). Start MariaDB and authenticate `pass-cli`. See the [installation guide](INSTALL.md) for platform-specific setup.
+
+The dev scripts read fields from the `Test` vault's `SECMAN` item. For a local stack, set `SECMAN_BACKEND_BASE_URL` to `http://localhost:8080` and `DB_CONNECT` to `jdbc:mariadb://localhost:3306/secman`. An exported `DB_CONNECT` in the backend terminal takes precedence. Configure the remaining fields referenced by the start scripts using the [Proton Pass guide](docs/PASS_CLI.md).
 
 ```bash
 git clone https://github.com/schmalle/secman.git && cd secman
-cd scripts/install/db && ./installdb.sh && cd -    # creates DB 'secman' / user 'secman'/'CHANGEME'
-./scripts/startbackenddev.sh                       # canonical dev start (pass-cli wraps gradle)
-cd src/frontend && npm install && cd - && ./scripts/startfrontenddev.sh   # canonical dev start, http://localhost:4321
+(cd scripts/install/db && ./installdb.sh)  # Creates the local secman database and user.
+(cd src/frontend && npm ci)
 ```
 
-On startup with an empty users table the backend creates `admin` with a 20-char random password printed once to stdout (look for `DEFAULT ADMIN USER CREATED`). Copy it immediately. Change it after first login.
+From the repository root, start the backend in one terminal. The cookie setting below is for local HTTP development.
 
-> **Production deploys** must replace the default DB password and generate `JWT_SECRET`, `SECMAN_ENCRYPTION_PASSWORD`, `SECMAN_ENCRYPTION_SALT`. See `docs/DEPLOYMENT.md`.
+```bash
+SECMAN_AUTH_COOKIE_SECURE=false ./scripts/startbackenddev.sh
+```
+
+From the repository root in a second terminal, start the frontend.
+
+```bash
+./scripts/startfrontenddev.sh
+```
+
+Open <http://localhost:4321>. On startup with an empty users table, the backend creates `admin` and prints a generated 20-character password to stdout in the `DEFAULT ADMIN USER CREATED` banner. Change the password after signing in.
+
+> **Production deployments** require a unique database password, `JWT_SECRET`, `SECMAN_ENCRYPTION_PASSWORD`, and `SECMAN_ENCRYPTION_SALT`. Follow the [deployment guide](docs/DEPLOYMENT.md).
 
 ## Layout
 
@@ -47,6 +60,7 @@ src/
   backendng/   Kotlin/Micronaut: domain → repository → service → controller, mcp/, dto/, filter/
   frontend/   Astro pages + React islands, services/ (Axios)
   cli/        Picocli commands + service/
+  shared/     Kotlin code shared by the backend and CLI
   adread/     Python AD workgroup import + AWS asset synchronization
   relay/      Go: zero-dependency DMZ relay for the mobile app
   clinotify/  stdlib-only Python monitoring helpers
@@ -58,31 +72,30 @@ specs/        historical implementation plans (frozen)
 ## Common commands
 
 ```bash
-# Build & run
+# Full Gradle build with a disposable database
 ./scripts/test/run-isolated-e2e.sh --database-only -- ./gradlew build  # full build incl. tests
-./scripts/startbackenddev.sh            # backend dev (port 8080)
-./scripts/startfrontenddev.sh           # frontend dev (port 4321)
 
 # CLI (build once, then use the wrapper)
 ./gradlew :cli:shadowJar
 ./scripts/secman help
 ./scripts/secman query servers --device-type SERVER_FAMILY --last-seen-days 1 --dry-run
 ./scripts/secman send-notifications --dry-run --verbose
-./scripts/secman manage-user-mappings list --send-email
-./scripts/secman add-vulnerability --hostname host --cve CVE-2024-1234 --criticality HIGH
+./scripts/secman manage-user-mappings list --send-email --dry-run
 ./scripts/secman export-requirements --format xlsx
 
 # Python importer: preview AWS asset assignments from canonical workgroup owners
 ./scripts/sync-workgroup-assets.sh --dry-run
-# Production alternative (set SECMAN_AWS_SECRET_ID and AWS_REGION first):
+# AWS Secrets Manager variant (set SECMAN_AWS_SECRET_ID and the AWS region)
 ./scripts/sync-workgroup-assets-aws.sh --dry-run
 
 # Tests
 ./scripts/runbackendtests.sh --tests "*ServiceTest*"      # focused service tests
 ./scripts/runbackendtests.sh --tests "*IntegrationTest*"  # integration (disposable MariaDB, see docs/TESTING.md)
 ./gradlew :cli:test
-# Full-stack and feature tests use the isolated runner described in docs/TESTING.md.
+(cd src/frontend && npm test)
 ```
+
+See the [CLI reference](docs/CLI.md) for command options, the [workgroup asset sync guide](docs/WORKGROUP_ASSET_SYNC.md) for importer setup, and the [testing guide](docs/TESTING.md) for full-stack and feature tests with the isolated runner.
 
 ## API and configuration
 
@@ -93,6 +106,7 @@ Browser sessions use the HttpOnly `secman_auth` cookie. See the
 For MCP clients, follow [client setup](docs/MCP_CLIENT_SETUP.md). The
 [MCP reference](docs/MCP.md) lists tools and permissions. Tool discovery and
 calls require both the API key and a delegated user email.
+Users can create a personal key from **Profile → Personal MCP keys** for read-only access to their visible inventory and AWS accounts. [Personal MCP keys](docs/MCP.md#personal-inventory-keys)
 
 Use the [environment reference](docs/ENVIRONMENT.md) for configuration
 and the [deployment guide](docs/DEPLOYMENT.md) for production setup.
@@ -105,7 +119,7 @@ and the [deployment guide](docs/DEPLOYMENT.md) for production setup.
 
 ## Workflow
 
-Branches: `dev` or `task/<name>` created from `dev`; never commit directly to `main` or `master`. Commits: `type(scope): description` (Conventional Commits). PRs need security review for AuthN/AuthZ/crypto/storage changes.
+Use `dev` or a `task/<name>` branch created from `dev`, and use `type(scope): description` for commit messages. Authentication, encryption, RBAC, and export changes require a security review before merge. [Repository guidelines](AGENTS.md)
 
 ## Roadmap (open)
 
