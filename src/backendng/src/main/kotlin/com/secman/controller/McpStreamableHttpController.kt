@@ -292,13 +292,14 @@ class McpStreamableHttpController(
         }
 
         // Delegated MCP work is activity for the inactive-user cleanup (throttled to daily).
-        userActivityService.recordDelegatedActivity(validation.user!!.id!!)
+        val delegatedUserId = validation.user!!.id!!
+        userActivityService.recordDelegatedActivity(delegatedUserId)
 
         return DelegatedCaller.Authorized(
             apiKey = mcpApiKey,
             delegation = DelegationContext(
                 delegatedUserEmail = delegatedUserEmail,
-                delegatedUserId = validation.user!!.id!!,
+                delegatedUserId = delegatedUserId,
                 effectivePermissions = validation.effectivePermissions
             )
         )

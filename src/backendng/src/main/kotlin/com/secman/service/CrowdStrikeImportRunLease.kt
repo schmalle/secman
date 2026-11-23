@@ -9,7 +9,8 @@ import java.util.UUID
 @Singleton
 class CrowdStrikeImportRunLease {
     internal var clock: Clock = Clock.systemUTC()
-    private data class Run(val id: String, val owner: String, var expiresAt: Instant)
+    private data class Run(val id: String, val owner: String, var expiresAt: Instant,
+                           val contacts: MutableMap<String, Instant> = mutableMapOf())
     private var run: Run? = null
     private var lastSuccessfulCompletion: Instant? = null
     private var cleanupActive = false
@@ -36,6 +37,30 @@ class CrowdStrikeImportRunLease {
     fun requireOwner(id: String, owner: String) {
         val current = active()
         check(current != null && current.id == id && current.owner == owner) { "Import run is unavailable" }
+    }
+
+    @Synchronized
+    fun stageContacts(id: String, owner: String, contacts: Map<String, Instant>) {
+        requireOwner(id, owner)
+        val staged = requireNotNull(run).contacts
+        require(contacts.size in 1..500 && contacts.keys.all { it.matches(AID) })
+        require(staged.size + contacts.size <= 1_000_000)
+        require(contacts.all { (aid, seen) -> staged[aid]?.let { it == seen } != false })
+        staged.putAll(contacts)
+    }
+
+    /** Hand the lease directly to cleanup so the scheduler cannot enter between the two. */
+    @Synchronized
+    fun finishWithCoverage(id: String, owner: String, count: Int): Map<String, Instant>? {
+        requireOwner(id, owner)
+        val contacts = requireNotNull(run).contacts
+        finish(id, owner, true)
+        if (contacts.isEmpty() || contacts.size != count || !tryBeginCleanup()) return null
+        return contacts
+    }
+
+    private companion object {
+        val AID = Regex("[A-Za-z0-9_-]{1,64}")
     }
 
     @Synchronized

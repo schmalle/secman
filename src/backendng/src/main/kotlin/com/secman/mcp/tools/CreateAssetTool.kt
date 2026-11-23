@@ -200,7 +200,7 @@ class CreateAssetTool(
             if (rawGroups != null && (rawGroups !is List<*> || rawGroups.any { it !is Number })) {
                 return McpToolResult.error("VALIDATION_ERROR", "workgroupIds must be an array of IDs")
             }
-            val groupIds = (rawGroups as? List<*>)?.map { (it as Number).toLong() }.orEmpty()
+            val groupIds = rawGroups?.map { (it as Number).toLong() }.orEmpty()
             val savedAsset = assetCreationService.create(asset, context.delegatedUserId!!, groupIds)
 
             // A new asset can be reached by anyone whose access criteria match

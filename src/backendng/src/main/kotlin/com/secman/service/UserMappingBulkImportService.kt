@@ -99,7 +99,7 @@ open class UserMappingBulkImportService(
         // Send the operator email AFTER the transaction has committed, so a
         // slow/failed send never rolls back the persisted mappings.
         var finalResult = if (request.notifyNewAccounts && request.notifyAddress != null && !request.dryRun && result.newAccounts.isNotEmpty()) {
-            val recipient = request.notifyAddress!!.trim()
+            val recipient = request.notifyAddress.trim()
             val sent = newAccountNotificationService.sendImportNotification(recipient, result.newAccounts)
             result.copy(
                 notificationRecipient = recipient,

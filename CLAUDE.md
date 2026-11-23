@@ -5,11 +5,11 @@ Security requirement, vulnerability and risk management platform.
 ## Stack
 
 - Backend: Kotlin 2.4.21 / Java 25, Micronaut 5.2.5, Hibernate JPA → `src/backendng/`
-- Frontend: Astro 7.4.7 + React 19 islands, Axios, JWT in the HttpOnly `secman_auth` cookie → `src/frontend/`
+- Frontend: Astro 7.4.13 + React 19 islands, Axios, JWT in the HttpOnly `secman_auth` cookie → `src/frontend/`
 - CLI: Kotlin + Picocli 4.7.7, AWS SDK v2 → `src/cli/`
 - Mobile relay: Go 1.24, **zero third-party dependencies** (stdlib only, incl. its own RFC 8555 ACME client) → `src/relay/`
 - DB: MariaDB 11.4, Flyway + Hibernate auto-migration
-- Build: Gradle 9.9.0 (Kotlin DSL)
+- Build: Gradle 9.9.1 (Kotlin DSL)
 - MCP: Streamable HTTP / JSON-RPC 2.0. `X-MCP-User-Email` header is **mandatory** on `tools/list` and `tools/call` (only `initialize` and `ping` exempt).
 
 ## Roles (RBAC)
@@ -49,7 +49,7 @@ Security requirement, vulnerability and risk management platform.
 
 Creator, uploader, and owner remain metadata. They grant no access. Workgroup hierarchy does not propagate membership.
 
-Current operational inventory additionally requires verified observation within the inclusive UTC 72-hour window. Falcon-managed assets use actual sensor contact; other assets use `verified_observed_at`. Stored-record authorization and scanner ingestion remain independent. See `docs/CURRENT_ASSETS.md`.
+Current operational inventory additionally requires verified observation within the inclusive UTC 24-hour window. Falcon-managed assets use actual sensor contact; other assets use `verified_observed_at`. Stored-record authorization and scanner ingestion remain independent. See `docs/CURRENT_ASSETS.md`.
 
 Authoritative filter: `AssetFilterService`. MCP and heatmap reuse it; SQL entity and ID queries share `AssetAccessSql`. `getScopedAccessibleAssetIds()` retains its ADMIN-only global shortcut for scoped notifications.
 
@@ -252,9 +252,9 @@ not input hygiene. All credentials use `EncryptedStringConverter`, are never ret
 `ImportCompletionNotifier` (no last batch exists), AWS account imports publish inline post-commit.
 
 ### Transactional replace (CrowdStrike vuln import)
-Per server: `findOrCreateAsset` → `vulnerabilityRepository.deleteByAssetId()` → `saveAll`, all in one `@Transactional`. Idempotent; missing CVEs in the next import = remediation.
+Per device, a complete changed snapshot replaces CrowdStrike findings in the affected scope in one transaction. Identical verified snapshots can retain their rows. Incomplete evidence preserves stored findings.
 
-**CRITICAL**: `Asset.vulnerabilities` MUST NOT use `cascade=ALL` or `orphanRemoval=true`. JPA cascade fights the manual delete-insert and silently drops 99% of rows (real incident: 166,812 → 1,819). Use explicit `vulnerabilityRepository.deleteByAssetId()` in the service. See `docs/CROWDSTRIKE_IMPORT.md`.
+**CRITICAL**: `Asset.vulnerabilities` MUST NOT use `cascade=ALL` or `orphanRemoval=true`. JPA cascade fights the manual delete-insert and silently drops 99% of rows (real incident: 166,812 → 1,819). Use explicit source- and severity-scoped writes in the importer. See `docs/CROWDSTRIKE_IMPORT.md`.
 
 ## Test Infrastructure
 
@@ -329,14 +329,14 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-11-11*
+*Last updated: 2026-11-22*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **CrowdStrike overdue age (2026-11-21)** — starts with the earliest detection on the affected system. V304 preserves the host detection independently of patch and CVE publication dates. See `docs/CROWDSTRIKE_IMPORT.md` for migration and exception-review behavior.
+
+- **Vulnerability replace scoping (2026-11-13)** — the Excel vulnerability import's transactional replace deleted every row on each asset named in the spreadsheet, including live CrowdStrike, CLI-manual and integration findings, until the next nightly run restored them; it now deletes only `XLSX` and pre-V213 `UNKNOWN` rows (`VulnerabilityPersistenceHelper.REPLACEABLE_SOURCES`, new `VulnerabilityRepository.deleteByAssetIdAndSourceIn`). The CrowdStrike reconcile sweep's failed-host exclusion matched by short label, so one failed `web01.a.example` kept `web01.b.example`'s patched findings out of the sweep; `reconcileScopeHosts` now excludes by failed AID or by a hostname naming the same machine (equal, or a bare short name on either side). The CLI no longer logs a zero-finding, unverified batch as "all 0 vulnerabilities were invalid". Investigation of a "patched vulnerabilities persist" report: the sampled host held only freshly re-imported rows that Falcon itself reported open. See `docs/CROWDSTRIKE_IMPORT.md` §Stale vulnerability cleanup.
+
 - **Inactive user cleanup (2026-11-11)** — opt-in nightly job (03:15, `USER_CLEANUP_ENABLED`, dry-run by default) warns users 30 days before and then deletes accounts inactive for 365 days, through `UserDeletionValidator` + `UserService.deleteUser`; ADMINs, service accounts, recent MCP-key owners and blocked users are skipped, a 10 % safety brake stops all deletions, every run is recorded per user. Passkey logins and delegated MCP calls (daily throttle) now set `last_login`. `deleteUser` now also removes MCP API keys, chat settings, preferences and relay identities, and the validator blocks only on NOT NULL references, so the manual delete no longer refuses e.g. assessment respondents or release creators. MCP `delete_user` now uses the same complete deletion, and V298 deactivates API keys left behind by earlier deletions. ADMIN endpoints `/api/user-cleanup/*`. See `docs/USER_CLEANUP.md`.
-
-- **AWS workgroup linking robustness (2026-11-08)** — link summaries split `truncated` into `reportTruncated` (500-row `links[]` cap) and `inputTruncated` (20,000-pair cap, rest NOT linked); `links[]` sorts failures/attention rows first, every rejection is logged, plus `statusReasonCounts` and report-only `staleAccounts`/`staleLinks`. CLI exits **4** when nothing failed but workgroups need attention. `UserMappingController` runs on the blocking executor. See `docs/AWS_ACCOUNT_WORKGROUP_LINKING.md`.
-
-- **Async user-mapping bulk import (2026-11-08)** — the CLI's `manage-user-mappings import`/`import-s3` now starts `POST /api/user-mappings/bulk/jobs` and polls `.../{jobId}/status` instead of holding one request open: on ~2200 accounts the synchronous `POST /bulk` took ~80 s, past production's 60 s load-balancer idle timeout, so the CLI got a 504 while the backend committed fine. Job state is in memory (single backend, owner emails not persisted), one import at a time (409), falls back to the synchronous endpoint on older backends. See `docs/CLI.md` and `docs/CHANGELOG.md`.

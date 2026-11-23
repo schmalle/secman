@@ -119,13 +119,8 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
     useState<keyof CurrentVulnerability>("scanTimestamp");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-  // Track previous filter values to detect filter-only vs page/sort changes
-  // When only page/sort changes, we pass knownTotal to skip the expensive count query
-  // Off by default: installer/setup payload findings ("Notepad++ Installer") are hidden unless
-  // the user explicitly asks for them, matching the backend default.
   const [includeInstallerFindings, setIncludeInstallerFindings] = useState(false);
-  const prevFiltersRef = useRef<string>("");
-  const countRequestKeyRef = useRef<string>("");
+  const requestIdRef = useRef(0);
 
   // Cleanup debounce timeout on unmount
   useEffect(() => {
@@ -161,9 +156,8 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
   }, []);
 
   useEffect(() => {
-    if (hasAccess) {
-      fetchVulnerabilities();
-    }
+    if (hasAccess) void fetchVulnerabilities();
+    return () => { requestIdRef.current += 1; };
   }, [
     severityFilter,
     debouncedSystemFilter,
@@ -214,101 +208,46 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
   };
 
   const fetchVulnerabilities = async () => {
+    const requestId = ++requestIdRef.current;
+    const { severity, system, exceptionStatus, product, cve, adDomain, cloudAccountId } = exportFilters;
+    const filters = [severity, system, exceptionStatus, product, cve, adDomain, cloudAccountId] as const;
     try {
       setLoading(true);
-      // Map frontend field names to backend sort field names.
-      // Note: the Overdue Status column is intentionally not sortable — the previous
-      // scanTimestamp proxy was misleading because it did not reflect the badge value.
-      const sortFieldMap: Record<string, string> = {
-        assetName: "assetName",
-        assetIp: "assetIp",
-        vulnerabilityId: "vulnerabilityId",
-        cvssSeverity: "cvssSeverity",
-        vulnerableProductVersions: "vulnerableProductVersions",
-        daysOpen: "scanTimestamp",
-        scanTimestamp: "scanTimestamp",
-      };
-      const backendSortField = sortFieldMap[sortField] || undefined;
-      // Invert sort direction for daysOpen: ascending days = descending scanTimestamp
-      const effectiveSortOrder = sortField === "daysOpen"
-        ? (sortOrder === "asc" ? "desc" : "asc")
-        : sortOrder;
-
-      // PERFORMANCE: When only page/sort changes (filters unchanged), pass the known total
-      // to skip the expensive COUNT query with NOT EXISTS on 358k+ rows
-      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(new Date());
-      const currentFilterKey = `${today}|${severityFilter}|${debouncedSystemFilter}|${exceptionFilter}|${productFilter}|${debouncedCveFilter}|${adDomainFilter}|${cloudAccountIdFilter}|${includeInstallerFindings}`;
-      const filtersUnchanged = currentFilterKey === prevFiltersRef.current;
-      const knownTotal = filtersUnchanged && paginatedResponse?.totalExact !== false
-        ? paginatedResponse.totalElements
-        : undefined;
-      const countMode = knownTotal !== undefined ? "exact" : "deferred";
-      const requestKey = `${currentFilterKey}|${pageSize}|${backendSortField || ""}|${effectiveSortOrder}`;
-      prevFiltersRef.current = currentFilterKey;
-
       const data = await getCurrentVulnerabilities(
-        severityFilter || undefined,
-        debouncedSystemFilter || undefined,
-        exceptionFilter || undefined,
-        productFilter || undefined,
-        debouncedCveFilter || undefined,
-        adDomainFilter || undefined,
-        cloudAccountIdFilter || undefined,
-        currentPage,
-        pageSize,
-        backendSortField,
-        effectiveSortOrder,
-        knownTotal,
-        countMode,
-        includeInstallerFindings,
+        ...filters, currentPage, pageSize, sortField, sortOrder, undefined,
+        currentPage === 0 ? "deferred" : "exact", includeInstallerFindings,
       );
+      if (requestIdRef.current !== requestId) return;
+
+      if (currentPage > 0 && data.content.length === 0) {
+        setCurrentPage(Math.max(0, Math.min(currentPage - 1, data.totalPages - 1)));
+        return;
+      }
+
       setPaginatedResponse(data);
       setError(null);
       if (data.totalExact === false) {
-        fetchExactVulnerabilityCount(requestKey, backendSortField, effectiveSortOrder);
+        void getCurrentVulnerabilityCount(...filters, pageSize, sortField, sortOrder, includeInstallerFindings)
+          .then((count) => {
+            if (requestIdRef.current !== requestId) return;
+            setPaginatedResponse({
+              ...data,
+              totalElements: count.totalElements,
+              totalPages: count.totalPages,
+              hasNext: data.currentPage < count.totalPages - 1,
+              totalExact: count.exact,
+            });
+          })
+          .catch((err) => {
+            if (requestIdRef.current === requestId) console.warn("Failed to fetch exact vulnerability count:", err);
+          });
       }
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to fetch vulnerabilities",
-      );
+      if (requestIdRef.current === requestId) {
+        setError(err instanceof Error ? err.message : "Failed to fetch vulnerabilities");
+      }
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchExactVulnerabilityCount = async (
-    requestKey: string,
-    backendSortField: string | undefined,
-    effectiveSortOrder: "asc" | "desc",
-  ) => {
-    countRequestKeyRef.current = requestKey;
-    try {
-      const count = await getCurrentVulnerabilityCount(
-        severityFilter || undefined,
-        debouncedSystemFilter || undefined,
-        exceptionFilter || undefined,
-        productFilter || undefined,
-        debouncedCveFilter || undefined,
-        adDomainFilter || undefined,
-        cloudAccountIdFilter || undefined,
-        pageSize,
-        backendSortField,
-        effectiveSortOrder,
-        includeInstallerFindings,
-      );
-      if (countRequestKeyRef.current !== requestKey) return;
-      setPaginatedResponse((current) => {
-        if (!current) return current;
-        return {
-          ...current,
-          totalElements: count.totalElements,
-          totalPages: count.totalPages,
-          hasNext: current.currentPage < count.totalPages - 1,
-          totalExact: count.exact,
-        };
-      });
-    } catch (err) {
-      console.warn("Failed to fetch exact vulnerability count:", err);
+      if (requestIdRef.current === requestId) setLoading(false);
     }
   };
 
@@ -352,7 +291,7 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
     adDomainFilter,
     cloudAccountIdFilter,
     includeInstallerFindings,
-  });
+  }, sortField, sortOrder);
 
   const handleCleanupDuplicates = async () => {
     try {
@@ -959,7 +898,7 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
             <select id="exceptionFilter" className="form-select" value={exceptionFilter}
               onChange={(e) => { setExceptionFilter(e.target.value); handleFilterChange(); }}>
               <option value="not_excepted">Not Excepted</option>
-              <option value="">All (incl. Excepted)</option>
+              <option value="all">All (incl. Excepted)</option>
               <option value="overdue">🔴 Overdue Only</option>
               <option value="excepted">🛡️ Excepted Only</option>
               <option value="ok">✅ OK Only</option>
@@ -1031,30 +970,25 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
           <div className="card h-100">
             <div className="card-body d-flex flex-column" style={{ minHeight: 0, overflow: "hidden" }}>
               <h5 className="card-title flex-shrink-0 mb-1">
-                Vulnerabilities ({totalCount}
+                Vulnerabilities ({paginatedResponse?.totalExact === false && "at least "}{totalCount}
                 {exceptionFilter === "not_excepted" && " not excepted"}
                 {exceptionFilter === "excepted" && " excepted"}
                 {exceptionFilter === "overdue" && " overdue"}
                 {exceptionFilter === "ok" && " ok"}
-                {exceptionFilter === "" && " total, incl. excepted"})
+                {exceptionFilter === "all" && " incl. excepted"})
               </h5>
-              {exceptionFilter === "not_excepted" && (
-                <details className="current-vulns__count-help text-muted small mb-1">
-                  <summary>About this count</summary>
-                  <p className="mb-1">
-                    Only systems last seen today (Europe/Berlin) are included.
-                    Excepted vulnerabilities are hidden by default. Inventory-wide views may
-                    include older systems and therefore show different totals. Sensor activity
-                    does not establish findings freshness. Legacy CrowdStrike findings remain
-                    visible until a verified synchronization establishes their enrollment; open
-                    a system to inspect its device, snapshot time and coverage.
-                  </p>
-                </details>
-              )}
+              <details className="current-vulns__count-help text-muted small mb-1">
+                <summary>About this count</summary>
+                <p className="mb-1">
+                  This count includes stored findings for systems you can access with a verified observation
+                  in the last 24 hours. It follows the selected filters. Exceptions and installer findings are
+                  hidden by default. Open a system to check its finding snapshot and coverage. Recent sensor
+                  contact confirms system activity, while the snapshot date shows when findings were collected.
+                </p>
+              </details>
               {sortedVulnerabilities.length === 0 ? (
                 <p className="text-muted">
-                  No vulnerabilities found. Upload vulnerability scan results to
-                  see them here.
+                  No stored vulnerabilities match these filters for your current systems.
                 </p>
               ) : (
                 <>
@@ -1153,15 +1087,19 @@ const CurrentVulnerabilitiesTable: React.FC<CurrentVulnerabilitiesTableProps> = 
                             >
                               {vuln.vulnerableProductVersions || "-"}
                             </td>
-                            <td>{vuln.ageInDays != null ? `${vuln.ageInDays} days` : "-"}</td>
                             <td>
-                              <OverdueStatusBadge
+                              {vuln.ageInDays != null ? `${vuln.ageInDays} days` : "Unknown"}
+                              <small className="d-block text-muted">First seen {vuln.firstSeenAt ? formatServerDate(vuln.firstSeenAt) : "unknown"}</small>
+                              <small className="d-block text-muted">Disclosed {vuln.cvePublishedDate ? `${formatServerDate(vuln.cvePublishedDate)} (${vuln.publicAgeInDays} days ago)` : "unknown"}</small>
+                            </td>
+                            <td>
+                              {vuln.ageInDays == null && !vuln.hasException ? "Unknown" : <OverdueStatusBadge
                                 status={vuln.overdueStatus || "OK"}
                                 daysOverdue={vuln.daysOverdue}
                                 ageInDays={vuln.ageInDays}
                                 exceptionReason={vuln.exceptionReason}
                                 exceptionEndDate={vuln.exceptionEndDate}
-                              />
+                              />}
                             </td>
                             <td>
                               {vuln.hasException ? (

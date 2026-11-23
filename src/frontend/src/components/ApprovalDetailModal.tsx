@@ -279,6 +279,11 @@ const ApprovalDetailModal: React.FC<ApprovalDetailModalProps> = ({
                             assetId={request.assetId}
                             assetName={request.assetName}
                           />
+                          {request.scope === 'IP' && request.scopeValue && (
+                            <div className="mt-1">
+                              <strong>Requested IP:</strong> <code className="text-break">{request.scopeValue}</code>
+                            </div>
+                          )}
                           {request.scope === 'AWS_ACCOUNT' && request.scopeValue && (
                             <div className="mt-1 small text-muted">
                               <i className="bi bi-cloud me-1"></i>

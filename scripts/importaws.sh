@@ -13,18 +13,6 @@ secman_aws_export_envfile
 
 cd "${PROJECT_ROOT}"
 
-# Override DB_CONNECT to the local-loopback default the original script uses
-# when running near the database. If the secret carried its own DB_CONNECT,
-# secman_aws_export_envfile already exported it; we only set the fallback when
-# it's still empty.
-export DB_CONNECT="${DB_CONNECT:-jdbc:mariadb://127.0.0.1:3306/secman?useSsl=true}"
-
-# The CLI reads SECMAN_ADMIN_NAME / SECMAN_ADMIN_PASS from the environment
-# populated by secman_aws_export_envfile. Keep credentials out of process args.
-exec java -Xmx4g -Xms2g -jar "${CLI_JAR}" \
-  query servers \
-  --device-type SERVER_FAMILY \
-  --severity CRITICAL,HIGH \
-  --min-days-open 1 \
-  --save \
-  --last-seen-days 30
+# Use the same import arguments after AWS has supplied the environment.
+export SECMAN_IMPORT_ENV_READY=1
+exec bash "$PROJECT_ROOT/scripts/import.sh" "$@"

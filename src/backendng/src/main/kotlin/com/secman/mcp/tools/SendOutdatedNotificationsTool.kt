@@ -29,7 +29,7 @@ class SendOutdatedNotificationsTool(
 ) : McpTool {
 
     override val name = "send_outdated_notifications"
-    override val description = "Send outdated-asset reminders for assets seen by Falcon within the last 72 hours (ADMIN only, requires User Delegation)"
+    override val description = "Send outdated-asset reminders for assets seen by Falcon within the last 24 hours (ADMIN only, requires User Delegation)"
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(

@@ -125,7 +125,7 @@ class AssetOverviewControllerTest : BaseIntegrationTest() {
         asset.crowdStrikeAgentSeenAt = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusHours(48)
         assetRepository.update(asset)
         assertThat((search(activity = "recent")["matchingCount"] as Number).toLong()).isZero()
-        assertThat((search(activity = "older")["matchingCount"] as Number).toLong()).isEqualTo(1)
+        assertThat((search(activity = "older")["matchingCount"] as Number).toLong()).isZero()
     }
 
 }

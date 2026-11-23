@@ -8,6 +8,7 @@ import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.client.BlockingHttpClient
 import io.micronaut.http.client.HttpClient
+import io.micronaut.http.client.exceptions.HttpClientException
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -769,6 +770,30 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
     }
 
     @Test
+    fun `live lookup resolves shared remediation IDs and keeps findings if the lookup fails`() {
+        val app = mapOf("product_name_version" to "Example package 1.0",
+            "remediation" to mapOf("ids" to listOf("update-one")))
+        val rows = listOf("one", "two").map { vulnResource(it) + ("apps" to listOf(app)) }
+        every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } returns
+            HttpResponse.ok(spotlightPage(rows, null, rows.size))
+        val requests = mutableListOf<HttpRequest<Any>>()
+        val action = "Update the example package"
+        every { blockingClient.retrieve(capture(requests), Map::class.java) } returns mapOf(
+            "resources" to listOf(mapOf("id" to "update-one", "action" to action))
+        )
+        val found = client.querySpotlightApi("device-1", "server01", token)
+        assertThat(found).hasSize(2).allMatch { it.remediation?.singleOrNull()?.action == action }
+        val request = requests.single()
+        assertThat(request.uri.path).isEqualTo("/spotlight/entities/remediations/v2")
+        assertThat(request.parameters.getAll("ids")).containsExactly("update-one")
+
+        every { blockingClient.retrieve(any<HttpRequest<Any>>(), Map::class.java) } throws
+            HttpClientException("fixture lookup failed")
+        assertThat(client.querySpotlightApi("device-1", "server01", token))
+            .hasSize(2).allMatch { it.remediation == null && it.noVendorFix == null }
+    }
+
+    @Test
     fun `nameless cloud winner uses its instance identity and retires its named sibling`() {
         val requests = mutableListOf<HttpRequest<Any>>()
         every { blockingClient.exchange(capture(requests), Map::class.java) } answers {
@@ -786,16 +811,16 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
             }
         }
         val devices = mutableListOf<QueriedHost>()
-        client.queryServersWithFiltersStreaming("SERVER", "HIGH", 0, config, 100, 0, 100) {
+        client.queryServersWithFiltersStreaming("SERVER", "ALL", 0, config, 100, 0, 100) {
             devices.addAll(it.devices)
         }
         val winner = devices.single()
         assertThat(winner.hostname).isEqualTo("i-shared")
         assertThat(winner.deviceSelection!!.selected.aid).isEqualTo("winner")
-        assertThat(winner.deviceSelection!!.superseded.single().aid).isEqualTo("old")
+        assertThat(winner.deviceSelection.superseded.single().aid).isEqualTo("old")
         val spotlight = requests.filter { it.uri.path.contains("/spotlight/") }
         assertThat(spotlight).hasSize(1)
-        assertThat(spotlight.single().parameters.get("filter")).contains("winner").doesNotContain("old")
+        assertThat(spotlight.single().parameters.get("filter")).contains("winner").doesNotContain("old", "cve.severity")
     }
 
     @Test

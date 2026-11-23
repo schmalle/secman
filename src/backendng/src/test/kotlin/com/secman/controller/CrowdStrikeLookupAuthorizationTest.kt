@@ -56,7 +56,7 @@ class CrowdStrikeLookupAuthorizationTest {
     @Test
     fun `cached and live lookups reject stale unknown and future observation`() {
         for (source in listOf("DATABASE", "LIVE_API")) {
-            for (observed in listOf(null, java.time.Instant.now().minusSeconds(72 * 3600 + 60L), java.time.Instant.now().plusSeconds(3600))) {
+            for (observed in listOf(null, java.time.Instant.now().minusSeconds(24 * 3600 + 60L), java.time.Instant.now().plusSeconds(3600))) {
                 stub(source = source, observed = observed)
                 assertThat(controller.queryAuthorizedVulnerabilities(asset.name, assetId = 7, authentication = viewer).code()).isEqualTo(404)
             }

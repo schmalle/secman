@@ -11,7 +11,7 @@ plugins {
 version = "0.1"
 group = "com.secman"
 
-val kotlinVersion = project.properties.get("kotlinVersion")
+val kotlinVersion = property("kotlinVersion")
 repositories {
     mavenCentral()
 	google()
@@ -37,12 +37,12 @@ dependencies {
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:4.0.0")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:8.1.1")
-	runtimeOnly("org.flywaydb:flyway-core:13.12.1")
-	runtimeOnly("org.flywaydb:flyway-mysql:13.12.1")
+	runtimeOnly("org.flywaydb:flyway-core:13.12.2")
+	runtimeOnly("org.flywaydb:flyway-mysql:13.12.2")
 
     // Security
-    implementation("io.micronaut.security:micronaut-security-jwt:5.5.1")
-    implementation("io.micronaut.security:micronaut-security-oauth2:5.5.1")
+    implementation("io.micronaut.security:micronaut-security-jwt:5.5.2")
+    implementation("io.micronaut.security:micronaut-security-oauth2:5.5.2")
 
     // WebAuthn/Passkey support
     implementation("com.webauthn4j:webauthn4j-core:0.32.0.RELEASE")
@@ -53,7 +53,7 @@ dependencies {
     implementation("jakarta.validation:jakarta.validation-api")
 
     // XSS Prevention - Feature 047
-    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20261107.1")
+    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20261110.1")
 
     // Email
     implementation("io.micronaut.email:micronaut-email-javamail:3.2.0")
@@ -61,7 +61,7 @@ dependencies {
 
     // Email templates (Thymeleaf) - Feature 035
     implementation("io.micronaut.views:micronaut-views-thymeleaf")
-    implementation("org.thymeleaf:thymeleaf:3.1.6.RELEASE")
+    implementation("org.thymeleaf:thymeleaf:3.1.7.RELEASE")
 
     constraints {
         implementation("ognl:ognl:3.4.17") {
@@ -88,12 +88,12 @@ dependencies {
     // time module with it, so every plain ObjectMapper lost Instant support. Without it
     // findAndRegisterModules() finds nothing and Instant fields fail to serialize.
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.23.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.13.0")
     implementation("io.micronaut.reactor:micronaut-reactor")
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.6.6")
+    runtimeOnly("ch.qos.logback:logback-classic:1.6.7")
     // Bridge Log4j to Logback (required for Apache POI)
     runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.26.1")
     // Logstash encoder for JSON logging (Feature 046)
@@ -137,7 +137,7 @@ dependencies {
     testImplementation("io.mockk:mockk:1.14.12")
     // Tests assert on log output via Logback's ListAppender; main code stays
     // slf4j-only (logback-classic is runtimeOnly above).
-    testImplementation("ch.qos.logback:logback-classic:1.6.6")
+    testImplementation("ch.qos.logback:logback-classic:1.6.7")
     testImplementation("org.assertj:assertj-core:3.27.7")
 }
 

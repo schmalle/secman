@@ -1,10 +1,13 @@
 package com.secman.controller
 
+import com.secman.crowdstrike.dto.DeviceType
+import com.secman.service.CrowdStrikePostImportCleanup
 import com.secman.service.CrowdStrikeImportRunLease
 import com.secman.service.ImportCompletionNotifier
 import com.secman.service.MaterializedViewRefreshService
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
+import io.micronaut.http.annotation.Body
 import io.micronaut.http.annotation.Controller
 import io.micronaut.http.annotation.Post
 import io.micronaut.http.annotation.QueryValue
@@ -21,7 +24,8 @@ import io.micronaut.security.authentication.Authentication
 open class CrowdStrikeImportRunController(
     private val lease: CrowdStrikeImportRunLease,
     private val notifier: ImportCompletionNotifier,
-    private val refreshService: MaterializedViewRefreshService
+    private val refreshService: MaterializedViewRefreshService,
+    private val cleanup: CrowdStrikePostImportCleanup
 ) {
     private val log = LoggerFactory.getLogger(CrowdStrikeImportRunController::class.java)
     private fun actor(authentication: Authentication) = authentication.name.replace("\r", "").replace("\n", "")
@@ -32,7 +36,7 @@ open class CrowdStrikeImportRunController(
         val id = lease.start(authentication.name)
         notifier.beginExplicitRun(id)
         log.info("CrowdStrike import run started: runId={}, actor={}", id, actor(authentication))
-        HttpResponse.ok(mapOf("runId" to id))
+        HttpResponse.ok(mapOf("runId" to id, "postImportCleanup" to (cleanup.enabled && "ADMIN" in authentication.roles)))
     } catch (e: IllegalStateException) {
         val body = mutableMapOf("error" to "An import or cleanup is already active")
         lease.activeExpiresAt()?.let { body["expiresAt"] = it.toString() }
@@ -50,16 +54,49 @@ open class CrowdStrikeImportRunController(
             .body(mapOf("error" to "Import run is unavailable"))
     }
 
+    @Post("/{runId}/contacts")
+    @Secured("ADMIN")
+    open fun stage(@PathVariable runId: String, @Body contacts: Map<String, java.time.Instant>,
+                   authentication: Authentication): HttpResponse<*> = try {
+        check(cleanup.enabled)
+        lease.stageContacts(runId, authentication.name, contacts)
+        HttpResponse.ok(mapOf("status" to "RECORDED"))
+    } catch (e: IllegalArgumentException) {
+        HttpResponse.badRequest(mapOf("error" to "Invalid contact evidence"))
+    } catch (e: IllegalStateException) {
+        HttpResponse.status<Any>(HttpStatus.CONFLICT)
+    }
+
     @Post("/{runId}/finish")
     @Synchronized
     open fun finish(@PathVariable runId: String, @QueryValue(defaultValue = "false") successful: Boolean,
-                    authentication: Authentication): HttpResponse<*> = try {
+                    authentication: Authentication, @QueryValue scope: DeviceType? = null,
+                    @QueryValue(defaultValue = "-1") contactCount: Int = -1): HttpResponse<*> = try {
         lease.finishedStatus(runId, authentication.name)?.let { status ->
             return HttpResponse.ok(mapOf("status" to status))
         }
         lease.requireOwner(runId, authentication.name)
         notifier.finishExplicitRun(runId, successful)
-        lease.finish(runId, authentication.name, successful)
+        if (cleanup.enabled) {
+            val eligible = successful && "ADMIN" in authentication.roles && scope != null
+            val contacts = if (eligible) lease.finishWithCoverage(runId, authentication.name, contactCount) else {
+                lease.finish(runId, authentication.name, successful)
+                null
+            }
+            val actor = "import:$runId:${scope?.name ?: "unspecified"}"
+            if (contacts == null) cleanup.recordSkip(actor, when {
+                !successful -> "Import failed, was cancelled, or was a dry run"
+                "ADMIN" !in authentication.roles -> "Import actor lacks asset cleanup permission"
+                else -> "Incomplete device coverage or another import write is active"
+            }) else {
+                try {
+                    cleanup.runReserved(actor, contacts)
+                } catch (e: Exception) {
+                    lease.finishCleanup()
+                    throw e
+                }
+            }
+        } else lease.finish(runId, authentication.name, successful)
         log.info("CrowdStrike import run finished: runId={}, actor={}, successful={}", runId, actor(authentication), successful)
         refreshService.requestDeferredRefresh("CrowdStrike import run ended")
         HttpResponse.ok(mapOf("status" to if (successful) "COMPLETED" else "FAILED"))

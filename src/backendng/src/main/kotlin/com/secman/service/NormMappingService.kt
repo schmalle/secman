@@ -326,6 +326,14 @@ Rules:
         }
     }
 
+    /** Fetch in bounded batches, then retain the caller's order and duplicate IDs. */
+    internal fun loadRequestedUnmappedRequirements(ids: List<Long>): List<Requirement> {
+        val byId = ids.distinct().chunked(500)
+            .flatMap { requirementRepository.findByIdIn(it) }
+            .associateBy { it.id }
+        return ids.mapNotNull { byId[it] }.filter { it.norms.isEmpty() }
+    }
+
     /**
      * Main orchestration method: Get AI suggestions for unmapped requirements
      * Processes requirements in batches to avoid API timeout
@@ -336,9 +344,7 @@ Rules:
 
         // Get requirements to analyze
         val requirements = if (request?.requirementIds != null && request.requirementIds.isNotEmpty()) {
-            request.requirementIds.mapNotNull { id ->
-                requirementRepository.findById(id).orElse(null)
-            }.filter { it.norms.isEmpty() }
+            loadRequestedUnmappedRequirements(request.requirementIds)
         } else {
             getUnmappedRequirements()
         }
@@ -446,9 +452,7 @@ Rules:
 
         // Get requirements to analyze
         val requirements = if (request?.requirementIds != null && request.requirementIds.isNotEmpty()) {
-            request.requirementIds.mapNotNull { id ->
-                requirementRepository.findById(id).orElse(null)
-            }.filter { it.norms.isEmpty() }
+            loadRequestedUnmappedRequirements(request.requirementIds)
         } else {
             getUnmappedRequirements()
         }

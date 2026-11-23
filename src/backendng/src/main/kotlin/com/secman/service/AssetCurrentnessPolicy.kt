@@ -8,6 +8,8 @@ import java.time.ZoneOffset
 
 /** Actual observation evidence, never inventory processing time. */
 object AssetCurrentnessPolicy {
+    const val WINDOW_HOURS = 24L
+
     fun observedAt(asset: Asset): LocalDateTime? =
         if (asset.crowdStrikeManaged || asset.crowdStrikeLastImportedAt != null || asset.crowdStrikeHostname != null ||
             asset.crowdStrikeAgentSeenAt != null || asset.owner == AssetOwners.CROWDSTRIKE_IMPORT)
@@ -20,6 +22,6 @@ object AssetCurrentnessPolicy {
     fun includes(seenAt: LocalDateTime?, clock: Clock = Clock.systemUTC()): Boolean {
         val now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC)
         val seen = seenAt ?: return false
-        return !seen.isBefore(now.minusHours(72)) && !seen.isAfter(now)
+        return !seen.isBefore(now.minusHours(WINDOW_HOURS)) && !seen.isAfter(now)
     }
 }

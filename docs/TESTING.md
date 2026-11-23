@@ -7,8 +7,8 @@ Integration tests run **unconditionally** — they *fail*, not skip, when no tes
 Stack:
 ```
 junit-jupiter 6.1.3, junit-platform-launcher 6.1.3,
-micronaut-test-junit5 5.1.1,
-mockk 1.14.11,
+micronaut-test-junit5 5.2.0,
+mockk 1.14.12,
 assertj 3.27.7
 ```
 
@@ -289,4 +289,4 @@ secrets, and no `pass-cli` — only Node ≥ 22 for `--experimental-strip-types`
 
 ## Current asset visibility
 
-Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.
+See [Current asset inventory](CURRENT_ASSETS.md) for observation sources, cache expiry, and the boundary between current and stored records.

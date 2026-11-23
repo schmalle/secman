@@ -11,6 +11,19 @@ class CrowdStrikeImportSessionTest {
     private val endpoint = "https://secman.example/api/crowdstrike/servers/import/runs"
 
     @Test
+    fun `partial import discards staged contacts and never requests cleanup on finish`() {
+        every { client.postMapWithStatus(endpoint, any(), any()) } returns
+            (200 to mapOf("runId" to "run-1", "postImportCleanup" to true))
+        every { client.postMap(any(), any(), any()) } returns mapOf("status" to "ok")
+        CrowdStrikeImportSession(client, "https://secman.example", "token") { "renewed" }.use {
+            it.stageCleanup(com.secman.crowdstrike.dto.DeviceType.SERVER, mapOf("aid" to java.time.Instant.EPOCH))
+            it.complete(false)
+        }
+        verify(exactly = 1) { client.postMap("$endpoint/run-1/finish?successful=false", any(), any()) }
+        verify(exactly = 0) { client.postMap(match { "contactCount=" in it }, any(), any()) }
+    }
+
+    @Test
     fun `active import conflict reports lease expiry and retry guidance`() {
         every { client.postMapWithStatus(endpoint, any(), any()) } returns
             (409 to mapOf("error" to "An import run is already active", "expiresAt" to "2026-10-13T05:43:27Z"))

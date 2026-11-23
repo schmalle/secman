@@ -10,34 +10,48 @@ Security requirement, vulnerability and risk-assessment platform.
 ## What it does
 
 - Security requirement lifecycle (versioned releases: PREPARATION → ALIGNMENT → ACTIVE → ARCHIVED), Excel/Word/CSV export, automated translation (OpenRouter, 10 languages).
-- Vulnerability management: CrowdStrike Falcon import, GitHub App Dependabot alert tracking with 30-day non-decrease owner alerts, exception-request workflow, statistics, heatmap, materialized view for fast outdated-asset queries (<2s @ 10k assets).
-- Asset inventory: Nmap/Masscan import, AD/cloud metadata, criticality, workgroup-scoped access.
+- Vulnerability management: CrowdStrike Falcon import and remediation guidance, GitHub App Dependabot alert tracking with 30-day non-decrease owner alerts, exception requests, statistics, heatmap, and outdated-asset reporting. CrowdStrike findings use first detection on the affected system as their SLA start. [CrowdStrike import guide](docs/CROWDSTRIKE_IMPORT.md)
+- Asset inventory: Nmap/Masscan import, AD/cloud metadata, criticality, and workgroup-scoped access. Current inventory requires a verified observation within the last 24 hours (UTC). Falcon-managed assets use the last sensor contact. [Current asset visibility](docs/CURRENT_ASSETS.md)
 - Risk register, demand classification, compliance-framework mapping (SOC2, ISO 27001, NIST), optional AI-assisted pre-fill of compliance answers (OpenRouter LLM, confidence scoring + citations, human review required).
 - AWS account onboarding: imports requesting notifications use a saved welcome-email (default) or risk-assessment policy. The welcome subject and body are editable in the web UI; advanced guided questionnaires remain supported.
 - Risk assessments support SaaS and COTS solution names, searchable existing assessors/respondents, and email-only respondents who need no SecMan account.
 - AuthN: local (BCrypt) + OAuth2/OIDC + Passkey/WebAuthn + optional MFA.
 - AuthZ: 10-role RBAC (including the additive BETA eligibility role) with asset access through workgroup, AWS account, AD domain, and sharing grants.
-- AI integration: 90+ tool MCP server (Streamable HTTP) for Claude Desktop/Code, Paperclip, and other MCP clients, with mandatory user delegation.
+- AI integration: MCP server (Streamable HTTP) for Claude Desktop/Code, Paperclip, and other MCP clients, with mandatory user delegation.
 - Email: SMTP/SES with retry + audit, Thymeleaf HTML templates, escalation tiers.
+- Inactive-user cleanup: an opt-in nightly job warns users before deletion, records each run, and applies a safety brake; dry-run is the default.
 
 ## Stack
 
-Kotlin 2.4.21 / Java 25 · Micronaut 5.2.5 · Hibernate JPA · Astro 7.4.7 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.9.0 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2 · Go 1.24 (mobile relay).
+Kotlin 2.4.21 / Java 25 · Micronaut 5.2.5 · Hibernate JPA · Astro 7.4.13 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.9.1 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2 · Go 1.24 (mobile relay).
 
 ## Quick Start (development)
 
-Prereqs: Java 25, Node 22.23.4+, MariaDB 11.4+, Git.
+Install a Java 25 JDK, Node.js 22.23.4+ with npm, MariaDB 11.4+ with the `mysql` client command, Git, OpenSSL, and Proton Pass CLI (`pass-cli`). Start MariaDB and authenticate `pass-cli`. See the [installation guide](INSTALL.md) for platform-specific setup.
+
+The dev scripts read fields from the `Test` vault's `SECMAN` item. For a local stack, set `SECMAN_BACKEND_BASE_URL` to `http://localhost:8080` and `DB_CONNECT` to `jdbc:mariadb://localhost:3306/secman`. An exported `DB_CONNECT` in the backend terminal takes precedence. Configure the remaining fields referenced by the start scripts using the [Proton Pass guide](docs/PASS_CLI.md).
 
 ```bash
 git clone https://github.com/schmalle/secman.git && cd secman
-cd scripts/install/db && ./installdb.sh && cd -    # creates DB 'secman' / user 'secman'/'CHANGEME'
-./scripts/startbackenddev.sh                       # canonical dev start (pass-cli wraps gradle)
-cd src/frontend && npm install && cd - && ./scripts/startfrontenddev.sh   # canonical dev start, http://localhost:4321
+(cd scripts/install/db && ./installdb.sh)  # Creates the local secman database and user.
+(cd src/frontend && npm ci)
 ```
 
-On first startup the backend auto-creates `admin` with a 20-char random password printed once to stdout (look for `DEFAULT ADMIN USER CREATED`). Copy it immediately. Change it after first login.
+From the repository root, start the backend in one terminal. The cookie setting below is for local HTTP development.
 
-> **Production deploys** must replace the default DB password and generate `JWT_SECRET`, `SECMAN_ENCRYPTION_PASSWORD`, `SECMAN_ENCRYPTION_SALT`. See `docs/DEPLOYMENT.md`.
+```bash
+SECMAN_AUTH_COOKIE_SECURE=false ./scripts/startbackenddev.sh
+```
+
+From the repository root in a second terminal, start the frontend.
+
+```bash
+./scripts/startfrontenddev.sh
+```
+
+Open <http://localhost:4321>. On startup with an empty users table, the backend creates `admin` and prints a generated 20-character password to stdout in the `DEFAULT ADMIN USER CREATED` banner. Change the password after signing in.
+
+> **Production deployments** require a unique database password, `JWT_SECRET`, `SECMAN_ENCRYPTION_PASSWORD`, and `SECMAN_ENCRYPTION_SALT`. Follow the [deployment guide](docs/DEPLOYMENT.md).
 
 ## Layout
 
@@ -46,6 +60,7 @@ src/
   backendng/   Kotlin/Micronaut: domain → repository → service → controller, mcp/, dto/, filter/
   frontend/   Astro pages + React islands, services/ (Axios)
   cli/        Picocli commands + service/
+  shared/     Kotlin code shared by the backend and CLI
   adread/     Python AD workgroup import + AWS asset synchronization
   relay/      Go: zero-dependency DMZ relay for the mobile app
   clinotify/  stdlib-only Python monitoring helpers
@@ -57,141 +72,54 @@ specs/        historical implementation plans (frozen)
 ## Common commands
 
 ```bash
-# Build & run
+# Full Gradle build with a disposable database
 ./scripts/test/run-isolated-e2e.sh --database-only -- ./gradlew build  # full build incl. tests
-./scripts/startbackenddev.sh            # backend dev (port 8080)
-./scripts/startfrontenddev.sh           # frontend dev (port 4321)
 
-# CLI (build once, then use wrapper)
+# CLI (build once, then use the wrapper)
 ./gradlew :cli:shadowJar
 ./scripts/secman help
-./scripts/secman query servers --dry-run
+./scripts/secman query servers --device-type SERVER_FAMILY --last-seen-days 1 --dry-run
 ./scripts/secman send-notifications --dry-run --verbose
-./scripts/secman manage-user-mappings list --send-email
-./scripts/secman add-vulnerability --hostname host --cve CVE-2024-1234 --criticality HIGH
+./scripts/secman manage-user-mappings list --send-email --dry-run
 ./scripts/secman export-requirements --format xlsx
 
 # Python importer: preview AWS asset assignments from canonical workgroup owners
 ./scripts/sync-workgroup-assets.sh --dry-run
-# Production alternative (set SECMAN_AWS_SECRET_ID and AWS_REGION first):
+# AWS Secrets Manager variant (set SECMAN_AWS_SECRET_ID and the AWS region)
 ./scripts/sync-workgroup-assets-aws.sh --dry-run
 
 # Tests
-./scripts/runbackendtests.sh --tests "*ServiceTest*"      # unit
+./scripts/runbackendtests.sh --tests "*ServiceTest*"      # focused service tests
 ./scripts/runbackendtests.sh --tests "*IntegrationTest*"  # integration (disposable MariaDB, see docs/TESTING.md)
 ./gradlew :cli:test
-./tests/e2e/run-e2e.sh                                 # Playwright (pass-cli secrets)
-./scripts/test/test-e2e-*.sh                           # feature E2E drivers (see docs/SKILLS.md)
+(cd src/frontend && npm test)
 ```
 
-## API reference
+See the [CLI reference](docs/CLI.md) for command options, the [workgroup asset sync guide](docs/WORKGROUP_ASSET_SYNC.md) for importer setup, and the [testing guide](docs/TESTING.md) for full-stack and feature tests with the isolated runner.
 
-Most endpoints under `/api/*` require authentication unless noted. Browser requests, including SSE EventSource connections, use the HttpOnly `secman_auth` cookie. External clients can use `Authorization: Bearer <jwt>`.
+## API and configuration
 
-| Endpoint | Method | Roles |
-|---|---|---|
-| `/api/auth/login` | POST | public |
-| `/api/requirements`, `.../export/xlsx` | GET | auth |
-| `/api/releases`, `.../compare`, `.../{id}` | GET/POST/DELETE | auth (write: ADMIN/REQADMIN; status: ADMIN/RELEASE_MANAGER) |
-| `/api/assets`, `.../bulk`, `.../export` | GET/POST/DELETE | auth (bulk: ADMIN) |
-| `/api/vulnerabilities/current`, `.../cli-add` | GET/POST | ADMIN, VULN |
-| `/api/vulnerability-exception-requests[/pending/count]`, `/api/vulnerability-exceptions` | various | auth |
-| `/api/outdated-assets`, `/api/materialized-view-refresh/trigger` | GET/POST | auth (refresh: ADMIN) |
-| `/api/notification-preferences`, `/api/notification-logs` | GET/PUT | auth (logs: ADMIN) |
-| `/api/account-vulns`, `/api/wg-vulns`, `/api/domain-vulns` | GET | auth |
-| `/api/workgroups[/{id}/{users,assets,aws-accounts}]` | GET/POST/DELETE | ADMIN |
-| `/api/aws-account-sharing[/{id}]` | GET/POST/DELETE | ADMIN |
-| `/api/vulnerability-heatmap[/refresh]`, `/api/external/vulnerability-heatmap` | GET/POST | auth/API key |
-| `/api/import/upload-{xlsx,nmap-xml,vulnerability-xlsx,user-mappings[-csv],assets-xlsx}` | POST | ADMIN |
-| `/api/user-mappings[/...]` | GET/POST/PUT/DELETE | ADMIN |
-| `/api/user-mappings/bulk/jobs`, `.../bulk/jobs/{jobId}/status` | POST/GET | ADMIN (background bulk import; status visible to its starter) |
-| `/api/identity-providers[/{id}[/test]]` | GET/POST/PUT/DELETE | ADMIN |
-| `/api/maintenance-banners[/active|/{id}]` | GET/POST/PUT/DELETE | ADMIN (active: public) |
-| `/api/users/profile[/change-password,mfa-{status,toggle}]` | GET/PUT | auth |
-| `/api/user-dashboard` | GET | auth |
-| `/api/github-config[/{id}[/test]]`, `/api/github/import`, `.../repositories/{id}/alerts` | GET/POST/PUT/DELETE | ADMIN (import: ADMIN/VULN) |
-| `/api/risk-assessments/{id}/ai-suggestions/...` | GET/POST/DELETE | ADMIN/SECCHAMPION |
-| `/api/account-onboarding/{questions,rules,rules/coverage,rules/preview,simulate}` | GET/POST/PUT/DELETE | ADMIN/SECCHAMPION |
-| `/api/account-onboarding/settings` | GET/PUT | ADMIN/SECCHAMPION read; ADMIN write |
-| `/api/public/account-onboarding/{token}` | GET/POST | public (single-use token) |
-| `/oauth/{authorize,callback}` | GET | public |
-| `/mcp` | POST | MCP API key + delegation |
-| `/health`, `/memory` | GET | public |
+Browser sessions use the HttpOnly `secman_auth` cookie. See the
+[API map](CLAUDE.md#api-endpoints-concise) for endpoint families and the
+[access guide](docs/USER_ACCESS_OVERVIEW.md) for object-level grants.
 
-Full reference: `CLAUDE.md`.
+For MCP clients, follow [client setup](docs/MCP_CLIENT_SETUP.md). The
+[MCP reference](docs/MCP.md) lists tools and permissions. Tool discovery and
+calls require both the API key and a delegated user email.
+Users can create a personal key from **Profile → Personal MCP keys** for read-only access to their visible inventory and AWS accounts. [Personal MCP keys](docs/MCP.md#personal-inventory-keys)
 
-## MCP integration (AI assistants)
-
-Setup instructions for Cursor, Codex, Claude Code, Claude web, and Claude
-Desktop are in [`docs/MCP_CLIENT_SETUP.md`](docs/MCP_CLIENT_SETUP.md). The
-guide covers the required API-key and delegated-user headers, Proton Pass,
-least-privilege configuration, verification, and client-specific limitations.
-
-`X-MCP-User-Email` is **required** for all `tools/list` and `tools/call`.
-Effective permissions = intersection of API-key permissions ∩ delegated user's
-role-implied permissions. See [`docs/MCP.md`](docs/MCP.md) for the complete tool
-and permission reference.
-
-## Configuration
-
-Backend reads `src/backendng/src/main/resources/application.yml` and env vars. Minimum required for production:
-
-```bash
-DB_CONNECT=jdbc:mariadb://localhost:3306/secman
-DB_PASSWORD=...
-JWT_SECRET=$(openssl rand -base64 32)
-SECMAN_ENCRYPTION_PASSWORD=$(openssl rand -hex 32)
-SECMAN_ENCRYPTION_SALT=$(openssl rand -hex 8)
-SECMAN_BACKEND_URL=https://api.example.com
-FRONTEND_URL=https://secman.example.com
-```
-
-Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings): `docs/ENVIRONMENT.md`.
+Use the [environment reference](docs/ENVIRONMENT.md) for configuration
+and the [deployment guide](docs/DEPLOYMENT.md) for production setup.
 
 ## Documentation
 
-| Document | What's in it |
-|---|---|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layered architecture, data model, design patterns |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Linux production: nginx, systemd, SSL, hardening |
-| [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) | All env vars (backend, frontend, CLI) |
-| [docs/CLI.md](docs/CLI.md) | CLI commands, cron, S3 ops |
-| [docs/ADREAD.md](docs/ADREAD.md) | Python AD group/member import and AWS asset synchronization |
-| [docs/WORKGROUP_ASSET_SYNC.md](docs/WORKGROUP_ASSET_SYNC.md) | Owner-email → AWS account → full workgroup asset replacement and dry-run |
-| [docs/MCP.md](docs/MCP.md) | MCP tools, API keys, delegation, troubleshooting |
-| [docs/MCP_RISK_ASSESSMENT_LIFECYCLE.md](docs/MCP_RISK_ASSESSMENT_LIFECYCLE.md) | AWS-account assessment REST/UI/MCP contract, Paperclip calls, Proton Pass script, E2E and cleanup |
-| [docs/MCP_STATISTICS.md](docs/MCP_STATISTICS.md) | Admin, delegated security, and risk-assessment aggregate MCP tools for Paperclip |
-| [docs/MCP_REQUIREMENT_MANAGEMENT.md](docs/MCP_REQUIREMENT_MANAGEMENT.md) | Requirement and use-case CRUD, exact assignment semantics, and Paperclip examples |
-| [docs/PAPERCLIP.md](docs/PAPERCLIP.md) | Paperclip goals/issues/agents with asset-scoped SecMan MCP reads |
-| [docs/PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md](docs/PAPERCLIP_RISK_ASSESSMENT_AUTOMATION.md) | Paperclip company, agent, heartbeat, reminder, respondent, and assessor blueprint |
-| [docs/INTEGRATION_RESULTS.md](docs/INTEGRATION_RESULTS.md) | Shared Visual/Web/GitHub checker contract and lifecycle |
-| [docs/CROWDSTRIKE_IMPORT.md](docs/CROWDSTRIKE_IMPORT.md) | Transactional-replace pattern, JPA cascade trap |
-| [docs/GITHUB_REPOS.md](docs/GITHUB_REPOS.md) | GitHub App vulnerability import, Dependabot alerts, owner alerting |
-| [docs/AI_RISK_ASSESSMENT.md](docs/AI_RISK_ASSESSMENT.md) | AI-assisted risk-assessment answer pre-fill |
-| [docs/AWS_ACCOUNT_RISK_ASSESSMENT.md](docs/AWS_ACCOUNT_RISK_ASSESSMENT.md) | Auto risk assessment for newly discovered AWS accounts |
-| [docs/RISK_ASSESSMENT_SETUP.md](docs/RISK_ASSESSMENT_SETUP.md) | SaaS/COTS, external respondents, saved onboarding policy, one-email test script |
-| [docs/ACCOUNT_ONBOARDING.md](docs/ACCOUNT_ONBOARDING.md) | Welcome mail, direct and guided assessments, the owner questionnaire |
-| [docs/EOL.md](docs/EOL.md) | End-of-life catalogue, matching, owner mail, repository ranking |
-| [docs/RELAY.md](docs/RELAY.md) | Zero-trust mobile relay (Go, DMZ) and the iOS app |
-| [docs/AWS.md](docs/AWS.md) | AWS account mapping, sharing and access rules |
-| [docs/AWS_ACCOUNT_WORKGROUP_LINKING.md](docs/AWS_ACCOUNT_WORKGROUP_LINKING.md) | Display-name workgroup linking during AWS account imports |
-| [docs/SKILLS.md](docs/SKILLS.md) | Which agent skill to use when, and what each one writes |
-| [docs/RACE_CONDITIONS.md](docs/RACE_CONDITIONS.md) | Known races and the guards that close them |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Full change history (archived from CLAUDE.md) |
-| [docs/TESTING.md](docs/TESTING.md) | JUnit/Mockk, external MariaDB, CLI and frontend test patterns |
-| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Symptom → diagnosis → fix |
-| [docs/S3_USER_MAPPING_IMPORT.md](docs/S3_USER_MAPPING_IMPORT.md) | `import-s3` / `download-s3` / `print-s3` / `list-bucket` |
-| [docs/E2E_EXCEPTION_WORKFLOW_TEST.md](docs/E2E_EXCEPTION_WORKFLOW_TEST.md) | Vuln-exception MCP E2E |
-| [docs/SKILLS_AND_AGENTS.md](docs/SKILLS_AND_AGENTS.md) | Claude Code skills + sub-agents wired to this repo |
-| [docs/PASS_CLI.md](docs/PASS_CLI.md) | `pass-cli` (Proton Pass) secret resolution |
-| [docker/README.md](docker/README.md) | Docker deployment: Compose (bundled DB or RDS), single-container, split 3-container (macOS), Kubernetes |
-| [docs/DOCKER_AWS.md](docs/DOCKER_AWS.md) | All-in-one AWS image: ECS/Fargate, Secrets Manager, RDS |
-| [docs/DOCKER_EKS.md](docs/DOCKER_EKS.md) | Kubernetes on AWS EKS/Fargate: manifests, ALB, External Secrets Operator, RDS |
-| [INSTALL.md](INSTALL.md) | Step-by-step install |
+- [Install and run SecMan](INSTALL.md)
+- [Browse operator, feature, and developer guides](docs/README.md)
+- [Review release history](docs/CHANGELOG.md)
 
 ## Workflow
 
-Branches: `dev` or `task/<name>` created from `dev`; never commit directly to `main` or `master`. Commits: `type(scope): description` (Conventional Commits). PRs need security review for AuthN/AuthZ/crypto/storage changes.
+Use `dev` or a `task/<name>` branch created from `dev`, and use `type(scope): description` for commit messages. Authentication, encryption, RBAC, and export changes require a security review before merge. [Repository guidelines](AGENTS.md)
 
 ## Roadmap (open)
 

@@ -48,6 +48,8 @@ class EncryptedStringConverter : AttributeConverter<String?, String?> {
                 log.warn("##########################################################################")
             }
 
+            // The replacement derives a different key and cannot read existing encrypted columns.
+            @Suppress("DEPRECATION")
             Encryptors.text(password ?: DEFAULT_PASSWORD, salt ?: DEFAULT_SALT)
         }
 

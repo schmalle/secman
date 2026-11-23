@@ -23,7 +23,7 @@ const DASHBOARD_CARD_TOGGLES: Array<{
   { field: 'showActiveReleases', label: 'Active Standard Releases' },
   { field: 'showRunningRiskAssessments', label: 'Running Risk Assessments' },
   { field: 'showLastCrowdStrikeImport', label: 'Last CrowdStrike Import' },
-  { field: 'showAwsCleanServerKpi', label: 'AWS Servers Without Old Vulnerabilities', requiresRole: ['ADMIN', 'SECCHAMPION'] },
+  { field: 'showAwsCleanServerKpi', label: 'EC2 Servers With Vulnerabilities Detected Over 30 Days Ago', requiresRole: ['ADMIN', 'SECCHAMPION'] },
   { field: 'showEdrCoverageKpi', label: 'EC2 Instances With CrowdStrike Installed', requiresRole: ['ADMIN', 'SECCHAMPION'] },
   { field: 'showAccountFindingAge', label: 'Longest-Open Findings By Account', requiresRole: 'ADMIN' }
 ];

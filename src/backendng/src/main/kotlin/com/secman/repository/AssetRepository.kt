@@ -337,16 +337,15 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     """)
     fun countAllAwsAssetsWithInstanceId(): Long
 
-    @io.micronaut.data.annotation.Query("SELECT COUNT(a) FROM Asset a WHERE " + AssetCurrentnessSql.JPQL + " AND a.cloudInstanceId IS NOT NULL AND TRIM(a.cloudInstanceId) <> ''")
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT COUNT(*)
+            FROM ${AssetCurrentnessSql.EC2_ASSETS} a
+        """,
+        nativeQuery = true
+    )
     fun countCurrentAwsAssetsWithInstanceId(): Long
 
-    @io.micronaut.data.annotation.Query("""
-        SELECT COUNT(a) FROM Asset a
-        WHERE ${AssetCurrentnessSql.JPQL} AND a.cloudInstanceId IS NOT NULL AND a.cloudInstanceId <> ''
-          AND a.crowdStrikeAgentSeenAt >= :seenTodayStart
-          AND a.crowdStrikeAgentSeenAt < :seenTodayEnd
-    """)
-    fun countAwsAssetsSeenToday(seenTodayStart: LocalDateTime, seenTodayEnd: LocalDateTime): Long
 
 
     /**
@@ -360,10 +359,8 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      */
     @io.micronaut.data.annotation.Query(
         value = """
-            SELECT COUNT(*) FROM ${AssetCurrentnessSql.ASSETS} a
-            WHERE a.cloud_instance_id IS NOT NULL
-              AND a.cloud_instance_id <> ''
-              AND EXISTS (
+            SELECT COUNT(*) FROM ${AssetCurrentnessSql.EC2_ASSETS} a
+            WHERE EXISTS (
                   SELECT 1 FROM vulnerability_exception e
                   WHERE e.kind = 'NO_EDR'
                     AND e.scope = 'ASSET'
@@ -385,10 +382,8 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      */
     @io.micronaut.data.annotation.Query(
         value = """
-            SELECT COUNT(*) FROM ${AssetCurrentnessSql.ASSETS} a
-            WHERE a.cloud_instance_id IS NOT NULL
-              AND a.cloud_instance_id <> ''
-              AND a.crowdstrike_agent_seen_at IS NOT NULL
+            SELECT COUNT(*) FROM ${AssetCurrentnessSql.EC2_ASSETS} a
+            WHERE a.crowdstrike_agent_seen_at IS NOT NULL
               AND a.crowdstrike_agent_seen_at >= :freshCutoff
               AND NOT EXISTS (
                   SELECT 1 FROM vulnerability_exception e
@@ -596,6 +591,13 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     """)
     fun findDistinctAdDomains(): List<String>
 
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT a.adDomain FROM Asset a
+        WHERE ${AssetCurrentnessSql.JPQL} AND a.id IN (:assetIds) AND a.adDomain <> ''
+        ORDER BY a.adDomain
+    """)
+    fun findDistinctAdDomainsForAssets(assetIds: Collection<Long>): List<String>
+
     /**
      * Find distinct AWS cloud account IDs from all assets
      * Used for filter dropdown population in Current Vulnerabilities view
@@ -610,6 +612,13 @@ interface AssetRepository : JpaRepository<Asset, Long> {
         ORDER BY a.cloudAccountId
     """)
     fun findDistinctCloudAccountIds(): List<String>
+
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT a.cloudAccountId FROM Asset a
+        WHERE ${AssetCurrentnessSql.JPQL} AND a.id IN (:assetIds) AND a.cloudAccountId <> ''
+        ORDER BY a.cloudAccountId
+    """)
+    fun findDistinctCloudAccountIdsForAssets(assetIds: Collection<Long>): List<String>
 
     /**
      * Find distinct OS versions from all assets

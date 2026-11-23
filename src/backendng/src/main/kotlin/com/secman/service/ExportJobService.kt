@@ -168,15 +168,18 @@ open class ExportJobService(
         val accessibleAssetIds = if (isAdmin) {
             emptySet()
         } else {
-            assetFilterService.getAccessibleAssets(authentication)
-                .mapNotNull { it.id }
-                .toSet()
+            assetFilterService.getAccessibleAssetIds(authentication)
         }
 
         // The filters ride this closure into the background thread. They are deliberately not
         // persisted on the job row: nothing ever re-runs a job from the DB (autoResetStaleJobs
         // and resetStuckJobs only mark stale jobs FAILED), so the in-memory hand-off is complete.
-        selfProvider.get().bindScope(jobId, authentication, if (isAdmin) "GLOBAL" else accessibleAssetIds.sorted().joinToString(","))
+        try {
+            selfProvider.get().bindScope(jobId, authentication, if (isAdmin) "GLOBAL" else accessibleAssetIds.sorted().joinToString(","))
+        } catch (exception: IllegalStateException) {
+            selfProvider.get().markJobAsFailed(jobId, "Export access changed before start")
+            throw exception
+        }
         executorService.submit {
             processExportInBackground(jobId, username, isAdmin, accessibleAssetIds, filters)
         }
@@ -645,7 +648,6 @@ open class ExportJobService(
         // Every filter comes from the caller so the workbook matches what the UI is showing.
         // These previously were hardcoded nulls, which is why an exported file ignored the
         // selected AD domain (and every other filter) and contained the whole accessible set.
-        // No sort/sortDir on purpose - see VulnerabilityExportFilters.
         return vulnerabilityService.getCurrentVulnerabilitiesOptimized(
             accessibleAssetIds = accessibleAssetIds,
             isAdmin = isAdmin,
@@ -658,6 +660,7 @@ open class ExportJobService(
             cloudAccountId = filters.cloudAccountId,
             page = page,
             size = size,
+            sort = filters.sort, sortDir = filters.sortDir,
             includeInstallerFindings = filters.includeInstallerFindings,
             seenToday = filters.seenToday,
             countMode = countMode
@@ -1040,7 +1043,7 @@ open class ExportJobService(
         }
 
         row.createCell(5).apply {
-            setCellValue(ExcelSanitizer.sanitize(dto.daysOpen))
+            dto.daysOpen?.let { setCellValue(it.toDouble()) }
             cellStyle = styles.text
         }
 

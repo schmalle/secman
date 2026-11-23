@@ -215,9 +215,9 @@ open class CSVUserMappingParser(
             .setSkipHeaderRecord(true)
             .setIgnoreEmptyLines(true)
             .setTrim(true)
-            .build()
+            .get()
 
-        return CSVParser(detectEncodingAndRead(file), csvFormat)
+        return csvFormat.parse(detectEncodingAndRead(file))
     }
 
     /**

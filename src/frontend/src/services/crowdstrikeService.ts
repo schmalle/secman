@@ -8,6 +8,12 @@
  * CrowdStrike Vulnerability DTO
  * Matches backend CrowdStrikeVulnerabilityDto
  */
+export interface CrowdStrikeRemediationDto {
+    action: string;
+    title?: string | null;
+    vendorUrl?: string | null;
+}
+
 export interface CrowdStrikeVulnerabilityDto {
     crowdStrikeAid?: string | null;
     id: string;
@@ -18,13 +24,14 @@ export interface CrowdStrikeVulnerabilityDto {
     cvssScore: number | null;
     affectedProduct: string | null;
     /** Days since Falcon created this finding for this host. Not the CVE's age. */
-    daysOpen: string | null;
+    daysOpen: number | string | null;
     /** Null when Falcon published no readable detection date. */
     detectedAt: string | null;
     /** When a fix became available (prefers a vendor/remediation date). */
     patchPublicationDate?: string | null;
     /** When the CVE itself was disclosed — the date a reader of "CVE-2023-…" expects. */
     cvePublishedDate?: string | null;
+    remediation?: CrowdStrikeRemediationDto[] | null;
     status: string;
     hasException: boolean;
     exceptionReason: string | null;
@@ -42,6 +49,7 @@ export interface CrowdStrikeQueryResponse {
     vulnerabilities: CrowdStrikeVulnerabilityDto[];
     totalCount: number;
     queriedAt: string;
+    observedAt?: string | null;
     /**
      * "DATABASE" — served from the persisted vulnerability table (matches the
      * Current/Account Vulnerabilities views).

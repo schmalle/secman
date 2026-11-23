@@ -94,7 +94,7 @@ The wrapper resolves the three SecMan variables from Proton Pass and uses the
 operating system certificate store; it does not load the Azure settings or
 accept `--import`/`--insecure` for this command. Direct invocations can select
 the same trust source with `--use-system-ca`.
-See [configuration and exit codes](WORKGROUP_ASSET_SYNC.md#reconciliation-and-diagnostics).
+See [configuration and exit codes](WORKGROUP_ASSET_SYNC.md#replacement-and-diagnostics).
 
 ### With Proton Pass (canonical)
 

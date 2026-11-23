@@ -46,7 +46,7 @@ class RiskAssessmentMcpServiceTest {
     private val entityManager = mockk<jakarta.persistence.EntityManager>(relaxed = true)
     private val keys = mockk<com.secman.repository.McpApiKeyRepository>(relaxed = true)
     private val workflow = AssessmentWorkflowService(entityManager, assessments, assignments, mockk(relaxed = true), mockk(relaxed = true),
-        responses, users, keys, requirements, releaseScope, access)
+        responses, users, keys, requirements, releaseScope, access, mockk(relaxed = true))
     private val recommendationService = RiskAssessmentRecommendationService(responses, workflow)
     private val service = RiskAssessmentMcpService(
         assessments, responses, requirements, useCases, awsAccounts, assets, users, filter, workflow, access, releaseScope,

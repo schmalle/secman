@@ -404,7 +404,7 @@ open class WorkgroupController(
             }
 
             if (!isAdmin(authentication) && request.userRefs.orEmpty().any {
-                it.id == null && !it.email.isNullOrBlank() && userRepository.findByEmailIgnoreCase(it.email!!.trim()).isEmpty
+                it.id == null && !it.email.isNullOrBlank() && userRepository.findByEmailIgnoreCase(it.email.trim()).isEmpty
             }) {
                 return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
                     .body(mapOf("error" to "Only ADMIN may create user accounts"))

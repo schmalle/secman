@@ -1,5 +1,18 @@
 # MCP Integration
 
+## Personal inventory keys
+
+Open **Profile → Personal MCP keys → Create personal key**. Copy the secret when it appears.
+You can hold five active personal keys. Each expires after 90 days. Use **Revoke** beside its public ID to disable it earlier.
+
+Configure the MCP client for the SecMan `/mcp` endpoint. Send the secret in `X-MCP-API-Key`
+and your SecMan email in `X-MCP-User-Email`. The key is bound to your user ID.
+Use `get_assets` to page through your visible inventory and `list_visible_accounts` to list
+your accessible AWS account IDs. SecMan resolves access at request time, including workgroup
+and account-sharing changes. A personal key can invoke only these two read operations.
+
+
+
 Streamable HTTP / JSON-RPC 2.0 endpoint at `POST /mcp`. Tools span requirements, releases, alignment, assets, the application register, vulnerabilities, integration results, exception requests, scans, workgroups, user mappings, AWS account sharing, users, statistics, the vulnerability heatmap, GitHub repositories, notifications, and maintenance jobs.
 
 For an operator-ready command that creates a user, one-requirement use case, AWS
@@ -71,14 +84,18 @@ Implied per role:
 ## Quick start
 
 ```bash
-# 1. Get JWT
-TOKEN=$(curl -s -XPOST http://localhost:8080/api/auth/login \
+# 1. Log in and retain the HttpOnly secman_auth cookie.
+# Use an admin account without MFA for this shell example.
+COOKIE_JAR=$(mktemp)
+chmod 600 "$COOKIE_JAR"
+trap 'rm -f "$COOKIE_JAR"' EXIT
+curl --fail-with-body -sS -c "$COOKIE_JAR" -X POST http://localhost:8080/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"adminuser","password":"…"}' | jq -r '.token')
+  -d '{"username":"adminuser","password":"…"}'
 
 # 2. Create API key
-curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+curl --fail-with-body -sS -b "$COOKIE_JAR" -X POST http://localhost:8080/api/mcp/admin/api-keys \
+  -H 'Content-Type: application/json' \
   -d '{
     "name":"claude",
     "permissions":["REQUIREMENTS_READ","ASSETS_READ","VULNERABILITIES_READ"],
@@ -729,4 +746,4 @@ a domain alone does not authorize everyone in that domain.
 
 ## Current asset visibility
 
-Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.
+See [Current asset inventory](CURRENT_ASSETS.md) for observation sources, cache expiry, and the boundary between current and stored records.

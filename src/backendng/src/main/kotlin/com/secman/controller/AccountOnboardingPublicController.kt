@@ -226,6 +226,6 @@ open class AccountOnboardingPublicController(
      */
     private fun clientKey(request: HttpRequest<*>): String {
         val forwarded = request.headers.get("X-Forwarded-For")?.takeIf { it.length <= 256 }
-        return trustedProxyResolver.resolveClientAddress(request.remoteAddress?.address, forwarded)
+        return trustedProxyResolver.resolveClientAddress(request.remoteAddress.address, forwarded)
     }
 }

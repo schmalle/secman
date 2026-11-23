@@ -31,6 +31,8 @@ function clean(value: string | undefined): string | undefined {
 
 export function buildVulnerabilityExportFilters(
   state: CurrentVulnerabilitiesFilterState,
+  sort?: string,
+  sortDir?: "asc" | "desc",
 ): VulnerabilityExportFilters {
   return {
     severity: clean(state.severityFilter),
@@ -41,7 +43,8 @@ export function buildVulnerabilityExportFilters(
     adDomain: clean(state.adDomainFilter),
     cloudAccountId: clean(state.cloudAccountIdFilter),
     includeInstallerFindings: state.includeInstallerFindings,
-    seenToday: true,
+    sort,
+    sortDir,
   };
 }
 
@@ -72,9 +75,7 @@ export function describeExportScope(
 ): string {
   const count = countActiveExportFilters(filters);
   if (count === 0) {
-    return filters.seenToday
-      ? "Export vulnerabilities of systems seen today (Europe/Berlin) to Excel"
-      : "Export all vulnerabilities to Excel";
+    return "Export vulnerabilities of current systems to Excel";
   }
   return count === 1
     ? "Export to Excel using the 1 active filter"

@@ -14,8 +14,8 @@ import java.time.LocalDateTime
 
 /**
  * The materialized-view refresh must use the same SLA anchor as the live overdue
- * badge (VulnerabilityService.calculateOverdueStatus): firstSeenAt when present,
- * scanTimestamp as legacy fallback. scanTimestamp drifts on every re-import
+ * badge (VulnerabilityService.calculateOverdueStatus): max(detection, patch date), where
+ * detection is firstSeenAt when present and scanTimestamp as legacy fallback (V299). scanTimestamp drifts on every re-import
  * (CrowdStrike recomputes it from daysOpen; XLSX re-imports reset it), so
  * anchoring the refresh on it makes the dashboard's "Overdue Patching" card
  * disagree with the Current Vulnerabilities view.
@@ -102,5 +102,60 @@ class OverdueAnchorIntegrationTest : BaseIntegrationTest() {
         vulnerabilityRepository.save(vuln)
 
         assertThat(rebuiltVulnIds()).doesNotContain("CVE-2026-3333")
+    }
+
+    @Test
+    @DisplayName("a fix published before detection does not make a recently detected finding overdue")
+    fun `old patch date does not pull the anchor before detection`() {
+        val asset = assetRepository.save(TestDataFactory.createAsset(name = "anchor-asset-4"))
+        val vuln = TestDataFactory.createVulnerabilityWithTimestamp(
+            asset = asset,
+            cve = "CVE-2026-4444",
+            severity = "High",
+            scanTimestamp = LocalDateTime.now().minusDays(10)
+        )
+        vuln.firstSeenAt = LocalDateTime.now().minusDays(10) // detected on day z
+        vuln.patchPublicationDate = LocalDateTime.now().minusDays(200) // fix known since day x
+        vulnerabilityRepository.save(vuln)
+
+        assertThat(rebuiltVulnIds()).doesNotContain("CVE-2026-4444")
+    }
+
+    @Test
+    @DisplayName("a CrowdStrike finding stays overdue when a fix arrives after detection")
+    fun `later patch date preserves the CrowdStrike deadline`() {
+        val asset = assetRepository.save(TestDataFactory.createAsset(name = "anchor-asset-5"))
+        val vuln = TestDataFactory.createVulnerabilityWithTimestamp(
+            asset = asset,
+            cve = "CVE-2026-5555",
+            severity = "High",
+            scanTimestamp = LocalDateTime.now().minusDays(60)
+        )
+        vuln.firstSeenAt = LocalDateTime.now().minusDays(60)
+        vuln.source = "CROWDSTRIKE"
+        vuln.patchPublicationDate = LocalDateTime.now().minusDays(5)
+        vulnerabilityRepository.save(vuln)
+
+        assertThat(rebuiltVulnIds()).contains("CVE-2026-5555")
+        val stored = vulnerabilityRepository.findById(vuln.id!!).orElseThrow()
+        // Verify the generated column uses the same host detection as the badge.
+        assertThat(stored.slaAnchorAt).isBefore(LocalDateTime.now().minusDays(59))
+    }
+
+    @Test
+    @DisplayName("detection and patch both past the threshold: overdue")
+    fun `both dates old is overdue`() {
+        val asset = assetRepository.save(TestDataFactory.createAsset(name = "anchor-asset-6"))
+        val vuln = TestDataFactory.createVulnerabilityWithTimestamp(
+            asset = asset,
+            cve = "CVE-2026-6666",
+            severity = "High",
+            scanTimestamp = LocalDateTime.now().minusDays(45)
+        )
+        vuln.firstSeenAt = LocalDateTime.now().minusDays(45)
+        vuln.patchPublicationDate = LocalDateTime.now().minusDays(35)
+        vulnerabilityRepository.save(vuln)
+
+        assertThat(rebuiltVulnIds()).contains("CVE-2026-6666")
     }
 }

@@ -1,0 +1,50 @@
+{{define "head"}}<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Supplier security questionnaire</title><link rel="stylesheet" href="/portal.css"><script src="/portal.js" defer></script></head>
+<body><main><header>Supplier security assessment</header>{{end}}
+{{define "foot"}}</main></body></html>{{end}}
+{{define "start"}}{{template "head"}}
+<h1>Open your questionnaire</h1>
+{{if .Error}}<p role="alert">{{.Error}}</p>{{else}}
+<p>Open the secure link in your invitation email to begin or resume your response.</p>
+<form method="post" action="/redeem" id="redeem" hidden>
+<input name="invitation" type="hidden"><button>Continue</button>
+</form>
+<noscript><p>Enable JavaScript to open the invitation link.</p></noscript>
+{{end}}{{template "foot"}}{{end}}
+{{define "questionnaire"}}{{template "head"}}
+{{if .Receipt}}
+<h1>Answers submitted</h1><p>Your answers were submitted.</p>
+<dl><dt>Reference</dt><dd>{{.Receipt.SubmissionID}}</dd><dt>Submitted</dt><dd><time>{{.Receipt.SubmittedAt.Format "2 Jan 2006, 15:04 MST"}}</time></dd></dl>
+{{else}}
+<h1>{{if .Review}}Review your answers{{else}}Security questionnaire{{end}}</h1>
+<dl><dt>Requested by</dt><dd>{{.Questionnaire.RequesterLabel}}</dd><dt>Service scope</dt><dd>{{.Questionnaire.ServiceScope}}</dd>
+<dt>Deadline</dt><dd><time>{{.Questionnaire.Deadline.Format "2 Jan 2006, 15:04 MST"}}</time></dd></dl>
+{{if .Saved}}<p role="status">Draft saved.</p>{{end}}
+<p>{{.Answered}} of {{len .Questions}} questions answered in your saved draft.</p>
+<p id="form-message" role="alert" tabindex="-1" hidden></p>
+<form method="post" action="/questionnaire" data-draft>
+<input type="hidden" name="revision" value="{{.Revision}}">
+{{if .Review}}
+<ol>{{range .Questions}}<li><strong>{{.Text}}</strong>
+<p class="answer">{{if eq .Answer "YES"}}Yes{{else if eq .Answer "NO"}}No{{else if eq .Answer "N_A"}}Not applicable{{if not .Comment}} — explanation required{{end}}{{else}}Missing answer{{end}}</p>
+{{if .Comment}}<p class="answer">{{.Comment}}</p>{{end}}</li>{{end}}</ol>
+<div class="actions"><a href="/questionnaire">Edit answers</a><button name="action" value="complete">Complete</button></div>
+{{else}}
+<p>Answer every question. Explain any <strong>Not applicable</strong> answer.</p>
+{{range .Questions}}
+<fieldset><legend>{{.Text}}</legend>
+<label for="answer-{{.Key}}">Answer</label>
+<select name="answer-{{.Key}}" id="answer-{{.Key}}">
+<option value="">Choose an answer</option>
+<option value="YES" {{if eq .Answer "YES"}}selected{{end}}>Yes</option>
+<option value="NO" {{if eq .Answer "NO"}}selected{{end}}>No</option>
+<option value="N_A" {{if eq .Answer "N_A"}}selected{{end}}>Not applicable</option>
+</select>
+<label for="comment-{{.Key}}">Comment</label><textarea id="comment-{{.Key}}" name="comment-{{.Key}}" maxlength="4000" rows="3">{{.Comment}}</textarea>
+</fieldset>
+{{end}}
+<div class="actions"><button class="secondary" name="action" value="save">Save draft</button><button name="action" value="review">Review answers</button></div>
+{{end}}
+</form>
+{{end}}{{template "foot"}}{{end}}

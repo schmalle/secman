@@ -1055,13 +1055,10 @@ open class RequirementController(
      * the anchor, which is exactly the document order the caller emits content in.
      */
     private fun insertParagraphBefore(document: XWPFDocument, anchor: XWPFParagraph): XWPFParagraph {
-        val cursor = anchor.ctp.newCursor()
-        try {
+        anchor.ctp.newCursor().use { cursor ->
             // POI returns null when the cursor is not in the document body. The anchor always is
             // (it came from document.paragraphs), but appending beats a 500 if that ever changes.
             return document.insertNewParagraph(cursor) ?: document.createParagraph()
-        } finally {
-            cursor.dispose()
         }
     }
 

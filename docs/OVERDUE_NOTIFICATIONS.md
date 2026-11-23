@@ -1,5 +1,10 @@
 # Workgroup overdue notifications
 
+CrowdStrike deadlines use the earliest detection on the affected system. Public disclosure and
+patch release dates do not postpone notifications. An automatically requested no-fix exception
+takes effect after an administrator or security champion approves it. See [CrowdStrike import](CROWDSTRIKE_IMPORT.md#sla-anchor-overdue-calculation).
+
+
 `secman notify-users-overdue` emails workgroup members about overdue vulnerabilities
 on the assets their workgroups cover. `secman show-notified-users --email X` shows,
 for one user, exactly what that run would send and why. Command reference, options,
@@ -17,9 +22,10 @@ qualifies under both can receive both emails. The two are distinguishable by sub
 User U is mailed about asset A when all of the following hold:
 
 1. A has at least one **overdue** finding: visible in the current CrowdStrike snapshot,
-   not excepted (`vulnerability.excepted = 0`), and first seen (`first_seen_at`, else
-   `scan_timestamp`) more than `--days` days ago (default 30).
-2. A is **current**: observed within the inclusive UTC window `[now - 72h, now]`.
+   not excepted (`vulnerability.excepted = 0`), and its SLA anchor (`sla_anchor_at`: the later
+   of first detection and patch date, see [`CROWDSTRIKE_IMPORT.md`](CROWDSTRIKE_IMPORT.md)
+   §SLA anchor) more than `--days` days ago (default 30).
+2. A is **current**: observed within the inclusive UTC window `[now - 24h, now]`.
    Falcon-managed assets use Falcon sensor contact, other assets `verified_observed_at`
    (the rule in [`CURRENT_ASSETS.md`](CURRENT_ASSETS.md)).
 3. U is an **enabled** user.

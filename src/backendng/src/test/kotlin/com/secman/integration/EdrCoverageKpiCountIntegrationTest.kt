@@ -63,31 +63,31 @@ class EdrCoverageKpiCountIntegrationTest : BaseIntegrationTest() {
             )
         )
 
-    private fun fresh() = LocalDateTime.now().minusDays(1)
+    private fun fresh() = LocalDateTime.now(java.time.ZoneOffset.UTC).minusHours(1)
     private fun stale() = LocalDateTime.now().minusDays(EdrCoverageKpiService.AGENT_SEEN_FRESHNESS_DAYS + 1)
 
-    /**
-     * The population fence. Only assets with a non-blank cloudInstanceId count — which is what
-     * excludes the synthetic "AWS Account <id>" placeholder assets (cloudAccountId but no
-     * instance id) and every non-cloud asset.
-     */
     @Test
-    @DisplayName("only assets with a cloud instance id are in the EC2 population")
+    @DisplayName("only current assets with EC2 instance IDs enter the population")
     fun populationExcludesNonEc2Assets() {
-        asset("ec2-a", "i-0000000000000001")
-        asset("ec2-b", "i-0000000000000002")
+        asset("ec2-a", "i-00000000000000001")
+        asset("ec2-b", "i-00000000000000002")
         asset("on-prem", null)
         asset("aws-account-placeholder", "")
 
-        assertThat(assetRepository.countAllAwsAssetsWithInstanceId()).isEqualTo(2L)
+        val otherCloud = asset("other-cloud", "12345678-1234-1234-1234-123456789abc", fresh())
+        val cutoff = fresh().minusDays(6)
+        assertThat(assetRepository.countCurrentAwsAssetsWithInstanceId()).isEqualTo(2L)
+        assertThat(assetRepository.countEc2AssetsWithFreshCrowdStrikeAgent(cutoff)).isZero()
+        noEdrException(otherCloud.id)
+        assertThat(assetRepository.countEc2AssetsExcludedByNoEdrException()).isZero()
     }
 
     @Test
     @DisplayName("only recently seen instances count as covered")
     fun freshnessWindowIsApplied() {
-        asset("seen-yesterday", "i-0000000000000001", fresh())
-        asset("seen-long-ago", "i-0000000000000002", stale())
-        asset("never-seen", "i-0000000000000003", null)
+        asset("seen-yesterday", "i-00000000000000001", fresh())
+        asset("seen-long-ago", "i-00000000000000002", stale())
+        asset("never-seen", "i-00000000000000003", null)
 
         val cutoff = LocalDateTime.now().minusDays(EdrCoverageKpiService.AGENT_SEEN_FRESHNESS_DAYS)
         assertThat(assetRepository.countEc2AssetsWithFreshCrowdStrikeAgent(cutoff)).isEqualTo(1L)
@@ -105,8 +105,8 @@ class EdrCoverageKpiCountIntegrationTest : BaseIntegrationTest() {
     @Test
     @DisplayName("an active NO_EDR exception excludes its asset and removes it from the numerator")
     fun activeNoEdrExceptionExcludesTheAsset() {
-        val exempt = asset("appliance", "i-0000000000000001", fresh())
-        asset("normal", "i-0000000000000002", fresh())
+        val exempt = asset("appliance", "i-00000000000000001", fresh())
+        asset("normal", "i-00000000000000002", fresh())
         noEdrException(exempt.id)
 
         assertThat(assetRepository.countEc2AssetsExcludedByNoEdrException()).isEqualTo(1L)
@@ -120,7 +120,7 @@ class EdrCoverageKpiCountIntegrationTest : BaseIntegrationTest() {
     @Test
     @DisplayName("an expired NO_EDR exception no longer excludes its asset")
     fun expiredNoEdrExceptionDoesNotExclude() {
-        val previouslyExempt = asset("appliance", "i-0000000000000001")
+        val previouslyExempt = asset("appliance", "i-00000000000000001")
         noEdrException(previouslyExempt.id, expirationDate = LocalDateTime.now().minusDays(1))
 
         assertThat(assetRepository.countEc2AssetsExcludedByNoEdrException()).isEqualTo(0L)
@@ -135,7 +135,7 @@ class EdrCoverageKpiCountIntegrationTest : BaseIntegrationTest() {
     @Test
     @DisplayName("an ordinary vulnerability exception on the same asset excludes nothing")
     fun ordinaryExceptionsAreNotEdrExemptions() {
-        val target = asset("normal", "i-0000000000000001", fresh())
+        val target = asset("normal", "i-00000000000000001", fresh())
         exceptionRepository.save(
             VulnerabilityException(
                 subject = VulnerabilityException.Subject.ALL_VULNS,
@@ -153,12 +153,12 @@ class EdrCoverageKpiCountIntegrationTest : BaseIntegrationTest() {
     @Test
     @DisplayName("the ever-seen probe distinguishes zero coverage from no import yet")
     fun everSeenProbeReflectsStampedAssets() {
-        asset("never-seen", "i-0000000000000001", null)
+        asset("never-seen", "i-00000000000000001", null)
         assertThat(assetRepository.countAssetsWithAnyCrowdStrikeAgentSighting()).isEqualTo(0L)
 
         // Even a stale sighting counts here — the probe answers "has an import ever run?",
         // not "is this box currently covered?".
-        asset("seen-long-ago", "i-0000000000000002", stale())
+        asset("seen-long-ago", "i-00000000000000002", stale())
         assertThat(assetRepository.countAssetsWithAnyCrowdStrikeAgentSighting()).isEqualTo(1L)
     }
 
@@ -170,14 +170,14 @@ class EdrCoverageKpiCountIntegrationTest : BaseIntegrationTest() {
     @Test
     @DisplayName("the exemption changes the denominator, not the numerator")
     fun exemptionArithmeticEndToEnd() {
-        asset("covered-1", "i-0000000000000001", fresh())
-        asset("covered-2", "i-0000000000000002", fresh())
-        asset("covered-3", "i-0000000000000003", fresh())
-        asset("uncovered", "i-0000000000000004", null)
-        val exempt = asset("appliance", "i-0000000000000005", null)
+        asset("covered-1", "i-00000000000000001", fresh())
+        asset("covered-2", "i-00000000000000002", fresh())
+        asset("covered-3", "i-00000000000000003", fresh())
+        asset("uncovered", "i-00000000000000004", null)
+        val exempt = asset("appliance", "i-00000000000000005", null)
         noEdrException(exempt.id)
 
-        val total = assetRepository.countAllAwsAssetsWithInstanceId()
+        val total = assetRepository.countCurrentAwsAssetsWithInstanceId()
         val excluded = assetRepository.countEc2AssetsExcludedByNoEdrException()
         val covered = assetRepository.countEc2AssetsWithFreshCrowdStrikeAgent(
             LocalDateTime.now().minusDays(EdrCoverageKpiService.AGENT_SEEN_FRESHNESS_DAYS)

@@ -1,7 +1,6 @@
 package com.secman.service
 
 import io.micronaut.cache.CacheManager
-import io.micronaut.cache.SyncCache
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 
@@ -24,11 +23,7 @@ class McpAccessibleAssetsCacheInvalidator(
 
     fun invalidate() {
         try {
-            val cache = cacheManager.getCache(CACHE_NAME)
-            when (cache) {
-                is SyncCache<*> -> cache.invalidateAll()
-                else -> cache.invalidateAll()
-            }
+            cacheManager.getCache(CACHE_NAME).invalidateAll()
             log.debug("Invalidated cache '{}'", CACHE_NAME)
         } catch (e: Exception) {
             log.warn("Failed to invalidate cache '{}': {}", CACHE_NAME, e.message)

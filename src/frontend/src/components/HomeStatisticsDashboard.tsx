@@ -7,19 +7,14 @@ import {
   ALL_CARDS_VISIBLE
 } from '../services/dashboardPreferenceService';
 import type { DashboardCardVisibility } from '../services/dashboardPreferenceService';
+import { formatOverdueEc2Share } from './overdueEc2Share';
+import type { AwsServerCounts } from './overdueEc2Share';
 
 type StatItem = {
   label: string;
   value: string;
   subtitle: string;
   icon: string;
-};
-
-type AwsCleanServerKpi = {
-  available: boolean;
-  percentage: number | null;
-  totalAwsServers: number | null;
-  cleanAwsServers: number | null;
 };
 
 type EdrCoverageKpi = {
@@ -39,7 +34,7 @@ type DashboardState = {
   runningAssessments: number | null;
   releases: number | null;
   lastCrowdStrikeCheckin: string | null;
-  awsCleanServerKpi: AwsCleanServerKpi | null;
+  awsCleanServerKpi: AwsServerCounts | null;
   edrCoverageKpi: EdrCoverageKpi | null;
   accountFindingAge: Array<{
     awsAccountId: string;
@@ -58,11 +53,6 @@ const initialState: DashboardState = {
   awsCleanServerKpi: null,
   edrCoverageKpi: null,
   accountFindingAge: null
-};
-
-const formatAwsCleanServerKpi = (kpi: AwsCleanServerKpi | null): string => {
-  if (!kpi || !kpi.available || kpi.percentage == null) return 'Not available';
-  return `${kpi.percentage}%`;
 };
 
 const formatEdrCoverageKpi = (kpi: EdrCoverageKpi | null): string => {
@@ -280,7 +270,7 @@ const HomeStatisticsDashboard: React.FC = () => {
   const cards: StatItem[] = [];
 
   if (prefs.showAssetInventory) {
-    cards.push({ label: 'Systems in Asset Inventory', value: formatCount(stats.assets), subtitle: 'All asset records', icon: 'bi-hdd-network' });
+    cards.push({ label: 'Systems in Asset Inventory', value: formatCount(stats.assets), subtitle: 'Assets observed in the last 24 hours', icon: 'bi-hdd-network' });
   }
   if (isAdmin && prefs.showUsers) {
     cards.push({ label: 'Users', value: formatCount(stats.users), subtitle: 'Registered user accounts', icon: 'bi-people' });
@@ -299,9 +289,8 @@ const HomeStatisticsDashboard: React.FC = () => {
   }
   if (canViewSecurityKpis && prefs.showAwsCleanServerKpi) {
     cards.push({
-      label: 'AWS Servers Without Old Vulnerabilities',
-      value: formatAwsCleanServerKpi(stats.awsCleanServerKpi),
-      subtitle: 'Share of AWS servers seen today (Europe/Berlin) with no vulnerability older than 30 days',
+      label: 'EC2 Servers With Vulnerabilities Detected Over 30 Days Ago',
+      ...formatOverdueEc2Share(stats.awsCleanServerKpi),
       icon: 'bi-cloud-check'
     });
   }

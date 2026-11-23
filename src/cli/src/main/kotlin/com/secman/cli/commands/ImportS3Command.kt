@@ -404,7 +404,7 @@ class ImportS3Command(
                 try {
                     userMappingCliService.testWelcomeFromFile(tempFilePath.toString(), format, recipient, backendUrl, token)
                 } finally {
-                    tempFilePath?.let { java.nio.file.Files.deleteIfExists(it) }
+                    java.nio.file.Files.deleteIfExists(tempFilePath)
                 }
                 return
             }

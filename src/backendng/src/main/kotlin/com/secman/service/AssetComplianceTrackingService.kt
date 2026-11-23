@@ -53,7 +53,7 @@ open class AssetComplianceTrackingService(
             // Count overdue vulnerabilities for this asset using a lightweight query.
             // Ages off firstSeenAt (the SLA anchor preserved across re-imports), falling back
             // to scanTimestamp, and excludes vulnerabilities under an active exception —
-            // matching AwsCleanServerKpiService.recalculate()'s logic.
+            // using this history report’s configurable remediation SLA.
             val overdueResult = entityManager.createQuery(
                 """
                 SELECT COUNT(v), MIN(v.slaAnchorAt)

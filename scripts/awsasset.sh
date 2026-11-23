@@ -14,7 +14,7 @@ if [ ! -f "$JAR_PATH" ]; then
     exit 1
 fi
 
-# Compare the complete AWS export against stored inventory. The 72-hour display
+# Compare the complete AWS export against stored inventory. The 24-hour display
 # window must not shrink this reconciliation population or its deletion safety brake.
 pass-cli run --env-file "$REPO_ROOT/secmanpp.env" -- \
     java -Xmx4g -Xms2g -jar "$JAR_PATH" asset-match-clear \

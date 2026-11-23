@@ -16,18 +16,19 @@ data class AwsCleanServerKpiResponse(
     val totalAwsServers: Long? = null,
     val cleanAwsServers: Long? = null,
     val lastCalculatedAt: LocalDateTime? = null,
-    val unknownAwsServers: Long? = null
+    val unknownAwsServers: Long? = null,
+    val overdueAwsServers: Long? = null
 )
 
 /**
  * Internal shape persisted as JSON in `vulnerability_statistics_cache`
- * (cache_key = AwsCleanServerKpiService.CACHE_KEY).
+ * (uses the versioned AWS clean-server cache key).
  */
 @Serdeable
 data class AwsCleanServerKpiCacheData(
     val totalAwsServers: Long,
     val cleanAwsServers: Long,
-    val percentage: Double,
-    val seenTodayStartUtc: String? = null,
-    val unknownAwsServers: Long = 0
+    val percentage: Double?,
+    val unknownAwsServers: Long,
+    val overdueAwsServers: Long
 )

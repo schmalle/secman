@@ -10,6 +10,14 @@ import org.junit.jupiter.api.Test
  * exact permissions rather than "roughly the right shape".
  */
 class McpToolPermissionsTest {
+    @Test
+    fun `personal inventory permission only exposes owner scoped reads`() {
+        for (table in listOf(McpToolPermissions.LISTING, McpToolPermissions.CALLING)) {
+            assertThat(table.filterValues { McpPermission.PERSONAL_INVENTORY_READ in it }.keys)
+                .containsExactlyInAnyOrder("get_assets", "list_visible_accounts")
+        }
+    }
+
 
     @Test
     fun `integration submission requires new permission without broadening legacy writes`() {

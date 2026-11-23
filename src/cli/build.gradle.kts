@@ -1,3 +1,5 @@
+import com.github.jengelman.gradle.plugins.shadow.transformers.PropertiesFileTransformer
+
 plugins {
     id("org.jetbrains.kotlin.jvm")
     id("org.jetbrains.kotlin.plugin.allopen")
@@ -33,7 +35,7 @@ dependencies {
     implementation("org.apache.commons:commons-csv:1.14.1")
 
     // AWS SDK for S3 (Feature 065 - S3 User Mapping Import)
-    implementation(platform("software.amazon.awssdk:bom:2.57.13"))
+    implementation(platform("software.amazon.awssdk:bom:2.59.4"))
     implementation("software.amazon.awssdk:s3")
     
     // Kotlin
@@ -41,7 +43,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.4.21")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.6.6")
+    runtimeOnly("ch.qos.logback:logback-classic:1.6.7")
     runtimeOnly("org.yaml:snakeyaml:2.7")
     
     // KSP
@@ -72,11 +74,34 @@ tasks {
     // Enable JUnit 5 platform for tests - Feature 056
     test {
         useJUnitPlatform()
+        // MockK appends to the bootstrap classpath. Disable test JVM class sharing
+        // and have Byte Buddy use its supported class-injection path.
+        jvmArgs("-Xshare:off")
+        systemProperty("net.bytebuddy.safe", "true")
     }
 
     // Fix for zip64 issue - archive has more than 65535 entries
     shadowJar {
         isZip64 = true
+        failOnDuplicateEntries = true
+        // These compile-time descriptors share a path across dependencies.
+        // The executable uses Micronaut's generated metadata and JVM service descriptors.
+        exclude("META-INF/spring-configuration-metadata.json", "META-INF/jackson-module-kotlin.kotlin_module")
+
+        // Preserve all provider registrations, license text, and per-module Netty versions.
+        val combinedText = listOf(
+            "LICENSE", "LICENSE.txt", "NOTICE", "NOTICE.txt", "NOTICE.md", "DEPENDENCIES",
+            "FastDoubleParser-LICENSE", "FastDoubleParser-ThirdParty-LICENSE", "Schubfach-LICENSE",
+            "config-properties.adoc"
+        ).map { "META-INF/$it" }
+        filesMatching(combinedText + listOf("META-INF/services/**", "META-INF/io.netty.versions.properties")) {
+            duplicatesStrategy = DuplicatesStrategy.INCLUDE
+        }
+        mergeServiceFiles()
+        combinedText.forEach { append(it) }
+        transform<PropertiesFileTransformer> {
+            paths.add("META-INF/io.netty.versions.properties")
+        }
     }
 }
 

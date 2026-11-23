@@ -235,7 +235,7 @@ guidance as the ECS runbook.
 
 - **No persistent volumes.** Fargate pods get ephemeral storage only — no
   EBS-backed `PersistentVolume`. This is *why* the database is RDS here
-  rather than a third in-cluster container; see [Appendix A](#appendix-a-running-the-database-in-cluster-instead-of-rds)
+  rather than a third in-cluster container; see [Appendix A](#appendix-a--running-the-database-in-cluster-instead-of-rds)
   if you specifically want the database as a real container anyway.
 - **No privileged pods, no `hostPort`, no `hostNetwork`.** None of this
   app's manifests use them, so this is a non-issue here — just don't add any.

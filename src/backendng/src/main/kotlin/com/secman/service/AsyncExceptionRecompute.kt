@@ -74,7 +74,7 @@ open class AsyncExceptionRecompute(
     open fun recomputeAll() {
         // @Async propagates the caller's transaction too. Even the boundary SELECT
         // must use its own session rather than sharing a request's Hibernate session.
-        PropagatedContext.empty().propagate().use {
+        PropagatedContext.empty().propagate(Runnable {
             val start = System.currentTimeMillis()
             try {
                 val updated = recomputeAllChunked("async full excepted recompute")
@@ -85,7 +85,7 @@ open class AsyncExceptionRecompute(
             } catch (e: Exception) {
                 log.error("Async full excepted recompute failed (non-fatal; standing sweeps will retry): {}", e.message, e)
             }
-        }
+        })
     }
 
     /**

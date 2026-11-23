@@ -44,7 +44,7 @@ open class AwsWorkgroupReconciliationService(
         }
         val assets = 0L // Explicit asset assignments are never owned by this reconciliation.
         val wasEnabled = workgroup?.enabled ?: false
-        if (!dryRun && workgroup != null && workgroupId != null) {
+        if (!dryRun && workgroup != null) {
             if (member != null && !alreadyMember) {
                 workgroupService.assignUsersToWorkgroup(workgroupId, listOf(member.id!!))
             }
@@ -70,7 +70,7 @@ open class AwsWorkgroupReconciliationService(
             dryRun -> if (enabled) "WOULD_ENABLE" else "WOULD_DISABLE"
             else -> if (enabled) "ENABLED" else "DISABLED"
         }
-        if (!dryRun && workgroup != null && workgroupId != null) {
+        if (!dryRun && workgroup != null) {
             workgroup.enabled = enabled
             workgroupRepository.update(workgroup)
             publisher.publishEvent(WorkgroupAccessChangedEvent(setOf(workgroupId)))

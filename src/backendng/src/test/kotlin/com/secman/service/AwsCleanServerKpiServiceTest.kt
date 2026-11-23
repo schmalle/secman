@@ -1,186 +1,61 @@
 package com.secman.service
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.secman.repository.AssetRepository
+import com.secman.domain.VulnerabilityStatisticsCache
 import com.secman.repository.VulnerabilityRepository
 import com.secman.repository.VulnerabilityStatisticsCacheRepository
+import com.secman.repository.projection.AwsServerDetectionCounts
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.time.LocalDateTime
 import java.util.Optional
 
-/**
- * Unit coverage for the KPI's ARITHMETIC and failure handling.
- *
- * The three predicates that decide which servers are "dirty" (non-excepted, has an EC2
- * instance id, older than the 30-day SLA anchor) now live in
- * VulnerabilityRepository.countDirtyVerifiedAwsServers and cannot be exercised with a mock. They are
- * covered against a real database by AwsCleanServerKpiCountIntegrationTest — which is the right
- * place, since transcribing those predicates from Kotlin into SQL is exactly the step where a
- * silent regression could hide.
- */
 class AwsCleanServerKpiServiceTest {
+    private val findings = mockk<VulnerabilityRepository>()
+    private val cache = mockk<VulnerabilityStatisticsCacheRepository>()
+    private val service = AwsCleanServerKpiService(findings, cache, jacksonObjectMapper())
 
-    private lateinit var assetRepository: AssetRepository
-    private lateinit var vulnerabilityRepository: VulnerabilityRepository
-    private lateinit var cacheRepository: VulnerabilityStatisticsCacheRepository
-    private lateinit var service: AwsCleanServerKpiService
-
-    @BeforeEach
-    fun setUp() {
-        assetRepository = mockk()
-        vulnerabilityRepository = mockk()
-        cacheRepository = mockk()
-        every { vulnerabilityRepository.countUnknownAwsServers(any(), any()) } returns 0L
-        service = AwsCleanServerKpiService(
-            assetRepository,
-            vulnerabilityRepository,
-            cacheRepository,
-            jacksonObjectMapper()
+    @Test
+    fun `percentages use the full denominator and keep unavailable states distinct`() {
+        val cases = listOf(
+            AwsServerDetectionCounts(6, 3, 1, 2) to 50.0,
+            AwsServerDetectionCounts(6, 2, 2, 2) to 33.3,
+            AwsServerDetectionCounts(6, 0, 1, 5) to 0.0,
+            AwsServerDetectionCounts(6, 0, 0, 6) to null,
+            AwsServerDetectionCounts(0, 0, 0, 0) to null
         )
-    }
-
-
-    @Test
-    fun `missing snapshot coverage is unknown instead of clean`() {
-        every { assetRepository.countAwsAssetsSeenToday(any(), any()) } returns 3L
-        every { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) } returns 0L
-        every { vulnerabilityRepository.countUnknownAwsServers(any(), any()) } returns 2L
-        val jsonSlot = slot<String>()
-        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any(), any()) } returns 1
-        service.recalculate()
-        assertThat(jsonSlot.captured).contains("\"cleanAwsServers\":1", "\"unknownAwsServers\":2")
-    }
-
-    @Test
-    fun `old scope and yesterday caches are unavailable and scheduled for refresh`() {
-        for (day in listOf<String?>(null, FalconSeenTodayWindow.today().startUtc.minusDays(1).toString())) {
-            val json = jacksonObjectMapper().writeValueAsString(com.secman.dto.AwsCleanServerKpiCacheData(
-                totalAwsServers = 10, cleanAwsServers = 9, percentage = 90.0, seenTodayStartUtc = day))
-            every { cacheRepository.findByCacheKey(AwsCleanServerKpiService.CACHE_KEY) } returns Optional.of(
-                com.secman.domain.VulnerabilityStatisticsCache(cacheKey = AwsCleanServerKpiService.CACHE_KEY, cachedJson = json))
-            assertThat(service.getKpi().available).isFalse()
+        val json = slot<String>()
+        every { cache.upsertStoredSnapshot(AwsCleanServerKpiService.CACHE_KEY, capture(json), any(), any()) } returns 1
+        every { cache.findByCacheKey(AwsCleanServerKpiService.CACHE_KEY) } answers {
+            Optional.of(VulnerabilityStatisticsCache(cacheKey = AwsCleanServerKpiService.CACHE_KEY, cachedJson = json.captured))
         }
-        every { assetRepository.countAwsAssetsSeenToday(any(), any()) } returns 0L
-        every { cacheRepository.upsertByCacheKey(any(), any(), any(), any(), any()) } returns 1
-        service.refreshForNewDay()
-        verify(exactly = 1) { assetRepository.countAwsAssetsSeenToday(any(), any()) }
+        for ((counts, percentage) in cases) {
+            every { findings.countAwsServerDetectionAge(any(), any()) } returns counts
+            service.recalculate(requireSuccess = true)
+            val response = service.getKpi()
+            assertThat(response.available).isTrue()
+            assertThat(response.percentage).isEqualTo(percentage)
+            assertThat(response.totalAwsServers).isEqualTo(counts.total)
+            assertThat(response.cleanAwsServers).isEqualTo(counts.clean)
+            assertThat(response.overdueAwsServers).isEqualTo(counts.overdue)
+            assertThat(response.unknownAwsServers).isEqualTo(counts.unknownCount)
+        }
     }
 
     @Test
-    fun `today cache is served without recalculation`() {
-        val json = jacksonObjectMapper().writeValueAsString(com.secman.dto.AwsCleanServerKpiCacheData(
-            totalAwsServers = 10, cleanAwsServers = 9, percentage = 90.0,
-            seenTodayStartUtc = FalconSeenTodayWindow.today().startUtc.toString()))
-        every { cacheRepository.findByCacheKey(AwsCleanServerKpiService.CACHE_KEY) } returns Optional.of(
-            com.secman.domain.VulnerabilityStatisticsCache(cacheKey = AwsCleanServerKpiService.CACHE_KEY, cachedJson = json))
-        assertThat(service.getKpi().percentage).isEqualTo(90.0)
-        service.refreshForNewDay()
-        verify(exactly = 0) { assetRepository.countAwsAssetsSeenToday(any(), any()) }
-    }
-
-    @Test
-    fun `getKpi returns not available when nothing has been cached yet`() {
-        every { cacheRepository.findByCacheKey(AwsCleanServerKpiService.CACHE_KEY) } returns Optional.empty()
-
-        val result = service.getKpi()
-
-        assertThat(result.available).isFalse()
-        assertThat(result.percentage).isNull()
-        assertThat(result.totalAwsServers).isNull()
-    }
-
-    @Test
-    fun `recalculate computes 100 percent when no AWS server has an old vulnerability`() {
-        every { assetRepository.countAwsAssetsSeenToday(any(), any()) } returns 3L
-        every { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) } returns 0L
-
-        val jsonSlot = slot<String>()
-        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any(), any()) } returns 1
-
+    fun `a failed refresh leaves the previous cache intact`() {
+        every { findings.countAwsServerDetectionAge(any(), any()) } throws IllegalStateException("test")
         service.recalculate()
-
-        assertThat(jsonSlot.captured).contains("\"totalAwsServers\":3")
-        assertThat(jsonSlot.captured).contains("\"cleanAwsServers\":3")
-        assertThat(jsonSlot.captured).contains("\"percentage\":100.0")
+        verify(exactly = 0) { cache.upsertStoredSnapshot(any(), any(), any(), any()) }
     }
 
     @Test
-    fun `recalculate derives clean count and rounds the percentage to one decimal`() {
-        every { assetRepository.countAwsAssetsSeenToday(any(), any()) } returns 3L
-        every { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) } returns 1L
-
-        val jsonSlot = slot<String>()
-        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any(), any()) } returns 1
-
-        service.recalculate()
-
-        // 3 total AWS servers, 1 dirty -> 2 clean -> 66.7% (HALF_UP at 1dp)
-        assertThat(jsonSlot.captured).contains("\"totalAwsServers\":3")
-        assertThat(jsonSlot.captured).contains("\"cleanAwsServers\":2")
-        assertThat(jsonSlot.captured).contains("\"percentage\":66.7")
-    }
-
-    /**
-     * The KPI must never pull the overdue-vulnerability entity graph into heap. It used to receive
-     * that list as a parameter, which forced MaterializedViewRefreshService to keep ~166k entities
-     * reachable for the whole refresh cycle.
-     *
-     * The stronger half of this guarantee is now structural rather than asserted:
-     * `findOverdueVulnerabilitiesWithAssets` has been deleted outright, so no code can call it.
-     * What remains worth pinning is that the KPI derives its answer from a scalar count.
-     */
-    @Test
-    fun `recalculate derives the dirty count from a scalar aggregate`() {
-        every { assetRepository.countAwsAssetsSeenToday(any(), any()) } returns 1L
-        every { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) } returns 1L
-        every { cacheRepository.upsertByCacheKey(any(), any(), any(), any(), any()) } returns 1
-
-        service.recalculate()
-
-        verify(exactly = 1) { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) }
-    }
-
-    @Test
-    fun `recalculate never reports a negative clean count if the counts disagree`() {
-        // Defensive: the two counts are separate queries, so a concurrent import could in
-        // principle report more dirty servers than the total. coerceAtLeast(0) must hold.
-        every { assetRepository.countAwsAssetsSeenToday(any(), any()) } returns 2L
-        every { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) } returns 5L
-
-        val jsonSlot = slot<String>()
-        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any(), any()) } returns 1
-
-        service.recalculate()
-
-        assertThat(jsonSlot.captured).contains("\"cleanAwsServers\":0")
-        assertThat(jsonSlot.captured).contains("\"percentage\":0.0")
-    }
-
-    @Test
-    fun `recalculate skips the dirty-server query entirely when there are no AWS servers`() {
-        every { assetRepository.countAwsAssetsSeenToday(any(), any()) } returns 0L
-
-        val jsonSlot = slot<String>()
-        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any(), any()) } returns 1
-
-        service.recalculate()
-
-        assertThat(jsonSlot.captured).contains("\"totalAwsServers\":0")
-        assertThat(jsonSlot.captured).contains("\"percentage\":0.0")
-        verify(exactly = 0) { vulnerabilityRepository.countDirtyVerifiedAwsServers(any(), any(), any()) }
-    }
-
-    @Test
-    fun `recalculate never throws even when a dependency fails`() {
-        every { assetRepository.countAwsAssetsSeenToday(any(), any()) } throws RuntimeException("boom")
-
-        service.recalculate()
-        // No exception propagates; nothing else to assert since nothing was cached
+    fun `missing versioned cache is unavailable without querying the fleet`() {
+        every { cache.findByCacheKey(AwsCleanServerKpiService.CACHE_KEY) } returns Optional.empty()
+        assertThat(service.getKpi().available).isFalse()
+        verify(exactly = 0) { findings.countAwsServerDetectionAge(any(), any()) }
     }
 }

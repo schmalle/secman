@@ -37,15 +37,16 @@ open class CrowdStrikeCleanupAuditService @Inject constructor(
 
     fun run(days: Int, dryRun: Boolean, triggeredBy: String, maxDeletePercent: Int? = null,
             includeLegacy: Boolean? = null,
-            basis: CrowdStrikeCleanupBasis = CrowdStrikeCleanupBasis.IMPORT_INACTIVITY): CrowdStrikeAssetCleanupResponse {
+            basis: CrowdStrikeCleanupBasis = CrowdStrikeCleanupBasis.IMPORT_INACTIVITY,
+            importScope: ImportContactScope? = null): CrowdStrikeAssetCleanupResponse {
         require(days in 1..36500) { "Days must be between 1 and 36500" }
         require(maxDeletePercent == null || maxDeletePercent in 0..100) { "maxDeletePercent must be between 0 and 100" }
         val actor = triggeredBy.replace('\r', '_').replace('\n', '_').take(100)
         val legacy = includeLegacy ?: includeLegacyDefault
         val started = LocalDateTime.now(clock)
-        val cutoff = started.minusDays(days.toLong())
+        val cutoff = importScope?.cutoff?.let { LocalDateTime.ofInstant(it, clock.zone) } ?: started.minusDays(days.toLong())
         val selection = try {
-            cleanupService.cleanup(days, true, actor, legacy, cutoff, basis)
+            cleanupService.cleanup(days, true, actor, legacy, cutoff, basis, scope = importScope)
         } catch (e: Exception) {
             logger.error("CrowdStrike cleanup actor={} basis={} outcome=selection-failed", actor, basis.value, e)
             CrowdStrikeAssetCleanupResponse(days, cutoff, dryRun, 0, 0, 0, emptyList(),
@@ -57,8 +58,8 @@ open class CrowdStrikeCleanupAuditService @Inject constructor(
 
         // The same paged population supplies the brake and the deletion candidates.
         val totalTracked = selection.candidateCount.toLong() + selection.exclusions
-            .filterKeys { it != "PROTECTED_INVENTORY" && it != "LEGACY_DISABLED" }.values.sum()
-        val permit = importLease.tryBeginCleanup()
+            .filterKeys { it != "PROTECTED_INVENTORY" && it != "LEGACY_DISABLED" && it != "OUTSIDE_IMPORT_SCOPE" }.values.sum()
+        val permit = importScope != null || importLease.tryBeginCleanup()
         try {
             var abortStatus: CrowdStrikeCleanupStatus? = null
             val blocked = if (maxDeletePercent != null && basis == CrowdStrikeCleanupBasis.IMPORT_INACTIVITY)
@@ -80,7 +81,7 @@ open class CrowdStrikeCleanupAuditService @Inject constructor(
                 else if (abortMessage != null) selection.copy(dryRun = false,
                 errors = listOf(CrowdStrikeAssetCleanupErrorDto(0, "(run-level safeguard)", abortMessage)),
                 status = abortStatus!!.name) else try {
-                cleanupService.cleanup(days, false, actor, legacy, cutoff, basis, selection)
+                cleanupService.cleanup(days, false, actor, legacy, cutoff, basis, selection, importScope)
             } catch (e: Exception) {
                 logger.error("CrowdStrike cleanup actor={} basis={} outcome=failed", actor, basis.value, e)
                 selection.copy(dryRun = false, status = CrowdStrikeCleanupStatus.FAILED.name,
@@ -101,6 +102,6 @@ open class CrowdStrikeCleanupAuditService @Inject constructor(
                 actor, saved.id, basis.value, status, response.deletedCount, response.skippedCount)
             if (response.deletedCount > 0 || response.errors.isNotEmpty()) notificationService.notifyAdmins(saved)
             return response.copy(status = status.name, runId = saved.id)
-        } finally { if (permit) importLease.finishCleanup() }
+        } finally { if (permit && importScope == null) importLease.finishCleanup() }
     }
 }

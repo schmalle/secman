@@ -560,13 +560,14 @@ class SecmanCli {
                   --aid <id>               Query one exact Falcon AID
                   --device-type <type>     Device scope: SERVER, DOMAIN_CONTROLLER, SERVER_FAMILY,
                                            WORKSTATION, or ALL (default: SERVER)
-                  --severity <levels>      Severity filter (default: HIGH,CRITICAL)
+                  --severity <levels>      Severity filter, or ALL for unfiltered findings (default: HIGH,CRITICAL)
                   --min-days-open <num>    Minimum days open filter (default: 30)
                   --last-seen-days <num>   Only include devices seen within N days (default: 3; 0 = all)
                   --limit <num>            Page size for pagination (default: 4000)
                   --client-id <id>         CrowdStrike API client ID (overrides config file)
                   --client-secret <secret> CrowdStrike API client secret (overrides config file)
-                  --overdue-threshold <num> Days threshold for overdue vulnerability report (default: 30)
+                  --overdue-threshold <num> Days after first host detection before a
+                                            finding counts as overdue in the summary (default: 30)
                   --backend-url <url>      Backend API URL (default: SECMAN_BACKEND_URL env var, or http://localhost:8080)
                   --save                   Save to database via backend API
                   --deleteonfail           With --save, delete failed-hostname matches, verified selected-AID owner and stale EC2-instance holders, then retry (max twice; ADMIN)

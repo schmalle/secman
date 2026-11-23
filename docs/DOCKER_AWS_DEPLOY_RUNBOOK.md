@@ -6,7 +6,7 @@ container running on AWS (ECR → RDS → Secrets Manager → ECS/Fargate → AL
 This runbook is the "do it in order" companion to `docs/DOCKER_AWS.md` (which
 explains the architecture and the full option set) and `docs/ENVIRONMENT.md`
 (the complete environment-variable catalog). If you just want to try the image
-on your laptop first, jump to [Appendix A: Local smoke test](#appendix-a-local-smoke-test).
+on your laptop first, jump to [Appendix A: Local smoke test](#appendix-a--local-smoke-test).
 
 The all-in-one image runs the **Astro SSR web server**, the **Micronaut
 backend**, and an internal **nginx** in one container listening on port **80**.
@@ -63,7 +63,7 @@ docker build -f docker/aws/Dockerfile -t "$ECR_REPO:latest" .
   ```
   (Or run Fargate on ARM64 — see Step 7's `runtimePlatform` note.)
 
-Optionally smoke-test locally now before pushing — see [Appendix A](#appendix-a-local-smoke-test).
+Optionally smoke-test locally now before pushing — see [Appendix A](#appendix-a--local-smoke-test).
 
 ---
 

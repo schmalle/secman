@@ -1,44 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { formatServerDateTime } from '../utils/dateUtils';
-
-interface SessionStats {
-  totalActive: number;
-  recentlyActive: number;
-  byConnectionType: Record<string, number>;
-  utilizationPercent: number;
-}
-
-interface SystemStats {
-  sessions: SessionStats;
-  apiKeys: {
-    totalActive: number;
-    totalInactive: number;
-    expiringSoon: number;
-    recentlyUsed: number;
-  };
-  tools: {
-    totalCalls: number;
-    successRate: number;
-    topTools: Array<{ name: string; calls: number }>;
-    averageResponseTime: number;
-  };
-  security: {
-    authFailures: number;
-    permissionDenials: number;
-    rateLimitHits: number;
-    suspiciousActivity: number;
-  };
-}
-
-interface RecentActivity {
-  id: number;
-  timestamp: string;
-  eventType: string;
-  toolName?: string;
-  success: boolean;
-  clientIp?: string;
-  errorMessage?: string;
-}
+import { loadMcpDashboardData, type RecentActivity, type SystemStats } from './mcpDashboardData';
 
 const McpDashboard: React.FC = () => {
   const [stats, setStats] = useState<SystemStats | null>(null);
@@ -60,34 +22,11 @@ const McpDashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     try {
-      // Authentication via HttpOnly secman_auth cookie (sent automatically with credentials: 'include')
-      const statsResponse = await fetch('/api/mcp/admin/statistics', {
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-      });
-
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json();
-        setStats(statsData);
-      }
-
-      // Fetch recent activity
-      const activityResponse = await fetch('/api/mcp/admin/audit-logs?pageSize=10', {
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-      });
-
-      if (activityResponse.ok) {
-        const activityData = await activityResponse.json();
-        setRecentActivity(activityData.logs || []);
-      }
-
-      setError(null);
-    } catch (err) {
+      const { stats, recentActivity, failed } = await loadMcpDashboardData();
+      if (stats) setStats(stats);
+      if (recentActivity) setRecentActivity(recentActivity);
+      setError(failed ? 'Failed to load dashboard data' : null);
+    } catch {
       setError('Failed to load dashboard data');
     } finally {
       setLoading(false);

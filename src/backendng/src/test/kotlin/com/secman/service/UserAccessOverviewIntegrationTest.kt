@@ -148,7 +148,7 @@ class UserAccessOverviewIntegrationTest : BaseIntegrationTest() {
         val current = asset("current", "111111111111", "mixed.example")
         for ((account, domain) in listOf("111111111111" to "mixed.example", "222222222222" to "stale.example", "333333333333" to "partial-stale.example")) {
             assets.update(asset("stale", account, domain, group).apply {
-                verifiedObservedAt = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusHours(73)
+                verifiedObservedAt = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusHours(25)
             })
         }
         entityManager.flush()

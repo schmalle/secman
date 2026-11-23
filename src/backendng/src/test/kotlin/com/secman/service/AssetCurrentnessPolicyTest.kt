@@ -16,8 +16,8 @@ class AssetCurrentnessPolicyTest {
 
     @Test
     fun `window includes both boundaries and rejects missing stale and future evidence`() {
-        for ((seen, expected) in listOf(utc to true, utc.minusHours(72) to true,
-                utc.minusHours(72).minusNanos(1000) to false, utc.plusSeconds(1) to false, null to false)) {
+        for ((seen, expected) in listOf(utc to true, utc.minusHours(24) to true,
+                utc.minusHours(24).minusNanos(1000) to false, utc.plusSeconds(1) to false, null to false)) {
             assertThat(AssetCurrentnessPolicy.isCurrent(asset().apply { verifiedObservedAt = seen }, clock))
                 .describedAs("observation=%s", seen).isEqualTo(expected)
         }
@@ -32,7 +32,7 @@ class AssetCurrentnessPolicyTest {
             verifiedObservedAt = utc
         }
         assertThat(AssetCurrentnessPolicy.isCurrent(a, clock)).isFalse()
-        a.crowdStrikeAgentSeenAt = utc.minusHours(73)
+        a.crowdStrikeAgentSeenAt = utc.minusHours(25)
         assertThat(AssetCurrentnessPolicy.isCurrent(a, clock)).isFalse()
         a.crowdStrikeAgentSeenAt = utc.minusHours(1)
         assertThat(AssetCurrentnessPolicy.isCurrent(a, clock)).isTrue()

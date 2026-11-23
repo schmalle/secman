@@ -42,7 +42,7 @@ class AssetCurrentnessIntegrationTest : BaseIntegrationTest() {
     fun `current native and JPQL reads agree and raw lookup retains hidden records`() {
         val current = save("current", now().minusHours(1))
         val falcon = save("falcon", now().minusHours(2), true)
-        val stale = save("stale", now().minusHours(73), true)
+        val stale = save("stale", now().minusHours(25), true)
         save("future", now().plusHours(1))
         save("unknown", null)
         val expected = setOf(current.id, falcon.id)
@@ -58,7 +58,7 @@ class AssetCurrentnessIntegrationTest : BaseIntegrationTest() {
     @Test
     fun `all roles have current read scope but grants remain usable for re-observation`() {
         val current = save("current", now().minusHours(1))
-        val stale = save("stale", now().minusHours(73))
+        val stale = save("stale", now().minusHours(25))
         mappings.save(UserMapping(email = "reader@example.test", awsAccountId = "123456789012", domain = null))
         for (role in listOf("ADMIN", "SECCHAMPION", "USER")) {
             assertThat(filter.getAccessibleAssetIds(auth(role))).containsExactly(current.id!!)
@@ -75,7 +75,7 @@ class AssetCurrentnessIntegrationTest : BaseIntegrationTest() {
     @Test
     fun `overview page count and vulnerability aggregates exclude stale assets`() {
         val current = save("current", now().minusHours(1))
-        val stale = save("stale", now().minusHours(73))
+        val stale = save("stale", now().minusHours(25))
         for (asset in listOf(current, stale)) vulnerabilities.save(Vulnerability(asset = asset,
             vulnerabilityId = "CVE-2026-1234", cvssSeverity = "High", scanTimestamp = now(), source = "CLI_MANUAL"))
         val page = overview.search(null, AssetOverviewQueryService.Filters(null, null, null, null, null, null), 0, 1)
@@ -89,7 +89,7 @@ class AssetCurrentnessIntegrationTest : BaseIntegrationTest() {
     @Test
     fun `cache expires at earliest included asset expiry even without an import`() {
         val calculationTime = now()
-        save("near-expiry", calculationTime.minusHours(72).plusMinutes(1))
+        save("near-expiry", calculationTime.minusHours(24).plusMinutes(1))
         cache.upsertByCacheKey("currentness-test", "{}", calculationTime, 1)
         val entry = cache.findByCacheKey("currentness-test").orElseThrow()
         assertThat(entry.validUntil).isBefore(calculationTime.plusMinutes(2))
@@ -100,12 +100,14 @@ class AssetCurrentnessIntegrationTest : BaseIntegrationTest() {
 
     @Test
     fun `SQL boundary agrees with UTC inclusive policy`() {
-        val at = now()
-        val boundary = save("boundary", at.minusHours(72))
-        val count = entityManager.createNativeQuery("SELECT COUNT(*) FROM asset WHERE id = :id AND " +
-            "(${AssetCurrentnessSql.OBSERVED_AT}) BETWEEN :start AND :end")
-            .setParameter("id", boundary.id).setParameter("start", at.minusHours(72))
-            .setParameter("end", at).singleResult as Number
-        assertThat(count.toLong()).isEqualTo(1)
+        val at = now().withNano(0)
+        val boundary = save("boundary", at.minusHours(24))
+        save("just-expired", at.minusHours(24).minusNanos(1000))
+        save("future", at.plusNanos(1000))
+        save("missing", null)
+        val predicate = AssetCurrentnessSql.CURRENT.replace("UTC_TIMESTAMP(6)", ":asOf")
+        val ids = entityManager.createNativeQuery("SELECT id FROM asset WHERE $predicate")
+            .setParameter("asOf", at).resultList.map { (it as Number).toLong() }
+        assertThat(ids).containsExactly(requireNotNull(boundary.id))
     }
 }

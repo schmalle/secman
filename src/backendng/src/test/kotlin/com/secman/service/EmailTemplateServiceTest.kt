@@ -20,7 +20,7 @@ class EmailTemplateServiceTest {
             if (type == NotificationType.NEW_VULNERABILITY) {
                 assertThat(text).doesNotContain("Falcon sensor contact")
             } else {
-                assertThat(text).contains("Falcon sensor contact within the last 72 hours")
+                assertThat(text).contains("Falcon sensor contact within the last 24 hours")
             }
         }
     }

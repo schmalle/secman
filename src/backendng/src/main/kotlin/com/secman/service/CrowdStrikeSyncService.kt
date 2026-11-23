@@ -64,7 +64,7 @@ class CrowdStrikeSyncService(
         val findings = supported.map { row ->
             VulnerabilityDto(requireNotNull(row.cveId), row.severity, row.affectedProduct?.take(512),
                 row.detectedAt?.let { ChronoUnit.DAYS.between(it, now).toInt().coerceAtLeast(0) } ?: 0,
-                row.detectedAt, row.patchPublicationDate, row.cvePublishedDate)
+                row.detectedAt, row.patchPublicationDate, row.cvePublishedDate, row.noVendorFix, row.detectedAt == null, row.remediation)
         }
         val batch = CrowdStrikeVulnerabilityBatchDto(selection.selected.hostname, null, device.cloudAccountId,
             device.instanceId, device.adDomain, device.osVersion, device.ip, ipAddresses = device.ipAddresses, vulnerabilities = findings,

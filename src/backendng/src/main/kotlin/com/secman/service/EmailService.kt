@@ -118,13 +118,25 @@ open class EmailService(
     fun sendTrackedEmailWithInlineImages(
         to: String, subject: String, textContent: String, htmlContent: String,
         inlineImages: Map<String, Pair<ByteArray, String>>
+    ): TrackedDelivery = trackedDelivery(to, subject, textContent, htmlContent, inlineImages, false)
+
+    fun sendTrackedSupplierInvitation(to: String, subject: String, textContent: String, htmlContent: String): TrackedDelivery =
+        trackedDelivery(to, subject, textContent, htmlContent, emptyMap(), true)
+
+    private fun trackedDelivery(
+        to: String, subject: String, textContent: String, htmlContent: String,
+        inlineImages: Map<String, Pair<ByteArray, String>>, sensitive: Boolean
     ): TrackedDelivery {
         val config = getActiveEmailConfig() ?: return TrackedDelivery("FAILED", "NO_ACTIVE_PROVIDER")
+        if (sensitive && config.smtpTls != true && config.smtpSsl != true) {
+            return TrackedDelivery("FAILED", "TLS_REQUIRED")
+        }
         var attempted = false
         var messageId: String? = null
         var failure: Exception? = null
         val sent = sendEmailWithConfigAndImages(config, to, subject, textContent, htmlContent, inlineImages,
-            onTransportStart = { attempted = true }, onAccepted = { messageId = it }, onFailure = { failure = it })
+            onTransportStart = { attempted = true }, onAccepted = { messageId = it },
+            onFailure = { failure = it }, sensitive = sensitive)
         return when {
             sent -> TrackedDelivery("SENT", messageId = messageId)
             failure is AuthenticationFailedException || generateSequence(failure as Throwable?) { it.cause }.any { it is java.net.ConnectException } ->
@@ -148,12 +160,18 @@ open class EmailService(
         cc: List<String> = emptyList(),
         onTransportStart: (() -> Unit)? = null,
         onAccepted: ((String?) -> Unit)? = null,
-        onFailure: ((Exception) -> Unit)? = null
+        onFailure: ((Exception) -> Unit)? = null,
+        sensitive: Boolean = false
     ): Boolean {
         return try {
-            log.debug("Sending email with {} inline image(s) to {}", inlineImages.size, to)
+            if (!sensitive) log.debug("Sending email with {} inline image(s) to {}", inlineImages.size, to)
 
             val properties = createMailProperties(config)
+            if (sensitive) {
+                properties.setProperty("mail.debug", "false")
+                properties.remove("mail.smtp.ssl.trust")
+                properties.setProperty("mail.smtp.ssl.checkserveridentity", "true")
+            }
             val session = createMailSession(properties, config)
 
             val message = MimeMessage(session).apply {
@@ -201,12 +219,12 @@ open class EmailService(
             onTransportStart?.invoke()
             Transport.send(message)
             onAccepted?.invoke(message.messageID)
-            log.info("Successfully sent email with inline images to {} with subject: {}", to, subject)
+            if (!sensitive) log.info("Successfully sent email with inline images to {} with subject: {}", to, subject)
             true
 
         } catch (e: Exception) {
             onFailure?.invoke(e)
-            log.error("Failed to send email with inline images to {}: {} - {}", to, e.javaClass.simpleName, e.message, e)
+            if (!sensitive) log.error("Failed to send email with inline images to {}: {} - {}", to, e.javaClass.simpleName, e.message, e)
             false
         }
     }

@@ -16,7 +16,7 @@ import java.time.LocalDateTime
  * Set-based recipient resolution for `notify-users-overdue` and `show-notified-users`.
  *
  * A user receives an asset when the asset has an overdue, non-excepted finding, is current
- * (observed in the 72-hour window), and the user is a direct member of an enabled aws- workgroup
+ * (observed in the 24-hour window), and the user is a direct member of an enabled aws- workgroup
  * that either has the asset assigned (DIRECT_ASSIGNMENT) or holds a whole-account grant for
  * the asset's AWS account (AWS_WORKGROUP). Account-owner mappings, AWS sharing, metadata
  * fields and workgroup hierarchy are deliberately not paths here; they stay with

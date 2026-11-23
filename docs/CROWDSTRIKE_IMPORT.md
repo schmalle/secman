@@ -362,6 +362,16 @@ provider records are retired. It reports legacy findings, binding counts and
 verified scopes. Resolve ambiguous/unverified identity groups individually before
 attempting retirement; no migration performs an absence-based fleet purge.
 
+## Stored Falcon recommendations
+
+The import and synchronization paths carry Spotlight recommendations with each
+finding. The backend stores them in `vulnerability.crowdstrike_remediation_json`
+(V305). The lookup page exposes them beside the affected product. A failed
+recommendation lookup preserves previously stored advice for a matching finding
+and enrollment. The display data is bounded to eight distinct recommendations
+per finding. See [AI Buddy](AI_BUDDY.md#evidence-and-scope) for what the patch
+guide currently uses.
+
 ## Asset IP addresses
 
 The import reads the current `local_ip`, `external_ip`, `connection_ip`, and
@@ -395,7 +405,7 @@ CLI invocation:
 ```bash
 SECMAN_BACKEND_URL=https://secman.example.com \
   ./scripts/secman query servers --device-type SERVER_FAMILY \
-  --severity CRITICAL,HIGH --min-days-open 1 --last-seen-days 30 --save
+  --severity CRITICAL,HIGH --min-days-open 1 --last-seen-days 1 --save
 ```
 
 ## Domain controller coverage
@@ -570,116 +580,93 @@ regression here is silent.
 - Rule changes need `POST /api/product-classification/reclassify` ("Reclassify now") to be applied
   to stored rows; it returns 202 and runs in the background, chunked by primary-key range.
 
-**Deliberately unfiltered:** `GET /api/vulnerabilities/current?exceptionStatus=all` falls through to
-`findLatestVulnerabilitiesPerAssetWithFilters` / `findLatestVulnerabilitiesWithAccessControl`, which
-carry neither the `excepted` nor the `product_class` predicate. That is not an oversight — it is the
-"show me everything" path, and `extensions/secman_visual_check` depends on it: it lists existing
-findings to deduplicate before uploading, so hiding a row from it would make it re-upload that row.
-The UI never sends `all` (the controller defaults a blank value to `not_excepted`).
+`GET /api/vulnerabilities/current?exceptionStatus=all` includes excepted findings. The installer
+filter is independent. Clients that deduplicate against existing findings, including the Visual
+Checker, explicitly send `includeInstallerFindings=true` alongside `exceptionStatus=all`.
 
-## Pattern: transactional replace
+## How the importer writes findings
 
-For each (Asset, batch) pair, in one transaction:
+The importer matches findings by CVE and affected product within an asset.
+For a changed verified snapshot, it replaces CrowdStrike rows in the affected
+severity scope in a per-device transaction. Other sources remain outside that
+write. A verified empty scope clears its old rows. Incomplete or rejected
+evidence preserves the stored findings.
 
-```kotlin
-@Transactional
-open fun importVulnerabilitiesForServer(batch: CrowdStrikeVulnerabilityBatchDto): ServerImportResult {
-    val (asset, isNewAsset) = findOrCreateAsset(batch)
-    vulnerabilityRepository.deleteByAssetId(asset.id!!)            // wipe
-    vulnerabilityRepository.saveAll(batch.vulnerabilities.map { Vulnerability(asset, it.cveId, …) })  // reinsert
-    return ServerImportResult(...)
-}
+For a complete, identical verified snapshot on the same Falcon enrollment and
+scope, the importer can retain the finding rows and refresh their import
+metadata. The backend logs committed additions, removals, changes and unchanged
+findings. The CLI's imported count includes findings accepted in unchanged
+snapshots, so it can exceed the number of inserted database rows.
+
+### Keep asset-to-vulnerability cascade disabled
+
+Keep `Asset.vulnerabilities` lazy, without `cascade=ALL` or orphan removal.
+An earlier importer lost rows when Hibernate flushed the collection after the
+service replaced its contents. The importer owns source- and severity-scoped
+replacement. Intentional whole-asset deletion belongs to the cascade deletion
+service.
+
+## SLA anchor (overdue calculation)
+
+SecMan keeps the earliest reliable detection for each system, CVE and product in
+`first_seen_at`. A CrowdStrike finding becomes overdue once that date plus the configured
+reminder threshold has passed, unless an approved exception covers it. For example, a finding
+detected 40 days ago is overdue under a 30-day threshold even if its patch was released yesterday.
+A new enrollment starts a new clock. Unknown detection dates have no overdue deadline.
+
+`cve_published_date` records Falcon’s CVE disclosure date. Public age counts days since disclosure.
+A repeat import preserves a previously known disclosure date when Falcon omits it. V304 fills
+missing disclosure dates from other CrowdStrike rows when they agree on the date for the same CVE.
+The next scheduled outdated-assets refresh updates the dashboard. Review remaining gaps after migration or fresh import with this read-only query:
+
+```sql
+SELECT COUNT(*) AS findings, COUNT(*) - COUNT(first_seen_at) AS unknown_detection,
+       COUNT(*) - COUNT(cve_published_date) AS unknown_disclosure
+FROM vulnerability WHERE source = 'CROWDSTRIKE';
 ```
 
-Guarantees:
-1. **Idempotent** — same input → same DB state (5 vulns stays 5, never grows).
-2. **No duplicates** — `(asset, cve)` unique by construction.
-3. **Atomic** — delete + insert all-or-nothing per server; one server's failure doesn't affect others.
-4. **Remediation tracking** — CVEs missing in the next batch are removed (= patched).
+The AWS clean-server dashboard uses a fixed 30-day host-detection cutoff over
+the EC2 subset of the current 24-hour asset inventory. Scheduled import wrappers use `--severity ALL` to fetch
+open findings without a severity filter, including results with unknown severity.
+A verified empty snapshot can establish clean coverage. A partial snapshot can
+establish overdue status when it contains an old finding. The card reports unknown
+coverage separately and keeps those systems in the denominator.
 
-## Why not upsert / soft-delete / diff?
+The current vulnerabilities table sorts Days Open by detection age across all result pages.
+Excel applies the selected filters, sort column and direction, with numeric Days Open cells.
+The CrowdStrike lookup export includes every filtered row in the selected order.
 
-| Approach | Why rejected |
-|---|---|
-| Upsert | complex merge logic; slow per-row; remediation hard to detect |
-| Soft delete | DB bloat; query complexity; stale data |
-| Differential sync | high complexity, error-prone, weak consistency guarantees |
-| **Transactional replace** | ✅ chosen — simple, accurate remediation, bulk-friendly, clean state |
+### Findings with no vendor recommendation
 
-Bulk delete + bulk insert outperforms per-row upsert; remediation falls out of "missing rows".
+On a verified import, an explicit “No fix or vendor recommendation” or a complete empty
+remediation facet creates a pending CVE exception request for that asset. Administrators and
+security champions approve or reject it under **Exception Approvals**. Approval covers that CVE on the asset, including findings for other products with the same CVE. The proposed exception
+expires 30 days after request creation. Reimports preserve earlier requests and decisions.
+Legacy rows acquire remediation evidence on their next Falcon import. For ID-only responses the importer resolves remediation IDs in batches of up to 100. Incomplete lookups leave
+the finding visible and do not trigger a request.
 
-## CRITICAL: no JPA cascade on `Asset.vulnerabilities`
+System Vulnerabilities shows Falcon's action text and any available vendor link
+beside the affected product. Live lookup can display guidance immediately.
+Scheduled import and **Synchronize from Falcon** store it on the finding and
+populate existing findings as they refresh. A failed lookup preserves saved
+guidance for the same finding and enrollment. A complete empty facet leaves
+the guidance control hidden, while an explicit no-fix message is displayed.
+Deploy the updated CLI with the backend to collect guidance in scheduled imports.
 
-```kotlin
-// ❌ WRONG — silent 99% data loss (real incident: 166,812 imported → 1,819 retained)
-@OneToMany(mappedBy = "asset", cascade = [CascadeType.ALL], orphanRemoval = true)
-var vulnerabilities: MutableList<Vulnerability> = mutableListOf()
+### History
 
-// ✅ CORRECT
-@OneToMany(mappedBy = "asset", fetch = FetchType.LAZY)
-var vulnerabilities: MutableList<Vulnerability> = mutableListOf()
-```
-
-Sequence with cascade enabled: service `deleteByAssetId()` → `saveAll(new)` → transaction commits → JPA flush sees the new rows are not in `asset.vulnerabilities` collection → cascade-deletes them → 99% loss.
-
-Use **explicit** repository calls in service code:
-
-```kotlin
-// CrowdStrikeVulnerabilityImportService.kt
-vulnerabilityRepository.deleteByAssetId(asset.id!!)
-vulnerabilityRepository.saveAll(vulnerabilities)
-
-// AssetCascadeDeleteService.kt
-vulnerabilityRepository.deleteByAssetId(assetId)
-assetRepository.delete(asset)
-```
-
-## Timestamp fix (overdue calculation)
-
-Fixed 2025-11-17. Earlier code used `scanTimestamp = LocalDateTime.now()`, so `daysOpen = now − scanTimestamp` was always 0–1, masking real age.
-
-Now:
-```kotlin
-val (scanTimestamp, daysOpenText) = if (usePatchPublicationDate && patchPublicationDate != null) {
-    Pair(patchPublicationDate, daysText)                                   // Feature 041
-} else {
-    Pair(currentImportTime.minusDays(vulnDto.daysOpen.toLong()), daysText) // discovery time
-}
-```
-
-Example: now = 2025-11-17, CrowdStrike `daysOpen=901` → `scanTimestamp = 2023-04-16` → overdue = 901 days → red badge ✅.
-
-Toggles via env (`docs/ENVIRONMENT.md`):
-- `VULN_USE_PATCH_PUBLICATION_DATE=true` (**default since 2026-08-24**): the SLA
-  anchor is when a **fix became available**, per row, falling back to detection age
-  when no patch date is published.
-- `VULN_USE_PATCH_PUBLICATION_DATE=false`: anchor is CrowdStrike detection time.
-
-### Why remediation age, and what enabling it costs
-
-Detection age answers "how long have we known", which resets whenever a host is
-rebuilt or newly onboarded — a 2023 CVE on a host added last month reads as a month
-old. Remediation age answers "how long could we have fixed this and did not", which
-is the number an auditor means and the only one that does not reward re-imaging.
-
-Two consequences to plan for:
-
-1. **Ages jump, so overdue counts jump.** A patch date is normally much earlier than
-   the detection date, so rows get older the moment they are re-imported, and more of
-   them cross the reminder threshold at once. Expect a larger-than-usual notification
-   run after the first import following the change.
-2. **It is a one-way door.** `first_seen_at` is preserved as `min(prior, new)` across
-   re-imports (that is what stops a re-import resetting the SLA clock), so once an
-   import writes the older patch date, setting the flag back to `false` does **not**
-   restore the previous anchors — the earlier date keeps winning. A genuine revert is:
-
-   ```sql
-   UPDATE vulnerability SET first_seen_at = NULL WHERE source = 'CROWDSTRIKE';
-   ```
-   then set `VULN_USE_PATCH_PUBLICATION_DATE=false` and run a full re-import, which
-   re-anchors from detection time. Take a backup first.
-
-Nothing changes until the next import: existing rows keep their current anchors.
+- 2025-11-17: `scanTimestamp` was `LocalDateTime.now()`, so every finding was 0–1 days old and
+  nothing was ever overdue. Fixed by dating rows from Falcon's detection time.
+- 2026-08-24 to 2026-11-13: `VULN_USE_PATCH_PUBLICATION_DATE=true` (default) wrote the patch date
+  into `first_seen_at`, so the clock started when a fix became available, even when CrowdStrike
+  detected the finding on the host much later. The flag and the env variable were removed; a
+  leftover `VULN_USE_PATCH_PUBLICATION_DATE` is ignored.
+- V299 (2026-11-13) re-anchored those rows: CrowdStrike rows whose `first_seen_at` equals their
+  `patch_publication_date` got `first_seen_at = scan_timestamp` (their latest detection). Rows
+  whose patch anchor came from a since-revised patch date do not match and keep the older date,
+  which errs toward overdue. Overdue counts **drop** after V299, because detection is normally
+  later than the patch date. Refresh the outdated-assets view afterwards
+  (`POST /api/materialized-view-refresh/trigger`) or wait for the next scheduled refresh.
 
 ### The three dates, and why they differ (2026-08-24)
 
@@ -718,15 +705,12 @@ Four defects were fixed alongside (see `docs/CHANGELOG.md` 2026-08-24):
 2b. An unreadable date silently became `LocalDateTime.now()` — which reads as a
    zero-day-old finding and therefore **never trips an overdue threshold**.
    `FalconTimestamps.parse` returns null, and `CrowdStrikeVulnerabilityDto.detectedAt`
-   is nullable so the unknown actually propagates instead of being coerced back at
-   the call site. `scan_timestamp` is `NOT NULL`, so persistence still falls back to
-   the import time — but logs a WARN naming the CVE and asset, because that row's age
-   is then a floor rather than a measurement. `first_seen_at` keeps the earliest
-   value, so a later import supplying a real date corrects it one-way.
+   is nullable. Current importers mark an unknown detection explicitly. The required
+   scan timestamp can record the import instant while the host detection and SLA deadline remain unknown.
+   Older CLI payloads with a known whole-day age still reconstruct detection from that age.
 3. The high-volume CLI batch payload (`/api/crowdstrike/servers/import`) sent
    only `cveId`/`severity`/`affectedProduct`/`daysOpen`. Both publication dates
-   were dropped in transit, which is why `VULN_USE_PATCH_PUBLICATION_DATE` could
-   never take effect on the main import path. It now sends `detectedAt` and both
+   were dropped in transit, so the patch date never reached the main import path. It now sends `detectedAt` and both
    dates, and the backend prefers `detectedAt` over re-deriving a timestamp from
    `daysOpen` against its own clock.
 4. Saving from the ad-hoc lookup dropped `patch_publication_date` entirely.
@@ -734,7 +718,7 @@ Four defects were fixed alongside (see `docs/CHANGELOG.md` 2026-08-24):
 `daysOpen` remains a display-only string. Never compute from it: it is a
 whole-day integer measured against whichever clock produced it, and every
 `parseDaysOpenToInt` call site defaults a parse failure to `0` — i.e. "not
-overdue". `first_seen_at` is the SLA anchor.
+overdue". The SLA anchor is `sla_anchor_at`; see §SLA anchor.
 
 ### One-shot migration for legacy rows
 
@@ -758,28 +742,18 @@ UI: vulns >30 days should show red OVERDUE badge. Threshold under Admin > Vulner
 
 ## Edge cases
 
-- **Same hostname twice in one batch** — last entry wins (per-server transactions). Dedupe upstream.
+- **Shared hostname** — independent device identities require their own assets and snapshots.
 - **Concurrent imports for same asset** — serialized by transaction lock. Last commit wins; no duplicates.
 - **Vulns without CVE ID** — filtered out, counted in `ImportStatisticsDto.vulnerabilitiesSkipped`.
 - **Error mid-import** — transaction rolls back; DB unchanged; per-server isolation preserved.
 
 ## Per-host mode (`--hostnames`)
 
-`query servers --hostnames a,b,c` bypasses the two-stage bulk enumeration and
-resolves each hostname directly. Each name is resolved to **all** matching device
-ids (5-strategy FQL cascade — exact, prefix, contains, lowercase, uppercase; the
-first strategy that matches returns its complete deduped list) and Spotlight rows
-are merged across those aids. This matters because a re-imaged or re-enrolled host
-keeps its hostname but gets a new aid: the bulk import aggregates across all of a
-hostname's aids naturally (it enumerates devices, then groups by metadata-derived
-hostname — ~2.4 aids per hostname observed in production), so the per-host path
-must do the same or it under-reports (observed 2026-08-25: five hosts read 0 rows
-via their first-returned aid while a sibling aid held thousands). Each host still
-arrives at the backend as ONE batch, so the transactional replace is untouched.
-`--device-type` and `--last-seen-days` are deliberately ignored in this mode (a
-host named explicitly is resolved without device filters, so a stale aid cannot
-silently vanish); the CLI prints a warning and a per-host status line
-(`not found` / `resolved, 0 matching` / `N vulnerabilities`).
+`query servers --hostnames a,b,c` resolves each name directly and selects its
+latest valid device contact. Use `--all-matches` for independent matching devices
+or `--aid` for an exact enrollment. Hostname queries ignore `--device-type`
+and `--last-seen-days`. Review the reported selection and per-host status
+before adding `--save`.
 
 Bulk pagination is guarded against cursor loops: every `after` token followed per
 batch is remembered, a repeated token fails the batch into `failedDeviceIds`
@@ -939,7 +913,7 @@ GET /api/crowdstrike/last-checkin              (no auth, text/plain)
 → "2026-04-21T08:42:13.511"   or   "never"
 ```
 
-Reads latest `crowdstrike_import_history.imported_at`, written by `recordImportHistory()` at the end of every import (CLI included).
+Reads latest `crowdstrike_import_history.imported_at`, written by `recordImportHistory()` after each persisted batch. It can advance during an active or partially successful import. Use the CLI exit status and error summary to confirm whether the full run succeeded.
 
 Telegram alert script: `src/clinotify/check_crowdstrike_checkin.py`. Stdlib-only Python:
 
@@ -972,6 +946,15 @@ at a time — a concurrent POST gets `409` with the running job's id. A
 safety-brake-aborted sweep is `COMPLETED` with `result.aborted = true`, not
 `FAILED`. Jobs stuck >30 min (backend restart mid-sweep) are auto-failed at
 the next start.
+
+Hosts whose fetch or persist failed are excluded from the sweep (`reconcileScopeHosts`
+in the CLI): by failed AID, or by a failed hostname naming the same machine — equal
+ignoring case, or either side a bare short name. Before 2026-11-13 the match was by short
+label alone, so one failed `web01.a.example` also kept `web01.b.example`'s patched findings.
+
+The sweep only deletes legacy rows (`crowdstrike_snapshot_id IS NULL`). Rows written with a
+verified snapshot are removed only by that host's own per-host replace, so a host whose
+import keeps getting rejected keeps its last findings until the import succeeds again.
 
 Three layers of safety prevent over-deletion:
 
@@ -1074,8 +1057,7 @@ To prevent deleted historical records from being imported again, explicitly set
 The backend independently excludes old, unknown or future contact from persistence
 when this policy is enabled, including per-host saves. These skips are reported as
 `SKIPPED_RETENTION`, preserve existing rows and are excluded from findings reconciliation.
-The import wrapper bounds discovery by this setting and uses the same window for
-normal and isolated runs (`CROWDSTRIKE_IMPORT_LAST_SEEN_DAYS`, default 3; wrapper caps wider values to 3).
+Both import wrappers pass `--last-seen-days 1` for normal and isolated runs. Older discovery settings cannot widen this 24-hour findings window.
 
 Scheduled cleanup remains disabled by default. `CROWDSTRIKE_CLEANUP_BASIS` selects
 its policy; the percentage brake remains active. Import-inactivity schedules also
@@ -1088,7 +1070,7 @@ inventory retention decision and is not proof that a stopped machine has been re
 
 ## Current asset visibility
 
-Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.
+See [Current asset inventory](CURRENT_ASSETS.md) for observation sources, cache expiry, and the boundary between current and stored records.
 
 
 ### Copying failed import hostnames

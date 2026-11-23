@@ -23,10 +23,7 @@ import java.time.LocalDateTime
  *
  * Two definitions worth stating explicitly, because the naive versions are both wrong:
  *
- *  - **"EC2 instance"** = an asset with a non-blank `cloudInstanceId`, matching the established
- *    codebase definition (`AssetRepository.countAllAwsAssetsWithInstanceId`). This naturally
- *    excludes the synthetic "AWS Account <id>" placeholder assets, which get a cloudAccountId
- *    but never a cloudInstanceId.
+ *  - **"EC2 instance"** = a current asset with a legacy or long-form EC2 instance ID.
  *
  *  - **"has CrowdStrike"** = the provider's UTC sensor contact within
  *    [AGENT_SEEN_FRESHNESS_DAYS]. Importing an offline host's retained findings does
@@ -41,7 +38,7 @@ open class EdrCoverageKpiService(
     private val log = LoggerFactory.getLogger(EdrCoverageKpiService::class.java)
 
     companion object {
-        const val CACHE_KEY = "edr_coverage_kpi"
+        const val CACHE_KEY = "edr_coverage_kpi_v2"
 
         /**
          * How recently CrowdStrike must have reported a host for it to count as covered.

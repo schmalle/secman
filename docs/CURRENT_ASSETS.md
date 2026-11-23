@@ -1,6 +1,6 @@
 # Current asset visibility
 
-SecMan operational inventory includes only assets observed in the inclusive rolling UTC window `[now - 72 hours, now]`. Missing and future evidence is excluded. This rule applies to ADMIN, SECCHAMPION and ordinary users, in addition to existing workgroup, AWS account, AD domain and sharing grants.
+SecMan operational inventory includes only assets observed in the inclusive rolling UTC window `[now - 24 hours, now]`. Missing and future evidence is excluded. This rule applies to ADMIN, SECCHAMPION and ordinary users, in addition to existing workgroup, AWS account, AD domain and sharing grants.
 
 Falcon-managed assets use `asset.crowdstrike_agent_seen_at`, Falcon's actual last sensor contact. The durable `crowdstrike_managed` marker identifies this population; rollout marks existing Falcon identity bindings and source evidence. Source hostname, import timestamp, sensor timestamp and legacy CrowdStrike ownership also identify it. Editing ownership cannot remove established Falcon management. Imports, edits, merges and vulnerability insertion do not prove sensor contact. A scan of a Falcon-managed asset cannot substitute for missing or stale Falcon contact.
 
@@ -14,21 +14,41 @@ The legacy `last_seen` field remains for compatibility with ingestion. It is not
 
 Native current vulnerability queries require both existing snapshot/severity eligibility and current asset eligibility. Materialized heatmap and outdated-asset readers check current asset IDs at read time, so waiting for an import cannot keep stale assets visible.
 
+Analytics Overview uses the same rolling observation window as the Asset Register for rows, counts, filter options and Excel exports. Its default view excludes excepted and installer findings. Select **All (incl. Excepted)** to include exceptions, and use the installer toggle independently. The per-system lookup shows the last verified observation alongside the finding snapshot and labels results fetched directly from Falcon.
+
 `canAccessAsset` and `getAuthorizedAssetIds` refer to stored-record grants. `canReadCurrentAsset` and operational accessible-asset methods additionally apply currentness. Ingestion, scanner target discovery, relationship management, cleanup and historical risk-assessment access retain authorized stored lookup. This allows an existing hidden asset to receive new evidence and reappear under the same ID. The ADMIN internet-facing target endpoint and scanner subject discovery intentionally include authorized configured targets that are not current; this is an ingestion surface, not the operational asset inventory.
 
 Hiding does not delete assets, findings, assignments, audit records or assessments. Existing retention and deletion policies remain independent. Historical records are evidence of the time they describe, not a list of current inventory. Repository-only integration and EOL records retain their separate lifecycle.
 
 ## Derived data and caches
 
-Statistics and KPI cache entries carry `valid_until`, computed from the earliest expiry of the assets present when calculation began. Legacy cache entries are unavailable until recalculated. Reads reject expired entries; a background expiry check refreshes them every minute. Statistics use their existing live fallback, while a KPI without a valid cache returns unavailable rather than a stale percentage. Request handlers do not trigger KPI recomputation.
+Migration V306 expires cached totals calculated under the previous 72-hour policy. Statistics and KPI cache entries carry `valid_until`, computed from the earliest expiry of the assets present when calculation began. Legacy cache entries are unavailable until recalculated. Reads reject expired entries; a background expiry check refreshes them every minute. Statistics use their existing live fallback, while a KPI without a valid cache returns unavailable rather than a stale percentage. Request handlers do not trigger KPI recomputation.
 
 Vulnerability list totals are calculated from current inventory. Client-supplied `knownTotal` and the former fixed-duration count caches cannot override a count after assets age out. Existing vulnerability-age and exception rules remain independent of observation age.
 
-The EDR KPI population consists of current EC2 assets, including non-Falcon assets with verified observations; its sensor-coverage condition and NO_EDR exclusions remain separate. The AWS clean-server KPI retains its documented seen-today scope, intersected with current inventory. Stored-population safety brakes used for deletion or matching are unchanged.
+Both dashboard EC2 cards require a legacy or long-form EC2 instance ID (`i-` followed by 8 or 17 hexadecimal digits). Other providers can also populate the cloud instance field. The EDR KPI population includes non-Falcon EC2 assets with verified observations; its sensor-coverage condition and NO_EDR exclusions remain separate. The AWS clean-server KPI counts EC2 servers in the same current inventory as the dashboard asset count. It reports clean, overdue and unknown coverage using each open finding’s first detection on that server. The cutoff is strictly more than 30 days. Stored-population safety brakes used for deletion or matching are unchanged.
+
+### Reading the dashboard after an import
+
+The inventory card counts current asset rows live. The two EC2 cards show the
+latest cached calculation, which can lag a running or recently completed
+import. Use the response’s `lastCalculatedAt` to compare observations from the
+same period. The deprecated mixed-cloud cache values are bypassed by the
+EC2-only cache keys.
+
+The dashboard shows the share of current EC2 assets with at least one open
+finding first detected more than 30 days ago on that server. It divides the
+overdue count by all current EC2 assets, including assets with unknown coverage.
+Approved exceptions and installer artifacts are excluded from finding evaluation.
+The API also supplies the clean share for other consumers. The EDR percentage is recently seen
+instances divided by current EC2 assets eligible for EDR. An active asset-level
+`NO_EDR` exception removes the asset from both EDR counts. This is coverage of
+SecMan’s current inventory. Full AWS fleet coverage requires an independent
+inventory of EC2 instances.
 
 ## Import and repair scripts
 
-`./scripts/import.sh` uses three-day Falcon discovery in both regular and isolated modes. `CROWDSTRIKE_IMPORT_LAST_SEEN_DAYS` defaults to `3`; the regular wrapper caps zero or wider settings to `3`. A narrower configured sensor-retention window may further restrict discovery. Visibility is always 72 hours and cannot be widened through an import setting. `CROWDSTRIKE_SENSOR_RETENTION_DAYS` remains a distinct destructive-retention/import-admission setting; it is not automatically enabled by visibility.
+Both `./scripts/import.sh` and `./scripts/importaws.sh` request findings for devices with sensor contact in the last 24 hours (`--last-seen-days 1`). The same limit applies in isolated runs and when older deployments supply a wider or unlimited `CROWDSTRIKE_IMPORT_LAST_SEEN_DAYS` setting. `CROWDSTRIKE_SENSOR_RETENTION_DAYS` remains a distinct destructive-retention/import-admission setting; it is not automatically enabled by visibility.
 
 Direct CLI queries may deliberately request a wider source window for diagnosis. This does not make imported stale assets visible. Hostname-specific source lookup retains its documented discovery behavior; saved inventory is still subject to backend currentness.
 

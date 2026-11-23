@@ -10,6 +10,7 @@ import com.secman.repository.RequirementRepository
 import com.secman.repository.RequirementReviewRepository
 import com.secman.repository.RequirementSnapshotRepository
 import com.secman.repository.RiskAssessmentRepository
+import com.secman.repository.SupplierAssessmentInvitationRepository
 import com.secman.repository.UserRepository
 import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
@@ -26,7 +27,8 @@ open class ReleaseService(
     private val alignmentSnapshotRepository: AlignmentSnapshotRepository,
     private val alignmentReviewerRepository: AlignmentReviewerRepository,
     private val requirementReviewRepository: RequirementReviewRepository,
-    private val riskAssessmentRepository: RiskAssessmentRepository
+    private val riskAssessmentRepository: RiskAssessmentRepository,
+    private val supplierInvitations: SupplierAssessmentInvitationRepository
 ) {
     private val logger = LoggerFactory.getLogger(ReleaseService::class.java)
 
@@ -129,11 +131,13 @@ open class ReleaseService(
      * @throws NoSuchElementException if release not found
      * @throws IllegalStateException if release is ACTIVE and force=false
      */
-    fun deleteRelease(releaseId: Long, force: Boolean = false) {
+    @Transactional
+    open fun deleteRelease(releaseId: Long, force: Boolean = false) {
         logger.info("Deleting release ID=$releaseId (force=$force)")
 
         val release = releaseRepository.findById(releaseId)
             .orElseThrow { NoSuchElementException("Release with ID $releaseId not found") }
+        check(!supplierInvitations.existsByReleaseId(releaseId)) { "Release is pinned by a supplier assessment" }
 
         // Prevent deletion of ACTIVE releases unless forced (admin debug bulk delete)
         if (!force && release.status == Release.ReleaseStatus.ACTIVE) {
@@ -286,6 +290,9 @@ open class ReleaseService(
         if (allReleases.isEmpty()) {
             logger.info("deleteAllReleases: no releases to delete")
             return 0
+        }
+        check(!supplierInvitations.existsByReleaseIdIn(allReleases.mapNotNull { it.id })) {
+            "A release is pinned by a supplier assessment"
         }
 
         // Detach all risk assessments (none are running per the guard above) so

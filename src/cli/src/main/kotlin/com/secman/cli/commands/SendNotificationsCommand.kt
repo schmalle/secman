@@ -13,7 +13,7 @@ import jakarta.inject.Singleton
 @Singleton
 @Command(
     name = "send-notifications",
-    description = ["Send overdue reminders for assets seen by Falcon within the last 72 hours"],
+    description = ["Send overdue reminders for assets seen by Falcon within the last 24 hours"],
     mixinStandardHelpOptions = true
 )
 class SendNotificationsCommand : Runnable {

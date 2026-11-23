@@ -7,6 +7,7 @@ import com.secman.repository.AssetRepository
 import com.secman.repository.OutdatedAssetMaterializedViewRepository
 import com.secman.repository.VulnerabilityRepository
 import io.micronaut.data.model.Page
+import io.micronaut.data.model.Sort
 import io.micronaut.data.model.Pageable
 import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
@@ -142,7 +143,11 @@ class OutdatedAssetService(
         assetId: Long,
         pageable: Pageable
     ): Page<Vulnerability> {
-        return vulnerabilityRepository.findByAssetId(assetId, pageable)
+        val order = pageable.sort.orderBy.firstOrNull()
+        if (order?.property != "daysOpen") return vulnerabilityRepository.findByAssetId(assetId, pageable)
+        val byDetection = if (order.isAscending) Sort.Order.desc("slaAnchorAt") else Sort.Order.asc("slaAnchorAt")
+        return vulnerabilityRepository.findSortedForAsset(assetId,
+            Pageable.from(pageable.number, pageable.size, Sort.of(byDetection, Sort.Order.asc("id"))))
     }
 
     /**
@@ -161,7 +166,7 @@ class OutdatedAssetService(
             val accessible = accessibleAssetIds(authentication)
             if (accessible != null && !accessible.contains(assetId)) return null
         }
-        return vulnerabilityRepository.findByAssetId(assetId, pageable)
+        return getVulnerabilitiesForAsset(assetId, pageable)
     }
 
     /**

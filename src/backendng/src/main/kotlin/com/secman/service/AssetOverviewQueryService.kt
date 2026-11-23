@@ -28,9 +28,8 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
 
         val rows = entityManager.createNativeQuery(ROW_QUERY, Asset::class.java)
         val count = entityManager.createNativeQuery(COUNT_QUERY)
-        val cutoff = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusHours(24)
-        bind(rows, ids, filters, cutoff)
-        bind(count, ids, filters, cutoff)
+        bind(rows, ids, filters)
+        bind(count, ids, filters)
         rows.firstResult = page * pageSize
         rows.maxResults = pageSize
         val assets = rows.resultList as List<Asset>
@@ -50,7 +49,7 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
         return Result(assets, (count.singleResult as Number).toLong(), addresses, aids)
     }
 
-    private fun bind(query: jakarta.persistence.Query, ids: Set<Long>?, filters: Filters, cutoff: java.time.LocalDateTime) {
+    private fun bind(query: jakarta.persistence.Query, ids: Set<Long>?, filters: Filters) {
         query.setParameter("restrictIds", ids != null)
         query.setParameter("ids", ids ?: setOf(-1L))
         query.setParameter("name", filters.name)
@@ -60,7 +59,6 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
         query.setParameter("accountId", filters.accountId)
         query.setParameter("workgroupId", filters.workgroupId)
         query.setParameter("falconActivity", filters.falconActivity)
-        query.setParameter("falconCutoff", cutoff)
     }
 
     companion object {
@@ -68,8 +66,7 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
             SELECT a.* FROM ${com.secman.repository.AssetCurrentnessSql.ASSETS} a
             WHERE (:restrictIds = FALSE OR a.id IN (:ids))
               AND (:falconActivity IS NULL
-                OR (:falconActivity = 'recent' AND a.crowdstrike_agent_seen_at >= :falconCutoff)
-                OR (:falconActivity = 'older' AND a.crowdstrike_agent_seen_at < :falconCutoff)
+                OR (:falconActivity = 'recent' AND a.crowdstrike_agent_seen_at IS NOT NULL)
                 OR (:falconActivity = 'unknown' AND a.crowdstrike_agent_seen_at IS NULL))
               AND (:name IS NULL OR LOCATE(LOWER(:name), LOWER(a.name)) > 0)
               AND (:ip IS NULL OR LOCATE(LOWER(:ip), LOWER(a.ip)) > 0 OR EXISTS (
@@ -90,8 +87,7 @@ open class AssetOverviewQueryService(private val entityManager: EntityManager) {
             SELECT COUNT(*) FROM ${com.secman.repository.AssetCurrentnessSql.ASSETS} a
             WHERE (:restrictIds = FALSE OR a.id IN (:ids))
               AND (:falconActivity IS NULL
-                OR (:falconActivity = 'recent' AND a.crowdstrike_agent_seen_at >= :falconCutoff)
-                OR (:falconActivity = 'older' AND a.crowdstrike_agent_seen_at < :falconCutoff)
+                OR (:falconActivity = 'recent' AND a.crowdstrike_agent_seen_at IS NOT NULL)
                 OR (:falconActivity = 'unknown' AND a.crowdstrike_agent_seen_at IS NULL))
               AND (:name IS NULL OR LOCATE(LOWER(:name), LOWER(a.name)) > 0)
               AND (:ip IS NULL OR LOCATE(LOWER(:ip), LOWER(a.ip)) > 0 OR EXISTS (

@@ -1051,12 +1051,12 @@ const AssetManagement: React.FC = () => {
           <label htmlFor="falconActivity" className="form-label me-2">Falcon sensor contact</label>
           <select id="falconActivity" className="form-select w-auto d-inline-block" value={falconActivity}
             onChange={(event) => { setFalconActivity(event.target.value); setPage(0); }}>
-            <option value="">All current assets (seen within 72 hours)</option>
+            <option value="">All current assets (seen within 24 hours)</option>
             <option value="recent">Seen within 24 hours</option>
-            <option value="older">Falcon contact between 24 and 72 hours ago</option>
+            {falconActivity === 'older' && <option value="older" disabled>Older Falcon contact (outside current inventory)</option>}
             <option value="unknown">Current assets observed by another source</option>
           </select>
-          <div className="form-text">Only assets observed within the last 72 hours are shown. Falcon-managed assets require actual sensor contact; other assets require a verified observation. Hidden assets remain stored.</div>
+          <div className="form-text">Only assets observed within the last 24 hours are shown. Falcon-managed assets require actual sensor contact; other assets require a verified observation. Hidden assets remain stored.</div>
         </div>
         {showMoreFilters && (
           <div id="assetMoreFilters" className="asset-management__more-filters">

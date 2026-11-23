@@ -18,16 +18,16 @@
         [CLI] ─── HTTPS ──► Backend REST API
 ```
 
-Stack: Kotlin 2.4.21 / Java 25 · Micronaut 5.2.5 · Hibernate JPA · Astro 7.4.7 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.9.0 · Picocli 4.7.7 · AWS SDK v2.
+Stack: Kotlin 2.4.21 / Java 25 · Micronaut 5.2.5 · Hibernate JPA · Astro 7.4.13 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.9.1 · Picocli 4.7.7 · AWS SDK v2.
 
 ## Backend (`src/backendng/`)
 
 Layered:
 
 ```
-Controller (80)        @Controller, @Secured, validation
+Controller             @Controller, @Secured, validation
    │
-Service (146)          @Singleton, @Transactional, business rules
+Service                @Singleton, @Transactional, business rules
    │
 Repository             CrudRepository / custom JPQL
    │
@@ -48,13 +48,13 @@ Controller groups:
 
 ## Frontend (`src/frontend/`)
 
-Astro pages (77, 23 admin) with React islands; Axios services in `src/services/`.
+Astro pages with React islands; Axios services in `src/services/`.
 
 Auth flow: the JWT lives in the HttpOnly `secman_auth` cookie (`AuthCookieService.AUTH_COOKIE_NAME`), never in JS-readable storage. Axios sends it via `withCredentials: true` (set globally in `utils/csrf.ts`); fetch calls use the `authenticated*` helpers in `utils/auth.ts` / `services/`. `sessionStorage["user"]` holds only the display/role payload — never a token. Browser EventSource connections send the cookie with `withCredentials: true`.
 
 ## CLI (`src/cli/`)
 
-Picocli. ~40 command classes under `commands/`, ~37 distinct command names. **`docs/CLI.md` is the reference** — do not maintain a command list here, it drifts.
+Picocli command classes live under `commands/`. **`docs/CLI.md` is the reference** — do not maintain a command list here, it drifts.
 
 Dispatch is a mix, which surprises people: most commands are registered as Picocli `subcommands` on `SecmanCli`, but a few (notably `query servers`, the CrowdStrike ingestion path) are matched by hand in `SecmanCli.kt`'s arg-parsing block. Grep `SecmanCli.kt` for a command name before concluding it does not exist.
 
@@ -187,16 +187,12 @@ open fun onUserCreated(e: UserCreatedEvent) { applyFutureUserMapping(e.user) }
 ```
 Used: user create → mapping apply, asset import → view refresh, vuln detect → email.
 
-### Transactional replace (CrowdStrike vuln import)
-```kotlin
-@Transactional
-open fun importVulnerabilitiesForServer(batch: …): Result {
-    val (asset, _) = findOrCreateAsset(batch)
-    vulnerabilityRepository.deleteByAssetId(asset.id!!)
-    vulnerabilityRepository.saveAll(vulnerabilities)
-}
-```
-Idempotent; missing CVEs in next import = remediation. **`Asset.vulnerabilities` MUST NOT use `cascade=ALL` / `orphanRemoval=true`** — JPA cascade fights manual delete-insert and silently drops 99% of rows. Use explicit `deleteByAssetId()`. Full rationale and incident detail: `docs/CROWDSTRIKE_IMPORT.md`.
+### CrowdStrike finding writes
+
+Complete changed snapshots replace findings for the matching asset, source and
+severity scope in one transaction. Identical verified snapshots can retain
+their rows. Keep the JPA vulnerability collection free of cascade and orphan
+removal. See [CrowdStrike import](CROWDSTRIKE_IMPORT.md#how-the-importer-writes-findings).
 
 ### Entity merge (asset import)
 ```kotlin
@@ -221,10 +217,10 @@ src/
   frontend/src/{pages,components,services,layouts}/
   cli/src/main/kotlin/com/secman/cli/{commands,service}/
 docs/
-scripts/             all scripts (./scripts deprecated)
+scripts/             canonical scripts; invoke as ./scripts/<name>.sh
 specs/                historical implementation plans
 ```
 
 ## Current asset visibility
 
-Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.
+See [Current asset inventory](CURRENT_ASSETS.md) for observation sources, cache expiry, and the boundary between current and stored records.

@@ -40,8 +40,8 @@ class CliHttpClient(
                 // JWT is in Set-Cookie header as "secman_auth=<token>; ..."
                 val setCookieHeaders = response.headers.getAll("Set-Cookie")
                 val token = setCookieHeaders
-                    ?.flatMap { it.split(";") }
-                    ?.firstOrNull { it.trim().startsWith("secman_auth=") }
+                    .flatMap { it.split(";") }
+                    .firstOrNull { it.trim().startsWith("secman_auth=") }
                     ?.substringAfter("=")
                     ?.trim()
 

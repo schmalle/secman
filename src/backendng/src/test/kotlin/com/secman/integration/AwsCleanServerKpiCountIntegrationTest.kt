@@ -4,7 +4,6 @@ import com.secman.domain.Asset
 import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
 import com.secman.service.AwsCleanServerKpiService
-import com.secman.service.FalconSeenTodayWindow
 import com.secman.testutil.BaseIntegrationTest
 import com.secman.testutil.TestDataFactory
 import jakarta.inject.Inject
@@ -13,6 +12,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import java.time.LocalDateTime
+import com.secman.constants.VulnerabilitySources
 
 /** Verifies the database predicates behind the AWS clean-server KPI. */
 @DisplayName("AWS clean-server KPI: detection age")
@@ -33,27 +33,28 @@ class AwsCleanServerKpiCountIntegrationTest : BaseIntegrationTest() {
     @Test
     @DisplayName("uses host detection age rather than the remediation SLA anchor")
     fun detectionAgeDefinesOldVulnerabilities() {
-        val recentlyDetected = awsAsset("recent-detection", "i-0000000000000018")
+        val recentlyDetected = awsAsset("recent-detection", "i-00000000000000018")
         val oldPatch = TestDataFactory.createVulnerabilityWithTimestamp(
             recentlyDetected,
             "CVE-2026-0018",
             "High",
             LocalDateTime.now().minusDays(5)
         ).apply {
-            firstSeenAt = LocalDateTime.now().minusDays(100)
+            source = VulnerabilitySources.XLSX
+            patchPublicationDate = LocalDateTime.now().minusDays(100)
         }
         vulnerabilityRepository.save(oldPatch)
 
         val threshold = LocalDateTime.now().minusDays(AwsCleanServerKpiService.VULN_AGE_THRESHOLD_DAYS)
 
-        assertThat(vulnerabilityRepository.countDirtyAwsServers(threshold, FalconSeenTodayWindow.today().startUtc, FalconSeenTodayWindow.today().endUtc)).isZero()
+        assertThat(vulnerabilityRepository.countAwsServerDetectionAge(threshold, LocalDateTime.now()).overdue).isZero()
     }
 
     @Test
     @DisplayName("counts each AWS server once when it has an old detected vulnerability")
     fun oldDetectionCountsDistinctAwsServers() {
         val oldDetection = LocalDateTime.now().minusDays(40)
-        val affected = awsAsset("old-detection", "i-0000000000000019")
+        val affected = awsAsset("old-detection", "i-00000000000000019")
         vulnerabilityRepository.save(
             TestDataFactory.createVulnerabilityWithTimestamp(affected, "CVE-2026-0019", "High", oldDetection)
         )
@@ -67,24 +68,21 @@ class AwsCleanServerKpiCountIntegrationTest : BaseIntegrationTest() {
 
         val threshold = LocalDateTime.now().minusDays(AwsCleanServerKpiService.VULN_AGE_THRESHOLD_DAYS)
 
-        assertThat(vulnerabilityRepository.countDirtyAwsServers(threshold, FalconSeenTodayWindow.today().startUtc, FalconSeenTodayWindow.today().endUtc)).isEqualTo(1L)
+        assertThat(vulnerabilityRepository.countAwsServerDetectionAge(threshold, LocalDateTime.now()).overdue).isEqualTo(1L)
     }
 
 
     @Test
-    fun `both KPI counts exclude old missing and future contact despite a fresh import`() {
-        val window = FalconSeenTodayWindow.today()
-        val contacts = listOf(window.startUtc.minusSeconds(1), window.startUtc, window.endUtc.minusSeconds(1), window.endUtc, null)
-        contacts.forEachIndexed { index, contact ->
-            val asset = assetRepository.save(Asset(name = "contact-$index", type = "SERVER", owner = "ops",
-                cloudInstanceId = "i-contact-$index", crowdStrikeAgentSeenAt = contact,
-                crowdStrikeLastImportedAt = LocalDateTime.now(), lastSeen = LocalDateTime.now()))
-            vulnerabilityRepository.save(TestDataFactory.createVulnerabilityWithTimestamp(
-                asset, "CVE-2099-12345", "High", LocalDateTime.now().minusDays(40)))
-        }
-        assertThat(assetRepository.countAwsAssetsSeenToday(window.startUtc, window.endUtc)).isEqualTo(1)
-        assertThat(vulnerabilityRepository.countDirtyAwsServers(
-            LocalDateTime.now().minusDays(30), window.startUtc, window.endUtc)).isEqualTo(1)
+    fun `historical EC2 records never enter the current fleet denominator`() {
+        awsAsset("current", "i-abcd1234")
+        awsAsset("other-cloud", "12345678-1234-1234-1234-123456789abc")
+        assetRepository.save(Asset(name = "historical", type = "SERVER", owner = "ops",
+            cloudInstanceId = "i-abcd1235", verifiedObservedAt = LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(4)))
+        val now = LocalDateTime.now()
+        val counts = vulnerabilityRepository.countAwsServerDetectionAge(now.minusDays(30), now)
+        assertThat(counts.total).isEqualTo(1L)
+        assertThat(counts.total).isEqualTo(assetRepository.countCurrentAwsAssetsWithInstanceId())
+        assertThat(counts.clean + counts.overdue + counts.unknownCount).isEqualTo(counts.total)
     }
 
     private fun awsAsset(name: String, instanceId: String): Asset = assetRepository.save(
@@ -93,8 +91,8 @@ class AwsCleanServerKpiCountIntegrationTest : BaseIntegrationTest() {
             type = "SERVER",
             owner = "ops",
             cloudAccountId = "111122223333",
-            cloudInstanceId = instanceId,
-            crowdStrikeAgentSeenAt = FalconSeenTodayWindow.today().startUtc
+            verifiedObservedAt = LocalDateTime.now(java.time.ZoneOffset.UTC).minusHours(1),
+            cloudInstanceId = instanceId
         )
     )
 }

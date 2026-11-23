@@ -158,7 +158,7 @@ tables as a rollback shortcut; their foreign keys intentionally retain history.
 
 ## Current asset visibility
 
-Operational asset inventory and asset-derived current data use verified observations from the last 72 hours, in addition to existing authorization. Stored-record ingestion, repair, scanner discovery and historical relationships retain their distinct scope. See [Current asset visibility](CURRENT_ASSETS.md) for timestamp sources, cache expiry, script defaults, rollout and fixture requirements.
+See [Current asset inventory](CURRENT_ASSETS.md) for observation sources, cache expiry, and the boundary between current and stored records.
 
 
 ## Optional source and web integration

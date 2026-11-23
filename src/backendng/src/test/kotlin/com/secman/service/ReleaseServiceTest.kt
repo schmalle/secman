@@ -12,6 +12,7 @@ import com.secman.repository.RequirementRepository
 import com.secman.repository.RequirementReviewRepository
 import com.secman.repository.RequirementSnapshotRepository
 import com.secman.repository.RiskAssessmentRepository
+import com.secman.repository.SupplierAssessmentInvitationRepository
 import com.secman.repository.UserRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -33,6 +34,7 @@ class ReleaseServiceTest {
     private val alignmentReviewerRepository = mockk<AlignmentReviewerRepository>(relaxed = true)
     private val requirementReviewRepository = mockk<RequirementReviewRepository>(relaxed = true)
     private val riskAssessmentRepository = mockk<RiskAssessmentRepository>(relaxed = true)
+    private val supplierInvitations = mockk<SupplierAssessmentInvitationRepository>(relaxed = true)
 
     private val service = ReleaseService(
         releaseRepository,
@@ -43,11 +45,22 @@ class ReleaseServiceTest {
         alignmentSnapshotRepository,
         alignmentReviewerRepository,
         requirementReviewRepository,
-        riskAssessmentRepository
+        riskAssessmentRepository,
+        supplierInvitations
     )
 
     private val activeRelease = Release(id = 42L, version = "1.0.0", name = "e2e-awsmail-release", status = Release.ReleaseStatus.ACTIVE)
     private val someUser = User(id = 1L, username = "assessor", email = "assessor@test.com", passwordHash = "x")
+
+    @Test
+    fun `supplier invitation protects release snapshots even during a force delete`() {
+        every { releaseRepository.findById(42L) } returns Optional.of(activeRelease)
+        every { supplierInvitations.existsByReleaseId(42L) } returns true
+
+        assertThrows<IllegalStateException> { service.deleteRelease(42L, force = true) }
+        verify(exactly = 0) { snapshotRepository.deleteByReleaseId(any()) }
+        verify(exactly = 0) { releaseRepository.delete(any()) }
+    }
 
     private fun riskAssessment(id: Long, lockedRelease: Release?) = RiskAssessment(
         id = id,

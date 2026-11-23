@@ -3,10 +3,9 @@ package com.secman.repository
 /**
  * Native SQL for the "accounts with the longest-open findings" report.
  *
- * Age anchor is COALESCE(first_seen_at, scan_timestamp): first_seen_at is the SLA
- * anchor preserved across re-imports but is nullable on rows written before V-era
- * backfills, and ranking on the raw column would silently drop the oldest accounts
- * this report exists to surface.
+ * Age anchor is the generated `sla_anchor_at`, host detection for CrowdStrike
+ * (Vulnerability.SLA_ANCHOR_SQL). It falls back to scan_timestamp on rows whose
+ * first_seen_at predates the V208 backfill, so the oldest accounts are never dropped.
  *
  * `excepted = 0` (the precomputed column, not a correlated EXCEPTION_MATCH) keeps
  * the grouped scan sargable on idx_vulnerability_excepted_sort.
@@ -23,7 +22,7 @@ object AccountAgeSql {
                COUNT(DISTINCT a.id)                             AS affectedAssetCount
         FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
         JOIN ${AssetCurrentnessSql.ASSETS} a ON v.asset_id = a.id
-        WHERE v.excepted = 0
+        WHERE v.excepted = 0 AND v.sla_anchor_at IS NOT NULL
           AND a.cloud_account_id IS NOT NULL
           AND a.cloud_account_id <> ''
         GROUP BY a.cloud_account_id
@@ -36,8 +35,8 @@ object AccountAgeSql {
      * one query, scoped by an IN list of at most MAX_LIMIT (50) account ids per the design.
      *
      * A window function partitions the IN-scoped rows by account and orders each partition
-     * by the same age anchor + tie-break as step 1 (oldest COALESCE(first_seen_at,
-     * scan_timestamp) first, ties broken by vulnerability_id ASC); the outer query keeps
+     * by the same age anchor + tie-break as step 1 (oldest sla_anchor_at
+     * first, ties broken by vulnerability_id ASC); the outer query keeps
      * only rn = 1. This is one scan of the scoped rows, not a correlated subquery re-run
      * per account — the partitioning happens once, in a single pass.
      */
@@ -55,7 +54,7 @@ object AccountAgeSql {
                    ) AS rn
             FROM ${com.secman.repository.CrowdStrikeSnapshotSql.CURRENT_FINDINGS} v
             JOIN ${AssetCurrentnessSql.ASSETS} a ON v.asset_id = a.id
-            WHERE v.excepted = 0
+            WHERE v.excepted = 0 AND v.sla_anchor_at IS NOT NULL
               AND a.cloud_account_id IN (:accountIds)
         ) ranked
         WHERE rn = 1

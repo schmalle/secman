@@ -20,7 +20,7 @@ import {
 } from '../services/outdatedAssetsApi';
 import { formatDistanceToNow } from 'date-fns';
 import CveLink from './CveLink';
-import { parseServerDate, formatServerDate } from '../utils/dateUtils';
+import { parseServerDateMs, parseServerDate, formatServerDate } from '../utils/dateUtils';
 
 interface OutdatedAssetDetailProps {
   assetId: number;
@@ -362,7 +362,9 @@ const OutdatedAssetDetail: React.FC<OutdatedAssetDetailProps> = ({ assetId }) =>
                             </td>
                             <td>{vuln.cvssscore ? vuln.cvssscore.toFixed(1) : 'N/A'}</td>
                             <td>
-                              <strong>{vuln.daysOpen}</strong> days
+                              {vuln.slaAnchorAt && parseServerDateMs(vuln.slaAnchorAt) != null
+                                ? `${Math.trunc((Date.now() - parseServerDateMs(vuln.slaAnchorAt)!) / 86400000)} days`
+                                : "Unknown"}
                             </td>
                             <td>{formatDate(vuln.scanTimestamp)}</td>
                           </tr>

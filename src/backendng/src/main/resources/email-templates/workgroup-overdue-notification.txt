@@ -7,7 +7,7 @@ Hello {userEmail},
 {totalOverdue} vulnerabilities open for more than {thresholdDays} days
 ({totalCritical} critical, {totalHigh} high).
 
-Only assets observed within the last 72 hours are included.
+Only assets observed within the last 24 hours are included.
 
 AFFECTED ASSETS
 ---------------

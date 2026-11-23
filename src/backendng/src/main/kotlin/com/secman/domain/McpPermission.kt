@@ -70,6 +70,8 @@ enum class McpPermission {
      */
     ASSETS_READ,
 
+    PERSONAL_INVENTORY_READ,
+
     /**
      * Create and update assets - allows create_asset, update_asset tools
      */
@@ -119,6 +121,7 @@ enum class McpPermission {
             USER_ACTIVITY -> "User Activity"
             TRANSLATION_USE -> "Use Translations"
             AUDIT_READ -> "Read Audit Logs"
+            PERSONAL_INVENTORY_READ -> "Read personal inventory"
             ASSETS_READ -> "Read Assets"
             ASSETS_WRITE -> "Write Assets"
             SCANS_READ -> "Read Scans"
@@ -147,6 +150,7 @@ enum class McpPermission {
             USER_ACTIVITY -> "Monitor user activity and sessions"
             TRANSLATION_USE -> "Translate requirements to different languages"
             AUDIT_READ -> "View MCP server audit logs (admin only)"
+            PERSONAL_INVENTORY_READ -> "Read visible accounts and assets"
             ASSETS_READ -> "View and search asset inventory"
             ASSETS_WRITE -> "Create and update assets in the inventory"
             SCANS_READ -> "View scan data and results"
