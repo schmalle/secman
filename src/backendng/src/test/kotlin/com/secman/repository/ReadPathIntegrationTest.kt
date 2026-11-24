@@ -116,6 +116,8 @@ class ReadPathIntegrationTest : BaseIntegrationTest() {
         heatmap.recalculateHeatmap()
 
         val byAsset = heatmapEntries.findByAssetIds(listOf(hot.id!!, calm.id!!)).associateBy { it.assetId }
+        assertThat(heatmapEntries.findByAssetIds(listOf(hot.id!!)).map { it.assetId })
+            .containsExactly(hot.id!!)
         val hotEntry = byAsset.getValue(hot.id!!)
         assertThat(hotEntry.criticalCount).isEqualTo(1)
         assertThat(hotEntry.highCount).isEqualTo(1)
