@@ -18,7 +18,7 @@
         [CLI] ─── HTTPS ──► Backend REST API
 ```
 
-Stack: Kotlin 2.4.21 / Java 25 · Micronaut 5.2.5 · Hibernate JPA · Astro 7.4.13 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.9.1 · Picocli 4.7.7 · AWS SDK v2.
+Stack: Kotlin 2.4.21 / Java 25 · Micronaut 5.2.7 · Hibernate JPA · Astro 7.4.13 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.9.2 · Picocli 4.7.7 · AWS SDK v2.
 
 ## Backend (`src/backendng/`)
 
@@ -38,7 +38,7 @@ Packages: `com.secman.{domain, repository, service, controller, config, dto, fil
 
 Controller groups:
 - **Core**: Asset, AssetCompliance, Requirement, Release, ReleaseComparison, Workgroup, Product, Standard, Norm, NormMapping, UseCase
-- **Vulnerability**: VulnerabilityManagement, VulnerabilityExceptionRequest, VulnerabilityStatistics, VulnerabilityConfig, VulnerabilityHeatmap, VulnerabilityMaintenance, ExternalHeatmap, AccountVulns, DomainVulns, WorkgroupVulns
+- **Vulnerability**: VulnerabilityManagement, VulnerabilityExceptionRequest, ProductExceptionBatch, VulnerabilityStatistics, VulnerabilityConfig, VulnerabilityHeatmap, VulnerabilityMaintenance, ExternalHeatmap, AccountVulns, DomainVulns, WorkgroupVulns
 - **Auth**: Auth, OAuth, Passkey, UserProfile
 - **Admin**: AppSettings, IdentityProvider, MaintenanceBanner, UserMapping, User, TranslationConfig, NotificationSettings, EmailConfig, EmailProviderConfig, FalconConfig, ConfigBundle, AwsAccountSharing
 - **Import/Export**: Import, RequirementFile, PublicRequirementDownload, Scan
