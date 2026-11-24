@@ -41,8 +41,8 @@ dependencies {
 	runtimeOnly("org.flywaydb:flyway-mysql:13.13.0")
 
     // Security
-    implementation("io.micronaut.security:micronaut-security-jwt:5.5.2")
-    implementation("io.micronaut.security:micronaut-security-oauth2:5.5.2")
+    implementation("io.micronaut.security:micronaut-security-jwt:5.5.3")
+    implementation("io.micronaut.security:micronaut-security-oauth2:5.5.3")
 
     // WebAuthn/Passkey support
     implementation("com.webauthn4j:webauthn4j-core:0.32.0.RELEASE")
