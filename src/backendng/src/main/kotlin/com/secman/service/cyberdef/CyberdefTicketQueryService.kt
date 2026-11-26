@@ -50,7 +50,7 @@ open class CyberdefTicketQueryService(
     private val access: CyberdefTicketAccess
 ) {
 
-/** One page of tickets in the caller's scope matching [filter]. */
+    /** One page of tickets in the caller's scope matching [filter]. */
     open fun list(actor: CyberdefTicketActor, filter: CyberdefTicketFilter): CyberdefTicketPageDto {
         val page = filter.page.coerceAtLeast(0)
         val size = filter.size.coerceIn(1, MAX_PAGE_SIZE)
@@ -61,7 +61,7 @@ open class CyberdefTicketQueryService(
         val order = if (filter.descending) Sort.Order.desc(sortField) else Sort.Order.asc(sortField)
         val now = Instant.now()
         val requested = filter.statuses.ifEmpty { CyberdefTicketStatus.entries.toSet() }
-        val statuses = if (filter.overdueOnly) requested intersect CyberdefTicketWorkflow.OPEN_STATUSES else requested
+        val statuses = if (filter.overdueOnly) requested intersect OPEN_ONLY else requested
         if (statuses.isEmpty()) return CyberdefTicketPageDto(emptyList(), 0, 0, page, size)
         val search = filter.search?.let(CyberdefTicketInput::cleanSingleLine)?.take(SEARCH_MAX)?.takeIf { it.isNotEmpty() }
 
@@ -82,23 +82,19 @@ open class CyberdefTicketQueryService(
         )
     }
 
-/** Status counts, overdue and needs-my-action figures within the caller's scope. */
+    /** Status counts, overdue and needs-my-action figures within the caller's scope. */
     open fun counts(actor: CyberdefTicketActor): CyberdefTicketCountsDto {
         val scope = access.scope(actor)
-        if (!scope.all && scope.accountIds.isEmpty()) return CyberdefTicketCountsDto(0, 0, 0, 0, emptyMap())
+        if (!scope.all && scope.accountIds.isEmpty()) return CyberdefTicketCountsDto(0, 0, 0, 0)
         val byStatus = tickets.countByStatus(scope.all, scope.queryIds)
-            .associate { row -> (row[0] as CyberdefTicketStatus).name to (row[1] as Number).toLong() }
-        val actionStatuses = if (actor.isDefender) CyberdefTicketWorkflow.DEFENDER_ACTION_STATUSES
-            else CyberdefTicketWorkflow.OWNER_ACTION_STATUSES
-        val open = CyberdefTicketWorkflow.OPEN_STATUSES.sumOf { byStatus[it.name] ?: 0L }
-        val overdue = tickets.countOverdue(scope.all, scope.queryIds, CyberdefTicketWorkflow.OPEN_STATUSES, Instant.now())
-        return CyberdefTicketCountsDto(
-            total = byStatus.values.sum(), open = open, overdue = overdue,
-            needsAction = actionStatuses.sumOf { byStatus[it.name] ?: 0L }, byStatus = byStatus
-        )
+            .associate { row -> row[0] as CyberdefTicketStatus to (row[1] as Number).toLong() }
+        val open = byStatus[CyberdefTicketStatus.OPEN] ?: 0L
+        val closed = byStatus[CyberdefTicketStatus.CLOSED] ?: 0L
+        val overdue = tickets.countOverdue(scope.all, scope.queryIds, OPEN_ONLY, Instant.now())
+        return CyberdefTicketCountsDto(total = open + closed, open = open, closed = closed, overdue = overdue)
     }
 
-/** One ticket, or NOT_FOUND when it is missing or outside the caller's accounts. */
+    /** One ticket, or NOT_FOUND when it is missing or outside the caller's accounts. */
     open fun detail(actor: CyberdefTicketActor, ticketId: Long): CyberdefTicketResult<CyberdefTicketDetailDto> {
         val ticket = access.loadVisible(actor, ticketId) ?: return notFound
         return CyberdefTicketResult.Ok(detailOf(actor, ticket))
@@ -119,23 +115,23 @@ open class CyberdefTicketQueryService(
         return detail(actor, ticket.id!!)
     }
 
-/** Builds the detail view of a ticket the caller is already known to see. */
+    /** Builds the detail view of a ticket the caller is already known to see. */
     fun detailOf(actor: CyberdefTicketActor, ticket: CyberdefTicket): CyberdefTicketDetailDto {
         val id = ticket.id!!
         val kinds = access.kinds(actor, ticket)
         val allowed = CyberdefTicketWorkflow.allowedTransitions(ticket.status, kinds)
-        val needComment = CyberdefTicketWorkflow.commentRequiredTargets(ticket.status)
+        val needComment = CyberdefTicketWorkflow.commentRequiredTargets(ticket.status, kinds)
         return CyberdefTicketDetailDto(
             ticket = CyberdefTicketSummaryDto.from(ticket),
             description = ticket.description, recommendedAction = ticket.recommendedAction,
             cves = ticket.cveList(), resources = resources.findByTicketIdOrderByIdAsc(id).map(CyberdefTicketResourceDto::from),
             references = ticket.referenceList(), recipientCount = ticket.recipientCount,
-            acknowledgedAt = ticket.acknowledgedAt, resolvedAt = ticket.resolvedAt, closedAt = ticket.closedAt,
+            closedAt = ticket.closedAt,
             events = events.findByTicketIdOrderByIdAsc(id, Pageable.from(0, MAX_DETAIL_EVENTS))
                 .map { CyberdefTicketEventDto.from(it, ticket.ticketKey) },
             allowedTransitions = allowed.map { it.name },
             commentRequiredFor = allowed.filter { it in needComment }.map { it.name },
-            canComment = kinds.isNotEmpty() && !ticket.status.isTerminal,
+            canComment = kinds.isNotEmpty(),
             canManageDelivery = CyberdefActorKind.DEFENDER in kinds
         )
     }
@@ -161,7 +157,7 @@ open class CyberdefTicketQueryService(
         )
     }
 
-/** Delivery state of a ticket's mail; Cyber Defence only. */
+    /** Delivery state of a ticket's mail; Cyber Defence only. */
     open fun notifications(actor: CyberdefTicketActor, ticketId: Long): CyberdefTicketResult<List<CyberdefNotificationDto>> {
         if (!actor.isDefender) return defendersOnly
         access.loadVisible(actor, ticketId) ?: return notFound
@@ -177,6 +173,7 @@ open class CyberdefTicketQueryService(
         const val MAX_DETAIL_EVENTS = 500
         private const val SEARCH_MAX = 100
         val SETTLE_WINDOW: Duration = Duration.ofSeconds(5)
+        private val OPEN_ONLY = setOf(CyberdefTicketStatus.OPEN)
 
         /** Request sort key → entity property. Nothing else ever reaches ORDER BY. */
         private val SORTABLE = mapOf("updatedAt" to "updatedAt", "createdAt" to "createdAt", "dueAt" to "dueAt")

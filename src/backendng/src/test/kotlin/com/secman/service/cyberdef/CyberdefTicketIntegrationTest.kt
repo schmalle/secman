@@ -98,24 +98,51 @@ class CyberdefTicketIntegrationTest : BaseIntegrationTest() {
         fun move(actor: CyberdefTicketActor, to: String, comment: String? = null) =
             service.transition(actor, id, to, comment, if (actor == soc) null else version())
 
-        assertThat(move(accountOwner, "NEEDS_INFO", "Which snapshot?")).isInstanceOf(CyberdefTicketResult.Ok::class.java)
-        assertThat((move(accountOwner, "RESOLVED", "done") as CyberdefTicketResult.Failed).code)
-            .isEqualTo(CyberdefTicketWorkflow.INVALID_TRANSITION)
-        assertThat(move(soc, "IN_PROGRESS", "db-prod-2026-11-20")).isInstanceOf(CyberdefTicketResult.Ok::class.java)
-        assertThat(move(accountOwner, "RESOLVED", "Public restore removed")).isInstanceOf(CyberdefTicketResult.Ok::class.java)
-        assertThat((service.transition(accountOwner, id, "ACKNOWLEDGED", null, 0) as CyberdefTicketResult.Failed).code)
+        assertThat(service.comment(accountOwner, id, "Which snapshot?")).isInstanceOf(CyberdefTicketResult.Ok::class.java)
+        assertThat((move(accountOwner, "CLOSED") as CyberdefTicketResult.Failed).code)
+            .isEqualTo(CyberdefTicketWorkflow.COMMENT_REQUIRED)
+        assertThat(move(accountOwner, "CLOSED", "Public restore removed")).isInstanceOf(CyberdefTicketResult.Ok::class.java)
+        assertThat((service.transition(accountOwner, id, "OPEN", "again", 0) as CyberdefTicketResult.Failed).code)
             .isEqualTo(CyberdefTicketResult.VERSION_CONFLICT)
+        val preview = service.previewTransition(soc, id, "OPEN", "Snapshot still public", null) as CyberdefTicketResult.Ok
+        assertThat(preview.value.wouldNotify).containsExactly(accountOwner.email)
+        assertThat(move(soc, "OPEN", "Snapshot still public")).isInstanceOf(CyberdefTicketResult.Ok::class.java)
         val closed = move(soc, "CLOSED") as CyberdefTicketResult.Ok
         assertThat(closed.value.ticket.status).isEqualTo(CyberdefTicketStatus.CLOSED.name)
-        assertThat(closed.value.allowedTransitions).isEmpty()
+        assertThat(closed.value.allowedTransitions).containsExactly("OPEN")
 
         val feed = events.findAfter(start, Instant.now().plusSeconds(60), Pageable.from(0, 100)).filter { it.ticketId == id }
-        assertThat(feed.map { it.toStatus }).containsExactly(
-            CyberdefTicketStatus.NEW, CyberdefTicketStatus.NEEDS_INFO, CyberdefTicketStatus.IN_PROGRESS,
-            CyberdefTicketStatus.RESOLVED, CyberdefTicketStatus.CLOSED)
-        // The defender's answer was mailed back to the account team.
-        assertThat(notifications.findByTicketIdOrderByIdAsc(id).map { it.kind })
-            .containsExactly(CyberdefTicketWriter.KIND_CREATED, CyberdefTicketWriter.KIND_DEFENDER_UPDATE)
+        assertThat(feed.map { it.eventType.name to it.toStatus }).containsExactly(
+            "CREATED" to CyberdefTicketStatus.OPEN, "COMMENT" to null, "STATUS_CHANGED" to CyberdefTicketStatus.CLOSED,
+            "STATUS_CHANGED" to CyberdefTicketStatus.OPEN, "STATUS_CHANGED" to CyberdefTicketStatus.CLOSED)
+        // Each Cyber Defence change was mailed to the account team; the owner's close was not (notify-submitter off).
+        assertThat(notifications.findByTicketIdOrderByIdAsc(id).map { it.kind }).containsExactly(
+            CyberdefTicketWriter.KIND_CREATED, CyberdefTicketWriter.KIND_DEFENDER_UPDATE, CyberdefTicketWriter.KIND_DEFENDER_UPDATE)
+    }
+
+    @Test
+    fun `a dry run leaves no trace and an override mails only the named known address`() {
+        val before = events.count()
+        val preview = (service.create(soc, CyberdefTicketCreateRequest(externalReference = "IT-DRY-$suffix",
+            awsAccountId = ownedAccount, title = "t", severity = "LOW", description = "d", dryRun = true))
+            as CyberdefTicketResult.Ok).value
+        assertThat(preview.outcome).isEqualTo("WOULD_CREATE")
+        assertThat(preview.recipients).containsExactly(accountOwner.email)
+        assertThat(events.count()).isEqualTo(before)
+
+        val overridden = (service.create(soc, CyberdefTicketCreateRequest(externalReference = "IT-OVR-$suffix",
+            awsAccountId = ownedAccount, title = "t", severity = "LOW", description = "d", recipients = listOf(outsider.email!!)))
+            as CyberdefTicketResult.Ok).value
+        assertThat(overridden.outcome).isEqualTo("CREATED")
+        assertThat(recipients.findByTicketIdOrderByEmailAsc(overridden.ticketId!!).map { it.email to it.source })
+            .containsExactly(outsider.email to CyberdefRecipientResolver.SOURCE_OVERRIDE)
+        // Being mailed grants no access: the outsider still cannot open the ticket.
+        assertThat(queries.detail(outsider, overridden.ticketId!!)).isEqualTo(CyberdefTicketResult.notFound)
+
+        val refused = (service.create(soc, CyberdefTicketCreateRequest(awsAccountId = ownedAccount, title = "t",
+            severity = "LOW", description = "d", recipients = listOf("nobody-$suffix@unknown.example")))
+            as CyberdefTicketResult.Ok).value
+        assertThat(refused.errorCode).isEqualTo(CyberdefTicketResult.RECIPIENT_NOT_ALLOWED)
     }
 
     @Test
@@ -123,8 +150,8 @@ class CyberdefTicketIntegrationTest : BaseIntegrationTest() {
         submit("IT-COUNT-$suffix", severity = "CRITICAL")
         val counts = queries.counts(accountOwner)
         assertThat(counts.open).isGreaterThanOrEqualTo(1)
-        assertThat(counts.needsAction).isGreaterThanOrEqualTo(1)
-        assertThat(queries.counts(outsider).byStatus.keys).doesNotContain("CLOSED")
+        assertThat(counts.total).isEqualTo(counts.open + counts.closed)
+        assertThat(queries.counts(outsider).total).isZero()
         assertThat(queries.list(soc, CyberdefTicketFilter(overdueOnly = true, accountId = ownedAccount)).content).isEmpty()
     }
 

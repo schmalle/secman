@@ -6,34 +6,29 @@ import com.secman.dto.mcp.McpExecutionContext
 import com.secman.service.cyberdef.CyberdefTicketService
 import jakarta.inject.Singleton
 
-/** Account-owner side of the workflow only: acknowledge, work, ask, resolve, accept, dispute. */
+/**
+ * Account-owner side of the workflow only: close a ticket with a note on what was done, or
+ * reopen it. With `dryRun` the change is only checked.
+ */
 @Singleton
 class UpdateMySecurityTicketStatusTool(private val service: CyberdefTicketService) : McpTool {
     override val name = "update_my_security_ticket_status"
-    override val description = "Move one of your security tickets to ACKNOWLEDGED, IN_PROGRESS, NEEDS_INFO, RESOLVED, " +
-        "RISK_ACCEPTED or FALSE_POSITIVE. Pass expectedVersion from the last read (requires User Delegation)."
+    override val description = "Close one of your security tickets (comment required: what was done) or reopen it (comment required). " +
+        "dryRun=true checks the change without applying it. Pass expectedVersion from the last read (requires User Delegation)."
     override val operation = McpOperation.WRITE
-    override val inputSchema = mapOf(
-        "type" to "object",
-        "properties" to mapOf(
-            "id" to mapOf("type" to "number", "description" to "Ticket id"),
-            "toStatus" to mapOf("type" to "string",
-                "enum" to listOf("ACKNOWLEDGED", "IN_PROGRESS", "NEEDS_INFO", "RESOLVED", "RISK_ACCEPTED", "FALSE_POSITIVE")),
-            "comment" to mapOf("type" to "string", "description" to "Required for NEEDS_INFO, RESOLVED, RISK_ACCEPTED and FALSE_POSITIVE"),
-            "expectedVersion" to mapOf("type" to "number", "description" to "ticket.version you last saw; a mismatch returns VERSION_CONFLICT")
-        ),
-        "required" to listOf("id", "toStatus")
-    )
+    override val inputSchema = CyberdefMcpSupport.statusSchema("Required: what was done (close) or why (reopen).")
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         requireDelegation(context)?.let { return it }
         val id = CyberdefMcpSupport.long(arguments, "id") ?: return CyberdefMcpSupport.invalid("id is required")
-        return CyberdefMcpSupport.toMcp(
-            service.transition(
-                CyberdefMcpSupport.actor(context), id, CyberdefMcpSupport.string(arguments, "toStatus"),
-                arguments["comment"] as? String, CyberdefMcpSupport.long(arguments, "expectedVersion"),
-                onlyAs = CyberdefActorKind.OWNER
-            )
-        )
+        val actor = CyberdefMcpSupport.actor(context)
+        val toStatus = CyberdefMcpSupport.string(arguments, "toStatus")
+        val comment = arguments["comment"] as? String
+        val expectedVersion = CyberdefMcpSupport.long(arguments, "expectedVersion")
+        return if (CyberdefMcpSupport.bool(arguments, "dryRun")) {
+            CyberdefMcpSupport.toMcp(service.previewTransition(actor, id, toStatus, comment, expectedVersion, onlyAs = CyberdefActorKind.OWNER))
+        } else {
+            CyberdefMcpSupport.toMcp(service.transition(actor, id, toStatus, comment, expectedVersion, onlyAs = CyberdefActorKind.OWNER))
+        }
     }
 }

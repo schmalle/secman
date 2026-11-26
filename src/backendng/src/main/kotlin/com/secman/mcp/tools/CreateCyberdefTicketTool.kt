@@ -16,7 +16,8 @@ import jakarta.inject.Singleton
 class CreateCyberdefTicketTool(private val service: CyberdefTicketService) : McpTool {
     override val name = "create_cyberdef_ticket"
     override val description = "Create a security ticket for an AWS account and notify its owners " +
-        "(CYBERDEF/ADMIN, requires User Delegation). Resending the same externalReference returns the existing ticket."
+        "(CYBERDEF/ADMIN, requires User Delegation). Resending the same externalReference returns the existing ticket. " +
+        "dryRun=true previews recipients and due date without storing or mailing; recipients=[...] mails those addresses instead of the owners."
     override val operation = McpOperation.WRITE
     override val inputSchema = mapOf(
         "type" to "object",
@@ -33,7 +34,7 @@ class CreateCyberdefTicketTool(private val service: CyberdefTicketService) : Mcp
         val result = service.create(CyberdefMcpSupport.actor(context), request)
         // A rejected single ticket is an error with its stable code (UNROUTABLE_ACCOUNT, ...).
         if (result is CyberdefTicketResult.Ok && result.value.outcome == CyberdefTicketService.OUTCOME_REJECTED) {
-            return McpToolResult.error(result.value.errorCode ?: CyberdefTicketResult.VALIDATION_ERROR,
+            return CyberdefMcpSupport.error(result.value.errorCode ?: CyberdefTicketResult.VALIDATION_ERROR,
                 result.value.errors.joinToString("; "))
         }
         return CyberdefMcpSupport.toMcp(result)

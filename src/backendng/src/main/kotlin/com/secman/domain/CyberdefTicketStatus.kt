@@ -1,22 +1,15 @@
 package com.secman.domain
 
 /**
- * Lifecycle of a cyber-defence ticket. The allowed moves between these values live in
+ * Lifecycle of a cyber-defence ticket: OPEN until someone closes it, CLOSED afterwards.
+ * A closed ticket can be reopened. Who may make which move lives in
  * [com.secman.service.cyberdef.CyberdefTicketWorkflow]; nothing else may change a status.
  */
 enum class CyberdefTicketStatus {
-    NEW,
-    ACKNOWLEDGED,
-    IN_PROGRESS,
-    NEEDS_INFO,
-    RESOLVED,
-    RISK_ACCEPTED,
-    FALSE_POSITIVE,
-    REOPENED,
-    CLOSED,
-    CANCELLED;
+    OPEN,
+    CLOSED;
 
-    val isTerminal: Boolean get() = this == CLOSED || this == CANCELLED
+    val isOpen: Boolean get() = this == OPEN
 }
 
 /** Severity the submitter assigns; selects the default due window (secman.cyberdef.sla.*). */

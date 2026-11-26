@@ -5,12 +5,14 @@ internal fun testSettings(
     maxRecipients: Int = 50,
     includeSummary: Boolean = false,
     notifySubmitter: Boolean = false,
-    maxPerHour: Long = 600
+    maxPerHour: Long = 600,
+    overrideDomains: String = ""
 ) = CyberdefTicketSettings(
     criticalDays = 2, highDays = 7, mediumDays = 30, lowDays = 90, infoDays = 0,
     mailIncludesSummary = includeSummary, notifySubmitter = notifySubmitter,
     maxRecipients = maxRecipients, maxTicketsPerHour = maxPerHour,
-    frontendBaseUrl = "https://secman.example.test/"
+    frontendBaseUrl = "https://secman.example.test/",
+    overrideDomains = overrideDomains
 )
 
 internal val defender = CyberdefTicketActor(1, "soc", "soc@example.test", setOf("CYBERDEF"))

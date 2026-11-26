@@ -32,12 +32,12 @@ data class CyberdefTicketSummaryDto(
     val version: Long
 ) {
     companion object {
-/** List row of [ticket]; [now] decides `overdue`. */
+        /** List row of [ticket]; [now] decides `overdue`. */
         fun from(ticket: CyberdefTicket, now: Instant = Instant.now()) = CyberdefTicketSummaryDto(
             id = ticket.id!!, ticketKey = ticket.ticketKey, awsAccountId = ticket.awsAccountId,
             awsAccountName = ticket.awsAccountName, title = ticket.title, severity = ticket.severity.name,
             status = ticket.status.name, dueAt = ticket.dueAt,
-            overdue = !ticket.status.isTerminal && ticket.dueAt?.isBefore(now) == true,
+            overdue = ticket.status.isOpen && ticket.dueAt?.isBefore(now) == true,
             createdAt = ticket.createdAt, updatedAt = ticket.updatedAt, createdByUsername = ticket.createdByUsername,
             sourceSystem = ticket.sourceSystem, externalReference = ticket.externalReference, version = ticket.version
         )
@@ -88,8 +88,6 @@ data class CyberdefTicketDetailDto(
     val resources: List<CyberdefTicketResourceDto>,
     val references: List<String>,
     val recipientCount: Int,
-    val acknowledgedAt: Instant?,
-    val resolvedAt: Instant?,
     val closedAt: Instant?,
     val events: List<CyberdefTicketEventDto>,
     /** Status targets the *calling* user may choose now. The server re-checks every one. */
@@ -115,22 +113,30 @@ data class CyberdefTicketPageDto(
 data class CyberdefTicketCountsDto(
     val total: Long,
     val open: Long,
-    val overdue: Long,
-    /** Tickets waiting on the caller's side of the workflow. */
-    val needsAction: Long,
-    val byStatus: Map<String, Long>
+    val closed: Long,
+    /** Open tickets past their due date. */
+    val overdue: Long
 )
 
 @Serdeable
 /** Outcome of one submitted ticket; `index` is its position in the request. */
 data class CyberdefCreateResultDto(
     val index: Int,
-    /** CREATED, DUPLICATE (same externalReference already submitted by you) or REJECTED. */
+    /**
+     * CREATED, DUPLICATE (same externalReference already submitted by you), REJECTED, or for
+     * a dry run WOULD_CREATE (nothing was stored or sent).
+     */
     val outcome: String,
     val ticketId: Long? = null,
     val ticketKey: String? = null,
     val status: String? = null,
     val recipientCount: Int? = null,
+    /** Who was (or, for a dry run, would be) mailed. */
+    val recipients: List<String> = emptyList(),
+    /** True when the recipients came from the request's `recipients` override. */
+    val recipientsOverridden: Boolean = false,
+    val dueAt: Instant? = null,
+    val dryRun: Boolean = false,
     val errorCode: String? = null,
     val errors: List<String> = emptyList()
 )
@@ -138,6 +144,8 @@ data class CyberdefCreateResultDto(
 @Serdeable
 /** Totals plus one [CyberdefCreateResultDto] per submitted item. */
 data class CyberdefBatchResultDto(
+    val dryRun: Boolean,
+    /** For a dry run: how many would be created. */
     val created: Int,
     val duplicates: Int,
     val rejected: Int,
@@ -149,7 +157,23 @@ data class CyberdefBatchResultDto(
 data class CyberdefTransitionRequest(
     val toStatus: String? = null,
     val comment: String? = null,
-    val expectedVersion: Long? = null
+    val expectedVersion: Long? = null,
+    /** Check the move and report who would be mailed; change nothing. */
+    val dryRun: Boolean? = null
+)
+
+/** What a dry-run status change would do. Nothing was stored or sent. */
+@Serdeable
+data class CyberdefTransitionPreviewDto(
+    val ticketId: Long,
+    val ticketKey: String?,
+    val fromStatus: String,
+    val toStatus: String,
+    val currentVersion: Long,
+    /** Side the change would be recorded under: OWNER or DEFENDER. */
+    val actingAs: String,
+    val wouldNotify: List<String>,
+    val dryRun: Boolean = true
 )
 
 @Serdeable

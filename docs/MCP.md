@@ -534,19 +534,20 @@ Cyber Defence submits findings about AWS accounts; account owners answer. Workfl
 
 | Tool | Arguments | Roles | Deleg. |
 |---|---|---|---|
-| `create_cyberdef_ticket` | `awsAccountId`*, `title`*, `severity`*, `description`*, `externalReference`, `recommendedAction`, `cves[]`, `resources[]`, `references[]`, `sourceSystem`, `dueAt`, `allowUnrouted` | CYBERDEF, ADMIN | ✓ |
-| `create_cyberdef_tickets` | `tickets[]`* (1–100 of the above) | CYBERDEF, ADMIN | ✓ |
+| `create_cyberdef_ticket` | `awsAccountId`*, `title`*, `severity`*, `description`*, `externalReference`, `recommendedAction`, `cves[]`, `resources[]`, `references[]`, `sourceSystem`, `dueAt`, `allowUnrouted`, `recipients[]` (override, max 20), `dryRun` | CYBERDEF, ADMIN | ✓ |
+| `create_cyberdef_tickets` | `tickets[]`* (1–100 of the above), batch-wide `dryRun`, `recipients[]` | CYBERDEF, ADMIN | ✓ |
 | `list_cyberdef_tickets` | `status[]`, `severity[]`, `awsAccountId`, `overdue`, `updatedSince`, `q`, `createdByMe`, `page`, `size` (max 200) | CYBERDEF, ADMIN | ✓ |
 | `get_cyberdef_ticket` | `id` \| `ticketKey` \| `externalReference` | CYBERDEF, ADMIN | ✓ |
 | `get_cyberdef_ticket_updates` | `sinceEventId`, `limit` (max 500) | CYBERDEF, ADMIN | ✓ |
-| `set_cyberdef_ticket_status` | `id`*, `toStatus`* (`IN_PROGRESS\|CLOSED\|REOPENED\|CANCELLED`), `comment`, `expectedVersion` | CYBERDEF, ADMIN | ✓ |
+| `set_cyberdef_ticket_status` | `id`*, `toStatus`* (`OPEN\|CLOSED`), `comment` (required to reopen), `expectedVersion`, `dryRun` | CYBERDEF, ADMIN | ✓ |
 | `add_cyberdef_ticket_comment` | `id`*, `comment`* | any, scoped | ✓ |
 | `list_my_security_tickets` | same filters as `list_cyberdef_tickets` without `createdByMe` | any, scoped | ✓ |
 | `get_my_security_ticket` | `id` \| `ticketKey` | any, scoped | ✓ |
-| `update_my_security_ticket_status` | `id`*, `toStatus`* (`ACKNOWLEDGED\|IN_PROGRESS\|NEEDS_INFO\|RESOLVED\|RISK_ACCEPTED\|FALSE_POSITIVE`), `comment`, `expectedVersion` | any, scoped | ✓ |
+| `update_my_security_ticket_status` | `id`*, `toStatus`* (`OPEN\|CLOSED`), `comment`* , `expectedVersion`, `dryRun` | any, scoped | ✓ |
 
 - "scoped" means the ticket's AWS account must be accessible to the delegated user (or the user is ADMIN/SECCHAMPION); anything else is `NOT_FOUND`.
 - The CYBERDEF/ADMIN check looks at the **delegated user's** roles; an admin API key alone does not pass it.
+- `dryRun` validates and resolves recipients without storing or mailing anything. `recipients` may only name addresses known to SecMan or on `secman.cyberdef.recipient-override.allowed-domains` (else `RECIPIENT_NOT_ALLOWED`). Error messages start with the stable code (`VERSION_CONFLICT: …`). Shell clients: `scripts/cyberdef/`.
 
 ### Notifications and reports
 

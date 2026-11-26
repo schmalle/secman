@@ -22,7 +22,7 @@ data class CyberdefTicketActor(
     /** ADMIN and SECCHAMPION act as owners on every account, matching their global asset authority. */
     val isGlobalOwner: Boolean get() = isAdmin || "SECCHAMPION" in roles
 
-/** Workflow sides held for a ticket, given whether the caller can access its account. */
+    /** Workflow sides held for a ticket, given whether the caller can access its account. */
     fun kindsFor(hasAccountAccess: Boolean): Set<CyberdefActorKind> = buildSet {
         if (isGlobalOwner || hasAccountAccess) add(CyberdefActorKind.OWNER)
         if (isDefender) add(CyberdefActorKind.DEFENDER)

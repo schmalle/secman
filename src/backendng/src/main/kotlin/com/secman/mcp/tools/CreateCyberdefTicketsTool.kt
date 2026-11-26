@@ -15,6 +15,7 @@ import jakarta.inject.Singleton
 class CreateCyberdefTicketsTool(private val service: CyberdefTicketService) : McpTool {
     override val name = "create_cyberdef_tickets"
     override val description = "Create up to 100 security tickets in one call; returns CREATED/DUPLICATE/REJECTED per item " +
+        "(WOULD_CREATE with dryRun). Top-level dryRun and recipients apply to every item that does not set its own " +
         "(CYBERDEF/ADMIN, requires User Delegation)."
     override val operation = McpOperation.WRITE
     override val inputSchema = mapOf(
@@ -24,7 +25,9 @@ class CreateCyberdefTicketsTool(private val service: CyberdefTicketService) : Mc
                 "type" to "array", "minItems" to 1, "maxItems" to CyberdefTicketInput.BATCH_MAX,
                 "items" to mapOf("type" to "object", "properties" to CyberdefMcpSupport.TICKET_FIELDS,
                     "required" to listOf("awsAccountId", "title", "severity", "description"))
-            )
+            ),
+            "dryRun" to CyberdefMcpSupport.DRY_RUN_PROPERTY,
+            "recipients" to CyberdefMcpSupport.RECIPIENTS_PROPERTY
         ),
         "required" to listOf("tickets")
     )
@@ -33,6 +36,8 @@ class CreateCyberdefTicketsTool(private val service: CyberdefTicketService) : Mc
         requireDelegation(context)?.let { return it }
         requireAnyUserRole(context, "CYBERDEF", "ADMIN", code = "FORBIDDEN", message = CyberdefMcpSupport.DEFENDERS_ONLY)
             ?.let { return it }
+        val unknown = arguments.keys - setOf("tickets", "dryRun", "recipients")
+        if (unknown.isNotEmpty()) return CyberdefMcpSupport.invalid("unknown field(s): ${unknown.sorted().joinToString()}")
         val items = arguments["tickets"] as? List<*> ?: return CyberdefMcpSupport.invalid("tickets must be an array")
         if (items.isEmpty() || items.size > CyberdefTicketInput.BATCH_MAX) {
             return CyberdefMcpSupport.invalid("tickets must contain 1-${CyberdefTicketInput.BATCH_MAX} items")
@@ -44,6 +49,15 @@ class CreateCyberdefTicketsTool(private val service: CyberdefTicketService) : Mc
             val (request, errors) = CyberdefTicketInput.fromArguments(map)
             requests += request ?: return CyberdefMcpSupport.invalid("tickets[$index]: ${errors.joinToString("; ")}")
         }
-        return CyberdefMcpSupport.toMcp(service.createBatch(CyberdefMcpSupport.actor(context), requests))
+        val recipients = if (arguments.containsKey("recipients")) {
+            (arguments["recipients"] as? List<*>)?.map { it as? String ?: return CyberdefMcpSupport.invalid("recipients must contain strings only") }
+                ?: return CyberdefMcpSupport.invalid("recipients must be an array of strings")
+        } else null
+        val dryRun = when (val flag = arguments["dryRun"]) {
+            null -> false
+            is Boolean -> flag
+            else -> return CyberdefMcpSupport.invalid("dryRun must be a boolean")
+        }
+        return CyberdefMcpSupport.toMcp(service.createBatch(CyberdefMcpSupport.actor(context), requests, dryRun, recipients))
     }
 }

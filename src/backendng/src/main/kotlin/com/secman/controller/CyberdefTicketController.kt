@@ -86,15 +86,20 @@ open class CyberdefTicketController(
         @PathVariable id: Long,
         @Body request: CyberdefTransitionRequest,
         authentication: Authentication
-    ): HttpResponse<*> = respond(
-        service.transition(CyberdefTicketActor.from(authentication), id, request.toStatus, request.comment, request.expectedVersion)
-    )
+    ): HttpResponse<*> {
+        val actor = CyberdefTicketActor.from(authentication)
+        return if (request.dryRun == true) {
+            respond(service.previewTransition(actor, id, request.toStatus, request.comment, request.expectedVersion))
+        } else {
+            respond(service.transition(actor, id, request.toStatus, request.comment, request.expectedVersion))
+        }
+    }
 
     @Post("/{id}/comments")
     open fun comment(@PathVariable id: Long, @Body request: CyberdefCommentRequest, authentication: Authentication): HttpResponse<*> =
         respond(service.comment(CyberdefTicketActor.from(authentication), id, request.comment))
 
-/** Web form submission (Phase 2 UI). 201 when created, 200 for a duplicate, 4xx with the reason otherwise. */
+    /** Web form submission (Phase 2 UI). 201 created, 200 duplicate or dry run, 4xx with the reason otherwise. */
     @Post
     @Secured("ADMIN", "CYBERDEF")
     open fun create(@Body request: CyberdefTicketCreateRequest, authentication: Authentication): HttpResponse<*> {
@@ -103,7 +108,7 @@ open class CyberdefTicketController(
         val created = result.value
         return when (created.outcome) {
             CyberdefTicketService.OUTCOME_CREATED -> HttpResponse.created(created)
-            CyberdefTicketService.OUTCOME_DUPLICATE -> HttpResponse.ok(created)
+            CyberdefTicketService.OUTCOME_DUPLICATE, CyberdefTicketService.OUTCOME_WOULD_CREATE -> HttpResponse.ok(created)
             else -> HttpResponse.status<Any>(statusFor(created.errorCode)).body(created)
         }
     }
@@ -128,7 +133,7 @@ open class CyberdefTicketController(
         CyberdefTicketResult.NOT_FOUND -> HttpStatus.NOT_FOUND
         CyberdefTicketResult.FORBIDDEN, CyberdefTicketWorkflow.FORBIDDEN -> HttpStatus.FORBIDDEN
         CyberdefTicketResult.VERSION_CONFLICT, CyberdefTicketWorkflow.INVALID_TRANSITION -> HttpStatus.CONFLICT
-        CyberdefTicketResult.UNROUTABLE_ACCOUNT -> HttpStatus.UNPROCESSABLE_ENTITY
+        CyberdefTicketResult.UNROUTABLE_ACCOUNT, CyberdefTicketResult.RECIPIENT_NOT_ALLOWED -> HttpStatus.UNPROCESSABLE_ENTITY
         CyberdefTicketResult.RATE_LIMITED -> HttpStatus.TOO_MANY_REQUESTS
         CyberdefTicketResult.INTERNAL_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR
         else -> HttpStatus.BAD_REQUEST

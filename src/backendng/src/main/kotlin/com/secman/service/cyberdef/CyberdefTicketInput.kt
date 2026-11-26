@@ -1,6 +1,7 @@
 package com.secman.service.cyberdef
 
 import com.secman.domain.CyberdefSeverity
+import com.secman.util.EmailAddressValidator
 import io.micronaut.core.annotation.Introspected
 import io.micronaut.serde.annotation.Serdeable
 import java.net.URI
@@ -31,7 +32,11 @@ data class CyberdefTicketCreateRequest(
     val references: List<String>? = null,
     val sourceSystem: String? = null,
     val dueAt: String? = null,
-    val allowUnrouted: Boolean? = null
+    val allowUnrouted: Boolean? = null,
+    /** Mail these addresses instead of the account's owners (see [CyberdefTicketInput.RECIPIENTS_MAX]). */
+    val recipients: List<String>? = null,
+    /** Validate and resolve everything, store and send nothing. */
+    val dryRun: Boolean? = null
 )
 
 /** A submission that passed [CyberdefTicketInput.validate]: trimmed, bounded, normalised. */
@@ -47,14 +52,17 @@ data class ValidTicket(
     val references: List<String>,
     val sourceSystem: String?,
     val dueAt: Instant?,
-    val allowUnrouted: Boolean
+    val allowUnrouted: Boolean,
+    /** Normalised override addresses; empty means "mail the account's owners". */
+    val recipientOverride: List<String>,
+    val dryRun: Boolean
 )
 
 /** Result of [CyberdefTicketInput.validate]: the cleaned ticket or every problem found. */
 sealed class ValidationOutcome {
-/** Input passed every check. */
+    /** Input passed every check. */
     data class Valid(val ticket: ValidTicket) : ValidationOutcome()
-/** Input failed; [errors] lists each problem, not just the first. */
+    /** Input failed; [errors] lists each problem, not just the first. */
     data class Invalid(val errors: List<String>) : ValidationOutcome()
 }
 
@@ -74,6 +82,7 @@ object CyberdefTicketInput {
     const val URL_MAX = 2_048
     const val IDENTIFIER_MAX = 512
     const val BATCH_MAX = 100
+    const val RECIPIENTS_MAX = 20
 
     private val ACCOUNT_ID = Regex("^[0-9]{12}$")
     private val CVE = Regex("^CVE-[0-9]{4}-[0-9]{4,7}$")
@@ -87,7 +96,7 @@ object CyberdefTicketInput {
     /** Keys the MCP tool accepts. An unknown key is a typo that would silently drop data. */
     val ALLOWED_KEYS = setOf(
         "externalReference", "awsAccountId", "title", "severity", "description", "recommendedAction",
-        "cves", "resources", "references", "sourceSystem", "dueAt", "allowUnrouted"
+        "cves", "resources", "references", "sourceSystem", "dueAt", "allowUnrouted", "recipients", "dryRun"
     )
     private val RESOURCE_KEYS = setOf("type", "identifier", "region")
 
@@ -102,7 +111,7 @@ object CyberdefTicketInput {
         return cleaned
     }
 
-/** Checks and normalises [request]; [now] is the reference for `dueAt`. */
+    /** Checks and normalises [request]; [now] is the reference for `dueAt`. */
     fun validate(request: CyberdefTicketCreateRequest, now: Instant = Instant.now()): ValidationOutcome {
         val errors = mutableListOf<String>()
 
@@ -137,6 +146,7 @@ object CyberdefTicketInput {
         val resources = validateResources(request.resources.orEmpty(), errors)
         val references = validateReferences(request.references.orEmpty(), errors)
         val dueAt = parseDueAt(request.dueAt, now, errors)
+        val override = validateRecipients(request.recipients.orEmpty(), errors)
 
         if (errors.isNotEmpty()) return ValidationOutcome.Invalid(errors)
         return ValidationOutcome.Valid(
@@ -144,7 +154,8 @@ object CyberdefTicketInput {
                 externalReference = reference, awsAccountId = account, title = title, severity = severity!!,
                 description = description, recommendedAction = action, cves = cves, resources = resources,
                 references = references, sourceSystem = source, dueAt = dueAt,
-                allowUnrouted = request.allowUnrouted == true
+                allowUnrouted = request.allowUnrouted == true, recipientOverride = override,
+                dryRun = request.dryRun == true
             )
         )
     }
@@ -172,6 +183,16 @@ object CyberdefTicketInput {
                 null
             } else CyberdefResourceInput(type, identifier, region)
         }
+    }
+
+    /** Syntax only; whether SecMan may mail an address is [CyberdefRecipientResolver.resolveOverride]'s call. */
+    private fun validateRecipients(raw: List<String>, errors: MutableList<String>): List<String> {
+        if (raw.size > RECIPIENTS_MAX) errors += "at most $RECIPIENTS_MAX recipients"
+        val addresses = raw.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
+        addresses.withIndex().filterNot { EmailAddressValidator.isValidRecipient(it.value) }.take(3).forEach { (index, _) ->
+            errors += "recipients[$index] is not a valid email address"
+        }
+        return addresses
     }
 
     private fun validateReferences(raw: List<String>, errors: MutableList<String>): List<String> {
@@ -231,19 +252,20 @@ object CyberdefTicketInput {
             is List<*> -> value.mapIndexed { index, item -> resourceFromMap(index, item, errors) }
             else -> { errors += "resources must be an array of objects"; null }
         }
-        val allowUnrouted = when (val value = arguments["allowUnrouted"]) {
+        fun flag(key: String): Boolean? = when (val value = arguments[key]) {
             null -> null
             is Boolean -> value
-            else -> { errors += "allowUnrouted must be a boolean"; null }
+            else -> { errors += "$key must be a boolean"; null }
         }
-        if (errors.isNotEmpty()) return null to errors
-        return CyberdefTicketCreateRequest(
+        // Every field is read before the error check, so each mistyped field is reported.
+        val request = CyberdefTicketCreateRequest(
             externalReference = text("externalReference"), awsAccountId = text("awsAccountId"),
             title = text("title"), severity = text("severity"), description = text("description"),
             recommendedAction = text("recommendedAction"), cves = stringList("cves"), resources = resources,
             references = stringList("references"), sourceSystem = text("sourceSystem"), dueAt = text("dueAt"),
-            allowUnrouted = allowUnrouted
-        ) to errors
+            allowUnrouted = flag("allowUnrouted"), recipients = stringList("recipients"), dryRun = flag("dryRun")
+        )
+        return (if (errors.isEmpty()) request else null) to errors
     }
 
     private fun resourceFromMap(index: Int, item: Any?, errors: MutableList<String>): CyberdefResourceInput {

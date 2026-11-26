@@ -505,6 +505,10 @@ secman:
       notify-submitter: ${CYBERDEF_MAIL_NOTIFY_SUBMITTER:false}
     max-recipients: ${CYBERDEF_MAX_RECIPIENTS:50}
     max-tickets-per-hour: ${CYBERDEF_MAX_TICKETS_PER_HOUR:600}
+    recipient-override:
+      # Comma-separated domains an explicit `recipients` list may mail. Empty: only addresses
+      # already known to SecMan (users or user mappings) may be named.
+      allowed-domains: ${CYBERDEF_RECIPIENT_OVERRIDE_DOMAINS:}
   crowdstrike:
     # Scheduled cleanup of assets that have not been re-imported by CrowdStrike
     # for `stale-days` days. Opt-in: disabled by default so existing deployments

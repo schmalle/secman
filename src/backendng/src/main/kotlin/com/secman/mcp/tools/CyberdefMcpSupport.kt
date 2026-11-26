@@ -25,16 +25,22 @@ internal object CyberdefMcpSupport {
     )
 
     /** Error message of the CYBERDEF/ADMIN guard that every submit tool calls itself. */
-    const val DEFENDERS_ONLY = "Only Cyber Defence (CYBERDEF) or ADMIN may use this tool"
+    const val DEFENDERS_ONLY = "FORBIDDEN: Only Cyber Defence (CYBERDEF) or ADMIN may use this tool"
 
     fun <T : Any> toMcp(result: CyberdefTicketResult<T>): McpToolResult = when (result) {
         is CyberdefTicketResult.Ok -> McpToolResult.success(result.value)
-        is CyberdefTicketResult.Failed -> McpToolResult.error(result.code, result.message)
+        is CyberdefTicketResult.Failed -> error(result.code, result.message)
     }
 
-    fun invalid(message: String): McpToolResult.Error = McpToolResult.Error(CyberdefTicketResult.VALIDATION_ERROR, message)
+    /**
+     * The JSON-RPC layer forwards only an error's message to the client, so the stable code
+     * leads the message ("UNROUTABLE_ACCOUNT: ..."). Scripts match on that prefix.
+     */
+    fun error(code: String, message: String): McpToolResult.Error = McpToolResult.Error(code, "$code: $message")
 
-/** A numeric argument that may arrive as a JSON number or a numeric string. */
+    fun invalid(message: String): McpToolResult.Error = error(CyberdefTicketResult.VALIDATION_ERROR, message)
+
+    /** A numeric argument that may arrive as a JSON number or a numeric string. */
     fun long(arguments: Map<String, Any>, key: String): Long? = when (val value = arguments[key]) {
         is Number -> value.toLong()
         is String -> value.trim().toLongOrNull()
@@ -43,7 +49,7 @@ internal object CyberdefMcpSupport {
 
     fun string(arguments: Map<String, Any>, key: String): String? = (arguments[key] as? String)?.takeIf { it.isNotBlank() }
 
-/** A boolean argument; anything but `true`/"true" is false. */
+    /** A boolean argument; anything but `true`/"true" is false. */
     fun bool(arguments: Map<String, Any>, key: String): Boolean = when (val value = arguments[key]) {
         is Boolean -> value
         is String -> value.equals("true", ignoreCase = true)
@@ -82,6 +88,30 @@ internal object CyberdefMcpSupport {
         ) to null
     }
 
+    val RECIPIENTS_PROPERTY: Map<String, Any> = mapOf(
+        "type" to "array", "items" to mapOf("type" to "string"), "maxItems" to 20,
+        "description" to "Mail these addresses instead of the account's owners (max 20). Each must be a SecMan user or " +
+            "mapping address, or on secman.cyberdef.recipient-override.allowed-domains; otherwise RECIPIENT_NOT_ALLOWED."
+    )
+
+    val DRY_RUN_PROPERTY: Map<String, Any> = mapOf(
+        "type" to "boolean",
+        "description" to "Validate and resolve recipients and due date, but store nothing and send no mail (default false)"
+    )
+
+    /** Shared schema of the two status tools; only the allowed targets differ. */
+    fun statusSchema(commentHint: String): Map<String, Any> = mapOf(
+        "type" to "object",
+        "properties" to mapOf(
+            "id" to mapOf("type" to "number", "description" to "Ticket id"),
+            "toStatus" to mapOf("type" to "string", "enum" to listOf("OPEN", "CLOSED")),
+            "comment" to mapOf("type" to "string", "description" to "$commentHint Max 4000 characters."),
+            "expectedVersion" to mapOf("type" to "number", "description" to "ticket.version you last saw; a mismatch returns VERSION_CONFLICT"),
+            "dryRun" to mapOf("type" to "boolean", "description" to "Check the change and report who would be mailed; change nothing")
+        ),
+        "required" to listOf("id", "toStatus")
+    )
+
     val FILTER_PROPERTIES: Map<String, Any> = mapOf(
         "status" to mapOf("type" to "array", "items" to mapOf("type" to "string", "enum" to CyberdefTicketStatus.entries.map { it.name }),
             "description" to "Only these statuses (default: all)"),
@@ -116,6 +146,8 @@ internal object CyberdefMcpSupport {
         "sourceSystem" to mapOf("type" to "string", "description" to "Where the finding came from, e.g. guardduty"),
         "dueAt" to mapOf("type" to "string", "description" to "ISO-8601 instant; may only shorten the severity SLA"),
         "allowUnrouted" to mapOf("type" to "boolean",
-            "description" to "Create the ticket even if nobody is allocated to the account (default false: rejected as UNROUTABLE_ACCOUNT)")
+            "description" to "Create the ticket even if nobody is allocated to the account (default false: rejected as UNROUTABLE_ACCOUNT)"),
+        "recipients" to RECIPIENTS_PROPERTY,
+        "dryRun" to DRY_RUN_PROPERTY
     )
 }

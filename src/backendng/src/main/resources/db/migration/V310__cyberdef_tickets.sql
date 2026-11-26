@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS cyberdef_ticket (
     description         TEXT         NOT NULL,
     recommended_action  TEXT         NULL,
     severity            VARCHAR(10)  NOT NULL,
-    status              VARCHAR(20)  NOT NULL,
+    status              VARCHAR(20)  NOT NULL,  -- OPEN | CLOSED
     cve_ids             TEXT         NULL,
     reference_urls      TEXT         NULL,
     due_at              DATETIME(6)  NULL,
@@ -25,8 +25,6 @@ CREATE TABLE IF NOT EXISTS cyberdef_ticket (
     recipient_count     INT          NOT NULL DEFAULT 0,
     created_at          DATETIME(6)  NOT NULL,
     updated_at          DATETIME(6)  NOT NULL,
-    acknowledged_at     DATETIME(6)  NULL,
-    resolved_at         DATETIME(6)  NULL,
     closed_at           DATETIME(6)  NULL,
     version             BIGINT       NOT NULL DEFAULT 0,
     UNIQUE KEY uk_cyberdef_ticket_key (ticket_key),

@@ -59,7 +59,7 @@ class CyberdefTicket(
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    var status: CyberdefTicketStatus = CyberdefTicketStatus.NEW,
+    var status: CyberdefTicketStatus = CyberdefTicketStatus.OPEN,
 
     /** Comma-separated, each value already matched against the CVE pattern on input. */
     @Column(name = "cve_ids", columnDefinition = "TEXT")
@@ -93,12 +93,7 @@ class CyberdefTicket(
     @Column(name = "updated_at", nullable = false)
     var updatedAt: Instant = Instant.now(),
 
-    @Column(name = "acknowledged_at")
-    var acknowledgedAt: Instant? = null,
-
-    @Column(name = "resolved_at")
-    var resolvedAt: Instant? = null,
-
+    /** Set when the ticket last moved to CLOSED; cleared again on reopen. */
     @Column(name = "closed_at")
     var closedAt: Instant? = null,
 

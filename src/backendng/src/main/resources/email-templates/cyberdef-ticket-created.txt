@@ -12,7 +12,8 @@ Cyber Defence opened a security ticket for an AWS account you are responsible fo
 {ifSummary}Summary:
 {summary}
 
-{/ifSummary}Please review the ticket, acknowledge it and update its status as you work on it:
+{/ifSummary}Please review the ticket and, once it is fixed, close it in SecMan with a short note
+on what was done. Questions can go into the ticket as comments:
 {ticketUrl}
 
 The full description, affected resources and recommended action are in SecMan.

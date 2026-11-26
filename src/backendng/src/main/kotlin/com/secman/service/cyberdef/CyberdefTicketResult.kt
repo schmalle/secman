@@ -5,9 +5,9 @@ package com.secman.service.cyberdef
  * scripts under scripts/cyberdef/ match on them, so never reword or rename one.
  */
 sealed class CyberdefTicketResult<out T> {
-/** The operation succeeded with [value]. */
+    /** The operation succeeded with [value]. */
     data class Ok<T>(val value: T) : CyberdefTicketResult<T>()
-/** The operation was refused; [code] is one of the constants below or a workflow code. */
+    /** The operation was refused; [code] is one of the constants below or a workflow code. */
     data class Failed(val code: String, val message: String) : CyberdefTicketResult<Nothing>()
 
     companion object {
@@ -16,6 +16,7 @@ sealed class CyberdefTicketResult<out T> {
         const val VALIDATION_ERROR = "VALIDATION_ERROR"
         const val VERSION_CONFLICT = "VERSION_CONFLICT"
         const val UNROUTABLE_ACCOUNT = "UNROUTABLE_ACCOUNT"
+        const val RECIPIENT_NOT_ALLOWED = "RECIPIENT_NOT_ALLOWED"
         const val RATE_LIMITED = "RATE_LIMITED"
         const val INTERNAL_ERROR = "INTERNAL_ERROR"
 

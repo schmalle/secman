@@ -101,4 +101,30 @@ class CyberdefTicketInputTest {
         assertThat(CyberdefTicketInput.cleanComment(" fixed\r\n ")).isEqualTo("fixed")
         assertThatThrownBy { CyberdefTicketInput.cleanComment("x".repeat(4001)) }.isInstanceOf(IllegalArgumentException::class.java)
     }
+
+    @Test
+    fun `override recipients are normalised, deduplicated and bounded`() {
+        val ticket = (CyberdefTicketInput.validate(valid {
+            copy(recipients = listOf(" Analyst@SOC.example ", "analyst@soc.example", ""), dryRun = true)
+        }, now) as ValidationOutcome.Valid).ticket
+        assertThat(ticket.recipientOverride).containsExactly("analyst@soc.example")
+        assertThat(ticket.dryRun).isTrue()
+
+        val tooMany = CyberdefTicketInput.validate(valid { copy(recipients = List(21) { "a$it@soc.example" }) }, now)
+        assertThat((tooMany as ValidationOutcome.Invalid).errors).contains("at most 20 recipients")
+        val malformed = CyberdefTicketInput.validate(valid { copy(recipients = listOf("not-an-address")) }, now)
+        assertThat((malformed as ValidationOutcome.Invalid).errors.single()).contains("recipients[0]")
+    }
+
+    @Test
+    fun `mcp dryRun and recipients are typed`() {
+        val (request, errors) = CyberdefTicketInput.fromArguments(mapOf("awsAccountId" to "123456789012", "title" to "t",
+            "severity" to "LOW", "description" to "d", "dryRun" to true, "recipients" to listOf("a@soc.example")))
+        assertThat(errors).isEmpty()
+        assertThat(request!!.dryRun).isTrue()
+        assertThat(request.recipients).containsExactly("a@soc.example")
+
+        val (_, typeErrors) = CyberdefTicketInput.fromArguments(mapOf("dryRun" to "yes", "recipients" to "a@soc.example"))
+        assertThat(typeErrors.joinToString()).contains("dryRun must be a boolean", "recipients must be an array")
+    }
 }

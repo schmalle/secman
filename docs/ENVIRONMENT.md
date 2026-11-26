@@ -385,6 +385,7 @@ All optional; defaults shown. Details: [`CYBERDEF_TICKETS.md`](CYBERDEF_TICKETS.
 | `CYBERDEF_MAIL_NOTIFY_SUBMITTER` | `false` | Mail the submitter when owners change the status |
 | `CYBERDEF_MAX_RECIPIENTS` | 50 | Recipient cap per ticket |
 | `CYBERDEF_MAX_TICKETS_PER_HOUR` | 600 | Submissions per submitter per hour |
+| `CYBERDEF_RECIPIENT_OVERRIDE_DOMAINS` | empty | Comma list of domains an explicit `recipients` list may mail; empty = only addresses known to SecMan |
 
 ## Mobile relay
 

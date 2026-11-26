@@ -36,7 +36,7 @@ open class CyberdefTicketMailer(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-/** How many rows a dispatch run actually sent or failed. */
+    /** How many rows a dispatch run actually sent or failed. */
     data class Tally(val attempted: Int, val sent: Int, val failed: Int)
 
     open fun dispatch(notificationIds: Collection<Long>): Tally =

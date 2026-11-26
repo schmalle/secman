@@ -1,6 +1,7 @@
 package com.secman.service.cyberdef
 
 import com.secman.repository.UserMappingRepository
+import com.secman.repository.UserRepository
 import com.secman.repository.WorkgroupAwsAccountRepository
 import com.secman.util.EmailAddressValidator
 import jakarta.inject.Singleton
@@ -28,9 +29,44 @@ data class CyberdefRouting(
 open class CyberdefRecipientResolver(
     private val userMappings: UserMappingRepository,
     private val workgroupAccounts: WorkgroupAwsAccountRepository,
+    private val users: UserRepository,
     private val settings: CyberdefTicketSettings
 ) {
-/** Recipients for [awsAccountId], mapping sources first, capped at `secman.cyberdef.max-recipients`. */
+    /** Result of [resolveOverride]: the routing to use, or the addresses SecMan may not mail. */
+    sealed class Override {
+        /** Every address may be mailed. */
+        data class Accepted(val routing: CyberdefRouting) : Override()
+
+        /** Some addresses are neither known to SecMan nor on an allowed domain. */
+        data class Refused(val addresses: List<String>) : Override()
+    }
+
+    /**
+     * Routing for an explicit recipient list instead of the account's owners.
+     *
+     * SecMan's mail server must not become a relay to arbitrary inboxes, so each address has
+     * to be a known SecMan user or mapping, or sit on `recipient-override.allowed-domains`.
+     * The account name still comes from the account's mappings.
+     */
+    open fun resolveOverride(awsAccountId: String, addresses: List<String>): Override {
+        val refused = addresses.filterNot(::mayOverride)
+        if (refused.isNotEmpty()) return Override.Refused(refused)
+        val accountName = userMappings.findRecipientRowsByAwsAccountId(awsAccountId)
+            .firstNotNullOfOrNull { (it[2] as? String)?.takeIf(String::isNotBlank) }
+        val recipients = addresses.map { email ->
+            CyberdefRecipient(email, users.findByEmailIgnoreCase(email).map { it.id }.orElse(null), SOURCE_OVERRIDE)
+        }
+        return Override.Accepted(CyberdefRouting(recipients, accountName, truncated = false))
+    }
+
+    private fun mayOverride(email: String): Boolean {
+        if (!EmailAddressValidator.isValidRecipient(email)) return false
+        val domain = email.substringAfterLast('@').lowercase(Locale.ROOT)
+        return domain in settings.overrideAllowedDomains ||
+            users.findByEmailIgnoreCase(email).isPresent || userMappings.existsByEmail(email)
+    }
+
+    /** Recipients for [awsAccountId], mapping sources first, capped at `secman.cyberdef.max-recipients`. */
     open fun resolve(awsAccountId: String): CyberdefRouting {
         val mappingRows = userMappings.findRecipientRowsByAwsAccountId(awsAccountId)
         val fromMappings = mappingRows.mapNotNull { row ->
@@ -55,5 +91,6 @@ open class CyberdefRecipientResolver(
     companion object {
         const val SOURCE_MAPPING = "MAPPING"
         const val SOURCE_WORKGROUP = "WORKGROUP"
+        const val SOURCE_OVERRIDE = "OVERRIDE"
     }
 }

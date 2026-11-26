@@ -26,6 +26,8 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      */
     fun findByEmail(email: String): List<UserMapping>
 
+    fun existsByEmail(email: String): Boolean
+
     /**
      * Find all mappings for a specific AWS account
      *

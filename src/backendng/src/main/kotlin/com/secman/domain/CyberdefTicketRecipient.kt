@@ -26,7 +26,7 @@ class CyberdefTicketRecipient(
     @Column(name = "user_id")
     var userId: Long? = null,
 
-    /** MAPPING (personal AWS-account mapping) or WORKGROUP (member of a granted workgroup). */
+    /** MAPPING (personal mapping), WORKGROUP (granted workgroup member) or OVERRIDE (named by the submitter). */
     @Column(nullable = false, length = 16)
     var source: String = ""
 )

@@ -38,22 +38,22 @@ open class CyberdefTicketWriter(
     private val users: UserRepository,
     private val settings: CyberdefTicketSettings
 ) {
-/** The stored ticket and the outbox rows to send once the transaction committed. */
+    /** The stored ticket and the outbox rows to send once the transaction committed. */
     data class Written(val ticket: CyberdefTicket, val notificationIds: List<Long>)
 
-/** What a status change did, decided against the row as read in the transaction. */
+    /** What a status change did, decided against the row as read in the transaction. */
     sealed class TransitionOutcome {
-/** The change was stored. */
+        /** The change was stored. */
         data class Done(val written: Written) : TransitionOutcome()
-/** The workflow refused the move. */
+        /** The workflow refused the move. */
         data class Denied(val code: String, val message: String) : TransitionOutcome()
-/** The caller saw an older version; nothing was changed. */
+        /** The caller saw an older version; nothing was changed. */
         data class Conflict(val currentVersion: Long, val currentStatus: CyberdefTicketStatus) : TransitionOutcome()
-/** The ticket no longer exists. */
+        /** The ticket no longer exists. */
         object Missing : TransitionOutcome()
     }
 
-/** Stores a new ticket with its resources, creation event, recipients and queued mail. */
+    /** Stores a new ticket with its resources, creation event, recipients and queued mail. */
     @Transactional
     open fun create(actor: CyberdefTicketActor, input: ValidTicket, routing: CyberdefRouting, dueAt: Instant?): Written {
         val now = Instant.now()
@@ -81,7 +81,7 @@ open class CyberdefTicketWriter(
             CyberdefTicketEvent(
                 ticketId = id, actorUserId = actor.userId, actorUsername = actor.username,
                 actorKind = CyberdefActorKind.DEFENDER, eventType = CyberdefTicketEventType.CREATED,
-                toStatus = CyberdefTicketStatus.NEW, createdAt = now
+                toStatus = CyberdefTicketStatus.OPEN, createdAt = now
             )
         )
         if (routing.recipients.isNotEmpty()) {
@@ -93,7 +93,7 @@ open class CyberdefTicketWriter(
         return Written(ticket, queued)
     }
 
-/** Applies one status change if the workflow and the expected version allow it. */
+    /** Applies one status change if the workflow and the expected version allow it. */
     @Transactional
     open fun transition(
         actor: CyberdefTicketActor,
@@ -115,15 +115,7 @@ open class CyberdefTicketWriter(
         val now = Instant.now()
         ticket.status = target
         ticket.updatedAt = now
-        when (target) {
-            CyberdefTicketStatus.ACKNOWLEDGED -> ticket.acknowledgedAt = ticket.acknowledgedAt ?: now
-            CyberdefTicketStatus.IN_PROGRESS -> ticket.acknowledgedAt = ticket.acknowledgedAt ?: now
-            CyberdefTicketStatus.RESOLVED, CyberdefTicketStatus.RISK_ACCEPTED, CyberdefTicketStatus.FALSE_POSITIVE ->
-                ticket.resolvedAt = now
-            CyberdefTicketStatus.REOPENED -> ticket.resolvedAt = null
-            CyberdefTicketStatus.CLOSED, CyberdefTicketStatus.CANCELLED -> ticket.closedAt = now
-            else -> Unit
-        }
+        ticket.closedAt = if (target == CyberdefTicketStatus.CLOSED) now else null
         val saved = tickets.update(ticket)
         val event = events.save(
             CyberdefTicketEvent(
@@ -133,7 +125,7 @@ open class CyberdefTicketWriter(
             )
         )
         val kind = if (actedAs == CyberdefActorKind.DEFENDER) KIND_DEFENDER_UPDATE else KIND_STATUS_CHANGED
-        val queued = queue(ticketId, event.id!!, kind, mailRecipients(ticket, actedAs, from, target), now)
+        val queued = queue(ticketId, event.id!!, kind, notifyTargets(ticket, actedAs), now)
         return TransitionOutcome.Done(Written(saved, queued))
     }
 
@@ -154,23 +146,16 @@ open class CyberdefTicketWriter(
     }
 
     /**
-     * Mail on a status change goes where the next move is expected: the account team when
-     * Cyber Defence reopens, answers or cancels; the submitter (opt-in) when the owners act.
-     * CLOSED is the end of the conversation and is not mailed.
+     * Who hears about a status change, read-only so a dry run can report the same list:
+     * when Cyber Defence closes or reopens, the account team it mailed at creation; when
+     * the owners do, the submitter, and only with `secman.cyberdef.mail.notify-submitter`.
      */
-    private fun mailRecipients(
-        ticket: CyberdefTicket,
-        actedAs: CyberdefActorKind,
-        from: CyberdefTicketStatus,
-        target: CyberdefTicketStatus
-    ): List<String> = when {
-        actedAs == CyberdefActorKind.DEFENDER && (target == CyberdefTicketStatus.REOPENED ||
-            target == CyberdefTicketStatus.CANCELLED ||
-            (from == CyberdefTicketStatus.NEEDS_INFO && target == CyberdefTicketStatus.IN_PROGRESS)) ->
-            recipients.findByTicketIdOrderByEmailAsc(ticket.id!!).map { it.email }
-        actedAs == CyberdefActorKind.OWNER && settings.notifySubmitter ->
-            users.findById(ticket.createdByUserId).map { listOf(it.email) }.orElse(emptyList())
-        else -> emptyList()
+    open fun notifyTargets(ticket: CyberdefTicket, actedAs: CyberdefActorKind): List<String> = when (actedAs) {
+        CyberdefActorKind.DEFENDER -> recipients.findByTicketIdOrderByEmailAsc(ticket.id!!).map { it.email }
+        CyberdefActorKind.OWNER ->
+            if (settings.notifySubmitter) users.findById(ticket.createdByUserId).map { listOf(it.email) }.orElse(emptyList())
+            else emptyList()
+        CyberdefActorKind.SYSTEM -> emptyList()
     }
 
     private fun queue(ticketId: Long, eventId: Long, kind: String, emails: List<String>, now: Instant): List<Long> {
