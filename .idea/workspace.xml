@@ -6,7 +6,19 @@
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
       <change beforePath="$PROJECT_DIR$/.idea/dataSources.local.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.local.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/secman.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/secman.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_app_ios/App/SecmanApp/Views/StatusView.swift" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_app_ios/App/SecmanApp/Views/StatusView.swift" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_app_ios/Sources/SecmanRelayKit/RelayModels.swift" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_app_ios/Sources/SecmanRelayKit/RelayModels.swift" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_app_ios/Tests/SecmanRelayKitTests/SecmanRelayKitTests.swift" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_app_ios/Tests/SecmanRelayKitTests/SecmanRelayKitTests.swift" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_intra_mon/docs/SECMAN.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_intra_mon/docs/SECMAN.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/cli.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/cli.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/src/secman/scanners.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/src/secman/scanners.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/startscan.sh" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/startscan.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/tests/test_launcher_isolation.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/tests/test_launcher_isolation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extensions/secman_source/tests/test_openrouter.py" beforeDir="false" afterPath="$PROJECT_DIR$/extensions/secman_source/tests/test_openrouter.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -133,15 +145,6 @@
     </key>
   </component>
   <component name="RunManager">
-    <configuration default="true" type="JetRunConfigurationType">
-      <method v="2">
-        <option name="Make" enabled="true" />
-      </method>
-    </configuration>
-    <configuration default="true" type="KotlinStandaloneScriptRunConfigurationType">
-      <option name="filePath" />
-      <method v="2" />
-    </configuration>
     <configuration default="true" type="DjangoTestsConfigurationType">
       <module name="secscan" />
       <option name="ENV_FILES" value="" />
@@ -439,8 +442,8 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-js-predefined-d6986cc7102b-56aff7b04f6f-JavaScript-PY-263.7307.206" />
-        <option value="bundled-python-sdk-34611be1ca5a-e0583fc556d1-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-263.7307.206" />
+        <option value="bundled-js-predefined-d6986cc7102b-56aff7b04f6f-JavaScript-PY-263.7307.351" />
+        <option value="bundled-python-sdk-342d7f33e45b-e0583fc556d1-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-263.7307.351" />
       </set>
     </attachedChunks>
   </component>
@@ -463,6 +466,9 @@
       <workItem from="1793002486809" duration="3106000" />
       <workItem from="1793027298001" duration="62000" />
       <workItem from="1794398212986" duration="589000" />
+      <workItem from="1795437278302" duration="713000" />
+      <workItem from="1795612551228" duration="643000" />
+      <workItem from="1795637513008" duration="20000" />
     </task>
     <task id="LOCAL-00001" summary="added source of testdata">
       <option name="closed" value="true" />

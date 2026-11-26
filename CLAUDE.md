@@ -34,6 +34,19 @@ Security requirement, vulnerability and risk management platform.
 - Both dev-start scripts require `pass-cli` and must be run **outside any sandbox** (e.g. Bash tool `dangerouslyDisableSandbox: true`, or escalated/unsandboxed permissions in other harnesses) — a sandboxed shell cannot reach `pass-cli` to source secrets, so the process fails to start cleanly.
 - **Host URL in tests**: operator/read-only checks use `SECMAN_HOST` from `pass-cli`; mutating tests use only the isolated runner's exported loopback URLs. Never hardcode the regular 8080/4321 stack.
 
+## Model selection
+
+Use the latest stable model available in the active harness for the appropriate tier in each phase.
+
+| Harness | Planning | Implementation |
+|---|---|---|
+| Codex | Astra-class, such as GPT‑6.2 Astra | Sol-class, such as GPT‑6.2 Sol |
+| Claude Code | Opus-class, such as Opus 5.5 | Sonnet-class, such as Sonnet 5.5 |
+
+Switch to the implementation tier before editing code. If the required tier is unavailable or the harness cannot switch models, ask for a model change before starting that phase.
+
+Keep this section in `AGENTS.md` and `CLAUDE.md` synchronized. When a newer stable model becomes available in a listed tier, verify it in the harness model picker or official release notes and update both files together. Never select Fable 5 or a similarly high-cost Claude model for either phase, including as a fallback.
+
 ## Key Entities
 
 - **Asset**: `id, name, type, ip, owner, description, lastSeen`; metadata `groups, cloudAccountId, cloudInstanceId, adDomain, osVersion`; relations `vulnerabilities, scanResults, workgroups, manualCreator, scanUploader`.
@@ -329,7 +342,7 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-11-22*
+*Last updated: 2026-11-25*
 
 ## Recent Changes
 
@@ -337,6 +350,6 @@ Summaries of the three newest only. Every entry is written **verbatim** to `docs
 
 - **CrowdStrike overdue age (2026-11-21)** — starts with the earliest detection on the affected system. V304 preserves the host detection independently of patch and CVE publication dates. See `docs/CROWDSTRIKE_IMPORT.md` for migration and exception-review behavior.
 
-- **Vulnerability replace scoping (2026-11-13)** — the Excel vulnerability import's transactional replace deleted every row on each asset named in the spreadsheet, including live CrowdStrike, CLI-manual and integration findings, until the next nightly run restored them; it now deletes only `XLSX` and pre-V213 `UNKNOWN` rows (`VulnerabilityPersistenceHelper.REPLACEABLE_SOURCES`, new `VulnerabilityRepository.deleteByAssetIdAndSourceIn`). The CrowdStrike reconcile sweep's failed-host exclusion matched by short label, so one failed `web01.a.example` kept `web01.b.example`'s patched findings out of the sweep; `reconcileScopeHosts` now excludes by failed AID or by a hostname naming the same machine (equal, or a bare short name on either side). The CLI no longer logs a zero-finding, unverified batch as "all 0 vulnerabilities were invalid". Investigation of a "patched vulnerabilities persist" report: the sampled host held only freshly re-imported rows that Falcon itself reported open. See `docs/CROWDSTRIKE_IMPORT.md` §Stale vulnerability cleanup.
+- **SLA anchor = max(first detection, patch date) (2026-11-13)** — overdue timing now uses `max(first CrowdStrike detection, patch date)` across backend lookups, imports, and CLI age reporting. V299 re-anchors affected rows; refresh the outdated-assets view after deployment. See `docs/CROWDSTRIKE_IMPORT.md` §SLA anchor.
 
-- **Inactive user cleanup (2026-11-11)** — opt-in nightly job (03:15, `USER_CLEANUP_ENABLED`, dry-run by default) warns users 30 days before and then deletes accounts inactive for 365 days, through `UserDeletionValidator` + `UserService.deleteUser`; ADMINs, service accounts, recent MCP-key owners and blocked users are skipped, a 10 % safety brake stops all deletions, every run is recorded per user. Passkey logins and delegated MCP calls (daily throttle) now set `last_login`. `deleteUser` now also removes MCP API keys, chat settings, preferences and relay identities, and the validator blocks only on NOT NULL references, so the manual delete no longer refuses e.g. assessment respondents or release creators. MCP `delete_user` now uses the same complete deletion, and V298 deactivates API keys left behind by earlier deletions. ADMIN endpoints `/api/user-cleanup/*`. See `docs/USER_CLEANUP.md`.
+- **Vulnerability replace scoping (2026-11-13)** — the Excel vulnerability import's transactional replace deleted every row on each asset named in the spreadsheet, including live CrowdStrike, CLI-manual and integration findings, until the next nightly run restored them; it now deletes only `XLSX` and pre-V213 `UNKNOWN` rows (`VulnerabilityPersistenceHelper.REPLACEABLE_SOURCES`, new `VulnerabilityRepository.deleteByAssetIdAndSourceIn`). The CrowdStrike reconcile sweep's failed-host exclusion matched by short label, so one failed `web01.a.example` kept `web01.b.example`'s patched findings out of the sweep; `reconcileScopeHosts` now excludes by failed AID or by a hostname naming the same machine (equal, or a bare short name on either side). The CLI no longer logs a zero-finding, unverified batch as "all 0 vulnerabilities were invalid". Investigation of a "patched vulnerabilities persist" report: the sampled host held only freshly re-imported rows that Falcon itself reported open. See `docs/CROWDSTRIKE_IMPORT.md` §Stale vulnerability cleanup.

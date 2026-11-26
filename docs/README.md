@@ -30,6 +30,7 @@ Start with [installation](../INSTALL.md) for a new checkout or [deployment](DEPL
 - [Workgroup asset sync](WORKGROUP_ASSET_SYNC.md)
 - [Workgroup feature documentation](workgroup-feature-documentation.md)
 - [CrowdStrike import and synchronization](CROWDSTRIKE_IMPORT.md)
+- [Product exception requests across AWS accounts](PRODUCT_EXCEPTION_BATCHES.md)
 - [Crowdstrike vulnerability match](CROWDSTRIKE_VULNERABILITY_MATCH.md)
 - [AWS asset match and clear](CLI_ASSET_MATCH_CLEAR.md)
 - [GitHub repos](GITHUB_REPOS.md)
@@ -92,5 +93,3 @@ These records describe changes, proposals, or investigations at the time they we
 - [Source review complexity speed](SOURCE_REVIEW_COMPLEXITY_SPEED.md)
 - [Implementation plans](plans/)
 - [Design records](superpowers/)
-
-- [Product exception batches across AWS accounts](PRODUCT_EXCEPTION_BATCHES.md)

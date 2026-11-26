@@ -10,7 +10,7 @@ Security requirement, vulnerability and risk-assessment platform.
 ## What it does
 
 - Security requirement lifecycle (versioned releases: PREPARATION → ALIGNMENT → ACTIVE → ARCHIVED), Excel/Word/CSV export, automated translation (OpenRouter, 10 languages).
-- Vulnerability management: CrowdStrike Falcon import, GitHub App Dependabot alert tracking with 30-day non-decrease owner alerts, exception-request workflow, statistics, heatmap, materialized view for outdated-asset queries. CrowdStrike findings use first detection on the affected system as their SLA start.
+- Vulnerability management: CrowdStrike Falcon import, GitHub App Dependabot alert tracking with 30-day non-decrease owner alerts, exception-request workflow (including product exceptions across AWS accounts), statistics, heatmap, materialized view for outdated-asset queries. CrowdStrike findings use first detection on the affected system as their SLA start. See the [product exception guide](docs/PRODUCT_EXCEPTION_BATCHES.md).
 - Asset inventory: Nmap/Masscan import, AD/cloud metadata, criticality, workgroup-scoped access. Operational views show assets [observed within the last 24 hours](docs/CURRENT_ASSETS.md).
 - Risk register, demand classification, compliance-framework mapping (SOC2, ISO 27001, NIST), optional AI-assisted pre-fill of compliance answers (OpenRouter LLM, confidence scoring + citations, human review required).
 - AWS account onboarding: imports requesting notifications use a saved welcome-email (default) or risk-assessment policy. The welcome subject and body are editable in the web UI; advanced guided questionnaires remain supported.
@@ -23,7 +23,7 @@ Security requirement, vulnerability and risk-assessment platform.
 
 ## Stack
 
-Kotlin 2.4.21 / Java 25 · Micronaut 5.2.5 · Hibernate JPA · Astro 7.4.13 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.9.1 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2 · Go 1.24 (mobile relay).
+Kotlin 2.4.21 / Java 25 · Micronaut 5.2.7 · Hibernate JPA · Astro 7.4.13 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.9.2 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2 · Go 1.24 (mobile relay).
 
 ## Quick Start (development)
 
