@@ -90,7 +90,12 @@ Field codes: `REQUIRED`, `INVALID`, `TOO_LONG`, `TOO_MANY`, `NOT_FUTURE`,
 - **Ticket key**: `CD-<year>-<id>` is derived from the id and creation year when read; it is
   not stored (V311 dropped the column). Lookup by key parses the id and checks the year.
 - **Batch cost**: duplicates, the hourly count and recipient routing are read once per call
-  (routing once per distinct account), not once per ticket.
+  (routing once per distinct account), not once per ticket. A `delivery.recipients` override
+  is checked once per call with two queries for the whole list; only the account name is
+  looked up per account. The hourly count uses `idx_cyberdef_ticket_submitter_created` (V312).
+- **Request cost**: a caller's accessible accounts are computed once per request and reused
+  for the visibility check, the workflow sides and the response. Never cached across requests,
+  so revoked access still takes effect on the next call.
 - **References** must be absolute `https` URLs without credentials. They are display-only
   and never fetched.
 
@@ -292,8 +297,9 @@ The mail link uses `app.frontend.base-url`.
 
 ## Data model
 
-Migrations `V310__cyberdef_tickets.sql` and `V311__cyberdef_ticket_key_and_digest.sql`
-(drops the stored key, adds the outbox `batch_key`): `cyberdef_ticket` (status `OPEN`/`CLOSED`,
+Migrations `V310__cyberdef_tickets.sql`, `V311__cyberdef_ticket_key_and_digest.sql`
+(drops the stored key, adds the outbox `batch_key`) and `V312__cyberdef_ticket_submitter_index.sql`
+(index for the hourly limit): `cyberdef_ticket` (status `OPEN`/`CLOSED`,
 `closed_at`, `@Version`), `cyberdef_ticket_resource`, `cyberdef_ticket_event` (append-only;
 id = cursor), `cyberdef_ticket_recipient` (audit; source `MAPPING`/`WORKGROUP`/`OVERRIDE`)
 and `cyberdef_ticket_notification` (outbox). Users are referenced by id plus a username

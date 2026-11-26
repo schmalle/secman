@@ -28,6 +28,10 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
 
     fun existsByEmail(email: String): Boolean
 
+    /** The lower-cased addresses among [emails] that appear on any mapping; one query for a whole list. */
+    @Query("SELECT DISTINCT LOWER(m.email) FROM UserMapping m WHERE LOWER(m.email) IN (:emails)")
+    fun findKnownLowerEmails(emails: Collection<String>): List<String>
+
     /**
      * Rows of [awsAccountId, awsAccountName] whose id starts with [idPrefix] or whose name
      * contains [nameContains] (both LIKE patterns, already escaped). For the ticket form's

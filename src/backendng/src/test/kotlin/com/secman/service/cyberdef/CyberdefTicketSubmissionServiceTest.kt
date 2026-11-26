@@ -149,15 +149,16 @@ class CyberdefTicketSubmissionServiceTest {
     fun `named recipients replace the owners and refused ones are named by field`() {
         quiet()
         val overrideRouting = CyberdefRouting(listOf(CyberdefRecipient("analyst@soc.example", null, "OVERRIDE")), "prod", false)
-        every { resolver.resolveOverride("123456789012", listOf("analyst@soc.example")) } returns
-            CyberdefRecipientResolver.Override.Accepted(overrideRouting)
+        every { resolver.checkOverride(listOf("analyst@soc.example")) } returns
+            CyberdefRecipientResolver.Override.Accepted(overrideRouting.recipients)
+        every { resolver.accountName("123456789012") } returns "prod"
         every { writer.create(defender, any(), overrideRouting, any(), any()) } returns CyberdefTicketWriter.Written(stored(), emptyList())
         val accepted = created(service().create(defender, one(delivery = CyberdefDelivery(recipients = listOf(" Analyst@SOC.example ")))))
             as com.secman.dto.CyberdefCreateResultDto
         assertThat(accepted.recipientsOverridden).isTrue()
         verify(exactly = 0) { resolver.resolve(any()) }
 
-        every { resolver.resolveOverride(any(), listOf("ok@soc.example", "x@evil.example")) } returns
+        every { resolver.checkOverride(listOf("ok@soc.example", "x@evil.example")) } returns
             CyberdefRecipientResolver.Override.Refused(listOf("x@evil.example"))
         val refused = created(service().create(defender, one(fields("SOC-2"),
             CyberdefDelivery(recipients = listOf("ok@soc.example", "x@evil.example"))))) as com.secman.dto.CyberdefCreateResultDto
@@ -172,5 +173,20 @@ class CyberdefTicketSubmissionServiceTest {
         assertThat((badDelivery as CyberdefTicketResult.Failed).fieldErrors.single().field).isEqualTo("delivery.recipients[0]")
         val tooMany = service().createBatch(defender, CyberdefBatchCreateRequest(List(101) { fields("R$it") }))
         assertThat((tooMany as CyberdefTicketResult.Failed).code).isEqualTo(CyberdefTicketResult.VALIDATION_ERROR)
+    }
+
+    @Test
+    fun `a batch over several accounts checks the override list once`() {
+        quiet()
+        every { resolver.checkOverride(any()) } returns
+            CyberdefRecipientResolver.Override.Accepted(listOf(CyberdefRecipient("a@soc.example", null, "OVERRIDE")))
+        every { resolver.accountName(any()) } returns null
+        every { writer.create(any(), any(), any(), any(), any()) } returns CyberdefTicketWriter.Written(stored(), emptyList())
+        service().createBatch(defender, CyberdefBatchCreateRequest(
+            listOf(fields("A", account = "111111111111"), fields("B", account = "222222222222"), fields("C", account = "111111111111")),
+            CyberdefDelivery(recipients = listOf("a@soc.example"))))
+        verify(exactly = 1) { resolver.checkOverride(any()) }
+        verify(exactly = 1) { resolver.accountName("111111111111") }
+        verify(exactly = 1) { resolver.accountName("222222222222") }
     }
 }

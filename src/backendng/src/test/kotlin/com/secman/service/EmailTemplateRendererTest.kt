@@ -135,4 +135,18 @@ class EmailTemplateRendererTest {
     fun `escapeHtml covers the four characters that matter in an attribute or a body`() {
         assertThat(renderer.escapeHtml("&<>\"")).isEqualTo("&amp;&lt;&gt;&quot;")
     }
+
+    @Test
+    fun `templates and the logo are read once and the cached logo cannot be altered by a caller`() {
+        val first = renderer.readHtml("cyberdef-ticket-created")
+        assertThat(renderer.readHtml("cyberdef-ticket-created")).isSameAs(first)
+
+        val logo = renderer.loadLogoInlineImage()
+        if (logo.isNotEmpty()) {
+            val bytes = logo.getValue(EmailTemplateRenderer.LOGO_CID).first
+            val original = bytes.copyOf()
+            bytes.fill(0)
+            assertThat(renderer.loadLogoInlineImage().getValue(EmailTemplateRenderer.LOGO_CID).first).isEqualTo(original)
+        }
+    }
 }

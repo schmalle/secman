@@ -6,6 +6,10 @@ import io.micronaut.security.authentication.Authentication
 /**
  * The caller of a ticket operation, built from either a web session or an MCP delegation,
  * so both surfaces go through exactly the same checks in [CyberdefTicketService].
+ *
+ * One instance lives for exactly one request (the controller and each MCP tool build a new
+ * one per call), which is what makes [accountsForRequest] safe: access is still evaluated
+ * live on every request, just not three times within one.
  */
 data class CyberdefTicketActor(
     val userId: Long,
@@ -21,6 +25,15 @@ data class CyberdefTicketActor(
 
     /** ADMIN and SECCHAMPION act as owners on every account, matching their global asset authority. */
     val isGlobalOwner: Boolean get() = isAdmin || "SECCHAMPION" in roles
+
+    /**
+     * The caller's accessible AWS accounts, computed on first use and reused for the rest of
+     * this request. Not part of equality; never shared between requests.
+     */
+    @Volatile
+    private var accounts: Set<String>? = null
+
+    fun accountsForRequest(compute: () -> Set<String>): Set<String> = accounts ?: compute().also { accounts = it }
 
     /** Workflow sides held for a ticket, given whether the caller can access its account. */
     fun kindsFor(hasAccountAccess: Boolean): Set<CyberdefActorKind> = buildSet {

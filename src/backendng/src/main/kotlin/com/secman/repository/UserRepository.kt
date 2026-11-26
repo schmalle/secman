@@ -81,6 +81,10 @@ interface UserRepository : JpaRepository<User, Long> {
 
     fun existsByEmail(email: String): Boolean
 
+    /** Rows of [id, lower-cased email] for [emails] (already lower-cased); one query for a whole list. */
+    @Query("SELECT u.id, LOWER(u.email) FROM User u WHERE LOWER(u.email) IN (:emails)")
+    fun findIdsByLowerEmailIn(emails: Collection<String>): List<Array<Any?>>
+
     fun findByUsernameOrEmail(username: String, email: String): Optional<User>
 
     // Workgroup-Based Access Control - Feature 008

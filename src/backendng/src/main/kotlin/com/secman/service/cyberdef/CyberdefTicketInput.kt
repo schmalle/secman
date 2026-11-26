@@ -180,7 +180,7 @@ object CyberdefTicketInput {
         )
     }
 
-    /** Syntax only; whether SecMan may mail an address is [CyberdefRecipientResolver.resolveOverride]'s call. */
+    /** Syntax only; whether SecMan may mail an address is [CyberdefRecipientResolver.checkOverride]'s call. */
     fun validateDelivery(delivery: CyberdefDelivery?): Validated<ValidDelivery> {
         val errors = mutableListOf<CyberdefFieldError>()
         val raw = delivery?.recipients.orEmpty()

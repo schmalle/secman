@@ -85,10 +85,15 @@ open class CyberdefTicketSubmissionService(
         val batchKey: String = UUID.randomUUID().toString()
         val queuedMail = mutableListOf<Long>()
         private val routes = mutableMapOf<String, Routed>()
+
+        /** Override recipients are checked once per call; only the account name differs per account. */
+        val override: CyberdefRecipientResolver.Override? by lazy {
+            delivery.recipients.takeIf { it.isNotEmpty() }?.let(resolver::checkOverride)
+        }
         private var budget: Long = settings.maxTicketsPerHour -
             tickets.countByCreatedByUserIdAndCreatedAtAfter(actor.userId, now.minus(Duration.ofHours(1)))
 
-        fun route(accountId: String): Routed = routes.getOrPut(accountId) { routeAccount(accountId, delivery) }
+        fun route(accountId: String): Routed = routes.getOrPut(accountId) { routeAccount(accountId, delivery, override) }
 
         /** Takes one slot of the hourly budget; dry runs only look. */
         fun takeBudget(): Boolean {
@@ -176,10 +181,11 @@ open class CyberdefTicketSubmissionService(
     }
 
     /** Explicit recipients replace the account's owners; otherwise the owners must exist or be waived. */
-    private fun routeAccount(accountId: String, delivery: ValidDelivery): Routed {
-        if (delivery.recipients.isNotEmpty()) {
-            return when (val override = resolver.resolveOverride(accountId, delivery.recipients)) {
-                is CyberdefRecipientResolver.Override.Accepted -> Routed.To(override.routing)
+    private fun routeAccount(accountId: String, delivery: ValidDelivery, override: CyberdefRecipientResolver.Override?): Routed {
+        if (override != null) {
+            return when (override) {
+                is CyberdefRecipientResolver.Override.Accepted ->
+                    Routed.To(CyberdefRouting(override.recipients, resolver.accountName(accountId), truncated = false))
                 is CyberdefRecipientResolver.Override.Refused -> Routed.Refused(RECIPIENT_NOT_ALLOWED,
                     delivery.recipients.withIndex().filter { it.value in override.addresses }.map { (i, address) ->
                         CyberdefFieldError("delivery.recipients[$i]", CyberdefFieldError.NOT_ALLOWED,

@@ -15,6 +15,7 @@ internal fun testSettings(
     overrideDomains = overrideDomains
 )
 
-internal val defender = CyberdefTicketActor(1, "soc", "soc@example.test", setOf("CYBERDEF"))
-internal val owner = CyberdefTicketActor(2, "owner", "owner@example.test", setOf("USER"))
-internal val champion = CyberdefTicketActor(3, "champ", "champ@example.test", setOf("USER", "SECCHAMPION"))
+/** Fresh actors on every access: each carries a per-request account cache. */
+internal val defender get() = CyberdefTicketActor(1, "soc", "soc@example.test", setOf("CYBERDEF"))
+internal val owner get() = CyberdefTicketActor(2, "owner", "owner@example.test", setOf("USER"))
+internal val champion get() = CyberdefTicketActor(3, "champ", "champ@example.test", setOf("USER", "SECCHAMPION"))

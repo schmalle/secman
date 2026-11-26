@@ -32,39 +32,41 @@ open class CyberdefRecipientResolver(
     private val users: UserRepository,
     private val settings: CyberdefTicketSettings
 ) {
-    /** Result of [resolveOverride]: the routing to use, or the addresses SecMan may not mail. */
+    /** Result of [checkOverride]: the recipients to use, or the addresses SecMan may not mail. */
     sealed class Override {
         /** Every address may be mailed. */
-        data class Accepted(val routing: CyberdefRouting) : Override()
+        data class Accepted(val recipients: List<CyberdefRecipient>) : Override()
 
         /** Some addresses are neither known to SecMan nor on an allowed domain. */
         data class Refused(val addresses: List<String>) : Override()
     }
 
     /**
-     * Routing for an explicit recipient list instead of the account's owners.
+     * Whether SecMan may mail an explicit recipient list instead of an account's owners.
      *
      * SecMan's mail server must not become a relay to arbitrary inboxes, so each address has
      * to be a known SecMan user or mapping, or sit on `recipient-override.allowed-domains`.
-     * The account name still comes from the account's mappings.
+     * The answer does not depend on the account, so a batch asks once: two queries for the
+     * whole list, whatever its length.
      */
-    open fun resolveOverride(awsAccountId: String, addresses: List<String>): Override {
-        val refused = addresses.filterNot(::mayOverride)
-        if (refused.isNotEmpty()) return Override.Refused(refused)
-        val accountName = userMappings.findRecipientRowsByAwsAccountId(awsAccountId)
-            .firstNotNullOfOrNull { (it[2] as? String)?.takeIf(String::isNotBlank) }
-        val recipients = addresses.map { email ->
-            CyberdefRecipient(email, users.findByEmailIgnoreCase(email).map { it.id }.orElse(null), SOURCE_OVERRIDE)
+    open fun checkOverride(addresses: List<String>): Override {
+        val normalized = addresses.map { it.trim().lowercase(Locale.ROOT) }.distinct()
+        if (normalized.isEmpty()) return Override.Accepted(emptyList())
+        val userIds = users.findIdsByLowerEmailIn(normalized)
+            .associate { (it[1] as String) to (it[0] as? Number)?.toLong() }
+        val mapped = userMappings.findKnownLowerEmails(normalized).toSet()
+        val refused = normalized.filterNot { email ->
+            EmailAddressValidator.isValidRecipient(email) &&
+                (email.substringAfterLast('@') in settings.overrideAllowedDomains || email in userIds || email in mapped)
         }
-        return Override.Accepted(CyberdefRouting(recipients, accountName, truncated = false))
+        if (refused.isNotEmpty()) return Override.Refused(refused)
+        return Override.Accepted(normalized.map { CyberdefRecipient(it, userIds[it], SOURCE_OVERRIDE) })
     }
 
-    private fun mayOverride(email: String): Boolean {
-        if (!EmailAddressValidator.isValidRecipient(email)) return false
-        val domain = email.substringAfterLast('@').lowercase(Locale.ROOT)
-        return domain in settings.overrideAllowedDomains ||
-            users.findByEmailIgnoreCase(email).isPresent || userMappings.existsByEmail(email)
-    }
+    /** The display name of [awsAccountId] from its mappings, for mails and the ticket record. */
+    open fun accountName(awsAccountId: String): String? =
+        userMappings.findRecipientRowsByAwsAccountId(awsAccountId)
+            .firstNotNullOfOrNull { (it[2] as? String)?.takeIf(String::isNotBlank) }
 
     /** Recipients for [awsAccountId], mapping sources first, capped at `secman.cyberdef.max-recipients`. */
     open fun resolve(awsAccountId: String): CyberdefRouting {

@@ -22,7 +22,8 @@ import java.time.Instant
     indexes = [
         Index(name = "idx_cyberdef_ticket_account_status", columnList = "aws_account_id,status"),
         Index(name = "idx_cyberdef_ticket_status_due", columnList = "status,due_at"),
-        Index(name = "idx_cyberdef_ticket_updated", columnList = "updated_at")
+        Index(name = "idx_cyberdef_ticket_updated", columnList = "updated_at"),
+        Index(name = "idx_cyberdef_ticket_submitter_created", columnList = "created_by_user_id,created_at")
     ]
 )
 // Columns mirror db/migration/V310__cyberdef_tickets.sql; change both together.

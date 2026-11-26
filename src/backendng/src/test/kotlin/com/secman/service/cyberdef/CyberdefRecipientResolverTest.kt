@@ -1,6 +1,5 @@
 package com.secman.service.cyberdef
 
-import com.secman.domain.User
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import com.secman.repository.WorkgroupAwsAccountRepository
@@ -8,7 +7,6 @@ import io.mockk.every
 import io.mockk.mockk
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import java.util.Optional
 
 /** Unit tests for CyberdefRecipientResolver; no database, collaborators are mocked. */
 class CyberdefRecipientResolverTest {
@@ -61,32 +59,35 @@ class CyberdefRecipientResolverTest {
 
     @Test
     fun `an override may name known SecMan addresses and allowed domains only`() {
-        val known = User(id = 4, username = "known", email = "known@corp.example", passwordHash = "x")
-        every { users.findByEmailIgnoreCase(any()) } returns Optional.empty()
-        every { users.findByEmailIgnoreCase("known@corp.example") } returns Optional.of(known)
-        every { mappings.existsByEmail(any()) } returns false
-        every { mappings.existsByEmail("future@corp.example") } returns true
-        every { mappings.findRecipientRowsByAwsAccountId(any()) } returns listOf(arrayOf<Any?>("x@corp.example", null, "prod"))
+        every { users.findIdsByLowerEmailIn(any()) } returns listOf(arrayOf<Any?>(4L, "known@corp.example"))
+        every { mappings.findKnownLowerEmails(any()) } returns listOf("future@corp.example")
 
-        val accepted = resolver(domains = "soc.example").resolveOverride("123456789012",
-            listOf("known@corp.example", "future@corp.example", "analyst@soc.example"))
-        val routing = (accepted as CyberdefRecipientResolver.Override.Accepted).routing
-        assertThat(routing.recipients).containsExactly(
+        val accepted = resolver(domains = "soc.example").checkOverride(
+            listOf(" Known@Corp.example ", "future@corp.example", "analyst@soc.example"))
+        assertThat((accepted as CyberdefRecipientResolver.Override.Accepted).recipients).containsExactly(
             CyberdefRecipient("known@corp.example", 4L, CyberdefRecipientResolver.SOURCE_OVERRIDE),
             CyberdefRecipient("future@corp.example", null, CyberdefRecipientResolver.SOURCE_OVERRIDE),
             CyberdefRecipient("analyst@soc.example", null, CyberdefRecipientResolver.SOURCE_OVERRIDE)
         )
-        assertThat(routing.accountName).isEqualTo("prod")
 
-        val refused = resolver().resolveOverride("123456789012", listOf("known@corp.example", "stranger@elsewhere.example"))
+        val refused = resolver().checkOverride(listOf("known@corp.example", "stranger@elsewhere.example"))
         assertThat((refused as CyberdefRecipientResolver.Override.Refused).addresses).containsExactly("stranger@elsewhere.example")
     }
 
     @Test
-    fun `an override never consults the account's owners`() {
-        every { users.findByEmailIgnoreCase(any()) } returns Optional.empty()
-        every { mappings.findRecipientRowsByAwsAccountId(any()) } returns emptyList()
-        resolver(domains = "@SOC.example").resolveOverride("123456789012", listOf("a@soc.example"))
-        io.mockk.verify(exactly = 0) { workgroups.findMemberContactsByAwsAccountId(any()) }
+    fun `an override costs two queries for the whole list and never consults the owners`() {
+        every { users.findIdsByLowerEmailIn(any()) } returns emptyList()
+        every { mappings.findKnownLowerEmails(any()) } returns emptyList()
+        resolver(domains = "@SOC.example").checkOverride(List(20) { "a$it@soc.example" })
+        io.mockk.verify(exactly = 1) { users.findIdsByLowerEmailIn(any()) }
+        io.mockk.verify(exactly = 1) { mappings.findKnownLowerEmails(any()) }
+        io.mockk.verify(exactly = 0) { workgroups.findMemberContactsByAwsAccountId(any()); mappings.findRecipientRowsByAwsAccountId(any()) }
+    }
+
+    @Test
+    fun `the account name comes from the account's mappings`() {
+        every { mappings.findRecipientRowsByAwsAccountId("123456789012") } returns
+            listOf(arrayOf<Any?>("a@x.example", 1L, null), arrayOf<Any?>("b@x.example", 2L, "payments-prod"))
+        assertThat(resolver().accountName("123456789012")).isEqualTo("payments-prod")
     }
 }

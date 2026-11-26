@@ -53,4 +53,18 @@ class CyberdefTicketAccessTest {
     fun `an empty scope still produces a valid IN list`() {
         assertThat(CyberdefAccountScope(false, emptySet()).queryIds).isNotEmpty()
     }
+
+    @Test
+    fun `one request looks up the caller's accounts once, a new request looks again`() {
+        every { tickets.findById(10) } returns Optional.of(ticket)
+        every { assetFilter.getAccessibleAwsAccountIds(any<Long>(), any()) } returns setOf("123456789012")
+        val request = owner
+        access.loadVisible(request, 10)
+        access.kinds(request, ticket)
+        access.scope(request)
+        verify(exactly = 1) { assetFilter.getAccessibleAwsAccountIds(any<Long>(), any()) }
+
+        access.loadVisible(owner, 10)
+        verify(exactly = 2) { assetFilter.getAccessibleAwsAccountIds(any<Long>(), any()) }
+    }
 }

@@ -28,8 +28,9 @@ open class CyberdefTicketAccess(
     private val tickets: CyberdefTicketRepository,
     private val assetFilter: AssetFilterService
 ) {
+    /** Evaluated once per request (see [CyberdefTicketActor.accountsForRequest]), never cached longer. */
     open fun ownAccounts(actor: CyberdefTicketActor): Set<String> =
-        assetFilter.getAccessibleAwsAccountIds(actor.userId, actor.email)
+        actor.accountsForRequest { assetFilter.getAccessibleAwsAccountIds(actor.userId, actor.email) }
 
     open fun scope(actor: CyberdefTicketActor): CyberdefAccountScope =
         if (actor.hasGlobalView) CyberdefAccountScope(true, emptySet())
