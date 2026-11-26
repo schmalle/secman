@@ -20,9 +20,10 @@ import java.util.Optional
 @Repository
 interface CyberdefTicketRepository : JpaRepository<CyberdefTicket, Long> {
 
-    fun findByTicketKey(ticketKey: String): Optional<CyberdefTicket>
-
     fun findByCreatedByUserIdAndExternalReference(createdByUserId: Long, externalReference: String): Optional<CyberdefTicket>
+
+    /** Batch idempotency check in one query instead of one per ticket. */
+    fun findByCreatedByUserIdAndExternalReferenceIn(createdByUserId: Long, externalReferences: Collection<String>): List<CyberdefTicket>
 
     fun findByIdIn(ids: Collection<Long>): List<CyberdefTicket>
 
@@ -38,7 +39,7 @@ interface CyberdefTicketRepository : JpaRepository<CyberdefTicket, Long> {
               AND (:createdBy IS NULL OR t.createdByUserId = :createdBy)
               AND (:dueBefore IS NULL OR (t.dueAt IS NOT NULL AND t.dueAt < :dueBefore))
               AND (:updatedSince IS NULL OR t.updatedAt >= :updatedSince)
-              AND (:search IS NULL OR LOWER(t.title) LIKE :search OR t.ticketKey = :searchKey)
+              AND (:search IS NULL OR LOWER(t.title) LIKE :search OR t.id = :searchId)
         """,
         countQuery = """
             SELECT COUNT(t) FROM CyberdefTicket t
@@ -49,7 +50,7 @@ interface CyberdefTicketRepository : JpaRepository<CyberdefTicket, Long> {
               AND (:createdBy IS NULL OR t.createdByUserId = :createdBy)
               AND (:dueBefore IS NULL OR (t.dueAt IS NOT NULL AND t.dueAt < :dueBefore))
               AND (:updatedSince IS NULL OR t.updatedAt >= :updatedSince)
-              AND (:search IS NULL OR LOWER(t.title) LIKE :search OR t.ticketKey = :searchKey)
+              AND (:search IS NULL OR LOWER(t.title) LIKE :search OR t.id = :searchId)
         """
     )
     fun search(
@@ -62,7 +63,7 @@ interface CyberdefTicketRepository : JpaRepository<CyberdefTicket, Long> {
         dueBefore: Instant?,
         updatedSince: Instant?,
         search: String?,
-        searchKey: String?,
+        searchId: Long?,
         pageable: Pageable
     ): Page<CyberdefTicket>
 

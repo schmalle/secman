@@ -1,0 +1,14 @@
+---
+import Layout from '../layouts/Layout.astro';
+import SecurityTicketList from '../components/securityTickets/SecurityTicketList';
+
+/**
+ * Security tickets reported by Cyber Defence for the caller's AWS accounts (all accounts for
+ * CYBERDEF, ADMIN and SECCHAMPION). Scoping is enforced by /api/security-tickets.
+ * See docs/CYBERDEF_TICKETS.md.
+ */
+---
+
+<Layout title="Security Tickets">
+  <SecurityTicketList client:idle />
+</Layout>

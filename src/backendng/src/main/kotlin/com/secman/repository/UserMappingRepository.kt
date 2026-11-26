@@ -29,6 +29,22 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
     fun existsByEmail(email: String): Boolean
 
     /**
+     * Rows of [awsAccountId, awsAccountName] whose id starts with [idPrefix] or whose name
+     * contains [nameContains] (both LIKE patterns, already escaped). For the ticket form's
+     * account picker; no email leaves this query.
+     */
+    @Query(
+        "SELECT m.awsAccountId, MAX(m.awsAccountName) FROM UserMapping m WHERE m.awsAccountId IS NOT NULL " +
+            "AND (m.awsAccountId LIKE :idPrefix OR LOWER(m.awsAccountName) LIKE :nameContains) " +
+            "GROUP BY m.awsAccountId ORDER BY m.awsAccountId"
+    )
+    fun searchAwsAccounts(idPrefix: String, nameContains: String, pageable: io.micronaut.data.model.Pageable): List<Array<Any?>>
+
+    /** Rows of [awsAccountId, email] for [awsAccountIds]; one query for a whole result page. */
+    @Query("SELECT m.awsAccountId, m.email FROM UserMapping m WHERE m.awsAccountId IN (:awsAccountIds)")
+    fun findEmailsByAwsAccountIdIn(awsAccountIds: Collection<String>): List<Array<Any?>>
+
+    /**
      * Find all mappings for a specific AWS account
      *
      * Use case: Get all users with access to an AWS account

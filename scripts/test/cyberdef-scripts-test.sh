@@ -27,20 +27,26 @@ LOG = sys.argv[1]
 EVENTS = [{"id": i, "ticketId": 40 + i, "ticketKey": f"CD-2026-{40 + i:06d}", "eventType": "COMMENT",
            "actorKind": "OWNER", "actorUsername": "owner", "toStatus": None, "comment": f"note {i}"} for i in range(1, 6)]
 
+def create(tickets, delivery):
+    results = []
+    for index, t in enumerate(tickets):
+        dry = delivery.get("dryRun", False)
+        to = delivery.get("recipients") or ["owner@example.test"]
+        if t.get("awsAccountId") == "000000000000":
+            results.append({"index": index, "outcome": "REJECTED", "errorCode": "UNROUTABLE_ACCOUNT", "dryRun": dry,
+                            "errors": [{"field": "awsAccountId", "code": "UNROUTABLE_ACCOUNT", "message": "nobody"}]})
+        else:
+            results.append({"index": index, "outcome": "WOULD_CREATE" if dry else "CREATED", "recipients": to,
+                            "dryRun": dry, "ticketKey": None if dry else f"CD-2026-{index:06d}", "errors": []})
+    count = lambda o: sum(1 for r in results if r["outcome"] in o)
+    return {"dryRun": delivery.get("dryRun", False), "created": count({"CREATED", "WOULD_CREATE"}),
+            "duplicates": 0, "rejected": count({"REJECTED"}), "results": results}
+
 def tool_result(name, args):
+    if name == "create_cyberdef_ticket":
+        return create([args["ticket"]], args.get("delivery", {}))["results"][0]
     if name == "create_cyberdef_tickets":
-        results = []
-        for index, t in enumerate(args["tickets"]):
-            dry = t.get("dryRun", args.get("dryRun", False))
-            to = t.get("recipients", args.get("recipients")) or ["owner@example.test"]
-            if t.get("awsAccountId") == "000000000000":
-                results.append({"index": index, "outcome": "REJECTED", "errorCode": "UNROUTABLE_ACCOUNT", "dryRun": dry})
-            else:
-                results.append({"index": index, "outcome": "WOULD_CREATE" if dry else "CREATED", "recipients": to,
-                                "dryRun": dry, "ticketKey": None if dry else f"CD-2026-{index:06d}"})
-        count = lambda o: sum(1 for r in results if r["outcome"] in o)
-        return {"dryRun": all(r["dryRun"] for r in results), "created": count({"CREATED", "WOULD_CREATE"}),
-                "duplicates": 0, "rejected": count({"REJECTED"}), "results": results}
+        return create(args["tickets"], args.get("delivery", {}))
     if name == "get_cyberdef_ticket_updates":
         page = [e for e in EVENTS if e["id"] > args["sinceEventId"]][: args["limit"]]
         last = page[-1]["id"] if page else args["sinceEventId"]
@@ -85,8 +91,8 @@ exit_code() { set +e; "$@" >"$WORK/out" 2>"$WORK/err"; local rc=$?; set -e; echo
 out="$(env -u SECMAN_BACKEND_URL -u SECMAN_MCP_KEY "$DIR/send-ticket.sh" --print-request --dry-run \
     --account 123456789012 --title t --severity LOW --description d --to "a@soc.example,b@soc.example")"
 expect "print-request needs no credentials and masks the key" \
-    jq -e '.headers["X-MCP-API-Key"] == "***" and .body.params.arguments.tickets[0].dryRun == true
-           and .body.params.arguments.tickets[0].recipients == ["a@soc.example","b@soc.example"]' <<<"$out"
+    jq -e '.headers["X-MCP-API-Key"] == "***" and .body.params.arguments.delivery.dryRun == true
+           and .body.params.arguments.delivery.recipients == ["a@soc.example","b@soc.example"]' <<<"$out"
 expect "print-request sends nothing" test ! -s "$WORK/requests.jsonl"
 
 # --- send-ticket: dry run and recipient override ---------------------------------------
@@ -95,11 +101,12 @@ expect "dry run returns WOULD_CREATE with the named recipient" \
     jq -e '.outcome == "WOULD_CREATE" and .recipients == ["analyst@soc.example"]' <<<"$out"
 expect "dry run and recipients reach the server; key travels in the header" \
     jq -e '.key == "test-key-not-a-secret" and .user == "soc@example.test"
-           and .body.params.arguments.tickets[0].dryRun == true
-           and .body.params.arguments.tickets[0].externalReference == "SOC-2026-4711"' <<<"$(last_request)"
+           and .body.params.name == "create_cyberdef_ticket"
+           and .body.params.arguments.delivery.dryRun == true
+           and .body.params.arguments.ticket.externalReference == "SOC-2026-4711"' <<<"$(last_request)"
 expect "without --dry-run no dryRun flag is sent" bash -c \
     "'$DIR/send-ticket.sh' --file '$DIR/examples/ticket.json' >/dev/null && \
-     tail -n1 '$WORK/requests.jsonl' | jq -e '.body.params.arguments.tickets[0] | has(\"dryRun\") | not' >/dev/null"
+     tail -n1 '$WORK/requests.jsonl' | jq -e '.body.params.arguments.delivery | has(\"dryRun\") | not' >/dev/null"
 expect "a rejected ticket exits 3" test "$(exit_code "$DIR/send-ticket.sh" --account 000000000000 --title t --severity LOW --description d)" = 3
 expect "an invalid recipient is refused locally with exit 2" \
     test "$(exit_code "$DIR/send-ticket.sh" --file "$DIR/examples/ticket.json" --to not-an-address)" = 2
@@ -113,7 +120,7 @@ jq -n '[range(150) | {externalReference:"R\(.)", awsAccountId:"123456789012", ti
 expect "150 tickets go out in two calls of at most 100" \
     test "$(jq -s 'map(.body.params.arguments.tickets | length)' "$WORK/requests.jsonl" | jq -c .)" = "[100,50]"
 expect "batch-wide dryRun and recipients are sent" \
-    jq -e '.body.params.arguments.dryRun == true and .body.params.arguments.recipients == ["analyst@soc.example"]' \
+    jq -e '.body.params.arguments.delivery == {dryRun: true, recipients: ["analyst@soc.example"]}' \
     <<<"$(head -n 1 "$WORK/requests.jsonl")"
 expect "result indexes refer to the file, not the chunk" test "$(tail -n 1 "$WORK/out" | jq .index)" = 149
 expect "summary names the dry run" grep -q "150 would be created" "$WORK/err"

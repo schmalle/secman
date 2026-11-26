@@ -13,13 +13,14 @@ usage() {
 Usage: scripts/cyberdef/send-tickets.sh --file tickets.json [options]
 
 The file holds a JSON array of ticket objects, or {"tickets": [...]}, with the same fields
-as send-ticket.sh --file (see examples/tickets.json). Give every ticket an
+as send-ticket.sh --file (see examples/tickets.json). Delivery options (--dry-run, --to)
+apply to the whole run; each MCP call is one digest mail per recipient. Give every ticket an
 externalReference: a rerun after a partial failure then reports DUPLICATE for the tickets
 already created instead of creating them twice.
 
   --file FILE          tickets to submit                                      (required)
   --to ADDR[,ADDR]     mail these addresses instead of the account owners, for every
-                       ticket that does not set its own "recipients" (repeatable, max 20)
+                       ticket of the run (repeatable, max 20)
   --dry-run            let SecMan validate and resolve every ticket; store and send nothing
   --print-request      print the first MCP request and exit; no network, no credentials
   --as EMAIL           delegated user (default: SECMAN_CYBERDEF_EMAIL, then SECMAN_ADMIN_EMAIL)
@@ -58,9 +59,9 @@ RECIPIENT_JSON="$(json_list "${RECIPIENTS[*]+"${RECIPIENTS[*]}"}")"
 created=0 duplicates=0 rejected=0
 for (( offset = 0; offset < TOTAL; offset += 100 )); do
     ARGUMENTS="$(jq -c --argjson from "$offset" --argjson dry "$DRY_RUN" --argjson to "$RECIPIENT_JSON" '
-        {tickets: .[$from:$from + 100]}
-        + (if $dry then {dryRun: true} else {} end)
-        + (if ($to | length) > 0 then {recipients: $to} else {} end)' <<<"$TICKETS")"
+        {tickets: .[$from:$from + 100],
+         delivery: ({} + (if $dry then {dryRun: true} else {} end) + (if ($to | length) > 0 then {recipients: $to} else {} end))}
+        ' <<<"$TICKETS")"
     [[ "$PRINT_REQUEST" != true ]] || { print_request create_cyberdef_tickets "$ARGUMENTS"; exit 0; }
     RESULT="$(mcp_call create_cyberdef_tickets "$ARGUMENTS")" || {
         echo "Batch starting at ticket $offset failed; rerun to continue (externalReference makes it safe)" >&2

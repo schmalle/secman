@@ -20,6 +20,14 @@ interface WorkgroupAwsAccountRepository : JpaRepository<WorkgroupAwsAccount, Lon
     @Query("SELECT DISTINCT u.id, u.email FROM WorkgroupAwsAccount waa JOIN waa.workgroup w JOIN w.users u WHERE waa.awsAccountId = :awsAccountId AND w.enabled = true")
     fun findMemberContactsByAwsAccountId(awsAccountId: String): List<Array<Any?>>
 
+    /** Granted account ids starting with [idPrefix] (escaped LIKE pattern), for the account picker. */
+    @Query("SELECT DISTINCT waa.awsAccountId FROM WorkgroupAwsAccount waa JOIN waa.workgroup w WHERE w.enabled = true AND waa.awsAccountId LIKE :idPrefix ORDER BY waa.awsAccountId")
+    fun searchGrantedAwsAccountIds(idPrefix: String, pageable: io.micronaut.data.model.Pageable): List<String>
+
+    /** Rows of [awsAccountId, email] of enabled-workgroup members for [awsAccountIds]. */
+    @Query("SELECT DISTINCT waa.awsAccountId, u.email FROM WorkgroupAwsAccount waa JOIN waa.workgroup w JOIN w.users u WHERE w.enabled = true AND waa.awsAccountId IN (:awsAccountIds)")
+    fun findMemberEmailsByAwsAccountIdIn(awsAccountIds: Collection<String>): List<Array<Any?>>
+
     // LEFT JOIN FETCH on createdBy: nullable since V206 (the creator may have
     // been deleted; see ON DELETE SET NULL on fk_wg_aws_created_by). An INNER
     // JOIN FETCH would silently hide assignments whose creator was removed.

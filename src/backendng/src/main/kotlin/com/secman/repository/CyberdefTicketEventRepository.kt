@@ -12,6 +12,8 @@ interface CyberdefTicketEventRepository : JpaRepository<CyberdefTicketEvent, Lon
 
     fun findByTicketIdOrderByIdAsc(ticketId: Long, pageable: Pageable): List<CyberdefTicketEvent>
 
+    fun findByIdIn(ids: Collection<Long>): List<CyberdefTicketEvent>
+
     /**
      * The polling cursor: every event after [sinceId], oldest first, bounded by [pageable].
      *

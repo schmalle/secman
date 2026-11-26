@@ -6,9 +6,11 @@ allocated to that account, and tracks it as **OPEN** or **CLOSED**. Owners close
 with a note on what they did. Cyber Defence reads those answers from a cursor feed and can
 reopen a ticket. Both sides comment.
 
-Status: **backend, REST, MCP and shell scripts implemented** (`scripts/cyberdef/`). The UI
-pages (`/security-tickets`, `/cyberdef`) follow; mail already links to
-`/security-tickets/{id}`.
+Status: **backend, REST, MCP, shell scripts and UI implemented**:
+- `/security-tickets`: list, for everyone, scoped to their accounts;
+- `/security-tickets/{id}`: detail with close, reopen and comment;
+- `/cyberdef/new`: the creation form and bulk import, for CYBERDEF and ADMIN;
+- `scripts/cyberdef/`: the shell clients.
 
 ## Roles and access
 
@@ -52,6 +54,23 @@ stateDiagram-v2
 
 ## Submitting
 
+A submission is `{ticket, delivery}`, or `{tickets: [...], delivery}` for a batch. `ticket`
+is the finding. `delivery` holds the sending options (`dryRun`, `recipients`,
+`allowUnrouted`), set once per call and applied to every ticket of a batch.
+
+Single and batch calls return the same per-ticket result:
+- `index`;
+- `outcome`: `CREATED`, `DUPLICATE`, `WOULD_CREATE` or `REJECTED`;
+- `ticketId`, `ticketKey`, `status`, `dueAt`;
+- `recipients`, `recipientsOverridden`;
+- `errorCode`;
+- `errors`: `[{field, code, message}]`, where `field` is a path such as `title`,
+  `resources[2].region` or `delivery.recipients[0]`. A form can show each message next to
+  its input.
+
+Field codes: `REQUIRED`, `INVALID`, `TOO_LONG`, `TOO_MANY`, `NOT_FUTURE`,
+`ACCOUNT_MISMATCH`, `UNKNOWN_FIELD`, `WRONG_TYPE`, `NOT_ALLOWED`.
+
 - **Idempotency**: `externalReference` (`[A-Za-z0-9._:/#-]{1,128}`) is unique per
   submitter. Resending it returns the existing ticket as `DUPLICATE` without new mail.
 - **Batch**: `create_cyberdef_tickets` takes 1–100 items and commits each separately. It
@@ -63,13 +82,21 @@ stateDiagram-v2
   extend it. INFO has no SLA and accepts at most 365 days.
 - **Limits**: title 200, description 20 000, recommended action 10 000, comment 4 000
   characters; 100 CVEs, 500 resources, 20 references, 20 recipients per ticket;
-  `max-tickets-per-hour` per submitter. Unknown fields are rejected.
+  `max-tickets-per-hour` stored tickets per submitter. Unknown fields are rejected.
+- **ARNs**: a resource identifier that is an ARN needs no `type` or `region`; both are taken
+  from the ARN (e.g. `arn:aws:ec2:eu-central-1:…:instance/i-1` → `EC2_INSTANCE`,
+  `eu-central-1`). The ARN's account must be the ticket's `awsAccountId`
+  (`ACCOUNT_MISMATCH` otherwise), so a ticket cannot point at another tenant's resources.
+- **Ticket key**: `CD-<year>-<id>` is derived from the id and creation year when read; it is
+  not stored (V311 dropped the column). Lookup by key parses the id and checks the year.
+- **Batch cost**: duplicates, the hourly count and recipient routing are read once per call
+  (routing once per distinct account), not once per ticket.
 - **References** must be absolute `https` URLs without credentials. They are display-only
   and never fetched.
 
 ### Dry run
 
-`dryRun: true` on a create (per ticket, or batch-wide on `create_cyberdef_tickets`) runs the
+`delivery.dryRun: true` on a create (single or batch) runs the
 same validation, idempotency check, rate limit, due-date calculation and recipient
 resolution as a real submission. Then it stops: nothing is stored, no event is written, no
 mail is queued. The result is `WOULD_CREATE` with `recipients` and `dueAt`, or `REJECTED`
@@ -83,7 +110,7 @@ Nothing changes.
 
 ### Target addresses (`recipients`)
 
-`recipients: ["a@…", …]` (max 20) mails these addresses **instead of** the account's owners.
+`delivery.recipients: ["a@…", …]` (max 20) mails these addresses **instead of** the account's owners.
 Use it to route a ticket to a specific team or to test with your own mailbox. Each address
 must be either
 
@@ -113,12 +140,14 @@ record and grants no access.
 | Event | Who is mailed | Template |
 |---|---|---|
 | Ticket created | the recipients | `cyberdef-ticket-created` |
+| Several tickets created in one call | each recipient once, listing all of their tickets, most severe first | `cyberdef-ticket-digest` |
 | Cyber Defence closes or reopens | the recipients | `cyberdef-ticket-update` |
 | An owner closes or reopens | the submitter, only with `notify-submitter: true` | `cyberdef-ticket-update` |
 
 Mail goes through an outbox (`cyberdef_ticket_notification`) written in the same
 transaction as the change. It is sent afterwards on the IO pool, claimed per row with one
-conditional `UPDATE`, and retried by a recovery job if a crash left it `PENDING`. A
+conditional `UPDATE`, and retried by a recovery job if a crash left it `PENDING`. Creation rows of
+one call share a `batch_key`; the dispatcher sends one digest per recipient for them. A
 possibly-accepted transport failure is `UNCERTAIN` and never retried automatically. `FAILED`
 rows can be resent. By default mail carries only the key, account, severity, title, due date
 and a link (`include-summary: false`).
@@ -132,11 +161,14 @@ and a link (`include-summary: false`).
 | `GET /{id}` | scoped | Detail with resources, CVEs, events, `allowedTransitions`, `commentRequiredFor` |
 | `POST /{id}/transitions` | scoped + workflow | `{toStatus, comment, expectedVersion, dryRun}` |
 | `POST /{id}/comments` | scoped | `{comment}` |
-| `POST /` | ADMIN, CYBERDEF | Submit one ticket (same body as MCP, incl. `dryRun`, `recipients`). 201 created, 200 duplicate or dry run |
+| `POST /` | ADMIN, CYBERDEF | Submit `{ticket, delivery}`. 201 created, 200 duplicate or dry run, 4xx with the same result body when rejected |
+| `POST /batch` | ADMIN, CYBERDEF | Submit `{tickets, delivery}` (1–100); 200 with one result per ticket |
+| `GET /meta` | ADMIN, CYBERDEF | Severities with SLA days, field limits, suggested resource types, override domains |
+| `GET /accounts?q=&limit=` | ADMIN, CYBERDEF | Account picker: `{awsAccountId, accountName, recipientCount, routable}`. No email addresses |
 | `GET /{id}/notifications` | ADMIN, CYBERDEF | Mail delivery per recipient |
 | `POST /{id}/notifications/resend` | ADMIN, CYBERDEF | Retry `FAILED` rows |
 
-Errors are `{"error": CODE, "message": text}`:
+Errors are `{"error": CODE, "message": text, "errors": [{field, code, message}]}`:
 - 400 `VALIDATION_ERROR` / `COMMENT_REQUIRED`
 - 403 `FORBIDDEN`
 - 404 `NOT_FOUND`
@@ -151,8 +183,8 @@ user** to hold `CYBERDEF` or `ADMIN`; an admin API key alone is not enough.
 
 | Tool | Permission | Notes |
 |---|---|---|
-| `create_cyberdef_ticket` | `TICKETS_SUBMIT` | one ticket; `dryRun`, `recipients` |
-| `create_cyberdef_tickets` | `TICKETS_SUBMIT` | 1–100; batch-wide `dryRun` / `recipients` apply to items that set none |
+| `create_cyberdef_ticket` | `TICKETS_SUBMIT` | `{ticket, delivery}`; same result shape as one batch item |
+| `create_cyberdef_tickets` | `TICKETS_SUBMIT` | `{tickets: [1–100], delivery}`; one digest mail per recipient |
 | `list_cyberdef_tickets` | `TICKETS_SUBMIT` | all accounts |
 | `get_cyberdef_ticket` | `TICKETS_SUBMIT` | by `id`, `ticketKey` or your `externalReference` |
 | `get_cyberdef_ticket_updates` | `TICKETS_SUBMIT` | cursor feed |
@@ -170,7 +202,8 @@ A JSON-RPC error message starts with the stable code, for example
 `VERSION_CONFLICT: The ticket changed …`. The codes are `VALIDATION_ERROR`,
 `COMMENT_REQUIRED`, `INVALID_TRANSITION`, `FORBIDDEN`, `NOT_FOUND`, `VERSION_CONFLICT`,
 `UNROUTABLE_ACCOUNT`, `RECIPIENT_NOT_ALLOWED`, `RATE_LIMITED` and `INTERNAL_ERROR`. In a batch
-result, per-item rejections carry the code in `errorCode`.
+result, per-item rejections carry the code in `errorCode` and the field problems in `errors`;
+argument errors list `field: problem` pairs inside the message.
 
 ### Example: dry run with target addresses
 
@@ -178,20 +211,46 @@ result, per-item rejections carry the code in `errorCode`.
 {
   "name": "create_cyberdef_ticket",
   "arguments": {
-    "externalReference": "SOC-2026-4711",
-    "awsAccountId": "123456789012",
-    "title": "Publicly exposed RDS snapshot",
-    "severity": "HIGH",
-    "description": "Snapshot `db-prod-2026-11-20` is shared with `all`.",
-    "resources": [{"type": "RDS_SNAPSHOT", "identifier": "arn:aws:rds:eu-central-1:123456789012:snapshot:db-prod-2026-11-20", "region": "eu-central-1"}],
-    "recipients": ["analyst@soc.example"],
-    "dryRun": true
+    "ticket": {
+      "externalReference": "SOC-2026-4711",
+      "awsAccountId": "123456789012",
+      "title": "Publicly exposed RDS snapshot",
+      "severity": "HIGH",
+      "description": "Snapshot `db-prod-2026-11-20` is shared with `all`.",
+      "resources": [{"identifier": "arn:aws:rds:eu-central-1:123456789012:snapshot:db-prod-2026-11-20"}]
+    },
+    "delivery": {"recipients": ["analyst@soc.example"], "dryRun": true}
   }
 }
 ```
 
 Returns `{"index":0,"outcome":"WOULD_CREATE","status":"OPEN","recipients":["analyst@soc.example"],"recipientsOverridden":true,"dueAt":"…","dryRun":true}`.
 Drop `dryRun` to create it: the outcome becomes `CREATED` with `ticketId` and `ticketKey`.
+
+## UI
+
+- **`/cyberdef/new` (CYBERDEF, ADMIN): single ticket.** The sections are Target, Finding,
+  Evidence and Delivery, with a preview panel beside them.
+  - Target uses an account type-ahead (`/accounts`) showing how many people a ticket reaches,
+    or "no owner".
+  - Severity buttons show the SLA from `/meta`. The description is Markdown.
+  - Resources accept pasted ARNs or `TYPE=id@region`, with a warning for ARNs of another account.
+  - Delivery is either the account owners or specific people.
+  - After each edit, a debounced dry run (500 ms) fills the preview: recipients and due date,
+    or the field errors, shown next to each input. Validation rules are not repeated in the UI.
+  - The form generates one idempotency key (`ui-<uuid>`) when it opens, so a double submit
+    returns `DUPLICATE`.
+  - After creating, the browser goes to the ticket's detail page.
+- **`/cyberdef/new`: bulk import.** Paste or upload JSON, or CSV with a header row using the
+  ticket field names (lists separated by `;`). Check runs a batch dry run and shows a
+  per-row outcome table; Create submits only the rows that would be created.
+- **`/security-tickets`.** Open/Closed/All tabs, search by title or key, count tiles.
+- **`/security-tickets/{id}`.** Description, resources, CVEs, links and the activity log.
+  Close, reopen and comment buttons follow the server's `allowedTransitions` and
+  `commentRequiredFor`; a conflicting change asks the user to reload.
+
+Pure UI logic lives in `services/securityTicketLogic.ts` (tested by
+`securityTicketLogic.test.ts`). The API client is `services/securityTicketService.ts`.
 
 ### Handling answers: the update feed
 
@@ -233,7 +292,8 @@ The mail link uses `app.frontend.base-url`.
 
 ## Data model
 
-Migration `V310__cyberdef_tickets.sql`: `cyberdef_ticket` (status `OPEN`/`CLOSED`,
+Migrations `V310__cyberdef_tickets.sql` and `V311__cyberdef_ticket_key_and_digest.sql`
+(drops the stored key, adds the outbox `batch_key`): `cyberdef_ticket` (status `OPEN`/`CLOSED`,
 `closed_at`, `@Version`), `cyberdef_ticket_resource`, `cyberdef_ticket_event` (append-only;
 id = cursor), `cyberdef_ticket_recipient` (audit; source `MAPPING`/`WORKGROUP`/`OVERRIDE`)
 and `cyberdef_ticket_notification` (outbox). Users are referenced by id plus a username
@@ -257,7 +317,9 @@ snapshot without a foreign key, so the inactive-user cleanup keeps ticket histor
 `domain/CyberdefTicket*.kt` · `repository/CyberdefTicket*Repository.kt` ·
 `service/cyberdef/` (`CyberdefTicketWorkflow`, `CyberdefTicketInput`,
 `CyberdefRecipientResolver`, `CyberdefTicketAccess`, `CyberdefTicketWriter`,
-`CyberdefTicketMailer`, `CyberdefTicketService`, `CyberdefTicketQueryService`) ·
+`CyberdefTicketMailer`, `CyberdefTicketMailRenderer`, `CyberdefTicketSubmissionService`,
+`CyberdefTicketService`, `CyberdefTicketQueryService`, `CyberdefAccountDirectory`, `CyberdefTicketMeta`,
+`CyberdefTicketArguments`, `AwsArn`) ·
 `controller/CyberdefTicketController.kt` · `mcp/tools/*Cyberdef*Tool.kt`,
 `*SecurityTicket*Tool.kt` · `email-templates/cyberdef-ticket-*.{html,txt}` ·
-`scripts/cyberdef/`.
+`scripts/cyberdef/` · frontend `components/securityTickets/`, `pages/security-tickets*`, `pages/cyberdef/new.astro`.

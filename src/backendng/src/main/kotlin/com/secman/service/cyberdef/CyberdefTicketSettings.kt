@@ -28,7 +28,10 @@ class CyberdefTicketSettings(
         overrideDomains.split(',').map { it.trim().lowercase().removePrefix("@") }.filter { it.isNotEmpty() }.toSet()
 
     /** Due window per severity; null means no deadline (INFO by default). */
-    fun slaFor(severity: CyberdefSeverity): Duration? {
+    fun slaFor(severity: CyberdefSeverity): Duration? = slaDays(severity)?.let { Duration.ofDays(it) }
+
+    /** The configured SLA in days, or null for "no deadline". */
+    fun slaDays(severity: CyberdefSeverity): Long? {
         val days = when (severity) {
             CyberdefSeverity.CRITICAL -> criticalDays
             CyberdefSeverity.HIGH -> highDays
@@ -36,8 +39,10 @@ class CyberdefTicketSettings(
             CyberdefSeverity.LOW -> lowDays
             CyberdefSeverity.INFO -> infoDays
         }
-        return if (days > 0) Duration.ofDays(days) else null
+        return days.takeIf { it > 0 }
     }
 
     fun ticketUrl(ticketId: Long): String = frontendBaseUrl.trimEnd('/') + "/security-tickets/" + ticketId
+
+    fun ticketListUrl(): String = frontendBaseUrl.trimEnd('/') + "/security-tickets"
 }

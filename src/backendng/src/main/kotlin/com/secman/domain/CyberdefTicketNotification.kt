@@ -18,7 +18,8 @@ import java.time.Instant
     uniqueConstraints = [UniqueConstraint(name = "uk_cyberdef_notification_key", columnNames = ["event_key"])],
     indexes = [
         Index(name = "idx_cyberdef_notification_ticket", columnList = "ticket_id"),
-        Index(name = "idx_cyberdef_notification_status", columnList = "status,created_at")
+        Index(name = "idx_cyberdef_notification_status", columnList = "status,created_at"),
+        Index(name = "idx_cyberdef_notification_batch", columnList = "batch_key,recipient_email")
     ]
 )
 // Columns mirror db/migration/V310__cyberdef_tickets.sql; change both together.
@@ -40,6 +41,10 @@ class CyberdefTicketNotification(
     /** The event that caused this mail, so the template can name the new status. */
     @Column(name = "event_id")
     var eventId: Long? = null,
+
+    /** Set for rows created by one submission call, so the dispatcher can send one digest per recipient. */
+    @Column(name = "batch_key", length = 36)
+    var batchKey: String? = null,
 
     @Column(name = "event_key", nullable = false, length = 64)
     var eventKey: String = "",

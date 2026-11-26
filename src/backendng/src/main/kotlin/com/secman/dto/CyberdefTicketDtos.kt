@@ -4,6 +4,7 @@ import com.secman.domain.CyberdefTicket
 import com.secman.domain.CyberdefTicketEvent
 import com.secman.domain.CyberdefTicketNotification
 import com.secman.domain.CyberdefTicketResource
+import com.secman.service.cyberdef.CyberdefFieldError
 import io.micronaut.serde.annotation.Serdeable
 import java.time.Instant
 
@@ -138,12 +139,14 @@ data class CyberdefCreateResultDto(
     val dueAt: Instant? = null,
     val dryRun: Boolean = false,
     val errorCode: String? = null,
-    val errors: List<String> = emptyList()
+    /** Field-keyed problems for a REJECTED ticket; `field` is relative to the ticket or `delivery.*`. */
+    val errors: List<CyberdefFieldError> = emptyList()
 )
 
 @Serdeable
 /** Totals plus one [CyberdefCreateResultDto] per submitted item. */
 data class CyberdefBatchResultDto(
+    /** The batch's `delivery.dryRun`: nothing was stored or sent. */
     val dryRun: Boolean,
     /** For a dry run: how many would be created. */
     val created: Int,
@@ -211,3 +214,33 @@ data class CyberdefNotificationDto(
 @Serdeable
 /** Result of retrying a ticket's failed mail. */
 data class CyberdefResendResultDto(val attempted: Int, val sent: Int, val failed: Int)
+
+/** One AWS account in the ticket form's picker. No email address ever appears here. */
+@Serdeable
+data class CyberdefAccountDto(
+    val awsAccountId: String,
+    val accountName: String?,
+    /** Distinct people a ticket would reach (mappings plus enabled-workgroup members). */
+    val recipientCount: Int,
+    /** False: submitting needs `delivery.allowUnrouted` or `delivery.recipients`. */
+    val routable: Boolean
+)
+
+/** A severity and its default due window. */
+@Serdeable
+data class CyberdefSeverityMetaDto(val name: String, val slaDays: Long?)
+
+/**
+ * Rules a submission client needs, served by `GET /api/security-tickets/meta`, so the form and
+ * the scripts never hard-code limits or SLA days.
+ */
+@Serdeable
+data class CyberdefTicketMetaDto(
+    val severities: List<CyberdefSeverityMetaDto>,
+    val limits: Map<String, Int>,
+    /** Suggestions only; any A-Z 0-9 _ value up to 32 characters is accepted. */
+    val resourceTypes: List<String>,
+    val maxTicketsPerHour: Long,
+    /** Domains `delivery.recipients` may name besides addresses already known to SecMan. */
+    val recipientOverrideDomains: List<String>
+)

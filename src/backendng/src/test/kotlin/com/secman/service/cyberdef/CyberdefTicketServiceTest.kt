@@ -5,138 +5,34 @@ import com.secman.domain.CyberdefSeverity
 import com.secman.domain.CyberdefTicket
 import com.secman.domain.CyberdefTicketStatus
 import com.secman.dto.CyberdefTicketDetailDto
-import com.secman.repository.CyberdefTicketRepository
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import io.mockk.verify
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import java.time.Duration
-import java.time.Instant
-import java.util.Optional
-import java.util.concurrent.ExecutorService
 
-/** Unit tests for CyberdefTicketService; no database, collaborators are mocked. */
+/** Unit tests for status changes, comments and resends; no database, collaborators are mocked. */
 class CyberdefTicketServiceTest {
-    private val tickets = mockk<CyberdefTicketRepository>()
     private val writer = mockk<CyberdefTicketWriter>()
     private val mailer = mockk<CyberdefTicketMailer>(relaxed = true)
-    private val resolver = mockk<CyberdefRecipientResolver>()
     private val access = mockk<CyberdefTicketAccess>()
     private val queries = mockk<CyberdefTicketQueryService>()
-    private val executor = mockk<ExecutorService>().also {
-        every { it.execute(any()) } answers { firstArg<Runnable>().run() }
-    }
-    private val service = CyberdefTicketService(tickets, writer, mailer, resolver, access, queries, testSettings(), executor)
+    private val service = CyberdefTicketService(writer, mailer, access, queries)
 
-    private val routed = CyberdefRouting(listOf(CyberdefRecipient("owner@example.test", 2, "MAPPING")), "prod", false)
-
-    private fun request(
-        reference: String? = "SOC-1", severity: String = "HIGH", dueAt: String? = null, allowUnrouted: Boolean? = null,
-        recipients: List<String>? = null, dryRun: Boolean? = null
-    ) = CyberdefTicketCreateRequest(externalReference = reference, awsAccountId = "123456789012", title = "t",
-        severity = severity, description = "d", dueAt = dueAt, allowUnrouted = allowUnrouted,
-        recipients = recipients, dryRun = dryRun)
-
-    private fun stored(id: Long = 10, status: CyberdefTicketStatus = CyberdefTicketStatus.OPEN) = CyberdefTicket(
-        id = id, ticketKey = "CD-2026-%06d".format(id), awsAccountId = "123456789012", title = "t", description = "d",
-        severity = CyberdefSeverity.HIGH, status = status, createdByUserId = defender.userId, createdByUsername = "soc",
-        recipientCount = 1
+    private fun stored(status: CyberdefTicketStatus = CyberdefTicketStatus.OPEN) = CyberdefTicket(
+        id = 10, awsAccountId = "123456789012", title = "t", description = "d", severity = CyberdefSeverity.HIGH,
+        status = status, createdByUserId = defender.userId, createdByUsername = "soc", recipientCount = 1
     )
 
-    private fun noDuplicates() {
-        every { tickets.findByCreatedByUserIdAndExternalReference(any(), any()) } returns Optional.empty()
-        every { tickets.countByCreatedByUserIdAndCreatedAtAfter(any(), any()) } returns 0L
-    }
-
-    @Test
-    fun `only defenders may submit`() {
-        val result = service.create(owner, request())
-        assertThat((result as CyberdefTicketResult.Failed).code).isEqualTo(CyberdefTicketResult.FORBIDDEN)
-        verify(exactly = 0) { writer.create(any(), any(), any(), any()) }
-    }
-
-    @Test
-    fun `a new ticket gets the severity SLA and its mail is dispatched after commit`() {
-        noDuplicates()
-        every { resolver.resolve("123456789012") } returns routed
-        val due = slot<Instant>()
-        every { writer.create(defender, any(), routed, capture(due)) } returns CyberdefTicketWriter.Written(stored(), listOf(5L, 6L))
-
-        val before = Instant.now()
-        val result = (service.create(defender, request()) as CyberdefTicketResult.Ok).value
-
-        assertThat(result.outcome).isEqualTo(CyberdefTicketService.OUTCOME_CREATED)
-        assertThat(result.ticketKey).isEqualTo("CD-2026-000010")
-        assertThat(due.captured).isBetween(before.plus(Duration.ofDays(7)), Instant.now().plus(Duration.ofDays(7)))
-        verify { mailer.dispatch(listOf(5L, 6L)) }
-    }
-
-    @Test
-    fun `resending an external reference returns the existing ticket without writing or mailing`() {
-        every { tickets.findByCreatedByUserIdAndExternalReference(defender.userId, "SOC-1") } returns Optional.of(stored(42))
-        val result = (service.create(defender, request()) as CyberdefTicketResult.Ok).value
-        assertThat(result.outcome).isEqualTo(CyberdefTicketService.OUTCOME_DUPLICATE)
-        assertThat(result.ticketId).isEqualTo(42)
-        verify(exactly = 0) { writer.create(any(), any(), any(), any()); mailer.dispatch(any()) }
-    }
-
-    @Test
-    fun `an account without owners is refused unless explicitly allowed`() {
-        noDuplicates()
-        every { resolver.resolve(any()) } returns CyberdefRouting(emptyList(), null, false)
-        val refused = (service.create(defender, request()) as CyberdefTicketResult.Ok).value
-        assertThat(refused.outcome).isEqualTo(CyberdefTicketService.OUTCOME_REJECTED)
-        assertThat(refused.errorCode).isEqualTo(CyberdefTicketResult.UNROUTABLE_ACCOUNT)
-
-        every { writer.create(any(), any(), any(), any()) } returns CyberdefTicketWriter.Written(stored(), emptyList())
-        val forced = (service.create(defender, request(reference = "SOC-2", allowUnrouted = true)) as CyberdefTicketResult.Ok).value
-        assertThat(forced.outcome).isEqualTo(CyberdefTicketService.OUTCOME_CREATED)
-    }
-
-    @Test
-    fun `a due date may shorten the SLA but never extend it`() {
-        noDuplicates()
-        every { resolver.resolve(any()) } returns routed
-        val late = Instant.now().plus(Duration.ofDays(30)).toString()
-        val result = (service.create(defender, request(dueAt = late)) as CyberdefTicketResult.Ok).value
-        assertThat(result.errorCode).isEqualTo(CyberdefTicketResult.VALIDATION_ERROR)
-        assertThat(result.errors.single()).contains("7 days")
-    }
-
-    @Test
-    fun `submissions above the hourly limit are refused`() {
-        every { tickets.findByCreatedByUserIdAndExternalReference(any(), any()) } returns Optional.empty()
-        every { tickets.countByCreatedByUserIdAndCreatedAtAfter(defender.userId, any()) } returns 600L
-        val result = (service.create(defender, request()) as CyberdefTicketResult.Ok).value
-        assertThat(result.errorCode).isEqualTo(CyberdefTicketResult.RATE_LIMITED)
-    }
-
-    @Test
-    fun `a batch reports each item and one bad item does not stop the rest`() {
-        noDuplicates()
-        every { resolver.resolve(any()) } returns routed
-        every { writer.create(any(), any(), any(), any()) } returns CyberdefTicketWriter.Written(stored(), emptyList())
-        val batch = (service.createBatch(defender, listOf(request("A"), request("B", severity = "SEVERE"), request("C")))
-            as CyberdefTicketResult.Ok).value
-        assertThat(batch.created).isEqualTo(2)
-        assertThat(batch.rejected).isEqualTo(1)
-        assertThat(batch.results.map { it.index to it.outcome }).containsExactly(
-            0 to "CREATED", 1 to "REJECTED", 2 to "CREATED")
-    }
-
-    @Test
-    fun `a batch over 100 items is refused as a whole`() {
-        val result = service.createBatch(defender, List(101) { request("R$it") })
-        assertThat((result as CyberdefTicketResult.Failed).code).isEqualTo(CyberdefTicketResult.VALIDATION_ERROR)
+    private fun visible(actor: CyberdefTicketActor, ticket: CyberdefTicket, vararg kinds: CyberdefActorKind) {
+        every { access.loadVisible(actor, 10) } returns ticket
+        every { access.kinds(actor, ticket) } returns kinds.toSet()
     }
 
     @Test
     fun `a ticket outside the caller's accounts is not found, not forbidden`() {
         every { access.loadVisible(owner, 10) } returns null
-        val result = service.transition(owner, 10, "CLOSED", "fixed", 0)
-        assertThat(result).isEqualTo(CyberdefTicketResult.notFound)
+        assertThat(service.transition(owner, 10, "CLOSED", "fixed", 0)).isEqualTo(CyberdefTicketResult.notFound)
         verify(exactly = 0) { writer.transition(any(), any(), any(), any(), any(), any()) }
     }
 
@@ -144,13 +40,10 @@ class CyberdefTicketServiceTest {
     fun `the owner tool cannot act for the defender side even for an admin`() {
         val admin = CyberdefTicketActor(9, "admin", "admin@example.test", setOf("ADMIN"))
         val ticket = stored()
-        every { access.loadVisible(admin, 10) } returns ticket
-        every { access.kinds(admin, ticket) } returns setOf(CyberdefActorKind.OWNER, CyberdefActorKind.DEFENDER)
+        visible(admin, ticket, CyberdefActorKind.OWNER, CyberdefActorKind.DEFENDER)
         every { writer.transition(admin, 10, setOf(CyberdefActorKind.OWNER), CyberdefTicketStatus.CLOSED, null, 3) } returns
             CyberdefTicketWriter.TransitionOutcome.Denied(CyberdefTicketWorkflow.COMMENT_REQUIRED, "no")
-
         val result = service.transition(admin, 10, "CLOSED", null, 3, onlyAs = CyberdefActorKind.OWNER)
-
         assertThat((result as CyberdefTicketResult.Failed).code).isEqualTo(CyberdefTicketWorkflow.COMMENT_REQUIRED)
     }
 
@@ -158,23 +51,17 @@ class CyberdefTicketServiceTest {
     fun `a successful transition dispatches its mail and returns the new detail`() {
         val ticket = stored()
         val detail = mockk<CyberdefTicketDetailDto>()
-        every { access.loadVisible(owner, 10) } returns ticket
-        every { access.kinds(owner, ticket) } returns setOf(CyberdefActorKind.OWNER)
+        visible(owner, ticket, CyberdefActorKind.OWNER)
         every { writer.transition(owner, 10, setOf(CyberdefActorKind.OWNER), CyberdefTicketStatus.CLOSED, "patched", 4) } returns
             CyberdefTicketWriter.TransitionOutcome.Done(CyberdefTicketWriter.Written(ticket, listOf(77L)))
         every { queries.detailOf(owner, ticket) } returns detail
-
-        val result = service.transition(owner, 10, "closed", " patched ", 4)
-
-        assertThat((result as CyberdefTicketResult.Ok).value).isSameAs(detail)
-        verify { mailer.dispatch(listOf(77L)) }
+        assertThat((service.transition(owner, 10, "closed", " patched ", 4) as CyberdefTicketResult.Ok).value).isSameAs(detail)
+        verify { mailer.dispatchLater(listOf(77L)) }
     }
 
     @Test
     fun `a stale version is a conflict`() {
-        val ticket = stored()
-        every { access.loadVisible(owner, 10) } returns ticket
-        every { access.kinds(owner, ticket) } returns setOf(CyberdefActorKind.OWNER)
+        visible(owner, stored(), CyberdefActorKind.OWNER)
         every { writer.transition(any(), any(), any(), any(), any(), any()) } returns
             CyberdefTicketWriter.TransitionOutcome.Conflict(5, CyberdefTicketStatus.CLOSED)
         val result = service.transition(owner, 10, "CLOSED", "fixed", 4)
@@ -183,9 +70,8 @@ class CyberdefTicketServiceTest {
 
     @Test
     fun `closed tickets still accept comments but empty comments are invalid`() {
-        val closed = stored(status = CyberdefTicketStatus.CLOSED)
-        every { access.loadVisible(owner, 10) } returns closed
-        every { access.kinds(owner, closed) } returns setOf(CyberdefActorKind.OWNER)
+        val closed = stored(CyberdefTicketStatus.CLOSED)
+        visible(owner, closed, CyberdefActorKind.OWNER)
         every { writer.comment(owner, 10, CyberdefActorKind.OWNER, "late note") } returns closed
         every { queries.detailOf(owner, closed) } returns mockk()
         assertThat(service.comment(owner, 10, "late note")).isInstanceOf(CyberdefTicketResult.Ok::class.java)
@@ -193,82 +79,20 @@ class CyberdefTicketServiceTest {
     }
 
     @Test
-    fun `a dry run resolves everything but stores and mails nothing`() {
-        noDuplicates()
-        every { resolver.resolve("123456789012") } returns routed
-        val result = (service.create(defender, request(dryRun = true)) as CyberdefTicketResult.Ok).value
-        assertThat(result.outcome).isEqualTo(CyberdefTicketService.OUTCOME_WOULD_CREATE)
-        assertThat(result.dryRun).isTrue()
-        assertThat(result.recipients).containsExactly("owner@example.test")
-        assertThat(result.dueAt).isNotNull()
-        assertThat(result.ticketId).isNull()
-        verify(exactly = 0) { writer.create(any(), any(), any(), any()); mailer.dispatch(any()) }
-    }
-
-    @Test
-    fun `a dry run still reports what a real run would reject`() {
-        noDuplicates()
-        every { resolver.resolve(any()) } returns CyberdefRouting(emptyList(), null, false)
-        val result = (service.create(defender, request(dryRun = true)) as CyberdefTicketResult.Ok).value
-        assertThat(result.outcome).isEqualTo(CyberdefTicketService.OUTCOME_REJECTED)
-        assertThat(result.errorCode).isEqualTo(CyberdefTicketResult.UNROUTABLE_ACCOUNT)
-        assertThat(result.dryRun).isTrue()
-    }
-
-    @Test
-    fun `named recipients replace the account owners and need no owner mapping`() {
-        noDuplicates()
-        val overrideRouting = CyberdefRouting(listOf(CyberdefRecipient("analyst@soc.example", null, "OVERRIDE")), "prod", false)
-        every { resolver.resolveOverride("123456789012", listOf("analyst@soc.example")) } returns
-            CyberdefRecipientResolver.Override.Accepted(overrideRouting)
-        every { writer.create(defender, any(), overrideRouting, any()) } returns CyberdefTicketWriter.Written(stored(), listOf(9L))
-
-        val result = (service.create(defender, request(recipients = listOf(" Analyst@SOC.example "))) as CyberdefTicketResult.Ok).value
-
-        assertThat(result.outcome).isEqualTo(CyberdefTicketService.OUTCOME_CREATED)
-        assertThat(result.recipientsOverridden).isTrue()
-        assertThat(result.recipients).containsExactly("analyst@soc.example")
-        verify(exactly = 0) { resolver.resolve(any()) }
-    }
-
-    @Test
-    fun `recipients SecMan may not mail are refused`() {
-        noDuplicates()
-        every { resolver.resolveOverride(any(), any()) } returns CyberdefRecipientResolver.Override.Refused(listOf("x@evil.example"))
-        val result = (service.create(defender, request(recipients = listOf("x@evil.example"))) as CyberdefTicketResult.Ok).value
-        assertThat(result.errorCode).isEqualTo(CyberdefTicketResult.RECIPIENT_NOT_ALLOWED)
-        verify(exactly = 0) { writer.create(any(), any(), any(), any()) }
-    }
-
-    @Test
-    fun `a batch dry run applies to every item that does not set its own`() {
-        noDuplicates()
-        every { resolver.resolve(any()) } returns routed
-        every { writer.create(any(), any(), any(), any()) } returns CyberdefTicketWriter.Written(stored(), emptyList())
-        val batch = (service.createBatch(defender, listOf(request("A"), request("B", dryRun = false)), dryRun = true)
-            as CyberdefTicketResult.Ok).value
-        assertThat(batch.results.map { it.outcome }).containsExactly("WOULD_CREATE", "CREATED")
-        assertThat(batch.dryRun).isFalse()
-    }
-
-    @Test
     fun `a status dry run checks the move and names who would be mailed without writing`() {
         val ticket = stored()
-        every { access.loadVisible(defender, 10) } returns ticket
-        every { access.kinds(defender, ticket) } returns setOf(CyberdefActorKind.DEFENDER)
+        visible(defender, ticket, CyberdefActorKind.DEFENDER)
         every { writer.notifyTargets(ticket, CyberdefActorKind.DEFENDER) } returns listOf("owner@example.test")
 
         val preview = (service.previewTransition(defender, 10, "CLOSED", null, ticket.version) as CyberdefTicketResult.Ok).value
-
-        assertThat(preview.toStatus).isEqualTo("CLOSED")
         assertThat(preview.actingAs).isEqualTo("DEFENDER")
         assertThat(preview.wouldNotify).containsExactly("owner@example.test")
         verify(exactly = 0) { writer.transition(any(), any(), any(), any(), any(), any()) }
 
         val stale = service.previewTransition(defender, 10, "CLOSED", null, ticket.version + 1)
         assertThat((stale as CyberdefTicketResult.Failed).code).isEqualTo(CyberdefTicketResult.VERSION_CONFLICT)
-        val reopenOpen = service.previewTransition(defender, 10, "OPEN", "x", null)
-        assertThat((reopenOpen as CyberdefTicketResult.Failed).code).isEqualTo(CyberdefTicketWorkflow.INVALID_TRANSITION)
+        val sameStatus = service.previewTransition(defender, 10, "OPEN", "x", null)
+        assertThat((sameStatus as CyberdefTicketResult.Failed).code).isEqualTo(CyberdefTicketWorkflow.INVALID_TRANSITION)
     }
 
     @Test

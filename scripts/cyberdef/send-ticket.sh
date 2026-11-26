@@ -24,7 +24,8 @@ Ticket fields (flags override values from --file):
   --action TEXT          recommended action for the owners
   --ref ID               your own id; resending it returns the existing ticket
   --cve ID               CVE id, repeatable
-  --resource T=ID[@REG]  affected resource, repeatable, e.g. EC2_INSTANCE=i-0abc@eu-central-1
+  --resource SPEC        affected resource, repeatable: an ARN (type and region are derived),
+                         or TYPE=ID[@REGION] such as HOSTNAME=web01.example.com
   --link URL             https reference link, repeatable
   --source NAME          originating system, e.g. guardduty
   --due ISO-8601         due date; may only shorten the severity SLA
@@ -38,7 +39,8 @@ Delivery:
   --as EMAIL             delegated user (default: SECMAN_CYBERDEF_EMAIL, then SECMAN_ADMIN_EMAIL)
   -h, --help
 
-Output: the per-ticket result as JSON (outcome CREATED, DUPLICATE, WOULD_CREATE or REJECTED).
+Output: the ticket result as JSON (outcome CREATED, DUPLICATE, WOULD_CREATE, or REJECTED with
+field-keyed errors).
 Exit codes: 0 ok, 1 error, 2 usage, 3 rejected.
 EOF
 }
@@ -83,7 +85,11 @@ fi
 # Resource flags: TYPE=IDENTIFIER[@REGION]
 RESOURCE_JSON='[]'
 for spec in "${RESOURCES[@]+"${RESOURCES[@]}"}"; do
-    [[ "$spec" == *=* ]] || usage_error "--resource must look like TYPE=IDENTIFIER[@REGION]: $spec"
+    if [[ "$spec" == arn:* ]]; then
+        RESOURCE_JSON="$(jq -c --arg i "$spec" '. + [{identifier:$i}]' <<<"$RESOURCE_JSON")"
+        continue
+    fi
+    [[ "$spec" == *=* ]] || usage_error "--resource must be an ARN or TYPE=IDENTIFIER[@REGION]: $spec"
     type="${spec%%=*}" rest="${spec#*=}" region=""
     if [[ "$rest" == *@* && "${rest##*@}" =~ ^[a-z0-9-]+$ ]]; then region="${rest##*@}"; rest="${rest%@*}"; fi
     RESOURCE_JSON="$(jq -c --arg t "$type" --arg i "$rest" --arg r "$region" \
@@ -98,15 +104,12 @@ TICKET="$(jq -c \
     --arg action "$ACTION" --arg ref "$REF" --arg source "$SOURCE" --arg due "$DUE" \
     --argjson cves "$(printf '%s\n' "${CVES[@]+"${CVES[@]}"}" | jq -R . | jq -sc 'map(select(length > 0))')" \
     --argjson links "$(printf '%s\n' "${LINKS[@]+"${LINKS[@]}"}" | jq -R . | jq -sc 'map(select(length > 0))')" \
-    --argjson resources "$RESOURCE_JSON" --argjson recipients "$RECIPIENT_JSON" \
-    --argjson dry "$DRY_RUN" --argjson unrouted "$ALLOW_UNROUTED" '
+    --argjson resources "$RESOURCE_JSON" '
     def set($k; $v): if ($v | length) > 0 then .[$k] = $v else . end;
     set("awsAccountId"; $account) | set("title"; $title) | set("severity"; $severity)
     | set("description"; $description) | set("recommendedAction"; $action) | set("externalReference"; $ref)
     | set("sourceSystem"; $source) | set("dueAt"; $due) | set("cves"; $cves) | set("references"; $links)
-    | set("resources"; $resources) | set("recipients"; $recipients)
-    | if $dry then .dryRun = true else . end
-    | if $unrouted then .allowUnrouted = true else . end
+    | set("resources"; $resources)
     ' <<<"$BASE")"
 
 for field in awsAccountId title severity description; do
@@ -115,11 +118,11 @@ for field in awsAccountId title severity description; do
 done
 jq -e '.awsAccountId | test("^[0-9]{12}$")' <<<"$TICKET" >/dev/null || usage_error "AWS account id must be 12 digits"
 
-# One-item batch: the batch tool reports a rejection as a structured result (errorCode),
-# which is easier to act on than the single-ticket tool's error text.
-ARGUMENTS="$(jq -c '{tickets: [.]}' <<<"$TICKET")"
-[[ "$PRINT_REQUEST" != true ]] || { print_request create_cyberdef_tickets "$ARGUMENTS"; exit 0; }
-RESULT="$(mcp_call create_cyberdef_tickets "$ARGUMENTS")" || exit 1
-ITEM="$(jq -c '.results[0]' <<<"$RESULT")"
-printf '%s\n' "$ITEM" | jq .
-[[ "$(jq -r '.outcome' <<<"$ITEM")" != "REJECTED" ]] || exit 3
+DELIVERY="$(jq -nc --argjson dry "$DRY_RUN" --argjson unrouted "$ALLOW_UNROUTED" --argjson to "$RECIPIENT_JSON" '
+    {} + (if $dry then {dryRun: true} else {} end) + (if $unrouted then {allowUnrouted: true} else {} end)
+    + (if ($to | length) > 0 then {recipients: $to} else {} end)')"
+ARGUMENTS="$(jq -c --argjson delivery "$DELIVERY" '{ticket: ., delivery: $delivery}' <<<"$TICKET")"
+[[ "$PRINT_REQUEST" != true ]] || { print_request create_cyberdef_ticket "$ARGUMENTS"; exit 0; }
+RESULT="$(mcp_call create_cyberdef_ticket "$ARGUMENTS")" || exit 1
+printf '%s\n' "$RESULT" | jq .
+[[ "$(jq -r '.outcome' <<<"$RESULT")" != "REJECTED" ]] || exit 3

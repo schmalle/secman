@@ -4,12 +4,16 @@ import com.secman.domain.CyberdefSeverity
 import com.secman.domain.CyberdefTicketStatus
 import com.secman.dto.CyberdefCommentRequest
 import com.secman.dto.CyberdefTransitionRequest
+import com.secman.service.cyberdef.CyberdefAccountDirectory
+import com.secman.service.cyberdef.CyberdefBatchCreateRequest
 import com.secman.service.cyberdef.CyberdefTicketActor
 import com.secman.service.cyberdef.CyberdefTicketCreateRequest
 import com.secman.service.cyberdef.CyberdefTicketFilter
+import com.secman.service.cyberdef.CyberdefTicketMeta
 import com.secman.service.cyberdef.CyberdefTicketQueryService
 import com.secman.service.cyberdef.CyberdefTicketResult
 import com.secman.service.cyberdef.CyberdefTicketService
+import com.secman.service.cyberdef.CyberdefTicketSubmissionService
 import com.secman.service.cyberdef.CyberdefTicketWorkflow
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
@@ -38,7 +42,10 @@ import java.time.format.DateTimeParseException
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class CyberdefTicketController(
     private val service: CyberdefTicketService,
-    private val queries: CyberdefTicketQueryService
+    private val submissions: CyberdefTicketSubmissionService,
+    private val queries: CyberdefTicketQueryService,
+    private val meta: CyberdefTicketMeta,
+    private val accounts: CyberdefAccountDirectory
 ) {
 
     @Get
@@ -81,6 +88,7 @@ open class CyberdefTicketController(
     open fun detail(@PathVariable id: Long, authentication: Authentication): HttpResponse<*> =
         respond(queries.detail(CyberdefTicketActor.from(authentication), id))
 
+    /** Close or reopen; with `dryRun` only checks the move and reports who would be mailed. */
     @Post("/{id}/transitions")
     open fun transition(
         @PathVariable id: Long,
@@ -99,19 +107,39 @@ open class CyberdefTicketController(
     open fun comment(@PathVariable id: Long, @Body request: CyberdefCommentRequest, authentication: Authentication): HttpResponse<*> =
         respond(service.comment(CyberdefTicketActor.from(authentication), id, request.comment))
 
-    /** Web form submission (Phase 2 UI). 201 created, 200 duplicate or dry run, 4xx with the reason otherwise. */
+    /**
+     * One ticket, `{ticket, delivery}`. 201 created, 200 duplicate or dry run; a rejection is
+     * 4xx with the same result body, whose `errors` name the offending fields.
+     */
     @Post
     @Secured("ADMIN", "CYBERDEF")
     open fun create(@Body request: CyberdefTicketCreateRequest, authentication: Authentication): HttpResponse<*> {
-        val result = service.create(CyberdefTicketActor.from(authentication), request)
+        val result = submissions.create(CyberdefTicketActor.from(authentication), request)
         if (result !is CyberdefTicketResult.Ok) return respond(result)
         val created = result.value
         return when (created.outcome) {
-            CyberdefTicketService.OUTCOME_CREATED -> HttpResponse.created(created)
-            CyberdefTicketService.OUTCOME_DUPLICATE, CyberdefTicketService.OUTCOME_WOULD_CREATE -> HttpResponse.ok(created)
-            else -> HttpResponse.status<Any>(statusFor(created.errorCode)).body(created)
+            CyberdefTicketSubmissionService.OUTCOME_CREATED -> HttpResponse.created(created)
+            CyberdefTicketSubmissionService.OUTCOME_REJECTED -> HttpResponse.status<Any>(statusFor(created.errorCode)).body(created)
+            else -> HttpResponse.ok(created)
         }
     }
+
+    /** 1-100 tickets, `{tickets, delivery}`. Always 200 with one result per ticket, unless the call itself is invalid. */
+    @Post("/batch")
+    @Secured("ADMIN", "CYBERDEF")
+    open fun createBatch(@Body request: CyberdefBatchCreateRequest, authentication: Authentication): HttpResponse<*> =
+        respond(submissions.createBatch(CyberdefTicketActor.from(authentication), request))
+
+    /** Submission rules for the form: severities with SLA days, limits, resource types, override domains. */
+    @Get("/meta")
+    @Secured("ADMIN", "CYBERDEF")
+    open fun meta(): HttpResponse<*> = HttpResponse.ok(meta.describe())
+
+    /** Account picker for the form: id, name and how many people a ticket reaches. No email addresses. */
+    @Get("/accounts")
+    @Secured("ADMIN", "CYBERDEF")
+    open fun accounts(@QueryValue q: String?, @QueryValue(defaultValue = "10") limit: Int): HttpResponse<*> =
+        HttpResponse.ok(accounts.search(q, limit))
 
     @Get("/{id}/notifications")
     @Secured("ADMIN", "CYBERDEF")
@@ -124,9 +152,9 @@ open class CyberdefTicketController(
         respond(service.resendFailed(CyberdefTicketActor.from(authentication), id))
 
     private fun respond(result: CyberdefTicketResult<*>): HttpResponse<*> = when (result) {
-        is CyberdefTicketResult.Ok -> HttpResponse.ok(result.value)
-        is CyberdefTicketResult.Failed ->
-            HttpResponse.status<Any>(statusFor(result.code)).body(mapOf("error" to result.code, "message" to result.message))
+        is CyberdefTicketResult.Ok -> HttpResponse.ok<Any>(result.value as Any)
+        is CyberdefTicketResult.Failed -> HttpResponse.status<Any>(statusFor(result.code))
+            .body(mapOf("error" to result.code, "message" to result.message, "errors" to result.fieldErrors))
     }
 
     private fun statusFor(code: String?): HttpStatus = when (code) {

@@ -15,6 +15,8 @@ interface CyberdefTicketNotificationRepository : JpaRepository<CyberdefTicketNot
 
     fun findByTicketIdAndStatus(ticketId: Long, status: String): List<CyberdefTicketNotification>
 
+    fun findByIdIn(ids: Collection<Long>): List<CyberdefTicketNotification>
+
     /** Rows nobody claimed, e.g. after a crash between commit and dispatch. */
     @Query(
         """
@@ -34,12 +36,13 @@ interface CyberdefTicketNotificationRepository : JpaRepository<CyberdefTicketNot
     )
     fun claim(id: Long, expected: String, now: Instant): Int
 
+    /** [finish] for every row of one digest mail, in one statement. */
     @Query(
         """
         UPDATE CyberdefTicketNotification n
         SET n.status = :status, n.errorCode = :errorCode, n.updatedAt = :now, n.sentAt = :sentAt
-        WHERE n.id = :id AND n.status = 'SENDING'
+        WHERE n.id IN (:ids) AND n.status = 'SENDING'
         """
     )
-    fun finish(id: Long, status: String, errorCode: String?, now: Instant, sentAt: Instant?): Int
+    fun finishAll(ids: Collection<Long>, status: String, errorCode: String?, now: Instant, sentAt: Instant?): Int
 }

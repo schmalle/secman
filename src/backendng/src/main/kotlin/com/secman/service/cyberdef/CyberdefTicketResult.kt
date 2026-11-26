@@ -7,8 +7,15 @@ package com.secman.service.cyberdef
 sealed class CyberdefTicketResult<out T> {
     /** The operation succeeded with [value]. */
     data class Ok<T>(val value: T) : CyberdefTicketResult<T>()
-    /** The operation was refused; [code] is one of the constants below or a workflow code. */
-    data class Failed(val code: String, val message: String) : CyberdefTicketResult<Nothing>()
+    /**
+     * The operation was refused; [code] is one of the constants below or a workflow code.
+     * [fieldErrors] names the offending input fields when there are any.
+     */
+    data class Failed(
+        val code: String,
+        val message: String,
+        val fieldErrors: List<CyberdefFieldError> = emptyList()
+    ) : CyberdefTicketResult<Nothing>()
 
     companion object {
         const val NOT_FOUND = "NOT_FOUND"

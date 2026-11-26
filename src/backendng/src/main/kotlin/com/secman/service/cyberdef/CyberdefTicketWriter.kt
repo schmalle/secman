@@ -18,7 +18,6 @@ import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
 import java.security.MessageDigest
 import java.time.Instant
-import java.time.ZoneOffset
 
 /**
  * Every database write of the feature, one transaction per public method.
@@ -55,7 +54,7 @@ open class CyberdefTicketWriter(
 
     /** Stores a new ticket with its resources, creation event, recipients and queued mail. */
     @Transactional
-    open fun create(actor: CyberdefTicketActor, input: ValidTicket, routing: CyberdefRouting, dueAt: Instant?): Written {
+    open fun create(actor: CyberdefTicketActor, input: ValidTicket, routing: CyberdefRouting, dueAt: Instant?, batchKey: String?): Written {
         val now = Instant.now()
         val ticket = tickets.save(
             CyberdefTicket(
@@ -69,8 +68,6 @@ open class CyberdefTicketWriter(
             )
         )
         val id = ticket.id!!
-        ticket.ticketKey = ticketKey(id, now)
-        tickets.update(ticket)
 
         if (input.resources.isNotEmpty()) {
             resources.saveAll(input.resources.map {
@@ -89,7 +86,7 @@ open class CyberdefTicketWriter(
                 CyberdefTicketRecipient(ticketId = id, email = it.email, userId = it.userId, source = it.source)
             })
         }
-        val queued = queue(id, event.id!!, KIND_CREATED, routing.recipients.map { it.email }, now)
+        val queued = queue(id, event.id!!, KIND_CREATED, routing.recipients.map { it.email }, now, batchKey)
         return Written(ticket, queued)
     }
 
@@ -158,11 +155,11 @@ open class CyberdefTicketWriter(
         CyberdefActorKind.SYSTEM -> emptyList()
     }
 
-    private fun queue(ticketId: Long, eventId: Long, kind: String, emails: List<String>, now: Instant): List<Long> {
+    private fun queue(ticketId: Long, eventId: Long, kind: String, emails: List<String>, now: Instant, batchKey: String? = null): List<Long> {
         if (emails.isEmpty()) return emptyList()
         val rows = emails.distinct().map { email ->
             CyberdefTicketNotification(
-                ticketId = ticketId, recipientEmail = email, kind = kind, eventId = eventId,
+                ticketId = ticketId, recipientEmail = email, kind = kind, eventId = eventId, batchKey = batchKey,
                 eventKey = eventKey(ticketId, eventId, kind, email), createdAt = now, updatedAt = now
             )
         }
@@ -173,9 +170,6 @@ open class CyberdefTicketWriter(
         const val KIND_CREATED = "CREATED"
         const val KIND_STATUS_CHANGED = "STATUS_CHANGED"
         const val KIND_DEFENDER_UPDATE = "DEFENDER_UPDATE"
-
-        fun ticketKey(id: Long, createdAt: Instant): String =
-            "CD-%d-%06d".format(createdAt.atZone(ZoneOffset.UTC).year, id)
 
         fun eventKey(ticketId: Long, eventId: Long, kind: String, email: String): String =
             MessageDigest.getInstance("SHA-256")

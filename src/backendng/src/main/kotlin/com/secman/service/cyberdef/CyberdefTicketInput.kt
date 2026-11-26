@@ -12,15 +12,17 @@ import java.time.format.DateTimeParseException
 @Serdeable
 @Introspected
 data class CyberdefResourceInput(
+    /** Optional when [identifier] is an ARN: it is then derived from the ARN's service and resource type. */
     val type: String? = null,
     val identifier: String? = null,
+    /** Optional when [identifier] is a regional ARN. */
     val region: String? = null
 )
 
-/** Submission payload, shared by `POST /api/security-tickets` and the MCP create tools. */
+/** The finding itself. Sending options live separately in [CyberdefDelivery]. */
 @Serdeable
 @Introspected
-data class CyberdefTicketCreateRequest(
+data class CyberdefTicketFields(
     val externalReference: String? = null,
     val awsAccountId: String? = null,
     val title: String? = null,
@@ -31,15 +33,51 @@ data class CyberdefTicketCreateRequest(
     val resources: List<CyberdefResourceInput>? = null,
     val references: List<String>? = null,
     val sourceSystem: String? = null,
-    val dueAt: String? = null,
-    val allowUnrouted: Boolean? = null,
-    /** Mail these addresses instead of the account's owners (see [CyberdefTicketInput.RECIPIENTS_MAX]). */
-    val recipients: List<String>? = null,
-    /** Validate and resolve everything, store and send nothing. */
-    val dryRun: Boolean? = null
+    val dueAt: String? = null
 )
 
-/** A submission that passed [CyberdefTicketInput.validate]: trimmed, bounded, normalised. */
+/** How a submission is handled, once per request; it applies to every ticket in a batch. */
+@Serdeable
+@Introspected
+data class CyberdefDelivery(
+    /** Validate and resolve everything, store and send nothing. */
+    val dryRun: Boolean? = null,
+    /** Mail these addresses instead of the account's owners (at most [CyberdefTicketInput.RECIPIENTS_MAX]). */
+    val recipients: List<String>? = null,
+    /** Create tickets for accounts nobody is allocated to. */
+    val allowUnrouted: Boolean? = null
+)
+
+/** `POST /api/security-tickets` and `create_cyberdef_ticket`. */
+@Serdeable
+@Introspected
+data class CyberdefTicketCreateRequest(val ticket: CyberdefTicketFields? = null, val delivery: CyberdefDelivery? = null)
+
+/** `POST /api/security-tickets/batch` and `create_cyberdef_tickets`. */
+@Serdeable
+@Introspected
+data class CyberdefBatchCreateRequest(val tickets: List<CyberdefTicketFields>? = null, val delivery: CyberdefDelivery? = null)
+
+/**
+ * One problem with one input field. [field] is a path such as `title` or `resources[2].region`
+ * (relative to the ticket, or `delivery.recipients[0]`), so a form can show it in place.
+ */
+@Serdeable
+data class CyberdefFieldError(val field: String, val code: String, val message: String) {
+    companion object {
+        const val REQUIRED = "REQUIRED"
+        const val INVALID = "INVALID"
+        const val TOO_LONG = "TOO_LONG"
+        const val TOO_MANY = "TOO_MANY"
+        const val NOT_FUTURE = "NOT_FUTURE"
+        const val ACCOUNT_MISMATCH = "ACCOUNT_MISMATCH"
+        const val UNKNOWN_FIELD = "UNKNOWN_FIELD"
+        const val WRONG_TYPE = "WRONG_TYPE"
+        const val NOT_ALLOWED = "NOT_ALLOWED"
+    }
+}
+
+/** A ticket that passed [CyberdefTicketInput.validate]: trimmed, bounded, normalised. */
 data class ValidTicket(
     val externalReference: String?,
     val awsAccountId: String,
@@ -51,19 +89,19 @@ data class ValidTicket(
     val resources: List<CyberdefResourceInput>,
     val references: List<String>,
     val sourceSystem: String?,
-    val dueAt: Instant?,
-    val allowUnrouted: Boolean,
-    /** Normalised override addresses; empty means "mail the account's owners". */
-    val recipientOverride: List<String>,
-    val dryRun: Boolean
+    val dueAt: Instant?
 )
 
-/** Result of [CyberdefTicketInput.validate]: the cleaned ticket or every problem found. */
-sealed class ValidationOutcome {
+/** Delivery options that passed [CyberdefTicketInput.validateDelivery]. */
+data class ValidDelivery(val dryRun: Boolean, val recipients: List<String>, val allowUnrouted: Boolean)
+
+/** Result of a validation: the cleaned value or every problem found. */
+sealed class Validated<out T> {
     /** Input passed every check. */
-    data class Valid(val ticket: ValidTicket) : ValidationOutcome()
+    data class Valid<T>(val value: T) : Validated<T>()
+
     /** Input failed; [errors] lists each problem, not just the first. */
-    data class Invalid(val errors: List<String>) : ValidationOutcome()
+    data class Invalid(val errors: List<CyberdefFieldError>) : Validated<Nothing>()
 }
 
 /**
@@ -93,12 +131,13 @@ object CyberdefTicketInput {
     private val MULTILINE_CONTROL = Regex("[\\p{Cntrl}&&[^\\n\\t]]")
     private val ANY_CONTROL = Regex("\\p{Cntrl}")
 
-    /** Keys the MCP tool accepts. An unknown key is a typo that would silently drop data. */
-    val ALLOWED_KEYS = setOf(
+    /** Keys a ticket object accepts. An unknown key is a typo that would silently drop data. */
+    val TICKET_KEYS = setOf(
         "externalReference", "awsAccountId", "title", "severity", "description", "recommendedAction",
-        "cves", "resources", "references", "sourceSystem", "dueAt", "allowUnrouted", "recipients", "dryRun"
+        "cves", "resources", "references", "sourceSystem", "dueAt"
     )
-    private val RESOURCE_KEYS = setOf("type", "identifier", "region")
+    val DELIVERY_KEYS = setOf("dryRun", "recipients", "allowUnrouted")
+    val RESOURCE_KEYS = setOf("type", "identifier", "region")
 
     fun cleanMultiline(value: String): String = value.replace("\r\n", "\n").replace(MULTILINE_CONTROL, "").trim()
 
@@ -111,95 +150,148 @@ object CyberdefTicketInput {
         return cleaned
     }
 
-    /** Checks and normalises [request]; [now] is the reference for `dueAt`. */
-    fun validate(request: CyberdefTicketCreateRequest, now: Instant = Instant.now()): ValidationOutcome {
-        val errors = mutableListOf<String>()
-
-        val account = request.awsAccountId?.trim().orEmpty()
-        if (!ACCOUNT_ID.matches(account)) errors += "awsAccountId must be exactly 12 digits"
-
-        val title = request.title?.let(::cleanSingleLine).orEmpty()
-        if (title.isEmpty() || title.length > TITLE_MAX) errors += "title is required and at most $TITLE_MAX characters"
-
-        val severity = request.severity?.trim()?.uppercase()?.let { raw ->
-            CyberdefSeverity.entries.firstOrNull { it.name == raw }
+    /** Checks and normalises one ticket; [now] is the reference for `dueAt`. */
+    fun validate(fields: CyberdefTicketFields, now: Instant = Instant.now()): Validated<ValidTicket> {
+        val errors = mutableListOf<CyberdefFieldError>()
+        val account = validateAccount(fields.awsAccountId, errors)
+        val title = requiredText("title", fields.title?.let(::cleanSingleLine), TITLE_MAX, errors)
+        val severity = validateSeverity(fields.severity, errors)
+        val description = requiredText("description", fields.description?.let(::cleanMultiline), DESCRIPTION_MAX, errors)
+        val action = fields.recommendedAction?.let(::cleanMultiline)?.takeIf { it.isNotEmpty() }
+        if (action != null && action.length > ACTION_MAX) {
+            errors += CyberdefFieldError("recommendedAction", CyberdefFieldError.TOO_LONG, "at most $ACTION_MAX characters")
         }
-        if (severity == null) errors += "severity must be one of ${CyberdefSeverity.entries.joinToString()}"
+        val reference = optionalPattern("externalReference", fields.externalReference, EXTERNAL_REFERENCE,
+            "1-128 characters of A-Z a-z 0-9 . _ : / # -", errors)
+        val source = optionalPattern("sourceSystem", fields.sourceSystem, SOURCE_SYSTEM,
+            "1-64 characters of A-Z a-z 0-9 . _ - and space", errors)
+        val cves = validateCves(fields.cves.orEmpty(), errors)
+        val resources = validateResources(fields.resources.orEmpty(), account, errors)
+        val references = validateReferences(fields.references.orEmpty(), errors)
+        val dueAt = parseDueAt(fields.dueAt, now, errors)
 
-        val description = request.description?.let(::cleanMultiline).orEmpty()
-        if (description.isEmpty() || description.length > DESCRIPTION_MAX) {
-            errors += "description is required and at most $DESCRIPTION_MAX characters"
-        }
-
-        val action = request.recommendedAction?.let(::cleanMultiline)?.takeIf { it.isNotEmpty() }
-        if (action != null && action.length > ACTION_MAX) errors += "recommendedAction must be at most $ACTION_MAX characters"
-
-        val reference = request.externalReference?.trim()?.takeIf { it.isNotEmpty() }
-        if (reference != null && !EXTERNAL_REFERENCE.matches(reference)) {
-            errors += "externalReference must be 1-128 characters of A-Z a-z 0-9 . _ : / # -"
-        }
-
-        val source = request.sourceSystem?.trim()?.takeIf { it.isNotEmpty() }
-        if (source != null && !SOURCE_SYSTEM.matches(source)) errors += "sourceSystem must be 1-64 characters of A-Z a-z 0-9 . _ - and space"
-
-        val cves = validateCves(request.cves.orEmpty(), errors)
-        val resources = validateResources(request.resources.orEmpty(), errors)
-        val references = validateReferences(request.references.orEmpty(), errors)
-        val dueAt = parseDueAt(request.dueAt, now, errors)
-        val override = validateRecipients(request.recipients.orEmpty(), errors)
-
-        if (errors.isNotEmpty()) return ValidationOutcome.Invalid(errors)
-        return ValidationOutcome.Valid(
+        if (errors.isNotEmpty()) return Validated.Invalid(errors)
+        return Validated.Valid(
             ValidTicket(
-                externalReference = reference, awsAccountId = account, title = title, severity = severity!!,
+                externalReference = reference, awsAccountId = account!!, title = title, severity = severity!!,
                 description = description, recommendedAction = action, cves = cves, resources = resources,
-                references = references, sourceSystem = source, dueAt = dueAt,
-                allowUnrouted = request.allowUnrouted == true, recipientOverride = override,
-                dryRun = request.dryRun == true
+                references = references, sourceSystem = source, dueAt = dueAt
             )
         )
     }
 
-    private fun validateCves(raw: List<String>, errors: MutableList<String>): List<String> {
-        if (raw.size > CVES_MAX) errors += "at most $CVES_MAX cves"
+    /** Syntax only; whether SecMan may mail an address is [CyberdefRecipientResolver.resolveOverride]'s call. */
+    fun validateDelivery(delivery: CyberdefDelivery?): Validated<ValidDelivery> {
+        val errors = mutableListOf<CyberdefFieldError>()
+        val raw = delivery?.recipients.orEmpty()
+        if (raw.size > RECIPIENTS_MAX) {
+            errors += CyberdefFieldError("delivery.recipients", CyberdefFieldError.TOO_MANY, "at most $RECIPIENTS_MAX recipients")
+        }
+        val addresses = raw.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
+        addresses.withIndex().filterNot { EmailAddressValidator.isValidRecipient(it.value) }.take(3).forEach { (index, _) ->
+            errors += CyberdefFieldError("delivery.recipients[$index]", CyberdefFieldError.INVALID, "not a valid email address")
+        }
+        if (errors.isNotEmpty()) return Validated.Invalid(errors)
+        return Validated.Valid(ValidDelivery(delivery?.dryRun == true, addresses, delivery?.allowUnrouted == true))
+    }
+
+    /** The 12-digit account, or null (with an error recorded) when it is missing or malformed. */
+    private fun validateAccount(raw: String?, errors: MutableList<CyberdefFieldError>): String? {
+        val account = raw?.trim().orEmpty()
+        return when {
+            account.isEmpty() -> null.also { errors += CyberdefFieldError("awsAccountId", CyberdefFieldError.REQUIRED, "AWS account id is required") }
+            !ACCOUNT_ID.matches(account) -> null.also { errors += CyberdefFieldError("awsAccountId", CyberdefFieldError.INVALID, "must be exactly 12 digits") }
+            else -> account
+        }
+    }
+
+    private fun validateSeverity(raw: String?, errors: MutableList<CyberdefFieldError>): CyberdefSeverity? {
+        val severity = raw?.trim()?.uppercase()?.let { name -> CyberdefSeverity.entries.firstOrNull { it.name == name } }
+        if (severity == null) {
+            val code = if (raw.isNullOrBlank()) CyberdefFieldError.REQUIRED else CyberdefFieldError.INVALID
+            errors += CyberdefFieldError("severity", code, "must be one of ${CyberdefSeverity.entries.joinToString()}")
+        }
+        return severity
+    }
+
+    private fun requiredText(field: String, cleaned: String?, max: Int, errors: MutableList<CyberdefFieldError>): String {
+        val text = cleaned.orEmpty()
+        when {
+            text.isEmpty() -> errors += CyberdefFieldError(field, CyberdefFieldError.REQUIRED, "$field is required")
+            text.length > max -> errors += CyberdefFieldError(field, CyberdefFieldError.TOO_LONG, "at most $max characters")
+        }
+        return text
+    }
+
+    private fun optionalPattern(field: String, raw: String?, pattern: Regex, rule: String, errors: MutableList<CyberdefFieldError>): String? {
+        val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        if (!pattern.matches(value)) errors += CyberdefFieldError(field, CyberdefFieldError.INVALID, rule)
+        return value
+    }
+
+    private fun validateCves(raw: List<String>, errors: MutableList<CyberdefFieldError>): List<String> {
+        if (raw.size > CVES_MAX) errors += CyberdefFieldError("cves", CyberdefFieldError.TOO_MANY, "at most $CVES_MAX CVEs")
         val cves = raw.map { it.trim().uppercase() }.distinct()
-        cves.filterNot { CVE.matches(it) }.take(3).forEach { errors += "invalid CVE id '${cleanSingleLine(it).take(40)}'" }
+        cves.withIndex().filterNot { CVE.matches(it.value) }.take(3).forEach { (index, _) ->
+            errors += CyberdefFieldError("cves[$index]", CyberdefFieldError.INVALID, "must look like CVE-2026-12345")
+        }
         return cves
     }
 
-    private fun validateResources(raw: List<CyberdefResourceInput>, errors: MutableList<String>): List<CyberdefResourceInput> {
-        if (raw.size > RESOURCES_MAX) errors += "at most $RESOURCES_MAX resources"
+    private fun validateResources(
+        raw: List<CyberdefResourceInput>,
+        account: String?,
+        errors: MutableList<CyberdefFieldError>
+    ): List<CyberdefResourceInput> {
+        if (raw.size > RESOURCES_MAX) errors += CyberdefFieldError("resources", CyberdefFieldError.TOO_MANY, "at most $RESOURCES_MAX resources")
         return raw.mapIndexedNotNull { index, resource ->
-            val type = resource.type?.trim()?.uppercase().orEmpty()
-            val identifier = resource.identifier?.let(::cleanSingleLine).orEmpty()
-            val region = resource.region?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
-            val problems = buildList {
-                if (!RESOURCE_TYPE.matches(type)) add("type must be 1-32 characters of A-Z 0-9 _")
-                if (identifier.isEmpty() || identifier.length > IDENTIFIER_MAX) add("identifier is required and at most $IDENTIFIER_MAX characters")
-                if (region != null && !REGION.matches(region)) add("region must look like eu-central-1")
-            }
-            if (problems.isNotEmpty()) {
-                errors += "resources[$index]: ${problems.joinToString("; ")}"
-                null
-            } else CyberdefResourceInput(type, identifier, region)
+            val before = errors.size
+            val cleaned = validateResource("resources[$index]", resource, account, errors)
+            cleaned.takeIf { errors.size == before }
         }
     }
 
-    /** Syntax only; whether SecMan may mail an address is [CyberdefRecipientResolver.resolveOverride]'s call. */
-    private fun validateRecipients(raw: List<String>, errors: MutableList<String>): List<String> {
-        if (raw.size > RECIPIENTS_MAX) errors += "at most $RECIPIENTS_MAX recipients"
-        val addresses = raw.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
-        addresses.withIndex().filterNot { EmailAddressValidator.isValidRecipient(it.value) }.take(3).forEach { (index, _) ->
-            errors += "recipients[$index] is not a valid email address"
+    /**
+     * One resource. An ARN identifier fills in region and type when they are missing and
+     * must name the ticket's own account, so a ticket cannot point at another tenant.
+     */
+    private fun validateResource(
+        path: String,
+        resource: CyberdefResourceInput,
+        account: String?,
+        errors: MutableList<CyberdefFieldError>
+    ): CyberdefResourceInput {
+        val identifier = resource.identifier?.let(::cleanSingleLine).orEmpty()
+        val arn = AwsArn.parse(identifier)
+        val identifierError = when {
+            identifier.isEmpty() -> CyberdefFieldError.REQUIRED to "identifier is required"
+            identifier.length > IDENTIFIER_MAX -> CyberdefFieldError.TOO_LONG to "at most $IDENTIFIER_MAX characters"
+            identifier.startsWith("arn:") && arn == null -> CyberdefFieldError.INVALID to "not a valid ARN"
+            arn != null && account != null && arn.account.isNotEmpty() && arn.account != account ->
+                CyberdefFieldError.ACCOUNT_MISMATCH to "ARN belongs to account ${arn.account}, not $account"
+            else -> null
         }
-        return addresses
+        identifierError?.let { (code, message) -> errors += CyberdefFieldError("$path.identifier", code, message) }
+
+        val type = resource.type?.trim()?.uppercase()?.takeIf { it.isNotEmpty() } ?: arn?.resourceType()
+        when {
+            type == null -> errors += CyberdefFieldError("$path.type", CyberdefFieldError.REQUIRED, "type is required unless the identifier is an ARN")
+            !RESOURCE_TYPE.matches(type) -> errors += CyberdefFieldError("$path.type", CyberdefFieldError.INVALID, "1-32 characters of A-Z 0-9 _")
+        }
+        val region = resource.region?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: arn?.region?.takeIf { it.isNotEmpty() }
+        if (region != null && !REGION.matches(region)) {
+            errors += CyberdefFieldError("$path.region", CyberdefFieldError.INVALID, "must look like eu-central-1")
+        }
+        return CyberdefResourceInput(type, identifier, region)
     }
 
-    private fun validateReferences(raw: List<String>, errors: MutableList<String>): List<String> {
-        if (raw.size > REFERENCES_MAX) errors += "at most $REFERENCES_MAX references"
+    private fun validateReferences(raw: List<String>, errors: MutableList<CyberdefFieldError>): List<String> {
+        if (raw.size > REFERENCES_MAX) {
+            errors += CyberdefFieldError("references", CyberdefFieldError.TOO_MANY, "at most $REFERENCES_MAX references")
+        }
         val references = raw.map { it.trim() }.distinct()
         references.withIndex().filterNot { isSafeHttpsUrl(it.value) }.take(3).forEach { (index, _) ->
-            errors += "references[$index] must be an absolute https URL without credentials"
+            errors += CyberdefFieldError("references[$index]", CyberdefFieldError.INVALID, "must be an absolute https URL without credentials")
         }
         return references
     }
@@ -215,66 +307,15 @@ object CyberdefTicketInput {
         return uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank() && uri.rawUserInfo == null
     }
 
-    private fun parseDueAt(raw: String?, now: Instant, errors: MutableList<String>): Instant? {
+    private fun parseDueAt(raw: String?, now: Instant, errors: MutableList<CyberdefFieldError>): Instant? {
         val text = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
         val parsed = try {
             Instant.parse(text)
         } catch (e: DateTimeParseException) {
-            errors += "dueAt must be an ISO-8601 instant such as 2026-12-31T00:00:00Z"
+            errors += CyberdefFieldError("dueAt", CyberdefFieldError.INVALID, "must be an ISO-8601 instant such as 2026-12-31T00:00:00Z")
             return null
         }
-        if (!parsed.isAfter(now)) errors += "dueAt must be in the future"
+        if (!parsed.isAfter(now)) errors += CyberdefFieldError("dueAt", CyberdefFieldError.NOT_FUTURE, "must be in the future")
         return parsed
-    }
-
-    /**
-     * Converts the loosely typed MCP argument map into a request. Unknown keys and wrongly
-     * typed values are reported, not ignored.
-     */
-    fun fromArguments(arguments: Map<String, Any?>): Pair<CyberdefTicketCreateRequest?, List<String>> {
-        val errors = mutableListOf<String>()
-        val unknown = arguments.keys - ALLOWED_KEYS
-        if (unknown.isNotEmpty()) errors += "unknown field(s): ${unknown.sorted().joinToString { cleanSingleLine(it).take(40) }}"
-
-        fun text(key: String): String? = when (val value = arguments[key]) {
-            null -> null
-            is String -> value
-            is Number -> value.toString()
-            else -> { errors += "$key must be a string"; null }
-        }
-        fun stringList(key: String): List<String>? = when (val value = arguments[key]) {
-            null -> null
-            is List<*> -> value.map { item -> item as? String ?: run { errors += "$key must contain strings only"; "" } }
-            else -> { errors += "$key must be an array of strings"; null }
-        }
-        val resources = when (val value = arguments["resources"]) {
-            null -> null
-            is List<*> -> value.mapIndexed { index, item -> resourceFromMap(index, item, errors) }
-            else -> { errors += "resources must be an array of objects"; null }
-        }
-        fun flag(key: String): Boolean? = when (val value = arguments[key]) {
-            null -> null
-            is Boolean -> value
-            else -> { errors += "$key must be a boolean"; null }
-        }
-        // Every field is read before the error check, so each mistyped field is reported.
-        val request = CyberdefTicketCreateRequest(
-            externalReference = text("externalReference"), awsAccountId = text("awsAccountId"),
-            title = text("title"), severity = text("severity"), description = text("description"),
-            recommendedAction = text("recommendedAction"), cves = stringList("cves"), resources = resources,
-            references = stringList("references"), sourceSystem = text("sourceSystem"), dueAt = text("dueAt"),
-            allowUnrouted = flag("allowUnrouted"), recipients = stringList("recipients"), dryRun = flag("dryRun")
-        )
-        return (if (errors.isEmpty()) request else null) to errors
-    }
-
-    private fun resourceFromMap(index: Int, item: Any?, errors: MutableList<String>): CyberdefResourceInput {
-        val map = item as? Map<*, *> ?: run {
-            errors += "resources[$index] must be an object"
-            return CyberdefResourceInput()
-        }
-        val unknown = map.keys.map { it.toString() }.toSet() - RESOURCE_KEYS
-        if (unknown.isNotEmpty()) errors += "resources[$index]: unknown field(s) ${unknown.sorted().joinToString { cleanSingleLine(it).take(40) }}"
-        return CyberdefResourceInput(map["type"] as? String, map["identifier"] as? String, map["region"] as? String)
     }
 }

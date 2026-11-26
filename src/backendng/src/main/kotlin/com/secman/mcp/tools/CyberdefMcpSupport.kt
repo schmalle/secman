@@ -3,6 +3,7 @@ package com.secman.mcp.tools
 import com.secman.domain.CyberdefSeverity
 import com.secman.domain.CyberdefTicketStatus
 import com.secman.dto.mcp.McpExecutionContext
+import com.secman.service.cyberdef.CyberdefFieldError
 import com.secman.service.cyberdef.CyberdefTicketActor
 import com.secman.service.cyberdef.CyberdefTicketFilter
 import com.secman.service.cyberdef.CyberdefTicketResult
@@ -29,8 +30,13 @@ internal object CyberdefMcpSupport {
 
     fun <T : Any> toMcp(result: CyberdefTicketResult<T>): McpToolResult = when (result) {
         is CyberdefTicketResult.Ok -> McpToolResult.success(result.value)
-        is CyberdefTicketResult.Failed -> error(result.code, result.message)
+        is CyberdefTicketResult.Failed -> error(result.code, withFields(result.message, result.fieldErrors))
     }
+
+    /** JSON-RPC carries only a message, so field errors are appended as `field: problem` pairs. */
+    fun withFields(message: String, errors: List<CyberdefFieldError>): String =
+        if (errors.isEmpty()) message
+        else message + " (" + errors.take(10).joinToString("; ") { "${it.field}: ${it.message}" } + ")"
 
     /**
      * The JSON-RPC layer forwards only an error's message to the client, so the stable code
@@ -135,19 +141,32 @@ internal object CyberdefMcpSupport {
         "recommendedAction" to mapOf("type" to "string", "description" to "What the owners should do, at most 10 000 characters"),
         "cves" to mapOf("type" to "array", "items" to mapOf("type" to "string"), "description" to "Up to 100 CVE ids"),
         "resources" to mapOf(
-            "type" to "array", "description" to "Up to 500 affected resources",
+            "type" to "array",
+            "description" to "Up to 500 affected resources. For an ARN, type and region may be omitted (derived); its account must match awsAccountId.",
             "items" to mapOf("type" to "object", "properties" to mapOf(
                 "type" to mapOf("type" to "string", "description" to "e.g. EC2_INSTANCE, S3_BUCKET, RDS_SNAPSHOT"),
                 "identifier" to mapOf("type" to "string", "description" to "ARN, instance id or hostname"),
                 "region" to mapOf("type" to "string", "description" to "e.g. eu-central-1")
-            ), "required" to listOf("type", "identifier"))
+            ), "required" to listOf("identifier"))
         ),
         "references" to mapOf("type" to "array", "items" to mapOf("type" to "string"), "description" to "Up to 20 https links (display only)"),
         "sourceSystem" to mapOf("type" to "string", "description" to "Where the finding came from, e.g. guardduty"),
         "dueAt" to mapOf("type" to "string", "description" to "ISO-8601 instant; may only shorten the severity SLA"),
-        "allowUnrouted" to mapOf("type" to "boolean",
-            "description" to "Create the ticket even if nobody is allocated to the account (default false: rejected as UNROUTABLE_ACCOUNT)"),
-        "recipients" to RECIPIENTS_PROPERTY,
-        "dryRun" to DRY_RUN_PROPERTY
+    )
+
+    val TICKET_SCHEMA: Map<String, Any> = mapOf(
+        "type" to "object", "properties" to TICKET_FIELDS,
+        "required" to listOf("awsAccountId", "title", "severity", "description")
+    )
+
+    /** Sending options, once per call; in a batch they apply to every ticket. */
+    val DELIVERY_SCHEMA: Map<String, Any> = mapOf(
+        "type" to "object",
+        "properties" to mapOf(
+            "dryRun" to DRY_RUN_PROPERTY,
+            "recipients" to RECIPIENTS_PROPERTY,
+            "allowUnrouted" to mapOf("type" to "boolean",
+                "description" to "Create tickets even if nobody is allocated to the account (default false: rejected as UNROUTABLE_ACCOUNT)")
+        )
     )
 }

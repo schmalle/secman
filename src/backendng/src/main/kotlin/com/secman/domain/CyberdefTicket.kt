@@ -17,7 +17,6 @@ import java.time.Instant
 @Table(
     name = "cyberdef_ticket",
     uniqueConstraints = [
-        UniqueConstraint(name = "uk_cyberdef_ticket_key", columnNames = ["ticket_key"]),
         UniqueConstraint(name = "uk_cyberdef_ticket_external_ref", columnNames = ["created_by_user_id", "external_reference"])
     ],
     indexes = [
@@ -31,9 +30,6 @@ class CyberdefTicket(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null,
-
-    @Column(name = "ticket_key", length = 20)
-    var ticketKey: String? = null,
 
     @Column(name = "target_type", nullable = false, length = 16)
     var targetType: String = TARGET_AWS_ACCOUNT,
@@ -101,11 +97,23 @@ class CyberdefTicket(
     @Column(nullable = false)
     var version: Long = 0
 ) {
+    /** Human reference such as `CD-2026-000123`, derived from id and creation year; never stored. */
+    @get:Transient
+    val ticketKey: String?
+        get() = id?.let { keyOf(it, createdAt) }
+
     fun cveList(): List<String> = cveIds?.split(',')?.filter { it.isNotBlank() }.orEmpty()
 
     fun referenceList(): List<String> = referenceUrls?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
 
     companion object {
         const val TARGET_AWS_ACCOUNT = "AWS_ACCOUNT"
+        private val KEY = Regex("^CD-(\\d{4})-(\\d{6,})$")
+
+        fun keyOf(id: Long, createdAt: Instant): String =
+            "CD-%d-%06d".format(createdAt.atZone(java.time.ZoneOffset.UTC).year, id)
+
+        /** The id inside a key, or null when [key] is not one. The caller still checks the year via [keyOf]. */
+        fun idFromKey(key: String): Long? = KEY.matchEntire(key.trim().uppercase())?.groupValues?.get(2)?.toLongOrNull()
     }
 }

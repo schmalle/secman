@@ -1,0 +1,16 @@
+{count} new security tickets for your AWS accounts
+================================================================
+
+Cyber Defence opened {count} security tickets for {accountCount} AWS account(s) you are
+responsible for, most severe first:
+
+{ticketList}
+
+Please review each ticket and, once it is fixed, close it in SecMan with a short note on
+what was done. All your tickets: {ticketsUrl}
+
+The full descriptions, affected resources and recommended actions are in SecMan.
+
+---
+You are receiving this because this email address is mapped to these AWS accounts, either
+directly or through a workgroup. Contact your SecMan administrator if that is wrong.

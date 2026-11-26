@@ -534,8 +534,8 @@ Cyber Defence submits findings about AWS accounts; account owners answer. Workfl
 
 | Tool | Arguments | Roles | Deleg. |
 |---|---|---|---|
-| `create_cyberdef_ticket` | `awsAccountId`*, `title`*, `severity`*, `description`*, `externalReference`, `recommendedAction`, `cves[]`, `resources[]`, `references[]`, `sourceSystem`, `dueAt`, `allowUnrouted`, `recipients[]` (override, max 20), `dryRun` | CYBERDEF, ADMIN | ✓ |
-| `create_cyberdef_tickets` | `tickets[]`* (1–100 of the above), batch-wide `dryRun`, `recipients[]` | CYBERDEF, ADMIN | ✓ |
+| `create_cyberdef_ticket` | `ticket`* {`awsAccountId`*, `title`*, `severity`*, `description`*, `externalReference`, `recommendedAction`, `cves[]`, `resources[]` (ARN or type+identifier), `references[]`, `sourceSystem`, `dueAt`}, `delivery` {`dryRun`, `recipients[]` (max 20), `allowUnrouted`} | CYBERDEF, ADMIN | ✓ |
+| `create_cyberdef_tickets` | `tickets[]`* (1–100 ticket objects), `delivery` (applies to all; one digest mail per recipient) | CYBERDEF, ADMIN | ✓ |
 | `list_cyberdef_tickets` | `status[]`, `severity[]`, `awsAccountId`, `overdue`, `updatedSince`, `q`, `createdByMe`, `page`, `size` (max 200) | CYBERDEF, ADMIN | ✓ |
 | `get_cyberdef_ticket` | `id` \| `ticketKey` \| `externalReference` | CYBERDEF, ADMIN | ✓ |
 | `get_cyberdef_ticket_updates` | `sinceEventId`, `limit` (max 500) | CYBERDEF, ADMIN | ✓ |

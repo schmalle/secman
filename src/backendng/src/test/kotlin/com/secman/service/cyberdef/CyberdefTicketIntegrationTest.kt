@@ -26,12 +26,14 @@ import java.time.Instant
 @MicronautTest(environments = ["test"], transactional = false, startApplication = false)
 class CyberdefTicketIntegrationTest : BaseIntegrationTest() {
     @Inject lateinit var service: CyberdefTicketService
+    @Inject lateinit var submissions: CyberdefTicketSubmissionService
     @Inject lateinit var queries: CyberdefTicketQueryService
     @Inject lateinit var users: UserRepository
     @Inject lateinit var mappings: UserMappingRepository
     @Inject lateinit var events: CyberdefTicketEventRepository
     @Inject lateinit var recipients: CyberdefTicketRecipientRepository
     @Inject lateinit var notifications: CyberdefTicketNotificationRepository
+    @Inject lateinit var directory: CyberdefAccountDirectory
 
     private val suffix = System.nanoTime().toString().takeLast(8)
     private val ownedAccount = "1" + suffix.padStart(11, '0')
@@ -57,10 +59,11 @@ class CyberdefTicketIntegrationTest : BaseIntegrationTest() {
     }
 
     private fun submit(reference: String, account: String = ownedAccount, severity: String = "HIGH") =
-        (service.create(soc, CyberdefTicketCreateRequest(
-            externalReference = reference, awsAccountId = account, title = "Finding $reference",
-            severity = severity, description = "Details for $reference"
-        )) as CyberdefTicketResult.Ok).value
+        create(CyberdefTicketFields(externalReference = reference, awsAccountId = account, title = "Finding $reference",
+            severity = severity, description = "Details for $reference"))
+
+    private fun create(fields: CyberdefTicketFields, delivery: CyberdefDelivery? = null) =
+        (submissions.create(soc, CyberdefTicketCreateRequest(fields, delivery)) as CyberdefTicketResult.Ok).value
 
     @Test
     fun `a submission is routed, mailed, scoped and idempotent`() {
@@ -84,8 +87,8 @@ class CyberdefTicketIntegrationTest : BaseIntegrationTest() {
 
     @Test
     fun `an unowned account is refused`() {
-        val refused = (service.create(soc, CyberdefTicketCreateRequest(awsAccountId = "3" + suffix.padStart(11, '0'),
-            title = "t", severity = "LOW", description = "d")) as CyberdefTicketResult.Ok).value
+        val refused = create(CyberdefTicketFields(awsAccountId = "3" + suffix.padStart(11, '0'),
+            title = "t", severity = "LOW", description = "d"))
         assertThat(refused.errorCode).isEqualTo(CyberdefTicketResult.UNROUTABLE_ACCOUNT)
     }
 
@@ -123,25 +126,23 @@ class CyberdefTicketIntegrationTest : BaseIntegrationTest() {
     @Test
     fun `a dry run leaves no trace and an override mails only the named known address`() {
         val before = events.count()
-        val preview = (service.create(soc, CyberdefTicketCreateRequest(externalReference = "IT-DRY-$suffix",
-            awsAccountId = ownedAccount, title = "t", severity = "LOW", description = "d", dryRun = true))
-            as CyberdefTicketResult.Ok).value
+        val preview = create(CyberdefTicketFields(externalReference = "IT-DRY-$suffix",
+            awsAccountId = ownedAccount, title = "t", severity = "LOW", description = "d"), CyberdefDelivery(dryRun = true))
         assertThat(preview.outcome).isEqualTo("WOULD_CREATE")
         assertThat(preview.recipients).containsExactly(accountOwner.email)
         assertThat(events.count()).isEqualTo(before)
 
-        val overridden = (service.create(soc, CyberdefTicketCreateRequest(externalReference = "IT-OVR-$suffix",
-            awsAccountId = ownedAccount, title = "t", severity = "LOW", description = "d", recipients = listOf(outsider.email!!)))
-            as CyberdefTicketResult.Ok).value
+        val overridden = create(CyberdefTicketFields(externalReference = "IT-OVR-$suffix",
+            awsAccountId = ownedAccount, title = "t", severity = "LOW", description = "d"),
+            CyberdefDelivery(recipients = listOf(outsider.email!!)))
         assertThat(overridden.outcome).isEqualTo("CREATED")
         assertThat(recipients.findByTicketIdOrderByEmailAsc(overridden.ticketId!!).map { it.email to it.source })
-            .containsExactly(outsider.email to CyberdefRecipientResolver.SOURCE_OVERRIDE)
+            .containsExactly(outsider.email!! to CyberdefRecipientResolver.SOURCE_OVERRIDE)
         // Being mailed grants no access: the outsider still cannot open the ticket.
-        assertThat(queries.detail(outsider, overridden.ticketId!!)).isEqualTo(CyberdefTicketResult.notFound)
+        assertThat(queries.detail(outsider, overridden.ticketId)).isEqualTo(CyberdefTicketResult.notFound)
 
-        val refused = (service.create(soc, CyberdefTicketCreateRequest(awsAccountId = ownedAccount, title = "t",
-            severity = "LOW", description = "d", recipients = listOf("nobody-$suffix@unknown.example")))
-            as CyberdefTicketResult.Ok).value
+        val refused = create(CyberdefTicketFields(awsAccountId = ownedAccount, title = "t",
+            severity = "LOW", description = "d"), CyberdefDelivery(recipients = listOf("nobody-$suffix@unknown.example")))
         assertThat(refused.errorCode).isEqualTo(CyberdefTicketResult.RECIPIENT_NOT_ALLOWED)
     }
 
@@ -162,5 +163,28 @@ class CyberdefTicketIntegrationTest : BaseIntegrationTest() {
         // The async dispatcher may already own it; either way a second claim from PENDING must fail.
         notifications.claim(row.id!!, CyberdefTicketNotification.STATUS_PENDING, Instant.now())
         assertThat(notifications.claim(row.id!!, CyberdefTicketNotification.STATUS_PENDING, Instant.now())).isZero()
+    }
+
+    @Test
+    fun `a batch for one account queues one digest row group and the account directory sees it`() {
+        val batch = (submissions.createBatch(soc, CyberdefBatchCreateRequest(listOf(
+            CyberdefTicketFields(externalReference = "IT-B1-$suffix", awsAccountId = ownedAccount, title = "a", severity = "LOW", description = "d"),
+            CyberdefTicketFields(externalReference = "IT-B2-$suffix", awsAccountId = ownedAccount, title = "b", severity = "LOW", description = "d")
+        ))) as CyberdefTicketResult.Ok).value
+        val rows = batch.results.flatMap { notifications.findByTicketIdOrderByIdAsc(it.ticketId!!) }
+        assertThat(rows).hasSize(2)
+        assertThat(rows.map { it.batchKey }.distinct()).hasSize(1).doesNotContainNull()
+
+        val found = directory.search(ownedAccount.take(6), 20).first { it.awsAccountId == ownedAccount }
+        assertThat(found.accountName).isEqualTo("payments-prod")
+        assertThat(found.recipientCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `a ticket is found by its derived key`() {
+        val created = submit("IT-KEY-$suffix")
+        val byKey = queries.find(soc, created.ticketKey, null) as CyberdefTicketResult.Ok
+        assertThat(byKey.value.ticket.id).isEqualTo(created.ticketId)
+        assertThat(queries.find(soc, "CD-1999-%06d".format(created.ticketId), null)).isEqualTo(CyberdefTicketResult.notFound)
     }
 }

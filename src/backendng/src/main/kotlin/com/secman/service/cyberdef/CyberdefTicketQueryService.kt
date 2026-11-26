@@ -73,7 +73,7 @@ open class CyberdefTicketQueryService(
             dueBefore = if (filter.overdueOnly) now else null,
             updatedSince = filter.updatedSince,
             search = search?.let { "%" + escapeLike(it.lowercase(Locale.ROOT)) + "%" },
-            searchKey = search?.uppercase(Locale.ROOT),
+            searchId = search?.let(CyberdefTicket::idFromKey),
             pageable = Pageable.from(page, size, Sort.of(order))
         )
         return CyberdefTicketPageDto(
@@ -107,7 +107,8 @@ open class CyberdefTicketQueryService(
      */
     open fun find(actor: CyberdefTicketActor, ticketKey: String?, externalReference: String?): CyberdefTicketResult<CyberdefTicketDetailDto> {
         val ticket = when {
-            !ticketKey.isNullOrBlank() -> tickets.findByTicketKey(ticketKey.trim().uppercase(Locale.ROOT)).orElse(null)
+            !ticketKey.isNullOrBlank() -> CyberdefTicket.idFromKey(ticketKey)?.let { tickets.findById(it).orElse(null) }
+                ?.takeIf { it.ticketKey == ticketKey.trim().uppercase(Locale.ROOT) }
             !externalReference.isNullOrBlank() ->
                 tickets.findByCreatedByUserIdAndExternalReference(actor.userId, externalReference.trim()).orElse(null)
             else -> null

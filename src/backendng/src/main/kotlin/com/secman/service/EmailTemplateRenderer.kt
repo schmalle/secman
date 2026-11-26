@@ -45,7 +45,8 @@ open class EmailTemplateRenderer {
             "workgroup-overdue-notification",
             "inactive-account-warning",
             "cyberdef-ticket-created",
-            "cyberdef-ticket-update"
+            "cyberdef-ticket-update",
+            "cyberdef-ticket-digest"
         )
     }
 
