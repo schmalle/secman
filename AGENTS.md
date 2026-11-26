@@ -15,6 +15,19 @@ Current operational inventory requires a verified observation within the last 24
 
 - `dev` is the integration branch. Agents may work and commit on `dev` or on `task/<name>` branches created from `dev` for isolated parallel work. Verify the branch and its base before editing and before committing. Never commit directly to `main` or `master` unless explicitly instructed. Each repository under `extensions/` is independent and must pass the same check locally. Do not merge, push, or commit unrelated work by inference.
 
+## Model selection
+
+Use the latest stable model available in the active harness for the appropriate tier in each phase.
+
+| Harness | Planning | Implementation |
+|---|---|---|
+| Codex | Astra-class, such as GPT‑6.2 Astra | Sol-class, such as GPT‑6.2 Sol |
+| Claude Code | Opus-class, such as Opus 5.5 | Sonnet-class, such as Sonnet 5.5 |
+
+Switch to the implementation tier before editing code. If the required tier is unavailable or the harness cannot switch models, ask for a model change before starting that phase.
+
+Keep this section in `AGENTS.md` and `CLAUDE.md` synchronized. When a newer stable model becomes available in a listed tier, verify it in the harness model picker or official release notes and update both files together. Never select Fable 5 or a similarly high-cost Claude model for either phase, including as a fallback.
+
 ## Build, run, test
 - Backend dev: `./scripts/startbackenddev.sh` (canonical — wraps `gradle run` with `pass-cli`-resolved env).
 - Build everything (incl. tests): `./gradlew build`.

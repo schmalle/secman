@@ -34,6 +34,19 @@ Security requirement, vulnerability and risk management platform.
 - Both dev-start scripts require `pass-cli` and must be run **outside any sandbox** (e.g. Bash tool `dangerouslyDisableSandbox: true`, or escalated/unsandboxed permissions in other harnesses) — a sandboxed shell cannot reach `pass-cli` to source secrets, so the process fails to start cleanly.
 - **Host URL in tests**: operator/read-only checks use `SECMAN_HOST` from `pass-cli`; mutating tests use only the isolated runner's exported loopback URLs. Never hardcode the regular 8080/4321 stack.
 
+## Model selection
+
+Use the latest stable model available in the active harness for the appropriate tier in each phase.
+
+| Harness | Planning | Implementation |
+|---|---|---|
+| Codex | Astra-class, such as GPT‑6.2 Astra | Sol-class, such as GPT‑6.2 Sol |
+| Claude Code | Opus-class, such as Opus 5.5 | Sonnet-class, such as Sonnet 5.5 |
+
+Switch to the implementation tier before editing code. If the required tier is unavailable or the harness cannot switch models, ask for a model change before starting that phase.
+
+Keep this section in `AGENTS.md` and `CLAUDE.md` synchronized. When a newer stable model becomes available in a listed tier, verify it in the harness model picker or official release notes and update both files together. Never select Fable 5 or a similarly high-cost Claude model for either phase, including as a fallback.
+
 ## Key Entities
 
 - **Asset**: `id, name, type, ip, owner, description, lastSeen`; metadata `groups, cloudAccountId, cloudInstanceId, adDomain, osVersion`; relations `vulnerabilities, scanResults, workgroups, manualCreator, scanUploader`.
