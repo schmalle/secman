@@ -64,7 +64,6 @@ interface DemandSummary {
 const DemandManagement: React.FC = () => {
   const [demands, setDemands] = useState<Demand[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [summary, setSummary] = useState<DemandSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -124,11 +123,15 @@ const DemandManagement: React.FC = () => {
   useEffect(() => {
     if (currentUser) {
       fetchDemands();
-      fetchAssets();
-      fetchUsers();
-      fetchSummary();
     }
   }, [currentUser, statusFilter, typeFilter, priorityFilter]);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchAssets();
+      fetchSummary();
+    }
+  }, [currentUser]);
 
   const fetchDemands = async () => {
     try {
@@ -163,21 +166,6 @@ const DemandManagement: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to fetch assets:', err);
-    }
-  };
-
-  const fetchUsers = async () => {
-    try {
-      const response = await authenticatedGet('/api/users');
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data);
-      } else if (response.status !== 401 && response.status !== 403) {
-        // 401/403 = user lacks permission to list users (RBAC); ignore silently.
-        console.error('Failed to fetch users:', response.status);
-      }
-    } catch (err) {
-      console.error('Failed to fetch users:', err);
     }
   };
 
