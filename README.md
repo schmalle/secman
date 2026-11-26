@@ -23,7 +23,7 @@ Security requirement, vulnerability and risk-assessment platform.
 
 ## Stack
 
-Kotlin 2.4.21 / Java 25 · Micronaut 5.2.7 · Hibernate JPA · Astro 7.4.13 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.9.2 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2 · Go 1.24 (mobile relay).
+Kotlin 2.4.21 / Java 25 · Micronaut 5.2.7 · Hibernate JPA · Astro 7.4.13 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle wrapper 9.9.2 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2 · Go 1.24 (mobile relay). The optional [Apple development container](docs/APPLE_CONTAINER_DEV.md) currently installs Gradle 9.7.0 on `PATH`.
 
 ## Quick Start (development)
 

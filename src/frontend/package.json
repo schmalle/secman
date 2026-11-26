@@ -16,7 +16,7 @@
     "@astrojs/node": "11.1.14",
     "@astrojs/react": "7.1.9",
     "@popperjs/core": "2.11.8",
-    "@types/react": "19.3.1",
+    "@types/react": "19.3.3",
     "@types/react-dom": "19.3.0",
     "astro": "7.4.13",
     "axios": "1.21.1",
@@ -34,9 +34,9 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@types/node": "26.6.6",
-    "@typescript-eslint/eslint-plugin": "8.73.0",
-    "@typescript-eslint/parser": "8.73.0",
+    "@types/node": "26.6.11",
+    "@typescript-eslint/eslint-plugin": "8.74.0",
+    "@typescript-eslint/parser": "8.74.0",
     "eslint": "10.15.0",
     "eslint-plugin-react": "7.37.5",
     "eslint-plugin-react-hooks": "7.1.1"

@@ -61,7 +61,7 @@ Reach them from the Mac at `http://localhost:8080`, `http://localhost:4321`,
 | | |
 |---|---|
 | OS | Debian 12 (bookworm), arm64 |
-| JVM | Eclipse Temurin **25** (`JAVA_HOME=/opt/java`), Gradle **9.7.0** on `PATH` |
+| JVM | Eclipse Temurin **25** (`JAVA_HOME=/opt/java`), Gradle **9.7.0** on `PATH` (the repository wrapper uses **9.9.2**) |
 | Node | current **24.x**, checksum-verified against `nodejs.org` |
 | Go | current **1.24.x** — `src/relay` is a separate module `./gradlew` never builds |
 | Python | via `uv`, 3.13 for Kimi CLI |
