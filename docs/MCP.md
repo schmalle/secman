@@ -80,6 +80,9 @@ Implied per role:
 | `REQADMIN` | `REQUIREMENTS_READ/WRITE` (also enables release create/delete + alignment) |
 | `RISK` | `ASSESSMENTS_READ/WRITE/EXECUTE` |
 | `SECCHAMPION` | `INTEGRATIONS_READ/WRITE`, `REQUIREMENTS_READ/WRITE/DELETE`, `ASSESSMENTS_READ/WRITE`, `ASSETS_READ/WRITE`, `VULNERABILITIES_READ`, `SCANS_READ`, `NOTIFICATIONS_SEND` |
+| `CYBERDEF` | `TICKETS_SUBMIT` only — no asset or vulnerability permission |
+
+Every delegated user additionally receives `PERSONAL_INVENTORY_READ` and `TICKETS_RESPOND` before the intersection: the tools behind them scope every result to the caller's own accounts. The API key still caps both.
 
 ## Quick start
 
@@ -151,6 +154,8 @@ This is the **API-key** permission each tool is gated on. It is only half the ch
 | `USER_ACTIVITY` | `list_users`, `add_user`, `delete_user`, `import_user_mappings`, `list_user_mappings`, `get_user_access_overview`, `list_/create_/delete_aws_account_sharing`, `simulate_account_onboarding` |
 | `WORKGROUPS_WRITE` | `create_workgroup`, `delete_workgroup`, `assign_assets_to_workgroup`, `assign_users_to_workgroup`, `list_/add_/remove_workgroup_aws_account`, `list_/add_/remove_workgroup_ad_domain`, `link_workgroup_aws_accounts` |
 | `NOTIFICATIONS_SEND` | `send_admin_summary`, `send_patch_notifications`, `send_exception_expiry_reminders`, `send_outdated_notifications`, `send_vulnerability_notifications`, `send_application_register_reminders`, `notify_new_accounts`, `send_github_repo_alerts`, `notify_risk_assessment_respondent` |
+| `TICKETS_SUBMIT` | `create_cyberdef_ticket`, `create_cyberdef_tickets`, `list_cyberdef_tickets`, `get_cyberdef_ticket`, `get_cyberdef_ticket_updates`, `set_cyberdef_ticket_status`, `add_cyberdef_ticket_comment` |
+| `TICKETS_RESPOND` | `list_my_security_tickets`, `get_my_security_ticket`, `update_my_security_ticket_status`, `add_cyberdef_ticket_comment` |
 | *(unmapped)* | `application_register` — see [Two permission maps](#two-permission-maps) |
 
 `get_asset_most_vulnerabilities` and `get_overdue_assets` accept `VULNERABILITIES_READ` **or** `ASSETS_READ`.
@@ -522,6 +527,26 @@ access to the bound asset.
 | `list_web_exposures` | `page`, `size` (max 100), `reachability` | `INTEGRATIONS_READ`; ADMIN / VULN / SECCHAMPION |
 | `list_web_components` | `page`, `size` (max 100), `category`, `state`, `search` | `INTEGRATIONS_READ`; ADMIN / VULN / SECCHAMPION |
 | `submit_integration_run` | version-1 run payload; see `docs/INTEGRATION_RESULTS.md` | `INTEGRATIONS_WRITE` |
+
+### Account tickets (CYBERDEF)
+
+Cyber Defence submits findings about AWS accounts; account owners answer. Workflow, mail, limits and error codes: [CYBERDEF account tickets](CYBERDEF_TICKETS.md).
+
+| Tool | Arguments | Roles | Deleg. |
+|---|---|---|---|
+| `create_cyberdef_ticket` | `awsAccountId`*, `title`*, `severity`*, `description`*, `externalReference`, `recommendedAction`, `cves[]`, `resources[]`, `references[]`, `sourceSystem`, `dueAt`, `allowUnrouted` | CYBERDEF, ADMIN | ✓ |
+| `create_cyberdef_tickets` | `tickets[]`* (1–100 of the above) | CYBERDEF, ADMIN | ✓ |
+| `list_cyberdef_tickets` | `status[]`, `severity[]`, `awsAccountId`, `overdue`, `updatedSince`, `q`, `createdByMe`, `page`, `size` (max 200) | CYBERDEF, ADMIN | ✓ |
+| `get_cyberdef_ticket` | `id` \| `ticketKey` \| `externalReference` | CYBERDEF, ADMIN | ✓ |
+| `get_cyberdef_ticket_updates` | `sinceEventId`, `limit` (max 500) | CYBERDEF, ADMIN | ✓ |
+| `set_cyberdef_ticket_status` | `id`*, `toStatus`* (`IN_PROGRESS\|CLOSED\|REOPENED\|CANCELLED`), `comment`, `expectedVersion` | CYBERDEF, ADMIN | ✓ |
+| `add_cyberdef_ticket_comment` | `id`*, `comment`* | any, scoped | ✓ |
+| `list_my_security_tickets` | same filters as `list_cyberdef_tickets` without `createdByMe` | any, scoped | ✓ |
+| `get_my_security_ticket` | `id` \| `ticketKey` | any, scoped | ✓ |
+| `update_my_security_ticket_status` | `id`*, `toStatus`* (`ACKNOWLEDGED\|IN_PROGRESS\|NEEDS_INFO\|RESOLVED\|RISK_ACCEPTED\|FALSE_POSITIVE`), `comment`, `expectedVersion` | any, scoped | ✓ |
+
+- "scoped" means the ticket's AWS account must be accessible to the delegated user (or the user is ADMIN/SECCHAMPION); anything else is `NOT_FOUND`.
+- The CYBERDEF/ADMIN check looks at the **delegated user's** roles; an admin API key alone does not pass it.
 
 ### Notifications and reports
 

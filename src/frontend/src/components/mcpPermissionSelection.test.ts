@@ -9,11 +9,13 @@ import {
 test('all-permissions selection includes every supported MCP permission once', () => {
   const selected = selectAllMcpPermissions(true);
 
-  assert.equal(selected.length, 20);
+  assert.equal(selected.length, 22);
   assert.equal(new Set(selected).size, selected.length);
   assert.deepEqual(selected, MCP_PERMISSION_KEYS);
   assert.ok(selected.includes('INTEGRATIONS_READ'));
   assert.ok(selected.includes('INTEGRATIONS_WRITE'));
+  assert.ok(selected.includes('TICKETS_SUBMIT'));
+  assert.ok(selected.includes('TICKETS_RESPOND'));
   assert.equal(hasAllMcpPermissions(selected), true);
 });
 

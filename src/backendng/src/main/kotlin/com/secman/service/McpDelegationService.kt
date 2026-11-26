@@ -130,7 +130,9 @@ class McpDelegationService {
             McpPermission.VULNERABILITIES_READ,
             McpPermission.SCANS_READ,
             McpPermission.NOTIFICATIONS_SEND
-        )
+        ),
+        // Ticket surface only: CYBERDEF sees no assets or vulnerabilities through MCP.
+        User.Role.CYBERDEF to setOf(McpPermission.TICKETS_SUBMIT)
     )
 
     /**
@@ -262,7 +264,10 @@ class McpDelegationService {
         val apiKeyPermissions = apiKey.getPermissionSet()
 
         // Compute intersection
-        val effectivePermissions = (userImpliedPermissions + McpPermission.PERSONAL_INVENTORY_READ).intersect(apiKeyPermissions)
+        // Like the personal inventory, answering tickets for one's own accounts needs no role:
+        // the ticket tools scope every read and write to the caller's account access.
+        val effectivePermissions = (userImpliedPermissions + McpPermission.PERSONAL_INVENTORY_READ +
+            McpPermission.TICKETS_RESPOND).intersect(apiKeyPermissions)
 
         logger.debug(
             "Computed effective permissions: user={}, userPermissions={}, apiKeyPermissions={}, effective={}",

@@ -1,0 +1,18 @@
+Security ticket {ticketKey} is now {status}
+================================================================
+
+{actor} moved security ticket {ticketKey} for AWS account {awsAccountLabel} to {status}.
+
+  Ticket:    {ticketKey}
+  Severity:  {severity}
+{ifDue}  Due:       {dueDate}
+{/ifDue}  Title:     {title}
+
+{ifSummary}Comment:
+{comment}
+
+{/ifSummary}Open the ticket to see the latest comments and what is expected next:
+{ticketUrl}
+
+---
+You are receiving this because you are involved in this ticket in SecMan.

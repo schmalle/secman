@@ -14,7 +14,7 @@ Security requirement, vulnerability and risk management platform.
 
 ## Roles (RBAC)
 
-`USER`, `ADMIN`, `VULN`, `RELEASE_MANAGER`, `REQ`, `REQADMIN`, `RISK`, `SECCHAMPION`, `REPORT`, `BETA`. BETA is additive feature eligibility only; ADMIN and SECCHAMPION are implicitly eligible. Existing object scopes still apply.
+`USER`, `ADMIN`, `VULN`, `RELEASE_MANAGER`, `REQ`, `REQADMIN`, `RISK`, `SECCHAMPION`, `REPORT`, `BETA`, `CYBERDEF`. BETA is additive feature eligibility only; ADMIN and SECCHAMPION are implicitly eligible. CYBERDEF submits and tracks account tickets and grants no asset or vulnerability visibility of its own (`docs/CYBERDEF_TICKETS.md`). Existing object scopes still apply.
 
 ## Tooling Conventions (canonical, do not deviate)
 
@@ -103,10 +103,11 @@ See `docs/AUTHORIZATION_REWORK.md` for assessment assignments, contribution hist
 | Account Onboarding | `GET/POST/PUT/DELETE /api/account-onboarding/questions[/{id}[/choices[/{cid}]]]`, `.../rules[/{id}]`, `GET .../rules/{coverage,matrix}`, `POST .../rules/preview`, `POST .../simulate` (ADMIN/SECCHAMPION); public single-use token `GET/POST /api/public/account-onboarding/{token}` | ADMIN/SECCHAMPION + public |
 | Welcome email test | `POST /api/account-onboarding/welcome-test` (`recipient`, `accountIds`): one sample, no import or production notification writes | ADMIN |
 | Product Classification | `GET/POST /api/product-classification/rules`, `PUT/DELETE .../rules/{id}`, `POST .../test`, `POST .../reclassify`, `GET .../stats` (ADMIN). Marks installer/setup payloads so vuln + EOL reads can hide them — `docs/CROWDSTRIKE_IMPORT.md` | ADMIN |
+| Security Tickets | `GET /api/security-tickets[/summary,/{id}]`, `POST .../{id}/{transitions,comments}` (scoped to the caller's AWS accounts, 404 outside; ADMIN/SECCHAMPION/CYBERDEF see all); `POST /api/security-tickets`, `GET .../{id}/notifications`, `POST .../{id}/notifications/resend` (ADMIN/CYBERDEF). Server-enforced workflow, `expectedVersion` on every transition, mail via outbox — `docs/CYBERDEF_TICKETS.md` | mixed |
 | Mobile Relay | `GET /api/relay/{status,sections,devices,identities}`, `POST /api/relay/{publish,enrollments,revocations,identities,principals/publish}`, `DELETE /api/relay/identities/{id}` | ADMIN |
 | User Cleanup | `GET /api/user-cleanup/{config,preview,runs[/{id}]}`, `POST /api/user-cleanup/run-now` (scheduled policy, brake included; 409 disabled/running). Nightly inactive-account warning + deletion — `docs/USER_CLEANUP.md` | ADMIN |
 
-MCP tool families mirror these (delegation required): `list_/create_/delete_release`, `set_release_status`, `compare_releases`; `create_use_case`; `create_risk_assessment`, `list_risk_assessments`, `get_risk_assessment_questionnaire`, `save_risk_assessment_answers`, `submit_risk_assessment`, `evaluate_risk_assessment`; `list_workgroup_aws_accounts`, `add_/remove_workgroup_aws_account`, `link_workgroup_aws_accounts`, `list_workgroup_ad_domains`, `add_/remove_workgroup_ad_domain`; `list_/create_/delete_aws_account_sharing`; `get_vulnerability_heatmap`, `refresh_vulnerability_heatmap`; `simulate_account_onboarding`, `list_/preview_account_onboarding_rules`; etc. See `docs/MCP.md` and `docs/MCP_RISK_ASSESSMENT_LIFECYCLE.md`.
+MCP tool families mirror these (delegation required): `list_/create_/delete_release`, `set_release_status`, `compare_releases`; `create_use_case`; `create_risk_assessment`, `list_risk_assessments`, `get_risk_assessment_questionnaire`, `save_risk_assessment_answers`, `submit_risk_assessment`, `evaluate_risk_assessment`; `list_workgroup_aws_accounts`, `add_/remove_workgroup_aws_account`, `link_workgroup_aws_accounts`, `list_workgroup_ad_domains`, `add_/remove_workgroup_ad_domain`; `list_/create_/delete_aws_account_sharing`; `get_vulnerability_heatmap`, `refresh_vulnerability_heatmap`; `simulate_account_onboarding`, `list_/preview_account_onboarding_rules`; `create_cyberdef_ticket[s]`, `list_/get_cyberdef_ticket[s]`, `get_cyberdef_ticket_updates` (cursor feed), `set_cyberdef_ticket_status`, `add_cyberdef_ticket_comment`, `list_my_security_tickets`, `get_my_security_ticket`, `update_my_security_ticket_status` (`TICKETS_SUBMIT` / `TICKETS_RESPOND`); etc. See `docs/MCP.md` and `docs/MCP_RISK_ASSESSMENT_LIFECYCLE.md`.
 
 ## Commands
 
@@ -342,14 +343,14 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`,
 
 ---
 
-*Last updated: 2026-11-25*
+*Last updated: 2026-11-26*
 
 ## Recent Changes
 
 Summaries of the three newest only. Every entry is written **verbatim** to `docs/CHANGELOG.md` when it happens — grep there for the full detail.
 
+- **CYBERDEF account tickets (2026-11-26)** — new role `CYBERDEF` submits vulnerability findings about AWS accounts through MCP (`create_cyberdef_ticket[s]`, idempotent per `externalReference`, batch ≤ 100); SecMan stores a ticket (V310), mails the account's mapped users and enabled-workgroup members through an outbox, and tracks it through a server-enforced workflow (`CyberdefTicketWorkflow`: owners acknowledge/resolve/accept/dispute or ask NEEDS_INFO, CYBERDEF answers, verifies, reopens or cancels; `expectedVersion` on every change). Owners use `/api/security-tickets` or the `*_my_security_ticket*` tools, scoped live to their account access (404 outside). CYBERDEF polls `get_cyberdef_ticket_updates` by event cursor. New MCP permissions `TICKETS_SUBMIT` (CYBERDEF/ADMIN) and `TICKETS_RESPOND` (every delegated user, key-capped). Mail is minimal by default (`secman.cyberdef.mail.include-summary`). UI pages and sample scripts follow. See `docs/CYBERDEF_TICKETS.md`.
+
 - **CrowdStrike overdue age (2026-11-21)** — starts with the earliest detection on the affected system. V304 preserves the host detection independently of patch and CVE publication dates. See `docs/CROWDSTRIKE_IMPORT.md` for migration and exception-review behavior.
 
 - **SLA anchor = max(first detection, patch date) (2026-11-13)** — overdue timing now uses `max(first CrowdStrike detection, patch date)` across backend lookups, imports, and CLI age reporting. V299 re-anchors affected rows; refresh the outdated-assets view after deployment. See `docs/CROWDSTRIKE_IMPORT.md` §SLA anchor.
-
-- **Vulnerability replace scoping (2026-11-13)** — the Excel vulnerability import's transactional replace deleted every row on each asset named in the spreadsheet, including live CrowdStrike, CLI-manual and integration findings, until the next nightly run restored them; it now deletes only `XLSX` and pre-V213 `UNKNOWN` rows (`VulnerabilityPersistenceHelper.REPLACEABLE_SOURCES`, new `VulnerabilityRepository.deleteByAssetIdAndSourceIn`). The CrowdStrike reconcile sweep's failed-host exclusion matched by short label, so one failed `web01.a.example` kept `web01.b.example`'s patched findings out of the sweep; `reconcileScopeHosts` now excludes by failed AID or by a hostname naming the same machine (equal, or a bare short name on either side). The CLI no longer logs a zero-finding, unverified batch as "all 0 vulnerabilities were invalid". Investigation of a "patched vulnerabilities persist" report: the sampled host held only freshly re-imported rows that Falcon itself reported open. See `docs/CROWDSTRIKE_IMPORT.md` §Stale vulnerability cleanup.

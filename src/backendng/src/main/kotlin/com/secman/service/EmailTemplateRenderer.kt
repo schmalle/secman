@@ -43,7 +43,9 @@ open class EmailTemplateRenderer {
             "account-onboarding-questionnaire",
             "account-onboarding-reminder",
             "workgroup-overdue-notification",
-            "inactive-account-warning"
+            "inactive-account-warning",
+            "cyberdef-ticket-created",
+            "cyberdef-ticket-update"
         )
     }
 

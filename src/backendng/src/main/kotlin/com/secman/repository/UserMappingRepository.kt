@@ -37,6 +37,13 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
     fun findByAwsAccountId(awsAccountId: String): List<UserMapping>
 
     /**
+     * Rows of [email, userId, awsAccountName] for every mapping of [awsAccountId], including
+     * future-user mappings without a user. Projection, so no lazy user proxy is touched.
+     */
+    @Query("SELECT m.email, u.id, m.awsAccountName FROM UserMapping m LEFT JOIN m.user u WHERE m.awsAccountId = :awsAccountId")
+    fun findRecipientRowsByAwsAccountId(awsAccountId: String): List<Array<Any?>>
+
+    /**
      * Return the subset of [ids] that already appear as awsAccountId on at least
      * one existing mapping. Used by bulk import to detect brand-new (DB-wide)
      * AWS accounts. Callers MUST skip this query when [ids] is empty (an empty

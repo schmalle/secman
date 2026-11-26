@@ -272,4 +272,21 @@ class McpToolPermissionsTest {
             assertThat(McpToolPermissions.CALLING).describedAs("CALLING/%s", tool).containsKey(tool)
         }
     }
+
+    @Test
+    fun `account ticket tools are in both tables with exactly their ticket permission`() {
+        val submit = listOf("create_cyberdef_ticket", "create_cyberdef_tickets", "list_cyberdef_tickets",
+            "get_cyberdef_ticket", "get_cyberdef_ticket_updates", "set_cyberdef_ticket_status")
+        val respond = listOf("list_my_security_tickets", "get_my_security_ticket", "update_my_security_ticket_status")
+        for (table in listOf(McpToolPermissions.LISTING, McpToolPermissions.CALLING)) {
+            submit.forEach { assertThat(table[it]).describedAs(it).isEqualTo(setOf(McpPermission.TICKETS_SUBMIT)) }
+            respond.forEach { assertThat(table[it]).describedAs(it).isEqualTo(setOf(McpPermission.TICKETS_RESPOND)) }
+            assertThat(table["add_cyberdef_ticket_comment"])
+                .isEqualTo(setOf(McpPermission.TICKETS_SUBMIT, McpPermission.TICKETS_RESPOND))
+            // The ticket permissions open nothing but the ticket tools.
+            val ticketPermissions = setOf(McpPermission.TICKETS_SUBMIT, McpPermission.TICKETS_RESPOND)
+            assertThat(table.filterValues { it.any(ticketPermissions::contains) }.keys)
+                .containsExactlyInAnyOrderElementsOf(submit + respond + "add_cyberdef_ticket_comment")
+        }
+    }
 }

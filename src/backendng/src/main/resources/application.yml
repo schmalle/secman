@@ -489,6 +489,22 @@ secman:
     # Safety brake: abort deletions when more than this percent of all users would go.
     max-delete-percent: ${USER_CLEANUP_MAX_DELETE_PERCENT:10}
     max-users-per-run: ${USER_CLEANUP_MAX_USERS_PER_RUN:500}
+  cyberdef:
+    # Account tickets submitted by the CYBERDEF role; see docs/CYBERDEF_TICKETS.md.
+    # Default due window per severity in days. 0 means no deadline. Submitters may only shorten it.
+    sla:
+      critical-days: ${CYBERDEF_SLA_CRITICAL_DAYS:2}
+      high-days: ${CYBERDEF_SLA_HIGH_DAYS:7}
+      medium-days: ${CYBERDEF_SLA_MEDIUM_DAYS:30}
+      low-days: ${CYBERDEF_SLA_LOW_DAYS:90}
+      info-days: ${CYBERDEF_SLA_INFO_DAYS:0}
+    mail:
+      # false: mail carries key, account, severity, title, due date and a link only.
+      include-summary: ${CYBERDEF_MAIL_INCLUDE_SUMMARY:false}
+      # true: mail the submitter when the account owners change a ticket's status.
+      notify-submitter: ${CYBERDEF_MAIL_NOTIFY_SUBMITTER:false}
+    max-recipients: ${CYBERDEF_MAX_RECIPIENTS:50}
+    max-tickets-per-hour: ${CYBERDEF_MAX_TICKETS_PER_HOUR:600}
   crowdstrike:
     # Scheduled cleanup of assets that have not been re-imported by CrowdStrike
     # for `stale-days` days. Opt-in: disabled by default so existing deployments

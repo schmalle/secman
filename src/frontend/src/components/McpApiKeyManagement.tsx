@@ -91,6 +91,8 @@ const McpApiKeyManagement: React.FC = () => {
     VULNERABILITIES_READ: { label: 'Read Vulnerabilities',   description: 'View vulnerability information' },
     INTEGRATIONS_READ:    { label: 'Read Integrations',       description: 'View integration findings, runs, and health' },
     INTEGRATIONS_WRITE:   { label: 'Write Integrations',      description: 'Submit integration results for assigned subjects' },
+    TICKETS_SUBMIT:       { label: 'Submit Account Tickets', description: 'Create, track and close cyber-defence account tickets (CYBERDEF)' },
+    TICKETS_RESPOND:      { label: 'Respond to Tickets',     description: 'View and update the account tickets for your own accounts' },
     TRANSLATION_USE:      { label: 'Use Translations',       description: 'Translate requirements to different languages' },
     SYSTEM_INFO:          { label: 'System Information',     description: 'Access system information and statistics', adminOnly: true },
     USER_ACTIVITY:        { label: 'User Activity',          description: 'Monitor user activity and sessions', adminOnly: true },
