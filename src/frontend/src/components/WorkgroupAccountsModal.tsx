@@ -153,7 +153,11 @@ export default function WorkgroupAccountsModal({
                 <tbody>
                   {accounts.map((a) => (
                     <tr key={a.id}>
-                      <td><code>{a.awsAccountId}</code></td>
+                      <td>
+                        <a href={`/assets?accountId=${encodeURIComponent(a.awsAccountId)}`}>
+                          {a.awsAccountId}
+                        </a>
+                      </td>
                       <td>{a.createdByUsername ?? '—'}</td>
                       <td>{a.createdAt ?? '—'}</td>
                       <td className="text-end">

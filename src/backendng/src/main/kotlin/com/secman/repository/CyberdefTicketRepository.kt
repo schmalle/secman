@@ -29,17 +29,18 @@ interface CyberdefTicketRepository : JpaRepository<CyberdefTicket, Long> {
 
     fun countByCreatedByUserIdAndCreatedAtAfter(createdByUserId: Long, createdAt: Instant): Long
 
+    // Micronaut Data qualifies Pageable sort fields with its generated entity alias.
     @Query(
         value = """
-            SELECT t FROM CyberdefTicket t
-            WHERE (:allAccounts = true OR t.awsAccountId IN (:accountIds))
-              AND t.status IN (:statuses)
-              AND t.severity IN (:severities)
-              AND (:accountId IS NULL OR t.awsAccountId = :accountId)
-              AND (:createdBy IS NULL OR t.createdByUserId = :createdBy)
-              AND (:dueBefore IS NULL OR (t.dueAt IS NOT NULL AND t.dueAt < :dueBefore))
-              AND (:updatedSince IS NULL OR t.updatedAt >= :updatedSince)
-              AND (:search IS NULL OR LOWER(t.title) LIKE :search OR t.id = :searchId)
+            SELECT cyberdefTicket_ FROM CyberdefTicket cyberdefTicket_
+            WHERE (:allAccounts = true OR cyberdefTicket_.awsAccountId IN (:accountIds))
+              AND cyberdefTicket_.status IN (:statuses)
+              AND cyberdefTicket_.severity IN (:severities)
+              AND (:accountId IS NULL OR cyberdefTicket_.awsAccountId = :accountId)
+              AND (:createdBy IS NULL OR cyberdefTicket_.createdByUserId = :createdBy)
+              AND (:dueBefore IS NULL OR (cyberdefTicket_.dueAt IS NOT NULL AND cyberdefTicket_.dueAt < :dueBefore))
+              AND (:updatedSince IS NULL OR cyberdefTicket_.updatedAt >= :updatedSince)
+              AND (:search IS NULL OR LOWER(cyberdefTicket_.title) LIKE :search OR cyberdefTicket_.id = :searchId)
         """,
         countQuery = """
             SELECT COUNT(t) FROM CyberdefTicket t

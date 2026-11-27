@@ -157,6 +157,24 @@ class CyberdefTicketIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `open ticket pages use the default most recently updated sort`() {
+        val search = "IT-LIST-$suffix"
+        val older = submit("$search-older").ticketId!!
+        val newer = submit("$search-newer").ticketId!!
+        val closed = submit("$search-closed").ticketId!!
+        assertThat(service.transition(soc, closed, "CLOSED", null, null))
+            .isInstanceOf(CyberdefTicketResult.Ok::class.java)
+
+        val filter = CyberdefTicketFilter(statuses = setOf(CyberdefTicketStatus.OPEN), search = search, size = 1)
+        val first = queries.list(accountOwner, filter)
+        val second = queries.list(accountOwner, filter.copy(page = 1))
+        assertThat(first.totalElements).isEqualTo(2)
+        assertThat(first.totalPages).isEqualTo(2)
+        assertThat(first.content.map { it.id }).containsExactly(newer)
+        assertThat(second.content.map { it.id }).containsExactly(older)
+    }
+
+    @Test
     fun `outbox rows are claimed exactly once`() {
         val id = submit("IT-CLAIM-$suffix").ticketId!!
         val row = notifications.findByTicketIdOrderByIdAsc(id).single()
