@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>New security ticket {ticketKey}</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #222; max-width: 640px; margin: 0 auto; padding: 24px;">
+  <p style="text-align: center;">
+    <img src="cid:secman-logo" alt="SecMan" style="max-height: 64px;">
+  </p>
+
+  <h2 style="color: #1f4e79;">New security ticket {ticketKey}</h2>
+
+  <p>Cyber Defence opened a security ticket for an AWS account you are responsible for.</p>
+
+  <table style="border-collapse: collapse; margin: 16px 0;">
+    <tr><td style="padding: 4px 12px 4px 0; color: #555;">Severity</td><td style="padding: 4px 0;"><strong>{severity}</strong></td></tr>
+    <tr><td style="padding: 4px 12px 4px 0; color: #555;">Account</td><td style="padding: 4px 0;">{awsAccountLabel}</td></tr>
+{ifDue}    <tr><td style="padding: 4px 12px 4px 0; color: #555;">Due</td><td style="padding: 4px 0;">{dueDate}</td></tr>
+{/ifDue}    <tr><td style="padding: 4px 12px 4px 0; color: #555;">Title</td><td style="padding: 4px 0;">{title}</td></tr>
+  </table>
+
+{ifSummary}  <p style="white-space: pre-wrap; background: #f5f7fa; padding: 12px; border-radius: 4px;">{summary}</p>
+{/ifSummary}
+  <p>
+    <a href="{ticketUrl}"
+       style="background: #1f4e79; color: #fff; padding: 10px 18px; text-decoration: none; border-radius: 4px;">
+      Open ticket in SecMan
+    </a>
+  </p>
+
+  <p>Once it is fixed, close the ticket in SecMan with a short note on what was done. Questions can go
+     into the ticket as comments.</p>
+
+  <p style="color: #555; font-size: 0.9em;">
+    The full description, affected resources and recommended action are in SecMan. If the button
+    does not work, open <a href="{ticketUrl}" style="color: #1f4e79;">{ticketUrl}</a>.
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 32px 0 16px;">
+
+  <p style="color: #777; font-size: 0.85em;">
+    You are receiving this because this email address is mapped to the AWS account above, either
+    directly or through a workgroup. Contact your SecMan administrator if that is wrong.
+  </p>
+</body>
+</html>

@@ -235,6 +235,23 @@ const Sidebar = () => {
                 </li>
 
 
+                {/* SECURITY TICKETS - every user sees tickets for their accounts; CYBERDEF/ADMIN create them */}
+                <li>
+                    <a href="/security-tickets" className="sidebar-section-header-clickable d-flex align-items-center text-decoration-none text-reset">
+                        <i className="bi bi-shield-exclamation me-2"></i>
+                        SECURITY TICKETS
+                    </a>
+                    {(isAdmin || userRoles.includes('CYBERDEF')) && (
+                        <ul className="list-unstyled ps-4">
+                            <li>
+                                <a href="/cyberdef/new" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                    <i className="bi bi-shield-plus me-2"></i> New security ticket
+                                </a>
+                            </li>
+                        </ul>
+                    )}
+                </li>
+
                 {/* REQUIREMENTS Section - ADMIN, REQ, or SECCHAMPION only */}
                 {hasReq && (
                     <li>

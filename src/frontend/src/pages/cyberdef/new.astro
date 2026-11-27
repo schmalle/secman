@@ -1,0 +1,13 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import CyberdefTicketCreator from '../../components/securityTickets/CyberdefTicketCreator';
+
+/**
+ * Create security tickets (single or bulk). The component hides itself for other roles;
+ * POST /api/security-tickets is @Secured("ADMIN", "CYBERDEF") either way.
+ */
+---
+
+<Layout title="New Security Ticket">
+  <CyberdefTicketCreator client:idle />
+</Layout>

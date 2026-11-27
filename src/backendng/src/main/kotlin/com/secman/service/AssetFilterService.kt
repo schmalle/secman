@@ -158,11 +158,15 @@ open class AssetFilterService(
     }
 
     /** Whole-account authority is independent of access to individual assets. */
-    fun getAccessibleAwsAccountIds(authentication: Authentication): Set<String> {
-        val userId = getUserId(authentication)
-        val personal = getUserEmail(authentication)?.let {
-            userMappingRepository.findDistinctAwsAccountIdByEmail(it)
-        }.orEmpty()
+    fun getAccessibleAwsAccountIds(authentication: Authentication): Set<String> =
+        getAccessibleAwsAccountIds(getUserId(authentication), getUserEmail(authentication))
+
+    /**
+     * Same rule for callers that hold a user id instead of an [Authentication], such as MCP
+     * delegation. Global roles are not short-circuited here; callers decide that themselves.
+     */
+    fun getAccessibleAwsAccountIds(userId: Long, email: String?): Set<String> {
+        val personal = email?.let { userMappingRepository.findDistinctAwsAccountIdByEmail(it) }.orEmpty()
         return personal.toSet() + workgroupAwsAccountRepository.findDistinctAwsAccountIdsByUserId(userId) +
             awsAccountSharingService.getSharedAwsAccountIds(userId)
     }

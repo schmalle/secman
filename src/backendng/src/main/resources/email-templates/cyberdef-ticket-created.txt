@@ -1,0 +1,23 @@
+New security ticket {ticketKey} for AWS account {awsAccountLabel}
+================================================================
+
+Cyber Defence opened a security ticket for an AWS account you are responsible for.
+
+  Ticket:    {ticketKey}
+  Severity:  {severity}
+  Account:   {awsAccountLabel}
+{ifDue}  Due:       {dueDate}
+{/ifDue}  Title:     {title}
+
+{ifSummary}Summary:
+{summary}
+
+{/ifSummary}Please review the ticket and, once it is fixed, close it in SecMan with a short note
+on what was done. Questions can go into the ticket as comments:
+{ticketUrl}
+
+The full description, affected resources and recommended action are in SecMan.
+
+---
+You are receiving this because this email address is mapped to the AWS account above,
+either directly or through a workgroup. Contact your SecMan administrator if that is wrong.

@@ -121,9 +121,11 @@ data class User(
      * - SECCHAMPION: Security champion (Risk + Req + Vuln, but NOT Admin)
      * - REQADMIN: Requirements admin (can make decisions on alignment reviews)
      * - REPORT: Receives CLI-triggered email notifications (outdated assets, vulnerabilities)
+     * - CYBERDEF: Cyber defence team; submits and tracks account tickets. Grants no asset or
+     *   vulnerability visibility of its own (docs/CYBERDEF_TICKETS.md)
      */
     enum class Role {
-        USER, ADMIN, VULN, RELEASE_MANAGER, REQ, RISK, SECCHAMPION, REQADMIN, REPORT, BETA
+        USER, ADMIN, VULN, RELEASE_MANAGER, REQ, RISK, SECCHAMPION, REQADMIN, REPORT, BETA, CYBERDEF
     }
 
     /**

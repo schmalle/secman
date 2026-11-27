@@ -1,0 +1,15 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import SecurityTicketDetail from '../../components/securityTickets/SecurityTicketDetail';
+
+// Ticket mails link here. Access is checked by the API: outside the caller's accounts it is a 404.
+const { id } = Astro.params;
+const ticketId = Number.parseInt(id || '', 10);
+if (!Number.isSafeInteger(ticketId) || ticketId <= 0) {
+    return Astro.redirect('/security-tickets');
+}
+---
+
+<Layout title={`Security ticket ${ticketId}`}>
+  <SecurityTicketDetail ticketId={ticketId} client:idle />
+</Layout>

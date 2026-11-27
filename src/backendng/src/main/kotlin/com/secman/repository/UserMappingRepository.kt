@@ -26,6 +26,28 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      */
     fun findByEmail(email: String): List<UserMapping>
 
+    fun existsByEmail(email: String): Boolean
+
+    /** The lower-cased addresses among [emails] that appear on any mapping; one query for a whole list. */
+    @Query("SELECT DISTINCT LOWER(m.email) FROM UserMapping m WHERE LOWER(m.email) IN (:emails)")
+    fun findKnownLowerEmails(emails: Collection<String>): List<String>
+
+    /**
+     * Rows of [awsAccountId, awsAccountName] whose id starts with [idPrefix] or whose name
+     * contains [nameContains] (both LIKE patterns, already escaped). For the ticket form's
+     * account picker; no email leaves this query.
+     */
+    @Query(
+        "SELECT m.awsAccountId, MAX(m.awsAccountName) FROM UserMapping m WHERE m.awsAccountId IS NOT NULL " +
+            "AND (m.awsAccountId LIKE :idPrefix OR LOWER(m.awsAccountName) LIKE :nameContains) " +
+            "GROUP BY m.awsAccountId ORDER BY m.awsAccountId"
+    )
+    fun searchAwsAccounts(idPrefix: String, nameContains: String, pageable: io.micronaut.data.model.Pageable): List<Array<Any?>>
+
+    /** Rows of [awsAccountId, email] for [awsAccountIds]; one query for a whole result page. */
+    @Query("SELECT m.awsAccountId, m.email FROM UserMapping m WHERE m.awsAccountId IN (:awsAccountIds)")
+    fun findEmailsByAwsAccountIdIn(awsAccountIds: Collection<String>): List<Array<Any?>>
+
     /**
      * Find all mappings for a specific AWS account
      *
@@ -35,6 +57,13 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      * @return List of mappings for the AWS account
      */
     fun findByAwsAccountId(awsAccountId: String): List<UserMapping>
+
+    /**
+     * Rows of [email, userId, awsAccountName] for every mapping of [awsAccountId], including
+     * future-user mappings without a user. Projection, so no lazy user proxy is touched.
+     */
+    @Query("SELECT m.email, u.id, m.awsAccountName FROM UserMapping m LEFT JOIN m.user u WHERE m.awsAccountId = :awsAccountId")
+    fun findRecipientRowsByAwsAccountId(awsAccountId: String): List<Array<Any?>>
 
     /**
      * Return the subset of [ids] that already appear as awsAccountId on at least

@@ -374,6 +374,19 @@ clientSecret: ...
 baseUrl: https://api.crowdstrike.com
 ```
 
+## CYBERDEF account tickets
+
+All optional; defaults shown. Details: [`CYBERDEF_TICKETS.md`](CYBERDEF_TICKETS.md).
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `CYBERDEF_SLA_CRITICAL_DAYS` / `_HIGH_` / `_MEDIUM_` / `_LOW_` / `_INFO_DAYS` | 2 / 7 / 30 / 90 / 0 | Default due window per severity; 0 = no deadline |
+| `CYBERDEF_MAIL_INCLUDE_SUMMARY` | `false` | Include description and comments in ticket mail |
+| `CYBERDEF_MAIL_NOTIFY_SUBMITTER` | `false` | Mail the submitter when owners change the status |
+| `CYBERDEF_MAX_RECIPIENTS` | 50 | Recipient cap per ticket |
+| `CYBERDEF_MAX_TICKETS_PER_HOUR` | 600 | Submissions per submitter per hour |
+| `CYBERDEF_RECIPIENT_OVERRIDE_DOMAINS` | empty | Comma list of domains an explicit `recipients` list may mail; empty = only addresses known to SecMan |
+
 ## Mobile relay
 
 Two processes, two sets of variables. secman pushes an admin-level status

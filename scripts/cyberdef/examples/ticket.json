@@ -1,0 +1,13 @@
+{
+  "externalReference": "SOC-2026-4711",
+  "awsAccountId": "123456789012",
+  "title": "Publicly exposed RDS snapshot",
+  "severity": "HIGH",
+  "description": "Snapshot `db-prod-2026-11-20` is shared with `all`. Anyone with an AWS account can restore it.",
+  "recommendedAction": "Remove the public restore permission and rotate the database credentials.",
+  "resources": [
+    {"type": "RDS_SNAPSHOT", "identifier": "arn:aws:rds:eu-central-1:123456789012:snapshot:db-prod-2026-11-20", "region": "eu-central-1"}
+  ],
+  "references": ["https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ShareSnapshot.html"],
+  "sourceSystem": "guardduty"
+}

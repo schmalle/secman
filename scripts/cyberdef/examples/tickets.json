@@ -1,0 +1,20 @@
+[
+  {
+    "externalReference": "SOC-2026-4712",
+    "awsAccountId": "123456789012",
+    "title": "IMDSv1 enabled on internet-facing instance",
+    "severity": "MEDIUM",
+    "description": "Instance allows IMDSv1, so an SSRF in the hosted application can read instance credentials.",
+    "recommendedAction": "Require IMDSv2 (HttpTokens=required).",
+    "resources": [{"type": "EC2_INSTANCE", "identifier": "i-0abc1234def567890", "region": "eu-central-1"}]
+  },
+  {
+    "externalReference": "SOC-2026-4713",
+    "awsAccountId": "210987654321",
+    "title": "Exploited CVE on public load balancer target",
+    "severity": "CRITICAL",
+    "description": "Active exploitation of the listed CVE was observed against this target.",
+    "cves": ["CVE-2026-12345"],
+    "resources": [{"type": "EC2_INSTANCE", "identifier": "i-0fedcba9876543210", "region": "eu-west-1"}]
+  }
+]

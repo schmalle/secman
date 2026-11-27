@@ -3,6 +3,7 @@ export const MCP_PERMISSION_GROUPS = [
   { title: 'Assessments', keys: ['ASSESSMENTS_READ', 'ASSESSMENTS_EXECUTE', 'ASSESSMENTS_WRITE'] },
   { title: 'Assets & Scans', keys: ['ASSETS_READ', 'ASSETS_WRITE', 'SCANS_READ', 'VULNERABILITIES_READ'] },
   { title: 'Integrations', keys: ['INTEGRATIONS_READ', 'INTEGRATIONS_WRITE'] },
+  { title: 'Account Tickets', keys: ['TICKETS_SUBMIT', 'TICKETS_RESPOND'] },
   { title: 'Files & Tags', keys: ['FILES_READ', 'TAGS_READ', 'TRANSLATION_USE'] },
   { title: 'Admin Only', keys: ['SYSTEM_INFO', 'USER_ACTIVITY', 'AUDIT_READ', 'WORKGROUPS_WRITE', 'NOTIFICATIONS_SEND'] },
 ] as const;

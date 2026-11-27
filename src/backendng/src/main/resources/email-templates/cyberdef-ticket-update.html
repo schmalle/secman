@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Security ticket {ticketKey} updated</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #222; max-width: 640px; margin: 0 auto; padding: 24px;">
+  <p style="text-align: center;">
+    <img src="cid:secman-logo" alt="SecMan" style="max-height: 64px;">
+  </p>
+
+  <h2 style="color: #1f4e79;">Security ticket {ticketKey} is now {status}</h2>
+
+  <p>{actor} moved security ticket <strong>{ticketKey}</strong> for AWS account {awsAccountLabel}
+     to <strong>{status}</strong>.</p>
+
+  <table style="border-collapse: collapse; margin: 16px 0;">
+    <tr><td style="padding: 4px 12px 4px 0; color: #555;">Severity</td><td style="padding: 4px 0;"><strong>{severity}</strong></td></tr>
+{ifDue}    <tr><td style="padding: 4px 12px 4px 0; color: #555;">Due</td><td style="padding: 4px 0;">{dueDate}</td></tr>
+{/ifDue}    <tr><td style="padding: 4px 12px 4px 0; color: #555;">Title</td><td style="padding: 4px 0;">{title}</td></tr>
+  </table>
+
+{ifSummary}  <p style="white-space: pre-wrap; background: #f5f7fa; padding: 12px; border-radius: 4px;">{comment}</p>
+{/ifSummary}
+  <p>
+    <a href="{ticketUrl}"
+       style="background: #1f4e79; color: #fff; padding: 10px 18px; text-decoration: none; border-radius: 4px;">
+      Open ticket in SecMan
+    </a>
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 32px 0 16px;">
+
+  <p style="color: #777; font-size: 0.85em;">
+    You are receiving this because you are involved in this ticket in SecMan.
+  </p>
+</body>
+</html>

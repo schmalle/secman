@@ -35,7 +35,13 @@ interface Workgroup {
 // All roles implemented: USER (baseline), ADMIN (full access),
 // VULN (vulnerabilities), RISK (risk management), REQ (requirements),
 // SECCHAMPION (broad access: risk+req+vuln), RELEASE_MANAGER (release management)
-const AVAILABLE_ROLES = ['USER', 'ADMIN', 'VULN', 'RISK', 'REQ', 'REQADMIN', 'SECCHAMPION', 'RELEASE_MANAGER', 'REPORT', 'BETA'];
+const ROLE_LABELS: Record<string, string> = {
+    BETA: 'BETA — optional beta features; existing access limits apply',
+    CYBERDEF: 'CYBERDEF — cyber defence: submits and tracks account tickets; no asset access of its own',
+};
+const roleLabel = (role: string): string => ROLE_LABELS[role] ?? role;
+
+const AVAILABLE_ROLES = ['USER', 'ADMIN', 'VULN', 'RISK', 'REQ', 'REQADMIN', 'SECCHAMPION', 'RELEASE_MANAGER', 'REPORT', 'BETA', 'CYBERDEF'];
 
 const UserManagement = () => {
     const [isAdmin, setIsAdmin] = useState(false);
@@ -790,7 +796,7 @@ const UserManagement = () => {
                                                         onChange={handleNewUserRolesChange}
                                                         disabled={isSubmittingUser}
                                                     />
-                                                    <label className="form-check-label" htmlFor={`role-${role}`}>{role === 'BETA' ? 'BETA — optional beta features; existing access limits apply' : role}</label>
+                                                    <label className="form-check-label" htmlFor={`role-${role}`}>{roleLabel(role)}</label>
                                                 </div>
                                             ))}
                                         </div>
@@ -872,7 +878,7 @@ const UserManagement = () => {
                                                         onChange={handleEditUserRolesChange}
                                                         disabled={isSubmittingEdit}
                                                     />
-                                                    <label className="form-check-label" htmlFor={`edit-role-${role}`}>{role === 'BETA' ? 'BETA — optional beta features; existing access limits apply' : role}</label>
+                                                    <label className="form-check-label" htmlFor={`edit-role-${role}`}>{roleLabel(role)}</label>
                                                 </div>
                                             ))}
                                         </div>

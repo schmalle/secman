@@ -1,5 +1,9 @@
 # Changelog (archived from CLAUDE.md)
 
+## 2026-11-26 — CYBERDEF account tickets
+
+- **CYBERDEF account tickets (2026-11-26)** — new role `CYBERDEF` submits vulnerability findings about AWS accounts through MCP (`create_cyberdef_ticket[s]` with `{ticket(s), delivery}`, idempotent per `externalReference`, batch ≤ 100), REST (`POST /api/security-tickets[/batch]`), the `/cyberdef/new` form (live dry-run preview, account picker, ARN paste, bulk JSON/CSV import) or `scripts/cyberdef/`. SecMan stores a ticket (V310–V312), mails the account's mapped users and enabled-workgroup members through an outbox (one digest per recipient per submission), and tracks it as OPEN/CLOSED (owners close with a note, either side reopens with a reason, `expectedVersion` on every change). `delivery.dryRun` previews without storing or mailing; `delivery.recipients` replaces the owners, limited to addresses known to SecMan or `secman.cyberdef.recipient-override.allowed-domains`. Rejections carry field-keyed errors; ARN resources must belong to the ticket's account. Owners use `/security-tickets` or the `*_my_security_ticket*` tools, scoped live to their account access (404 outside). CYBERDEF polls `get_cyberdef_ticket_updates` by event cursor. MCP permissions `TICKETS_SUBMIT` (CYBERDEF/ADMIN) and `TICKETS_RESPOND` (every delegated user, key-capped). See `docs/CYBERDEF_TICKETS.md`.
+
 ## 2026-11-21 — CrowdStrike overdue age
 
 - **CrowdStrike overdue age (2026-11-21)** — starts with the earliest detection on the affected system. V304 preserves the host detection independently of patch and CVE publication dates. See `docs/CROWDSTRIKE_IMPORT.md` for migration and exception-review behavior.

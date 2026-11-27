@@ -20,6 +20,21 @@ open class EmailTemplateRenderer {
 
     private val log = LoggerFactory.getLogger(EmailTemplateRenderer::class.java)
 
+    /**
+     * Classpath resources cannot change while the application runs, so each template and the
+     * logo are read once. A batch of ticket mails used to re-read them per message.
+     */
+    private val resourceCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val logo: ByteArray? by lazy {
+        try {
+            javaClass.getResourceAsStream(LOGO_PATH)?.use { it.readAllBytes() }
+        } catch (e: Exception) {
+            // A missing logo must not cost the recipient their notification.
+            log.warn("Failed to load SecManLogo.png: {}", e.message)
+            null
+        }
+    }
+
     companion object {
         private const val TEMPLATE_DIR = "/email-templates/"
         private const val LOGO_PATH = "/email-templates/SecManLogo.png"
@@ -43,7 +58,10 @@ open class EmailTemplateRenderer {
             "account-onboarding-questionnaire",
             "account-onboarding-reminder",
             "workgroup-overdue-notification",
-            "inactive-account-warning"
+            "inactive-account-warning",
+            "cyberdef-ticket-created",
+            "cyberdef-ticket-update",
+            "cyberdef-ticket-digest"
         )
     }
 
@@ -93,15 +111,8 @@ open class EmailTemplateRenderer {
 
     /** The inline SecMan logo, keyed by CID. Empty when unavailable — see [loadLogoInlineImage]. */
     fun loadLogoInlineImage(): Map<String, Pair<ByteArray, String>> =
-        try {
-            javaClass.getResourceAsStream(LOGO_PATH)?.readAllBytes()
-                ?.let { mapOf(LOGO_CID to (it to "image/png")) }
-                ?: emptyMap()
-        } catch (e: Exception) {
-            // A missing logo must not cost the recipient their notification.
-            log.warn("Failed to load SecManLogo.png: {}", e.message)
-            emptyMap()
-        }
+        // A copy per call, so no caller can alter the cached bytes.
+        logo?.let { mapOf(LOGO_CID to (it.copyOf() to "image/png")) } ?: emptyMap()
 
     fun escapeHtml(text: String): String =
         text.replace("&", "&amp;")
@@ -109,9 +120,9 @@ open class EmailTemplateRenderer {
             .replace(">", "&gt;")
             .replace("\"", "&quot;")
 
-    private fun readResource(path: String): String {
+    private fun readResource(path: String): String = resourceCache.computeIfAbsent(path) {
         val stream = javaClass.getResourceAsStream(path)
             ?: throw IllegalStateException("Email template not found on classpath: $path")
-        return stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
     }
 }

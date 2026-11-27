@@ -22,7 +22,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
  * - password (required): Password for the new user (will be hashed)
  * - roles (optional): List of roles to assign (defaults to ["USER", "VULN", "REQ"])
  *
- * Available roles: USER, ADMIN, VULN, RELEASE_MANAGER, REQ, RISK, SECCHAMPION, REQADMIN, REPORT
+ * Available roles: USER, ADMIN, VULN, RELEASE_MANAGER, REQ, RISK, SECCHAMPION, REQADMIN, REPORT, BETA, CYBERDEF
  */
 @Singleton
 class AddUserTool(
@@ -56,7 +56,7 @@ class AddUserTool(
             "roles" to mapOf(
                 "type" to "array",
                 "items" to mapOf("type" to "string"),
-                "description" to "List of roles to assign. Available: USER, ADMIN, VULN, RELEASE_MANAGER, REQ, RISK, SECCHAMPION, REQADMIN, REPORT. Defaults to [USER, VULN, REQ]"
+                "description" to "List of roles to assign. Available: USER, ADMIN, VULN, RELEASE_MANAGER, REQ, RISK, SECCHAMPION, REQADMIN, REPORT, BETA, CYBERDEF. Defaults to [USER, VULN, REQ]"
             ),
             "mfaEnabled" to mapOf(
                 "type" to "boolean",

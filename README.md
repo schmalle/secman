@@ -11,19 +11,20 @@ Security requirement, vulnerability and risk-assessment platform.
 
 - Security requirement lifecycle (versioned releases: PREPARATION → ALIGNMENT → ACTIVE → ARCHIVED), Excel/Word/CSV export, automated translation (OpenRouter, 10 languages).
 - Vulnerability management: CrowdStrike Falcon import, GitHub App Dependabot alert tracking with 30-day non-decrease owner alerts, exception-request workflow (including product exceptions across AWS accounts), statistics, heatmap, materialized view for outdated-asset queries. CrowdStrike findings use first detection on the affected system as their SLA start. See the [product exception guide](docs/PRODUCT_EXCEPTION_BATCHES.md).
+- Cyber Defence account tickets: CYBERDEF and ADMIN users submit AWS-account findings through MCP, REST, a web form, or shell clients. Account members can view, comment on, and close tickets; ticket mail is routed to mapped users and enabled-workgroup members. See the [account ticket guide](docs/CYBERDEF_TICKETS.md).
 - Asset inventory: Nmap/Masscan import, AD/cloud metadata, criticality, workgroup-scoped access. Operational views show assets [observed within the last 24 hours](docs/CURRENT_ASSETS.md).
 - Risk register, demand classification, compliance-framework mapping (SOC2, ISO 27001, NIST), optional AI-assisted pre-fill of compliance answers (OpenRouter LLM, confidence scoring + citations, human review required).
 - AWS account onboarding: imports requesting notifications use a saved welcome-email (default) or risk-assessment policy. The welcome subject and body are editable in the web UI; advanced guided questionnaires remain supported.
 - Risk assessments support SaaS and COTS solution names, searchable existing assessors/respondents, and email-only respondents who need no SecMan account.
 - AuthN: local (BCrypt) + OAuth2/OIDC + Passkey/WebAuthn + optional MFA.
-- AuthZ: 10-role RBAC (including the additive BETA eligibility role) with asset access through workgroup, AWS account, AD domain, and sharing grants.
+- AuthZ: 11-role RBAC (including the additive BETA eligibility role and the ticket-only CYBERDEF role) with asset access through workgroup, AWS account, AD domain, and sharing grants.
 - AI integration: MCP server (Streamable HTTP) for Claude Desktop/Code, Paperclip, and other MCP clients, with mandatory user delegation.
 - Email: SMTP/SES with retry + audit, Thymeleaf HTML templates, escalation tiers.
 - Inactive-user cleanup: an opt-in nightly job warns users before deletion, records each run, and applies a safety brake; dry-run is the default.
 
 ## Stack
 
-Kotlin 2.4.21 / Java 25 · Micronaut 5.2.7 · Hibernate JPA · Astro 7.4.13 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.9.2 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2 · Go 1.24 (mobile relay).
+Kotlin 2.4.21 / Java 25 · Micronaut 5.2.7 · Hibernate JPA · Astro 7.4.13 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle wrapper 9.9.2 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2 · Go 1.24 (mobile relay). The optional [Apple development container](docs/APPLE_CONTAINER_DEV.md) currently installs Gradle 9.7.0 on `PATH`.
 
 ## Quick Start (development)
 

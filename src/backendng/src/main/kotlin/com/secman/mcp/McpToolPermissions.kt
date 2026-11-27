@@ -133,6 +133,16 @@ object McpToolPermissions {
         ),
         setOf(SYSTEM_INFO) to listOf("get_secman_statistics"),
         setOf(ASSETS_READ, PERSONAL_INVENTORY_READ) to listOf("get_assets", "list_visible_accounts"),
+        // Account tickets. The submit tools also require a CYBERDEF/ADMIN delegated user in
+        // execute(); the respond tools are scoped to the caller's AWS accounts in the service.
+        setOf(TICKETS_SUBMIT) to listOf(
+            "create_cyberdef_ticket", "create_cyberdef_tickets", "list_cyberdef_tickets",
+            "get_cyberdef_ticket", "get_cyberdef_ticket_updates", "set_cyberdef_ticket_status",
+        ),
+        setOf(TICKETS_RESPOND) to listOf(
+            "list_my_security_tickets", "get_my_security_ticket", "update_my_security_ticket_status",
+        ),
+        setOf(TICKETS_SUBMIT, TICKETS_RESPOND) to listOf("add_cyberdef_ticket_comment"),
     )
 
     /**
@@ -264,6 +274,14 @@ object McpToolPermissions {
                 "notify_risk_assessment_respondent",
             ),
             setOf(SYSTEM_INFO) to listOf("get_secman_statistics"),
+            setOf(TICKETS_SUBMIT) to listOf(
+                "create_cyberdef_ticket", "create_cyberdef_tickets", "list_cyberdef_tickets",
+                "get_cyberdef_ticket", "get_cyberdef_ticket_updates", "set_cyberdef_ticket_status",
+            ),
+            setOf(TICKETS_RESPOND) to listOf(
+                "list_my_security_tickets", "get_my_security_ticket", "update_my_security_ticket_status",
+            ),
+            setOf(TICKETS_SUBMIT, TICKETS_RESPOND) to listOf("add_cyberdef_ticket_comment"),
         ))
 
         ToolCategories.CATEGORY_PERMISSIONS.reversed().forEach { (tools, unlocking) ->

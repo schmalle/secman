@@ -102,7 +102,13 @@ enum class McpPermission {
     /**
      * Send notifications - allows send_admin_summary tool (admin only)
      */
-    NOTIFICATIONS_SEND;
+    NOTIFICATIONS_SEND,
+
+    /** Submit and steer cyber-defence account tickets (role CYBERDEF). */
+    TICKETS_SUBMIT,
+
+    /** Read and answer the account tickets of the accounts the user can see. */
+    TICKETS_RESPOND;
 
     /**
      * Get display name for UI
@@ -130,6 +136,8 @@ enum class McpPermission {
             INTEGRATIONS_WRITE -> "Submit Integration Runs"
             WORKGROUPS_WRITE -> "Manage Workgroups"
             NOTIFICATIONS_SEND -> "Send Notifications"
+            TICKETS_SUBMIT -> "Submit Account Tickets"
+            TICKETS_RESPOND -> "Respond to Account Tickets"
         }
     }
 
@@ -159,6 +167,8 @@ enum class McpPermission {
             INTEGRATIONS_WRITE -> "Submit scanner results for assigned integration subjects"
             WORKGROUPS_WRITE -> "Create, delete, and manage workgroup memberships (admin only)"
             NOTIFICATIONS_SEND -> "Send admin summary emails and trigger notifications (admin only)"
+            TICKETS_SUBMIT -> "Create, track and close cyber-defence account tickets (CYBERDEF)"
+            TICKETS_RESPOND -> "View and update the account tickets for your own accounts"
         }
     }
 

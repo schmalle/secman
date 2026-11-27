@@ -31,6 +31,7 @@ Start with [installation](../INSTALL.md) for a new checkout or [deployment](DEPL
 - [Workgroup feature documentation](workgroup-feature-documentation.md)
 - [CrowdStrike import and synchronization](CROWDSTRIKE_IMPORT.md)
 - [Product exception requests across AWS accounts](PRODUCT_EXCEPTION_BATCHES.md)
+- [Cyber Defence account tickets](CYBERDEF_TICKETS.md)
 - [Crowdstrike vulnerability match](CROWDSTRIKE_VULNERABILITY_MATCH.md)
 - [AWS asset match and clear](CLI_ASSET_MATCH_CLEAR.md)
 - [GitHub repos](GITHUB_REPOS.md)
