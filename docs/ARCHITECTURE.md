@@ -39,6 +39,7 @@ Packages: `com.secman.{domain, repository, service, controller, config, dto, fil
 Controller groups:
 - **Core**: Asset, AssetCompliance, Requirement, Release, ReleaseComparison, Workgroup, Product, Standard, Norm, NormMapping, UseCase
 - **Vulnerability**: VulnerabilityManagement, VulnerabilityExceptionRequest, ProductExceptionBatch, VulnerabilityStatistics, VulnerabilityConfig, VulnerabilityHeatmap, VulnerabilityMaintenance, ExternalHeatmap, AccountVulns, DomainVulns, WorkgroupVulns
+- **Security tickets**: CyberdefTicket (AWS-account findings, owner workflow and notification status)
 - **Auth**: Auth, OAuth, Passkey, UserProfile
 - **Admin**: AppSettings, IdentityProvider, MaintenanceBanner, UserMapping, User, TranslationConfig, NotificationSettings, EmailConfig, EmailProviderConfig, FalconConfig, ConfigBundle, AwsAccountSharing
 - **Import/Export**: Import, RequirementFile, PublicRequirementDownload, Scan
@@ -101,7 +102,7 @@ aws_account_sharing, identity_providers, oauth_states, maintenance_banners, app_
 
 ## Access control
 
-Roles: `USER`, `ADMIN`, `VULN`, `RELEASE_MANAGER`, `REQ`, `REQADMIN`, `RISK`, `SECCHAMPION`, `REPORT`, `BETA` (additive feature eligibility).
+Roles: `USER`, `ADMIN`, `VULN`, `RELEASE_MANAGER`, `REQ`, `REQADMIN`, `RISK`, `SECCHAMPION`, `REPORT`, `BETA` (additive feature eligibility), `CYBERDEF` (account-ticket submission and tracking only).
 
 Asset access (any of):
 1. ADMIN **or SECCHAMPION** role (universal access)
