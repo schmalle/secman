@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "mcp-remote": "0.16.7"
+    "mcp-remote": "0.17.1"
   },
   "overrides": {
     "qs": "6.17.1"
