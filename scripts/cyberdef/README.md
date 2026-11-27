@@ -1,7 +1,8 @@
 # CYBERDEF ticket scripts
 
-Shell clients for the CYBERDEF account-ticket MCP tools (`docs/CYBERDEF_TICKETS.md`).
-They need `bash`, `curl` and `jq`, nothing else.
+Shell clients for the [Cyber Defence account-ticket MCP tools](../../docs/CYBERDEF_TICKETS.md).
+They use `bash`, `curl` and `jq`. `pass-cli` supplies credentials when they are missing from
+the environment.
 
 | Script | Side | Purpose |
 |---|---|---|
@@ -9,7 +10,7 @@ They need `bash`, `curl` and `jq`, nothing else.
 | `send-tickets.sh` | Cyber Defence | Submit many tickets from a JSON array, 100 per call |
 | `ticket-updates.sh` | Cyber Defence | Read owners' answers and status changes by cursor; optional handler per event |
 | `ticket-status.sh` | Cyber Defence | `list`, `get`, `close`, `reopen`, `comment` on any ticket |
-| `my-tickets.sh` | Account owner | The same commands, limited to the owner's own accounts |
+| `my-tickets.sh` | Account owner | List, inspect and comment in the caller's read scope. Close and reopen as an owner. |
 | `examples/` | — | `ticket.json`, `tickets.json`, and `on-event.sh` (a handler to adapt) |
 
 ## Credentials
@@ -26,15 +27,15 @@ The MCP key needs **User Delegation** and, depending on the side, `TICKETS_SUBMI
 
 ## Dry run and target addresses
 
-Every sending path has both modes:
+Use the delivery and preview flags as follows.
 
 - `--dry-run` sends the request with `dryRun: true`. SecMan validates the ticket and resolves
   the recipients and due date, then stores nothing and sends no mail.
-  - `send-ticket.sh` / `send-tickets.sh` return `WOULD_CREATE` with the recipient list, or
-    `REJECTED` with the exact reason a real run would give.
+  - `send-ticket.sh` / `send-tickets.sh` return `WOULD_CREATE` with the recipient list,
+    `DUPLICATE` for an existing reference, or `REJECTED` with the reason.
   - `ticket-status.sh close|reopen` and `my-tickets.sh close|reopen` return the status change
     and `wouldNotify` instead of applying it.
-- `--to ADDR[,ADDR]` (repeatable, max 20) mails these addresses **instead of** the people
+- `--to ADDR[,ADDR]` on the send scripts (repeatable, max 20) mails these addresses instead of the people
   allocated to the account. Each address must belong to a SecMan user or user mapping, or
   sit on a domain listed in `secman.cyberdef.recipient-override.allowed-domains`. Otherwise
   the ticket is rejected with `RECIPIENT_NOT_ALLOWED`. Being mailed grants no access: the
@@ -96,7 +97,8 @@ prints one JSON line per event, unless `--on-event` handles them.
 `${XDG_STATE_HOME:-~/.local/state}/secman-cyberdef/cursor` (override with `--state`).
 It writes the file after each successfully handled event, by write-then-rename. If the
 handler fails, the run stops and that event is handled again next time. `--since 0`
-replays everything.
+replays everything. Consumers that write downstream should deduplicate by event ID because
+a crash after handler success and before the cursor write can replay that event.
 
 ## Tests
 

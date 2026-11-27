@@ -15,7 +15,6 @@
     "severity": "CRITICAL",
     "description": "Active exploitation of the listed CVE was observed against this target.",
     "cves": ["CVE-2026-12345"],
-    "resources": [{"type": "EC2_INSTANCE", "identifier": "i-0fedcba9876543210", "region": "eu-west-1"}],
-    "dueAt": "2026-12-01T00:00:00Z"
+    "resources": [{"type": "EC2_INSTANCE", "identifier": "i-0fedcba9876543210", "region": "eu-west-1"}]
   }
 ]
