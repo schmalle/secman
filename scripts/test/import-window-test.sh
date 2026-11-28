@@ -9,11 +9,17 @@ cp "$ROOT/scripts/import.sh" "$ROOT/scripts/importaws.sh" "$FIXTURE/scripts/"
 touch "$FIXTURE/src/cli/build/libs/cli-0.1.0-all.jar" "$FIXTURE/secmanpp.env"
 cat > "$FIXTURE/bin/java" <<'MOCK'
 #!/usr/bin/env bash
+found=false
 while (( $# )); do
-    if [[ "$1" == "--last-seen-days" ]]; then printf '%s\n' "$2"; exit 0; fi
+    if [[ "$1" == "--last-seen-days" || "$1" == "--hostnames" || "$1" == "--aid" ]]; then
+        printf '%s\n' "$2"
+        found=true
+        shift
+    fi
+    if [[ "$1" == "--skip-age-snapshot" ]]; then printf '%s\n' "$1"; fi
     shift
 done
-exit 1
+"$found"
 MOCK
 cat > "$FIXTURE/bin/pass-cli" <<'MOCK'
 #!/usr/bin/env bash
@@ -44,4 +50,11 @@ for wrapper in import.sh importaws.sh; do
         echo "$wrapper: invalid discovery window was accepted" >&2; exit 1
     fi
 done
-echo 'import-window-test: 16 cases passed'
+actual=$(PATH="$FIXTURE/bin:$PATH" bash "$FIXTURE/scripts/import.sh" --hostnames host-one,host-two)
+[[ "$actual" == $'1\nhost-one,host-two\n--skip-age-snapshot' ]] || exit 1
+actual=$(PATH="$FIXTURE/bin:$PATH" bash "$FIXTURE/scripts/import.sh" --aid test-aid)
+[[ "$actual" == $'1\ntest-aid\n--skip-age-snapshot' ]] || exit 1
+if PATH="$FIXTURE/bin:$PATH" bash "$FIXTURE/scripts/import.sh" --deleteonfail >/dev/null 2>&1; then
+    echo 'import.sh: unsupported option was accepted' >&2; exit 1
+fi
+echo 'import-window-test: 19 cases passed'

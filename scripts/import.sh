@@ -5,6 +5,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 JAR_PATH="$REPO_ROOT/src/cli/build/libs/cli-0.1.0-all.jar"
 
+if (( $# > 0 )) && [[ $# != 2 || ( "$1" != "--hostnames" && "$1" != "--aid" ) || -z "$2" || "$2" == -* ]]; then
+    echo "Usage: $0 [--hostnames host1,host2 | --aid falcon-device-id]" >&2
+    exit 2
+fi
+
 if [ ! -f "$JAR_PATH" ]; then
     echo "Error: CLI JAR not found at $JAR_PATH"
     echo ""
@@ -38,4 +43,7 @@ if [[ -n "${SECMAN_TEST_ISOLATED_DB:-}" ]]; then
     source "$REPO_ROOT/scripts/test/lib/isolated-target.sh"
     secman_test_require_isolated || exit 2
 fi
-exec java -Xmx4g -Xms2g -jar "$JAR_PATH" query servers --device-type SERVER_FAMILY --severity CRITICAL,HIGH --min-days-open 1 --save --last-seen-days 1
+if (( $# > 0 )); then
+    set -- "$@" --skip-age-snapshot
+fi
+exec java -Xmx4g -Xms2g -jar "$JAR_PATH" query servers --device-type SERVER_FAMILY --severity CRITICAL,HIGH --min-days-open 1 --save --last-seen-days 1 "$@"

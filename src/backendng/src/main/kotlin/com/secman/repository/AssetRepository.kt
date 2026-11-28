@@ -242,7 +242,8 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * of assets, and this bypasses the persistence context entirely (callers already clear it).
      */
     @io.micronaut.data.annotation.Query(
-        "UPDATE Asset a SET a.crowdStrikeAgentSeenAt = :seenAt WHERE a.id IN (:ids)"
+        "UPDATE Asset a SET a.crowdStrikeAgentSeenAt = :seenAt WHERE a.id IN (:ids) " +
+            "AND (a.crowdStrikeAgentSeenAt IS NULL OR a.crowdStrikeAgentSeenAt < :seenAt)"
     )
     fun stampCrowdStrikeAgentSeenAt(ids: Collection<Long>, seenAt: LocalDateTime): Long
 

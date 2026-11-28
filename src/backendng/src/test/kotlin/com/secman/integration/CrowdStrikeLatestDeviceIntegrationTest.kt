@@ -21,6 +21,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.util.UUID
 
 class CrowdStrikeLatestDeviceIntegrationTest : BaseIntegrationTest() {
     @Inject lateinit var importer: CrowdStrikeVulnerabilityImportService
@@ -28,6 +30,88 @@ class CrowdStrikeLatestDeviceIntegrationTest : BaseIntegrationTest() {
     @Inject lateinit var identities: CrowdStrikeAssetIdentityRepository
     @Inject lateinit var vulnerabilities: VulnerabilityRepository
     @Inject lateinit var em: EntityManager
+
+    @Test
+    fun `Azure VM move rebinds Falcon to the new subscription and keeps the old asset and manual findings`() {
+        val now = Instant.now()
+        val original = CrowdStrikeDeviceRecord("azure-${UUID.randomUUID()}", "azure-${UUID.randomUUID()}",
+            instanceId = UUID.randomUUID().toString(), cloudAccountId = UUID.randomUUID().toString(),
+            firstSeen = now.minusSeconds(3600), lastSeen = now.minusSeconds(1200), serviceProvider = "AZURE")
+        importDevice(original)
+        val former = identities.findByCrowdStrikeAidIn(listOf(original.aid)).single().asset
+        listOf("MANUAL", VulnerabilitySources.CROWDSTRIKE).forEach { source ->
+            vulnerabilities.save(Vulnerability(asset = former, vulnerabilityId = "CVE-2026-1030",
+                scanTimestamp = LocalDateTime.now(), source = source))
+        }
+        em.flush()
+        em.clear()
+
+        val moved = original.copy(instanceId = UUID.randomUUID().toString(), cloudAccountId = UUID.randomUUID().toString(),
+            lastSeen = now.minusSeconds(600))
+        val conflict = assertThrows<CrowdStrikeIdentityConflict> { importDevice(moved.copy(serviceProvider = null)) }
+        assertThat(conflict.code).isEqualTo("INCOMPLETE_IDENTITY")
+        val bootstrap = moved.copy(aid = "bootstrap-${UUID.randomUUID()}", lastSeen = now.minusSeconds(601))
+        repeat(2) { importDevice(moved, listOf(bootstrap)) }
+
+        val current = identities.findByCrowdStrikeAidIn(listOf(original.aid)).single().asset
+        assertThat(current.id).isNotEqualTo(former.id)
+        assertThat(current.cloudInstanceId).isEqualTo(moved.instanceId)
+        assertThat(current.cloudAccountId).isEqualTo(moved.cloudAccountId)
+        assertThat(assets.findById(former.id!!).orElseThrow().cloudAccountId).isEqualTo(original.cloudAccountId)
+        assertThat(vulnerabilities.findByAssetId(former.id!!, Pageable.from(0, 10)).content.map { it.source })
+            .containsExactly("MANUAL")
+    }
+
+    @Test
+    fun `Azure subscription move retires the former binding when a newer AID wins on the destination VM`() {
+        val now = Instant.now()
+        val original = CrowdStrikeDeviceRecord("desktop-${UUID.randomUUID()}", "desktop-${UUID.randomUUID()}",
+            instanceId = UUID.randomUUID().toString(), cloudAccountId = UUID.randomUUID().toString(),
+            firstSeen = now.minusSeconds(3600), lastSeen = now.minusSeconds(1200), serviceProvider = "AZURE")
+        importDevice(original)
+        val formerId = identities.findByCrowdStrikeAidIn(listOf(original.aid)).single().asset.id!!
+        val moved = original.copy(instanceId = UUID.randomUUID().toString(), cloudAccountId = UUID.randomUUID().toString(),
+            lastSeen = now.minusSeconds(600))
+        val winner = moved.copy(aid = "winner-${UUID.randomUUID()}", firstSeen = now.minusSeconds(900),
+            lastSeen = now.minusSeconds(500))
+
+        importDevice(winner, listOf(moved))
+        assertThat(identities.findByCrowdStrikeAidIn(listOf(original.aid))).isEmpty()
+        assertThat(assets.findById(formerId).orElseThrow().cloudAccountId).isEqualTo(original.cloudAccountId)
+        val current = identities.findByCrowdStrikeAidIn(listOf(winner.aid)).single().asset
+        assertThat(current.id).isNotEqualTo(formerId)
+        assertThat(current.cloudAccountId).isEqualTo(winner.cloudAccountId)
+        assertThat(current.cloudInstanceId).isEqualTo(winner.instanceId)
+    }
+
+    @Test
+    fun `new contact accepts a nonoverlapping non-cloud enrollment and an older contact cannot regress it`() {
+        val now = Instant.now()
+        val original = CrowdStrikeDeviceRecord("renewed-${UUID.randomUUID()}", "renewed-${UUID.randomUUID()}",
+            firstSeen = now.minusSeconds(7200), lastSeen = now.minusSeconds(3600))
+        importDevice(original)
+        val assetId = identities.findByCrowdStrikeAidIn(listOf(original.aid)).single().asset.id
+        val current = original.copy(firstSeen = now.minusSeconds(1800), lastSeen = now.minusSeconds(600))
+        importDevice(current)
+        importDevice(current.copy(lastSeen = current.lastSeen!!.minusSeconds(22)))
+
+        val binding = identities.findByCrowdStrikeAidIn(listOf(current.aid)).single()
+        val contact = LocalDateTime.ofInstant(current.lastSeen, ZoneOffset.UTC).truncatedTo(java.time.temporal.ChronoUnit.MICROS)
+        assertThat(binding.asset.id).isEqualTo(assetId)
+        assertThat(binding.falconLastSeenAt).isEqualTo(contact)
+        assertThat(binding.asset.crowdStrikeAgentSeenAt).isEqualTo(contact)
+        assertThat(binding.falconFirstSeenAt).isEqualTo(
+            LocalDateTime.ofInstant(current.firstSeen, ZoneOffset.UTC).truncatedTo(java.time.temporal.ChronoUnit.MICROS))
+    }
+
+    private fun importDevice(device: CrowdStrikeDeviceRecord, superseded: List<CrowdStrikeDeviceRecord> = emptyList()) {
+        val batch = CrowdStrikeVulnerabilityBatchDto(device.hostname, null, device.cloudAccountId, device.instanceId,
+            null, null, null, vulnerabilities = emptyList(), crowdStrikeAids = setOf(device.aid),
+            deviceSelection = CrowdStrikeDeviceSelection(device, superseded))
+        importer.importVulnerabilitiesForServer(batch, "test-admin", allowDeviceReplacement = true)
+        em.flush()
+        em.clear()
+    }
 
     @Test
     fun `zero finding winner removes duplicate asset and stale severities but preserves manual findings and display name`() {

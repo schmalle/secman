@@ -90,6 +90,7 @@ class ServersCommand {
     var limit: Int = 4000
     var lastSeenDays: Int = 3
     var overdueThreshold: Int = 30
+    var skipAgeSnapshot: Boolean = false
     var backendUrl: String? = null
     /** Run the post-import reconcile sweep in report-only mode (counts, deletes nothing). */
     var reconcileDryRun: Boolean = false
@@ -684,6 +685,7 @@ class ServersCommand {
      * Uses the backend API's /api/vulnerability-statistics/age-snapshot-from-data endpoint.
      */
     private fun captureSnapshotViaHttp(backendUrl: String, totalServers: Int, serversWithOverdue: Int, thresholdDays: Int) {
+        if (skipAgeSnapshot) return
         try {
             val username = System.getenv("SECMAN_ADMIN_NAME") ?: return
             val password = System.getenv("SECMAN_ADMIN_PASS") ?: return

@@ -815,6 +815,21 @@ claims; metadata, findings, snapshots, and the append-only
 save does not create another transition. V287 adds this history and a nullable
 last-accepted identity observation; legacy observation times are not invented.
 
+For a Falcon device reporting `AZURE`, the importer validates Azure VM and
+subscription IDs as GUIDs. A verified move to another Azure subscription requires
+the same AID, enrollment, hostname and domain, a newer Falcon contact and observation,
+and an unclaimed destination VM. The destination gets its own asset. The former
+asset retains its manual data and access grants and its CrowdStrike snapshot is retired.
+If a newer enrollment wins on that destination VM, the importer retires the
+former binding and imports the winning AID.
+
+A single bound non-cloud device can start a new enrollment under the same AID
+when its hostname and domain match and its new enrollment starts after the prior
+contact. The importer replaces the old enrollment's CrowdStrike snapshot.
+For an otherwise identical identity, a newer import may refresh findings when
+Falcon's contact timestamp moves backward. The stored contact stays at its newest
+verified value.
+
 When a superseded AID now reports a different EC2 instance than its stored asset,
 an ADMIN import retires that old binding only with the same verified enrollment,
 matching AWS account, non-decreasing Falcon contact and a newer identity observation.
@@ -1074,6 +1089,13 @@ See [Current asset inventory](CURRENT_ASSETS.md) for observation sources, cache 
 
 
 ### Copying failed import hostnames
+
+Run `./scripts/import.sh --hostnames host-one,host-two` to retry specific
+hosts. Falcon resolves the names directly, including hosts outside the regular
+24-hour discovery window. Use `./scripts/import.sh --aid falcon-device-id` when
+the failed enrollment is one of several matches for its hostname. A targeted
+retry skips publishing fleet-wide age statistics. The current inventory still
+uses the actual contact time.
 
 CLI imports print a **Failed import hostnames (N, comma-separated)** section
 with a single copyable line of names. This list is not truncated when the detailed

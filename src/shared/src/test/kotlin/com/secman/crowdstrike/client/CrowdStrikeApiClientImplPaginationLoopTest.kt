@@ -992,6 +992,7 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
         val requests = stubHostnameDevices(records)
         val response = client.queryVulnerabilities("server01", config)
         assertThat(response.devices.single().crowdStrikeAid).isEqualTo("aid-18")
+        assertThat(response.devices.single().deviceSelection!!.selected.serviceProvider).isEqualTo("AWS")
         assertThat(response.devices.single().deviceSelection!!.superseded).isEmpty()
         assertThat(response.matchingDevices).hasSize(19)
         assertThat(spotlightCalls(requests)).isEqualTo(1)

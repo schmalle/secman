@@ -87,7 +87,7 @@ open class CrowdStrikeApiClientImpl(
         require(aids.size in 1..100 && aids.all { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) }) { "Invalid device IDs" }
         return resolveImportMetadata(aids.sorted(), config).map { (aid, md) ->
             CrowdStrikeDeviceRecord(aid, firstNonBlank(md.hostname, md.cloudInstanceId).orEmpty(), md.cloudInstanceId,
-                md.cloudAccountId, md.adDomain, md.firstSeen, md.lastSeen, md.productType)
+                md.cloudAccountId, md.adDomain, md.firstSeen, md.lastSeen, md.productType, md.serviceProvider)
         }
     }
 
@@ -2040,7 +2040,8 @@ open class CrowdStrikeApiClientImpl(
         val lastSeen: Instant? = null,
         val firstSeen: Instant? = null,
         val productType: String? = null,
-        val selection: CrowdStrikeDeviceSelection? = null
+        val selection: CrowdStrikeDeviceSelection? = null,
+        val serviceProvider: String? = null
     ) {
         fun toQueriedHost(aid: String) = QueriedHost(hostname, cloudInstanceId, aid,
             cloudAccountId, adDomain, osVersion, ip, lastSeen, selection, ipAddresses)
@@ -2076,7 +2077,7 @@ open class CrowdStrikeApiClientImpl(
                 val md = metadata.getValue(id)
                 // Falcon can omit a cloud device's hostname while retaining its instance identity.
                 CrowdStrikeDeviceRecord(id, firstNonBlank(md.hostname, md.cloudInstanceId).orEmpty(), md.cloudInstanceId,
-                    md.cloudAccountId, md.adDomain, md.firstSeen, md.lastSeen, md.productType)
+                    md.cloudAccountId, md.adDomain, md.firstSeen, md.lastSeen, md.productType, md.serviceProvider)
             })
         } catch (e: IllegalArgumentException) {
             log.warn("Latest Falcon device selection rejected: {}", e.message)
@@ -2228,7 +2229,9 @@ open class CrowdStrikeApiClientImpl(
                         osVersion = osVersion,
                         lastSeen = device["last_seen"]?.toString()?.let { runCatching { Instant.parse(it) }.getOrNull() },
                         firstSeen = device["first_seen"]?.toString()?.let { runCatching { Instant.parse(it) }.getOrNull() },
-                        productType = device["product_type_desc"]?.toString()
+                        productType = device["product_type_desc"]?.toString(),
+                        serviceProvider = firstNonBlank(device["service_provider"]?.toString(),
+                            nestedDevice?.get("service_provider")?.toString())
                     )
                 }
             } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {

@@ -22,7 +22,9 @@ data class CrowdStrikeDeviceRecord(
     val firstSeen: Instant? = null,
     val lastSeen: Instant? = null,
     @field:Size(max = 64)
-    val productType: String? = null
+    val productType: String? = null,
+    @field:Size(max = 64)
+    val serviceProvider: String? = null
 )
 
 @Serdeable

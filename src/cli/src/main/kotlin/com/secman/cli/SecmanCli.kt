@@ -165,6 +165,7 @@ class SecmanCli {
                         args[i] == "--deleteonfail" -> serversCommand.deleteOnFail = true
                         args[i] == "--dry-run" -> serversCommand.dryRun = true
                         args[i] == "--reconcile-dry-run" -> serversCommand.reconcileDryRun = true
+                        args[i] == "--skip-age-snapshot" -> serversCommand.skipAgeSnapshot = true
                         args[i] == "--verbose" -> serversCommand.verbose = true
                     }
                     i++

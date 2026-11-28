@@ -1,6 +1,7 @@
 package com.secman.service
 
 import com.secman.crowdstrike.dto.CrowdStrikeDeviceSelection
+import com.secman.crowdstrike.dto.CrowdStrikeDeviceRecord
 import com.secman.crowdstrike.dto.hostnameScope
 import com.secman.crowdstrike.dto.selectLatestCrowdStrikeDevices
 import com.secman.domain.Asset
@@ -33,7 +34,9 @@ class CrowdStrikeDeviceReplacementService(
     data class Replacement(val asset: Asset?, val duplicates: List<Asset>, val snapshotChanged: Boolean,
         val formerInstanceId: String? = null,
         val relocatedBindings: List<CrowdStrikeAssetIdentity> = emptyList(),
-        val preservedHistoricalAids: Set<String> = emptySet())
+        val preservedHistoricalAids: Set<String> = emptySet(),
+        val azureSubscriptionMove: CrowdStrikeAssetIdentity? = null,
+        val retainedContact: LocalDateTime? = null)
 
     /** Includes transaction completion, so concurrent first imports cannot create two assets. */
     fun <T> withSelectionLocks(selection: CrowdStrikeDeviceSelection?, action: () -> T): T =
@@ -131,9 +134,10 @@ class CrowdStrikeDeviceReplacementService(
             val firstSeen = device.firstSeen?.toFalconEnrollmentTime()
             val lastSeen = device.lastSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) }
             val observed = LocalDateTime.ofInstant(selection.observedAt, ZoneOffset.UTC)
-            if (device.instanceId?.matches(Regex("i-(?:[0-9a-f]{8}|[0-9a-f]{17})")) != true ||
-                asset.cloudAccountId.isNullOrBlank() || device.cloudAccountId.isNullOrBlank() ||
-                !asset.cloudAccountId.orEmpty().trim().equals(device.cloudAccountId.orEmpty().trim(), ignoreCase = true) ||
+            val verifiedCloudMove = (device.instanceId?.matches(EC2_ID) == true &&
+                !asset.cloudAccountId.isNullOrBlank() && sameIdentityValue(asset.cloudAccountId, device.cloudAccountId)) ||
+                verifiesAzureMove(binding, device, selection.observedAt)
+            if (!verifiedCloudMove ||
                 binding.falconFirstSeenAt == null || binding.falconFirstSeenAt != firstSeen || lastSeen == null ||
                 binding.falconLastSeenAt?.let { it > lastSeen } == true ||
                 binding.identityObservedAt?.let { it >= observed } == true) {
@@ -159,25 +163,44 @@ class CrowdStrikeDeviceReplacementService(
         fun heldByBootstrap(holder: Asset) = identities.filter { it.asset.id == holder.id }
             .let { bindings -> bindings.isNotEmpty() && bindings.all { it.crowdStrikeAid in bootstrapAids } }
         requireFreshObservation(identities, selection, changingInstance)
+        val incomingFirst = requireNotNull(selected.firstSeen).toFalconEnrollmentTime()
+        val incomingContact = selected.lastSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) }
+        val observed = LocalDateTime.ofInstant(selection.observedAt, ZoneOffset.UTC)
+        val validContact = incomingContact?.takeIf {
+            it >= incomingFirst && selected.lastSeen?.isBefore(selection.observedAt) == true
+        }
         if (changingInstance) {
             val asset = requireNotNull(knownWinner).asset
             fun conflict(code: String, message: String): Nothing = throw CrowdStrikeIdentityConflict(code, message,
                 asset.id, asset.cloudInstanceId, selected.instanceId, selected.aid, asset.updatedAt)
-            if (selected.instanceId?.matches(Regex("i-(?:[0-9a-f]{8}|[0-9a-f]{17})")) != true)
-                conflict("INCOMPLETE_IDENTITY", "A valid incoming EC2 instance ID is required")
+            val azure = isAzureMove(asset, selected)
+            if (!azure && selected.instanceId?.matches(EC2_ID) != true)
+                conflict("INCOMPLETE_IDENTITY", "A valid EC2 instance ID or verified Azure VM identity is required")
             if (selected.lastSeen == null)
                 conflict("INCOMPLETE_IDENTITY", "Provider contact time is required for an instance change")
             if (asset.cloudAccountId.isNullOrBlank() || selected.cloudAccountId.isNullOrBlank())
                 conflict("INCOMPLETE_IDENTITY", "Verified stored and incoming cloud accounts are required for an instance change")
-            if (!asset.cloudAccountId.orEmpty().trim().equals(selected.cloudAccountId.orEmpty().trim(), ignoreCase = true))
+            val accountChanged = !sameIdentityValue(asset.cloudAccountId, selected.cloudAccountId)
+            if (accountChanged && !azure)
                 conflict("CLOUD_ACCOUNT_CONFLICT", "Falcon device conflicts with stored cloud account")
             if (!asset.adDomain.orEmpty().trim().equals(selected.adDomain.orEmpty().trim(), ignoreCase = true))
                 conflict("AD_DOMAIN_CONFLICT", "Falcon device conflicts with stored AD domain")
-            if (knownWinner.falconFirstSeenAt == null || knownWinner.falconFirstSeenAt !=
-                requireNotNull(selected.firstSeen).toFalconEnrollmentTime())
+            if (knownWinner.falconFirstSeenAt != incomingFirst)
                 conflict("ENROLLMENT_MISMATCH", "An instance change requires the same verified Falcon enrollment")
+            if (accountChanged) {
+                // Keep the former subscription's inventory and access grants on its own asset.
+                if (!verifiesAzureMove(knownWinner, selected, selection.observedAt))
+                    conflict("CLOUD_ACCOUNT_CONFLICT", "An Azure subscription move requires a verified enrollment and newer contact")
+                if (identityRepository.findByAssetIdIn(listOf(requireNotNull(asset.id))).singleOrNull()?.crowdStrikeAid != selected.aid)
+                    conflict("UNEXPLAINED_AID", "An Azure subscription move requires one current Falcon binding")
+                if (instanceCandidates.isNotEmpty())
+                    conflict("INSTANCE_ALREADY_BOUND", "Incoming Azure VM already belongs to another asset")
+                return Replacement(null, emptyList(), false, formerInstanceId = asset.cloudInstanceId,
+                    relocatedBindings = relocatedBindings, preservedHistoricalAids = preservedHistoricalAids,
+                    azureSubscriptionMove = knownWinner)
+            }
             if (instanceCandidates.any { it.id != asset.id && !heldByBootstrap(it) })
-                conflict("INSTANCE_ALREADY_BOUND", "Incoming EC2 instance already belongs to another asset")
+                conflict("INSTANCE_ALREADY_BOUND", "Incoming cloud instance already belongs to another asset")
         }
         fun compatible(asset: Asset): Boolean {
             fun compatibleValue(stored: String?, incoming: String?) = stored.isNullOrBlank() ||
@@ -235,7 +258,6 @@ class CrowdStrikeDeviceReplacementService(
             "Stored asset has an unverified Falcon device identity")
         if (!identities.filterNot { it in relocatedBindings }.all { binding -> current.any { it.crowdStrikeAid == binding.crowdStrikeAid && it.asset.id == binding.asset.id } })
             throw CrowdStrikeIdentityConflict("IDENTITY_CHANGED", "Falcon identity changed while acquiring replacement locks")
-        val incomingFirst = requireNotNull(selected.firstSeen).toFalconEnrollmentTime()
         val storedWinner = current.firstOrNull { it.crowdStrikeAid == selected.aid }
         requireFreshObservation(current, selection, changingInstance)
         if (changingInstance) {
@@ -248,11 +270,26 @@ class CrowdStrikeDeviceReplacementService(
                 (binding.falconLastSeenAt ?: LocalDateTime.MIN) >=
                 (selected.lastSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) } ?: LocalDateTime.MIN)
         }) throw CrowdStrikeIdentityConflict("STALE_IDENTITY_OBSERVATION", "An older or tied Falcon device cannot replace the current device")
-        if (current.any { binding -> binding.falconLastSeenAt?.let { prior ->
-            selected.lastSeen == null || LocalDateTime.ofInstant(selected.lastSeen, ZoneOffset.UTC) < prior
+        val sameMachine = storedWinner != null && current.size == 1 && records.size == 1 &&
+            sameIdentityValue(storedWinner.sourceHostname, selected.hostname) &&
+            sameIdentityValue(storedWinner.asset.cloudInstanceId, selected.instanceId) &&
+            sameIdentityValue(storedWinner.asset.cloudAccountId, selected.cloudAccountId) &&
+            sameIdentityValue(storedWinner.asset.adDomain, selected.adDomain)
+        val newerObservation = storedWinner?.identityObservedAt?.let { observed > it } == true
+        // The new findings fetch has its own observation time. Keep the highest verified contact.
+        val retainedContact = storedWinner?.falconLastSeenAt?.takeIf {
+            sameMachine && newerObservation && validContact != null && storedWinner.falconFirstSeenAt == incomingFirst &&
+                validContact < it
+        }
+        if (retainedContact == null && current.any { binding -> binding.falconLastSeenAt?.let { prior ->
+            incomingContact == null || incomingContact < prior
         } == true }) throw CrowdStrikeIdentityConflict("STALE_IDENTITY_OBSERVATION", "An older Falcon device contact cannot overwrite newer data")
+        val renewedEnrollment = sameMachine && newerObservation && validContact != null &&
+            selected.instanceId.isNullOrBlank() && selected.cloudAccountId.isNullOrBlank() &&
+            storedWinner.falconLastSeenAt?.let { incomingFirst > it } == true &&
+            storedWinner.falconFirstSeenAt?.let { incomingFirst > it } == true
         if (storedWinner?.falconFirstSeenAt != null) {
-            if (storedWinner.falconFirstSeenAt != incomingFirst)
+            if (storedWinner.falconFirstSeenAt != incomingFirst && !renewedEnrollment)
                 throw CrowdStrikeIdentityConflict("ENROLLMENT_MISMATCH", "Falcon enrollment timestamp changed for an existing device",
                     storedWinner.asset.id, storedWinner.asset.cloudInstanceId, selected.instanceId, selected.aid, storedWinner.asset.updatedAt)
         }
@@ -281,10 +318,11 @@ class CrowdStrikeDeviceReplacementService(
                     canonical.id, canonical.cloudInstanceId, selected.instanceId, selected.aid, canonical.updatedAt)
         }
         return Replacement(canonical, duplicates, canonical != null &&
-            (current.filter { it.asset.id == canonical.id }.let { bindings ->
+            (renewedEnrollment || current.filter { it.asset.id == canonical.id }.let { bindings ->
                 bindings.size != 1 || bindings.singleOrNull()?.crowdStrikeAid != selected.aid ||
                     bindings.singleOrNull()?.falconFirstSeenAt == null
-            }), canonical?.cloudInstanceId?.takeIf { changingInstance }, relocatedBindings, preservedHistoricalAids)
+            }), canonical?.cloudInstanceId?.takeIf { changingInstance }, relocatedBindings, preservedHistoricalAids,
+            retainedContact = retainedContact)
     }
 
     /**
@@ -310,6 +348,27 @@ class CrowdStrikeDeviceReplacementService(
     }
 
     companion object {
+        private val EC2_ID = Regex("i-(?:[0-9a-f]{8}|[0-9a-f]{17})")
+        private val AZURE_ID = Regex("[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", RegexOption.IGNORE_CASE)
+
+        private fun sameIdentityValue(stored: String?, incoming: String?): Boolean =
+            stored.orEmpty().trim().equals(incoming.orEmpty().trim(), ignoreCase = true)
+
+        private fun isAzureMove(asset: Asset, device: CrowdStrikeDeviceRecord): Boolean =
+            device.serviceProvider.equals("AZURE", ignoreCase = true) &&
+                listOf(asset.cloudInstanceId, asset.cloudAccountId, device.instanceId, device.cloudAccountId)
+                    .all { it?.matches(AZURE_ID) == true }
+
+        private fun verifiesAzureMove(binding: CrowdStrikeAssetIdentity, device: CrowdStrikeDeviceRecord,
+            observedAt: java.time.Instant): Boolean {
+            val contact = device.lastSeen?.takeIf { it.isBefore(observedAt) } ?: return false
+            return isAzureMove(binding.asset, device) &&
+                sameIdentityValue(binding.sourceHostname, device.hostname) &&
+                sameIdentityValue(binding.asset.adDomain, device.adDomain) &&
+                binding.falconLastSeenAt?.let { LocalDateTime.ofInstant(contact, ZoneOffset.UTC) > it } == true &&
+                binding.identityObservedAt?.let { LocalDateTime.ofInstant(observedAt, ZoneOffset.UTC) > it } == true
+        }
+
         internal fun requireFreshObservation(
             bindings: List<CrowdStrikeAssetIdentity>,
             selection: CrowdStrikeDeviceSelection,
@@ -384,7 +443,8 @@ class CrowdStrikeDeviceReplacementService(
                 actor = actor.replace('\r', '_').replace('\n', '_').take(255), reason = "SUPERSEDED_ENROLLMENT_MOVED"))
             identityRepository.delete(binding)
         }
-        replacement.relocatedBindings.map { it.asset }.distinctBy { it.id }.forEach { retired ->
+        val formerSubscriptionAsset = replacement.azureSubscriptionMove?.asset
+        (replacement.relocatedBindings.map { it.asset } + listOfNotNull(formerSubscriptionAsset)).distinctBy { it.id }.forEach { retired ->
             // Keep the former machine and all inventory relationships. Its moved agent
             // no longer supplies a current vulnerability or installed-product snapshot.
             entityManager.createNativeQuery("DELETE FROM vulnerability WHERE asset_id = :id AND source = :source")
@@ -398,12 +458,13 @@ class CrowdStrikeDeviceReplacementService(
         replacement.formerInstanceId?.let { former ->
             val selected = selection.selected
             entityManager.persist(com.secman.domain.CrowdStrikeInstanceTransition(
-                assetId = requireNotNull(asset.id), crowdStrikeAid = selected.aid, formerInstanceId = former,
+                assetId = requireNotNull((formerSubscriptionAsset ?: asset).id), crowdStrikeAid = selected.aid, formerInstanceId = former,
                 instanceId = requireNotNull(selected.instanceId), cloudAccountId = requireNotNull(selected.cloudAccountId),
                 adDomain = selected.adDomain, falconFirstSeenAt = requireNotNull(selected.firstSeen).toFalconEnrollmentTime(),
                 falconLastSeenAt = selected.lastSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) },
                 observedAt = LocalDateTime.ofInstant(selection.observedAt, ZoneOffset.UTC),
-                actor = actor.replace('\r', '_').replace('\n', '_').take(255)))
+                actor = actor.replace('\r', '_').replace('\n', '_').take(255),
+                reason = if (formerSubscriptionAsset != null) "AZURE_SUBSCRIPTION_MOVE" else "SAME_ENROLLMENT_INSTANCE_CHANGE"))
             log.info("Falcon instance change actor={} assetId={} formerInstanceId={} instanceId={} outcome=staged-in-import-transaction",
                 actor.replace('\r', '_').replace('\n', '_'), asset.id,
                 former.replace('\r', '_').replace('\n', '_'), selected.instanceId)
@@ -427,7 +488,8 @@ class CrowdStrikeDeviceReplacementService(
                 .setParameter("hostname", device.hostname).setParameter("instanceId", device.instanceId)
                 .setParameter("accountId", device.cloudAccountId).setParameter("productType", device.productType)
                 .setParameter("firstSeen", device.firstSeen?.toFalconEnrollmentTime())
-                .setParameter("lastSeen", device.lastSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) })
+                .setParameter("lastSeen", replacement.retainedContact?.takeIf { device.aid == selection.selected.aid }
+                    ?: device.lastSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) })
                 .setParameter("supersededBy", selection.selected.aid.takeIf { it != device.aid })
                 .executeUpdate()
         }
@@ -452,6 +514,7 @@ class CrowdStrikeDeviceReplacementService(
         bindings.filter { it.crowdStrikeAid != selection.selected.aid }.forEach(identityRepository::delete)
         val now = LocalDateTime.now()
         val winner = bindings.firstOrNull { it.crowdStrikeAid == selection.selected.aid }
+            ?: replacement.azureSubscriptionMove?.also { it.asset = asset }
             ?: CrowdStrikeAssetIdentity(asset = asset, crowdStrikeAid = selection.selected.aid,
                 sourceHostname = selection.selected.hostname)
         winner.sourceHostname = selection.selected.hostname
