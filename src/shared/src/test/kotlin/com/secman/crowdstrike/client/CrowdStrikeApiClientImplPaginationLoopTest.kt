@@ -383,6 +383,48 @@ class CrowdStrikeApiClientImplPaginationLoopTest {
     }
 
     @Test
+    fun `streaming protects tied enrollments and reused EC2 IDs while importing independent devices`() {
+        val ids = listOf("aid-tied-a", "aid-tied-b", "aid-conflict-a", "aid-conflict-b", "aid-independent")
+        val contact = Instant.now().minusSeconds(60)
+        val devices = ids.map { id ->
+            val instance = when {
+                id.startsWith("aid-tied") -> "i-shared"
+                id.startsWith("aid-conflict") -> "i-reused"
+                else -> "i-other"
+            }
+            mapOf(
+            "device_id" to id, "hostname" to id, "instance_id" to instance,
+            "service_provider_account_id" to "123456789012", "first_seen" to contact.minusSeconds(300).toString(),
+            "last_seen" to contact.minusSeconds(if (id == "aid-conflict-a") 1 else 0).toString(),
+            "service_provider" to "AWS_EC2",
+            "system_manufacturer" to if (id == "aid-conflict-a") "HPE" else "VMware",
+            "serial_number" to id
+        ) }
+        every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } answers {
+            val uri = firstArg<HttpRequest<Any>>().uri.toString()
+            when {
+                uri.contains("/devices/combined/") -> HttpResponse.ok(combinedDeviceResponse(*ids.toTypedArray()))
+                uri.contains("/devices/entities/") -> HttpResponse.ok(mapOf("resources" to devices))
+                uri.contains("/spotlight/") -> {
+                    assertThat(uri).contains("aid-independent").doesNotContain("aid-tied", "aid-conflict")
+                    HttpResponse.ok(spotlightPage(emptyList(), null, 0))
+                }
+                else -> error("Unexpected request: $uri")
+            }
+        }
+        val saved = mutableListOf<String?>()
+        val result = client.queryServersWithFiltersStreaming("SERVER", "HIGH", 0, config, 100, 1, 200) { batch ->
+            saved.addAll(batch.devices.map { it.crowdStrikeAid })
+        }
+        assertThat(saved).containsExactly("aid-independent")
+        assertThat(result.tiedDevices.map { it.crowdStrikeAid }).containsExactlyInAnyOrder("aid-tied-a", "aid-tied-b")
+        assertThat(result.conflictingCloudDevices.map { it.crowdStrikeAid })
+            .containsExactlyInAnyOrder("aid-conflict-a", "aid-conflict-b")
+        assertThat(result.queriedHosts.map { it.crowdStrikeAid }).containsExactly("aid-independent")
+        assertThat(result.inventoryContacts).isNull()
+    }
+
+    @Test
     fun `cloud instance aliases share one canonical host payload across outer boundaries`() {
         val ids = listOf("aid-1", "aid-2")
         every { blockingClient.exchange(any<HttpRequest<Any>>(), Map::class.java) } answers {

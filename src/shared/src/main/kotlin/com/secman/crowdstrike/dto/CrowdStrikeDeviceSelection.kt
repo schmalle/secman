@@ -41,7 +41,10 @@ data class CrowdStrikeDeviceSelection(
 fun CrowdStrikeDeviceRecord.hostnameScope(): List<String> =
     listOf(hostname, adDomain.orEmpty(), cloudAccountId.orEmpty()).map { it.trim().lowercase() }
 
-fun selectLatestCrowdStrikeDevices(records: List<CrowdStrikeDeviceRecord>): List<CrowdStrikeDeviceSelection> {
+fun selectLatestCrowdStrikeDevices(
+    records: List<CrowdStrikeDeviceRecord>,
+    onContactTie: ((List<CrowdStrikeDeviceRecord>) -> Unit)? = null
+): List<CrowdStrikeDeviceSelection> {
     require(records.map { it.aid }.distinct().size == records.size) { "Duplicate Falcon device IDs" }
     require(records.all { it.aid.matches(Regex("[A-Za-z0-9_-]{1,64}")) &&
         it.hostname.matches(Regex("[A-Za-z0-9_.-]{1,255}")) && it.firstSeen != null }) {
@@ -76,13 +79,22 @@ fun selectLatestCrowdStrikeDevices(records: List<CrowdStrikeDeviceRecord>): List
             owners.putIfAbsent(key, index)?.let { previous -> parents[root(index)] = root(previous) }
         }
     }
-    return records.indices.groupBy(::root).values.map { indices ->
+    return records.indices.groupBy(::root).values.mapNotNull { indices ->
         val group = indices.map(records::get)
         require(group.size <= 101) { "Too many Falcon device identities for one hostname" }
-        val selected = if (group.size == 1) group.single() else selectMostRecentlySeenCrowdStrikeDevice(group)
+        val selected = try {
+            if (group.size == 1) group.single() else selectMostRecentlySeenCrowdStrikeDevice(group)
+        } catch (e: CrowdStrikeContactTie) {
+            if (onContactTie == null) throw e
+            onContactTie(e.devices)
+            return@mapNotNull null
+        }
         CrowdStrikeDeviceSelection(selected, group.filter { it.aid != selected.aid }.sortedByDescending { it.lastSeen })
     }
 }
+
+private class CrowdStrikeContactTie(val devices: List<CrowdStrikeDeviceRecord>) :
+    IllegalArgumentException("Ambiguous latest Falcon device contact timestamp; select an AID explicitly")
 
 /** Contact recency chooses a query default, never establishes machine identity. */
 fun selectMostRecentlySeenCrowdStrikeDevice(records: List<CrowdStrikeDeviceRecord>): CrowdStrikeDeviceRecord {
@@ -93,8 +105,8 @@ fun selectMostRecentlySeenCrowdStrikeDevice(records: List<CrowdStrikeDeviceRecor
         "Incomplete or invalid Falcon device contact timestamp"
     }
     val ordered = records.sortedByDescending { it.lastSeen }
-    require(ordered.size == 1 || ordered[0].lastSeen != ordered[1].lastSeen) {
-        "Ambiguous latest Falcon device contact timestamp; select an AID explicitly"
+    if (ordered.size > 1 && ordered[0].lastSeen == ordered[1].lastSeen) {
+        throw CrowdStrikeContactTie(ordered.takeWhile { it.lastSeen == ordered[0].lastSeen })
     }
     return ordered.first()
 }

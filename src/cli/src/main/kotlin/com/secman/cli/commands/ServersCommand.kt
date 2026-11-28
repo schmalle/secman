@@ -302,6 +302,27 @@ class ServersCommand {
                         totalErrorCount += streamResult.failedDeviceCount
                         allErrors.add("Incomplete fetch for ${streamResult.failedDeviceCount} device(s); existing findings preserved")
                     }
+                    totalErrorCount += streamResult.tiedDevices.size
+                    for (device in streamResult.tiedDevices) {
+                        device.hostname?.let(allFailedHostnames::add)
+                        device.crowdStrikeAid?.let(allFailedAids::add)
+                        if (allErrors.size < MAX_RETAINED_ERRORS) {
+                            allErrors.add("Ambiguous Falcon contact for '${device.hostname}' [AID=${device.crowdStrikeAid}]: " +
+                                "Another enrollment on the same instance has the same latest contact; existing findings preserved")
+                        }
+                    }
+                    totalErrorCount += streamResult.conflictingCloudDevices.size
+                    for (device in streamResult.conflictingCloudDevices) {
+                        val hostname = device.hostname?.replace('\r', '_')?.replace('\n', '_')
+                        val aid = device.crowdStrikeAid?.replace('\r', '_')?.replace('\n', '_')
+                        val instance = device.instanceId?.replace('\r', '_')?.replace('\n', '_')
+                        hostname?.let(allFailedHostnames::add)
+                        aid?.let(allFailedAids::add)
+                        if (allErrors.size < MAX_RETAINED_ERRORS) {
+                            allErrors.add("Conflicting Falcon cloud identity for '$hostname' [AID=$aid]: " +
+                                "Legacy EC2 instance $instance was reported by different hardware; existing findings preserved")
+                        }
+                    }
                     if (totalVulns == 0) {
                         System.out.println("No complete vulnerability results found matching criteria")
                     }

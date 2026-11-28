@@ -783,6 +783,14 @@ creation date of a vulnerability. Missing device metadata aborts a streaming run
 before replacement starts, because an unresolved AID might belong to any sibling
 group.
 
+When several enrollments on the same instance and account tie for latest contact,
+the fleet import preserves that instance's saved data and reports the tied AIDs.
+Other instances continue importing. An in-window tie makes the run incomplete
+and the cleanup pass requires a complete inventory.
+The fleet import also excludes a shared legacy EC2 ID when Falcon reports it
+for devices with different hardware manufacturers and serial numbers. These
+reports require identity review even when their contact times differ.
+
 Hostname-specific lookups expose failed AIDs. A failed device query, cursor loop,
 404 after pagination starts, exhausted timeout retry, or page cap makes the lookup
 incomplete. In the batched Stage-2 query, a 404 after pagination starts (Falcon lost
@@ -1096,6 +1104,8 @@ hosts. Falcon resolves the names directly, including hosts outside the regular
 the failed enrollment is one of several matches for its hostname. A targeted
 retry skips publishing fleet-wide age statistics. The current inventory still
 uses the actual contact time.
+The hostname retry can also find a prior Falcon enrollment classified as a
+workstation when a fleet run queries only servers and domain controllers.
 
 CLI imports print a **Failed import hostnames (N, comma-separated)** section
 with a single copyable line of names. This list is not truncated when the detailed

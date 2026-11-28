@@ -382,13 +382,22 @@ open class CrowdStrikeApiClientImpl(
             log.warn("Excluded {} nameless Falcon devices with confirmed zero open findings from import and reconciliation",
                 namelessDevices.size)
         }
-        metadataByDeviceId = selectImportDevices(serverDeviceIds, metadataByDeviceId)
-        val inventoryContacts = if (namelessDevices.isEmpty()) metadataByDeviceId.mapNotNull { (aid, md) ->
+        val cloudConflicts = conflictingLegacyEc2Devices(metadataByDeviceId)
+        serverDeviceIds = serverDeviceIds - cloudConflicts
+        val tiedRecords = mutableListOf<CrowdStrikeDeviceRecord>()
+        val now = Instant.now()
+        val cutoff = now.minusSeconds(lastSeenDays.toLong() * 86400)
+        val conflictingCloudDevices = cloudConflicts.map { id -> metadataByDeviceId.getValue(id).toQueriedHost(id) }
+            .filter { lastSeenDays <= 0 || it.lastSeen?.isBefore(cutoff) == false }.toSet()
+        metadataByDeviceId = selectImportDevices(serverDeviceIds, metadataByDeviceId, onContactTie = { tiedRecords.addAll(it) })
+        val completeInventory = namelessDevices.isEmpty() && tiedRecords.isEmpty() && cloudConflicts.isEmpty()
+        val inventoryContacts = if (completeInventory) metadataByDeviceId.mapNotNull { (aid, md) ->
             md.lastSeen?.takeIf { seen -> md.firstSeen?.let { !seen.isBefore(it) } == true }?.let { aid to it }
         }.toMap() else null
+        val tiedDevices = tiedRecords.filter { lastSeenDays <= 0 || it.lastSeen?.isBefore(cutoff) == false }
+            .map { QueriedHost(it.hostname, it.instanceId, it.aid, it.cloudAccountId, it.adDomain, lastSeen = it.lastSeen) }
+            .toSet()
         if (lastSeenDays > 0) {
-            val now = Instant.now()
-            val cutoff = now.minusSeconds(lastSeenDays.toLong() * 86400)
             metadataByDeviceId = metadataByDeviceId.filterValues { md ->
                 md.lastSeen?.let { !it.isBefore(cutoff) && !it.isAfter(now) } == true
             }
@@ -458,7 +467,9 @@ open class CrowdStrikeApiClientImpl(
             queriedHosts = queriedHosts,
             failedHosts = failedHosts,
             failedDeviceCount = failedDeviceIds.size,
-            inventoryContacts = inventoryContacts
+            inventoryContacts = inventoryContacts,
+            tiedDevices = tiedDevices,
+            conflictingCloudDevices = conflictingCloudDevices
         )
     }
 
@@ -2041,11 +2052,26 @@ open class CrowdStrikeApiClientImpl(
         val firstSeen: Instant? = null,
         val productType: String? = null,
         val selection: CrowdStrikeDeviceSelection? = null,
-        val serviceProvider: String? = null
+        val serviceProvider: String? = null,
+        val manufacturer: String? = null,
+        val hardwareSerial: String? = null
     ) {
         fun toQueriedHost(aid: String) = QueriedHost(hostname, cloudInstanceId, aid,
             cloudAccountId, adDomain, osVersion, ip, lastSeen, selection, ipAddresses)
     }
+
+    // Falcon's legacy EC2 decorator can report one instance for unrelated physical hosts.
+    private fun conflictingLegacyEc2Devices(metadata: Map<String, DeviceMetadata>): Set<String> =
+        metadata.entries.filter { (_, md) -> !md.cloudInstanceId.isNullOrBlank() && !md.cloudAccountId.isNullOrBlank() }
+            .groupBy { (_, md) -> md.cloudInstanceId!!.trim().lowercase() to md.cloudAccountId!!.trim().lowercase() }
+            .values.filter { group ->
+                val hardware = group.mapNotNull { (_, md) ->
+                    if (!md.serviceProvider.equals("AWS_EC2", ignoreCase = true) ||
+                        md.manufacturer.isNullOrBlank() || md.hardwareSerial.isNullOrBlank()) null
+                    else md.manufacturer.trim().lowercase() to md.hardwareSerial.trim().lowercase()
+                }.distinct()
+                hardware.map { it.first }.toSet().size > 1 && hardware.map { it.second }.toSet().size > 1
+            }.flatten().map { it.key }.toSet()
 
     /** Prefer latest contact without retiring independently identified machines. */
     private fun selectCurrentHostnameDevice(
@@ -2069,7 +2095,8 @@ open class CrowdStrikeApiClientImpl(
     }
 
     private fun selectImportDevices(
-        ids: List<String>, metadata: Map<String, DeviceMetadata>, lastSeenDays: Int = 0
+        ids: List<String>, metadata: Map<String, DeviceMetadata>, lastSeenDays: Int = 0,
+        onContactTie: ((List<CrowdStrikeDeviceRecord>) -> Unit)? = null
     ): Map<String, DeviceMetadata> {
         if (ids.any { it !in metadata }) throw CrowdStrikeException("Incomplete Falcon device metadata")
         val selections = try {
@@ -2078,7 +2105,7 @@ open class CrowdStrikeApiClientImpl(
                 // Falcon can omit a cloud device's hostname while retaining its instance identity.
                 CrowdStrikeDeviceRecord(id, firstNonBlank(md.hostname, md.cloudInstanceId).orEmpty(), md.cloudInstanceId,
                     md.cloudAccountId, md.adDomain, md.firstSeen, md.lastSeen, md.productType, md.serviceProvider)
-            })
+            }, onContactTie)
         } catch (e: IllegalArgumentException) {
             log.warn("Latest Falcon device selection rejected: {}", e.message)
             throw CrowdStrikeException("Cannot select the latest Falcon device safely", e)
@@ -2231,7 +2258,11 @@ open class CrowdStrikeApiClientImpl(
                         firstSeen = device["first_seen"]?.toString()?.let { runCatching { Instant.parse(it) }.getOrNull() },
                         productType = device["product_type_desc"]?.toString(),
                         serviceProvider = firstNonBlank(device["service_provider"]?.toString(),
-                            nestedDevice?.get("service_provider")?.toString())
+                            nestedDevice?.get("service_provider")?.toString()),
+                        manufacturer = firstNonBlank(device["system_manufacturer"]?.toString(),
+                            nestedDevice?.get("system_manufacturer")?.toString()),
+                        hardwareSerial = firstNonBlank(device["serial_number"]?.toString(),
+                            nestedDevice?.get("serial_number")?.toString())
                     )
                 }
             } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
