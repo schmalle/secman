@@ -63,9 +63,7 @@ class CrowdStrikeImportRecoveryService(
             guard(owned.size == 1 && owned.single().crowdStrikeAid == selection.selected.aid,
                 "UNEXPLAINED_AID", "Selected AID owner asset $outsideId has additional or changed Falcon bindings")
             val binding = owned.single()
-            val firstSeen = selection.selected.firstSeen?.let {
-                java.time.LocalDateTime.ofInstant(it, java.time.ZoneOffset.UTC)
-            }
+            val firstSeen = selection.selected.firstSeen?.toFalconEnrollmentTime()
             guard(firstSeen != null && binding.falconFirstSeenAt == firstSeen && selection.selected.lastSeen != null,
                 "UNVERIFIED_SELECTED_OWNER", "Selected AID owner asset $outsideId requires matching enrollment and provider contact")
         }

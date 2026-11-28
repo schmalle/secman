@@ -50,7 +50,7 @@ open class CrowdStrikeIdentityRepairWriter(
             em.persist(CrowdStrikeIdentityRepair(operationId = operationId, sourceAssetId = request.assetId,
                 targetAssetId = targetId, crowdstrikeAid = device.aid, instanceId = requireNotNull(device.instanceId),
                 accountId = requireNotNull(device.cloudAccountId),
-                falconFirstSeenAt = LocalDateTime.ofInstant(requireNotNull(device.firstSeen), ZoneOffset.UTC),
+                falconFirstSeenAt = requireNotNull(device.firstSeen).toFalconEnrollmentTime(),
                 falconLastSeenAt = LocalDateTime.ofInstant(requireNotNull(device.lastSeen), ZoneOffset.UTC),
                 actor = actor.replace('\r', '_').replace('\n', '_').take(255), reason = request.reason.trim()))
         }

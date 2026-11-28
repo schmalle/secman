@@ -128,7 +128,7 @@ class CrowdStrikeDeviceReplacementService(
         relocatedBindings.forEach { binding ->
             val device = selection.superseded.first { it.aid == binding.crowdStrikeAid }
             val asset = binding.asset
-            val firstSeen = device.firstSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) }
+            val firstSeen = device.firstSeen?.toFalconEnrollmentTime()
             val lastSeen = device.lastSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) }
             val observed = LocalDateTime.ofInstant(selection.observedAt, ZoneOffset.UTC)
             if (device.instanceId?.matches(Regex("i-(?:[0-9a-f]{8}|[0-9a-f]{17})")) != true ||
@@ -174,7 +174,7 @@ class CrowdStrikeDeviceReplacementService(
             if (!asset.adDomain.orEmpty().trim().equals(selected.adDomain.orEmpty().trim(), ignoreCase = true))
                 conflict("AD_DOMAIN_CONFLICT", "Falcon device conflicts with stored AD domain")
             if (knownWinner.falconFirstSeenAt == null || knownWinner.falconFirstSeenAt !=
-                LocalDateTime.ofInstant(requireNotNull(selected.firstSeen), ZoneOffset.UTC))
+                requireNotNull(selected.firstSeen).toFalconEnrollmentTime())
                 conflict("ENROLLMENT_MISMATCH", "An instance change requires the same verified Falcon enrollment")
             if (instanceCandidates.any { it.id != asset.id && !heldByBootstrap(it) })
                 conflict("INSTANCE_ALREADY_BOUND", "Incoming EC2 instance already belongs to another asset")
@@ -235,7 +235,7 @@ class CrowdStrikeDeviceReplacementService(
             "Stored asset has an unverified Falcon device identity")
         if (!identities.filterNot { it in relocatedBindings }.all { binding -> current.any { it.crowdStrikeAid == binding.crowdStrikeAid && it.asset.id == binding.asset.id } })
             throw CrowdStrikeIdentityConflict("IDENTITY_CHANGED", "Falcon identity changed while acquiring replacement locks")
-        val incomingFirst = LocalDateTime.ofInstant(requireNotNull(selected.firstSeen), ZoneOffset.UTC)
+        val incomingFirst = requireNotNull(selected.firstSeen).toFalconEnrollmentTime()
         val storedWinner = current.firstOrNull { it.crowdStrikeAid == selected.aid }
         requireFreshObservation(current, selection, changingInstance)
         if (changingInstance) {
@@ -400,7 +400,7 @@ class CrowdStrikeDeviceReplacementService(
             entityManager.persist(com.secman.domain.CrowdStrikeInstanceTransition(
                 assetId = requireNotNull(asset.id), crowdStrikeAid = selected.aid, formerInstanceId = former,
                 instanceId = requireNotNull(selected.instanceId), cloudAccountId = requireNotNull(selected.cloudAccountId),
-                adDomain = selected.adDomain, falconFirstSeenAt = LocalDateTime.ofInstant(requireNotNull(selected.firstSeen), ZoneOffset.UTC),
+                adDomain = selected.adDomain, falconFirstSeenAt = requireNotNull(selected.firstSeen).toFalconEnrollmentTime(),
                 falconLastSeenAt = selected.lastSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) },
                 observedAt = LocalDateTime.ofInstant(selection.observedAt, ZoneOffset.UTC),
                 actor = actor.replace('\r', '_').replace('\n', '_').take(255)))
@@ -426,7 +426,7 @@ class CrowdStrikeDeviceReplacementService(
             """).setParameter("aid", device.aid).setParameter("assetId", asset.id)
                 .setParameter("hostname", device.hostname).setParameter("instanceId", device.instanceId)
                 .setParameter("accountId", device.cloudAccountId).setParameter("productType", device.productType)
-                .setParameter("firstSeen", device.firstSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) })
+                .setParameter("firstSeen", device.firstSeen?.toFalconEnrollmentTime())
                 .setParameter("lastSeen", device.lastSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) })
                 .setParameter("supersededBy", selection.selected.aid.takeIf { it != device.aid })
                 .executeUpdate()
@@ -456,7 +456,7 @@ class CrowdStrikeDeviceReplacementService(
                 sourceHostname = selection.selected.hostname)
         winner.sourceHostname = selection.selected.hostname
         winner.lastSeenAt = now
-        winner.falconFirstSeenAt = LocalDateTime.ofInstant(requireNotNull(selection.selected.firstSeen), ZoneOffset.UTC)
+        winner.falconFirstSeenAt = requireNotNull(selection.selected.firstSeen).toFalconEnrollmentTime()
         winner.identityObservedAt = LocalDateTime.ofInstant(selection.observedAt, ZoneOffset.UTC)
         winner.falconLastSeenAt = listOfNotNull(winner.falconLastSeenAt,
             selection.selected.lastSeen?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) }).maxOrNull()

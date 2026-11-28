@@ -10,6 +10,7 @@ import com.secman.dto.CrowdStrikeVulnerabilityBatchDto
 import com.secman.repository.AssetRepository
 import com.secman.repository.CrowdStrikeAssetIdentityRepository
 import com.secman.repository.VulnerabilityRepository
+import com.secman.service.CrowdStrikeIdentityConflict
 import com.secman.service.CrowdStrikeVulnerabilityImportService
 import com.secman.testutil.BaseIntegrationTest
 import io.micronaut.data.model.Pageable
@@ -17,6 +18,7 @@ import jakarta.inject.Inject
 import jakarta.persistence.EntityManager
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.time.Instant
 import java.time.LocalDateTime
 
@@ -37,7 +39,7 @@ class CrowdStrikeLatestDeviceIntegrationTest : BaseIntegrationTest() {
         val oldRecord = CrowdStrikeDeviceRecord("old-${old.id}", hostname, instanceId = "i-latest-${old.id}",
             cloudAccountId = "account-latest", firstSeen = Instant.parse("2026-01-01T00:00:00Z"),
             lastSeen = Instant.parse("2026-01-15T00:00:00Z"))
-        val newRecord = oldRecord.copy(aid = "new-${winner.id}", firstSeen = Instant.parse("2026-02-01T00:00:00Z"),
+        val newRecord = oldRecord.copy(aid = "new-${winner.id}", firstSeen = Instant.parse("2026-02-01T00:00:00.123456789Z"),
             lastSeen = Instant.now().minusSeconds(60), productType = "Domain Controller")
         identities.save(CrowdStrikeAssetIdentity(asset = old, crowdStrikeAid = oldRecord.aid, sourceHostname = hostname))
         identities.save(CrowdStrikeAssetIdentity(asset = winner, crowdStrikeAid = newRecord.aid, sourceHostname = hostname))
@@ -63,10 +65,28 @@ class CrowdStrikeLatestDeviceIntegrationTest : BaseIntegrationTest() {
             assertThat(surviving.owner).isEqualTo("User owner")
             assertThat(surviving.type).isEqualTo("DATABASE")
             assertThat(surviving.crowdStrikeProductType).isEqualTo("Domain Controller")
-            assertThat(identities.findByAssetIdIn(listOf(winner.id!!)).map { it.crowdStrikeAid }).containsExactly(newRecord.aid)
+            val binding = identities.findByAssetIdIn(listOf(winner.id!!)).single()
+            assertThat(binding.crowdStrikeAid).isEqualTo(newRecord.aid)
+            assertThat(binding.falconFirstSeenAt).isEqualTo(LocalDateTime.parse("2026-02-01T00:00:00.123456"))
             assertThat(vulnerabilities.findByAssetId(winner.id!!, Pageable.from(0, 10)).content.map { it.source })
                 .containsExactly("MANUAL")
         }
+        vulnerabilities.save(Vulnerability(asset = assets.findById(winner.id!!).orElseThrow(),
+            vulnerabilityId = "CVE-2026-1003", cvssSeverity = "HIGH",
+            scanTimestamp = LocalDateTime.now(), source = VulnerabilitySources.CROWDSTRIKE))
+        em.flush()
+        em.clear()
+
+        val changedEnrollment = newRecord.copy(firstSeen = requireNotNull(newRecord.firstSeen).plusNanos(1_000))
+        val conflict = assertThrows<CrowdStrikeIdentityConflict> {
+            importer.importVulnerabilitiesForServer(
+                batch.copy(deviceSelection = CrowdStrikeDeviceSelection(changedEnrollment, listOf(oldRecord))),
+                "test-admin", allowDeviceReplacement = true
+            )
+        }
+        assertThat(conflict.code).isEqualTo("ENROLLMENT_MISMATCH")
+        assertThat(vulnerabilities.findByAssetId(winner.id!!, Pageable.from(0, 10)).content.map { it.vulnerabilityId })
+            .containsExactlyInAnyOrder("CVE-2026-1002", "CVE-2026-1003")
     }
     @Test
     fun `same-name cloud instances are restored separately with provider type contact and enrollment history`() {
